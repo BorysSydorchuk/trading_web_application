@@ -23,3 +23,11 @@ One line per decision: date, decision, reason. Product decisions live in PRD.md.
 - 2026-10-31: Logging: rotating 5 MB × 5 files, UTC ISO timestamps; `setup_logging(file_name)` shared by API (`api.log`) and worker (`worker.log`).
 - 2026-10-31: Tests point DATABASE_URL at the test DB and LOG_DIR at a temp dir before importing the app; pytest treats warnings as errors (one Starlette TestClient deprecation ignored).
 - 2026-10-31: Alembic migrations named `YYYYMMDD_<rev>_<slug>`; env.py honours an explicit `config.attributes["sqlalchemy.url"]` so migration tests can target the test DB.
+- 2026-10-31: Schema numeric types: money NUMERIC(18,2), prices/volumes/tick values NUMERIC(20,8), percent/R NUMERIC(10,4); all datetimes TIMESTAMPTZ; system enums VARCHAR + CHECK; journal option fields VARCHAR(50) without CHECK (options live in YAML, old values survive).
+- 2026-10-31: Accounts with trades cannot be deleted (FK RESTRICT), they are archived; symbol_specs and sync_log cascade with the account; trade/bias children cascade with their parent.
+- 2026-10-31: Bias alignment stored as computed daily/weekly/monthly values plus `bias_alignment_override` + reason; effective value = override if set. Values: aligned/counter/neutral_bias/no_bias.
+- 2026-10-31: trades.weekday (0 = Monday) and hour (0–23) are Brussels time of the open. bias_entries.period_date is a Brussels date (trading day; Monday for weekly; 1st for monthly). Digest periods are inclusive dates.
+- 2026-10-31: `updated_at` bumped by the ORM (no DB trigger). Tests rebuild the test DB by dropping `public` and running Alembic `upgrade head`; a drift test fails if models and migrations diverge.
+- 2026-10-31: Open positions are stored as trades with status `open` and close_time NULL (CHECK enforces the pair); the inbox only uses needs_sl/needs_description/draft. Default status for a closed trade is needs_description.
+- 2026-10-31: accounts keep the last synced MT5 `balance`, `equity`, `balance_synced_at` (calculator offline, daily/weekly limits). trades.last_sl and trade_exit_deals.reason (MT5 DEAL_REASON, lowercase, no CHECK so unknown broker values never break sync) support breakeven detection.
+- 2026-10-31: A custom test compares CHECK constraints between models and the migrated DB, because Alembic's comparison ignores them.
