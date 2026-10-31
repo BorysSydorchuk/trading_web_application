@@ -12,3 +12,14 @@ One line per decision: date, decision, reason. Product decisions live in PRD.md.
 - 2026-10-31: npm (ships with Node) as the frontend package manager. Reason: nothing extra to install on a fresh clone.
 - 2026-10-31: `make dev` and `start.bat` both call one Python launcher `scripts/dev.py` (starts DB if needed, runs migrations, starts API, worker, frontend, opens browser). Reason: one cross-shell implementation instead of duplicating logic in Makefile and batch.
 - 2026-10-31: GNU make on Windows via `winget install ezwinports.make`; Makefile recipes use only commands valid in both cmd and sh. Reason: CLAUDE.md requires `make check`; Windows has no make by default.
+- 2026-10-31: Frontend versions: React + Vite 8 + TypeScript 6 (strict + noUncheckedIndexedAccess), Tailwind 4 via @tailwindcss/vite, react-router 8, TanStack Query 5, ESLint 9 (eslint-plugin-react not yet on ESLint 10). Reason: current stable, plugin compatibility.
+- 2026-10-31: `react/jsx-no-literals` is an ESLint error (props and a few symbols allowed). Reason: enforces "no hardcoded UI strings" from CLAUDE.md.
+- 2026-10-31: Non-envelope HTTP errors (e.g. Vite proxy 502) map by status: 5xx → network_error, 404 → not_found, 422 → validation_error, else unknown. Reason: backend down shows "Сервер недоступний".
+- 2026-10-31: Toasts dedupe by error code; queries opt out with `meta.silentError` (health poll uses it). Toasts are neutral-coloured; green/red reserved for P&L and deviations. Reason: PRD style rule, no toast spam.
+- 2026-10-31: shadcn/ui components added by hand only when used (button, sonner); fixed dark theme, no next-themes. Reason: no unused code.
+- 2026-10-31: Backend versions: FastAPI 0.162, Starlette 1.10, SQLAlchemy 2.1, psycopg 3.3, Alembic 1.20, APScheduler 3.11; build via hatchling, version from package metadata.
+- 2026-10-31: Health: engine connect_timeout 2 s, `SET LOCAL statement_timeout=2000` in the health check; `db.error` is a fixed short English string by exception type, details only in logs. On Windows a refused port surfaces as a ~2 s timeout.
+- 2026-10-31: Unhandled exceptions handled by a middleware (logs traceback once, returns internal_error); custom error codes via `ApiError(status, code, message, details)`.
+- 2026-10-31: Logging: rotating 5 MB × 5 files, UTC ISO timestamps; `setup_logging(file_name)` shared by API (`api.log`) and worker (`worker.log`).
+- 2026-10-31: Tests point DATABASE_URL at the test DB and LOG_DIR at a temp dir before importing the app; pytest treats warnings as errors (one Starlette TestClient deprecation ignored).
+- 2026-10-31: Alembic migrations named `YYYYMMDD_<rev>_<slug>`; env.py honours an explicit `config.attributes["sqlalchemy.url"]` so migration tests can target the test DB.

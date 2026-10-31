@@ -15,7 +15,7 @@ Any non-2xx response has this body:
 - `message`: English, for logs and developers.
 - `details`: optional object (for example validation errors: `{ "fields": { "name": "required" } }`).
 
-Known codes: `validation_error` (422), `not_found` (404), `db_unavailable` (503), `internal_error` (500).
+Known codes: `validation_error` (422, `details.fields` maps field path → English message), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
 Unhandled exceptions are logged with a traceback to `logs/` and returned as `internal_error`; the API never returns an HTML error page.
 
 ## M0
