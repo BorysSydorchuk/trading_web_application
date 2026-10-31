@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:16
-    container_name: trading_journal_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-journal}

@@ -252,7 +252,12 @@ def ensure_dependencies(uv: Sequence[str], npm: str) -> None:
         run_step([*uv, "sync"], BACKEND, "Installing backend dependencies (uv sync)", 900)
         BACKEND_STAMP.touch()
     if needs_install(FRONTEND_STAMP, [FRONTEND / "package-lock.json", FRONTEND / "package.json"]):
-        run_step([npm, "install"], FRONTEND, "Installing frontend dependencies (npm install)", 900)
+        run_step(
+            [npm, "install", "--no-audit", "--no-fund"],
+            FRONTEND,
+            "Installing frontend dependencies (npm install)",
+            900,
+        )
         FRONTEND_STAMP.touch()
 
 

@@ -45,7 +45,8 @@ double-click `start.bat` in Explorer. On the first run it:
 Дайджести, Калькулятор, Налаштування), empty pages, and a green status bar (backend and DB OK).
 The console prints `Ready in N s`; a warm start takes a few seconds.
 
-Stop with **Ctrl+C** in that window (all processes are stopped). `.\start.bat --no-browser`
+Stop with **Ctrl+C** in that window (all processes are stopped). If cmd then asks
+`Terminate batch job (Y/N)?`, answer `Y`; the app is already stopped. `.\start.bat --no-browser`
 starts without opening the browser.
 
 ## Everyday commands
