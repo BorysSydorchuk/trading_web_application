@@ -4,3 +4,7 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 
 | Date | Idea | Source | Notes |
 |------|------|--------|-------|
+| 2026-10-31 | Tie launcher child processes to a Windows Job Object (KILL_ON_JOB_CLOSE) so ending `dev.py` from Task Manager doesn't leave API/worker/Vite running | QA (M0) | Fits M7 hardening; Ctrl+C path already clean |
+| 2026-10-31 | Frontend unit tests (Vitest) for `api/client.ts` and `lib/errors.ts` | code-reviewer (M0) | Add when frontend logic grows (M1/M2) |
+| 2026-10-31 | Review `npm audit` moderate advisory (minimatch via eslint/typescript-eslint, dev-only) | frontend-dev (M0) | Re-check on next eslint upgrade |
+| 2026-10-31 | README note: two checkouts running at once need different `POSTGRES_PORT` in `.env` | code-reviewer (M0) | One line in README |
