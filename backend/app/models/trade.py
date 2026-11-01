@@ -31,7 +31,14 @@ from app.models.base import (
     enum_check,
     jsonb_default,
 )
-from app.models.enums import BiasAlignment, Direction, TradeStatus, TradingSession, ViolationSource
+from app.models.enums import (
+    BiasAlignment,
+    Direction,
+    InitialSlSource,
+    TradeStatus,
+    TradingSession,
+    ViolationSource,
+)
 
 if TYPE_CHECKING:
     from app.models.media import AudioNote, ChartLink
@@ -49,6 +56,7 @@ class Trade(TimestampMixin, Base):
         enum_check("direction", Direction, "direction_valid"),
         enum_check("status", TradeStatus, "status_valid"),
         enum_check("session", TradingSession, "session_valid"),
+        enum_check("initial_sl_source", InitialSlSource, "initial_sl_source_valid"),
         enum_check("bias_alignment", BiasAlignment, "bias_alignment_valid"),
         enum_check("bias_alignment_weekly", BiasAlignment, "bias_alignment_weekly_valid"),
         enum_check("bias_alignment_monthly", BiasAlignment, "bias_alignment_monthly_valid"),
@@ -80,6 +88,8 @@ class Trade(TimestampMixin, Base):
     exit_price: Mapped[Decimal | None] = mapped_column(PRICE)  # volume-weighted over exit deals
     volume: Mapped[Decimal] = mapped_column(PRICE)
     initial_sl: Mapped[Decimal | None] = mapped_column(PRICE)
+    # deal | order | position | user; NULL while initial_sl is unknown.
+    initial_sl_source: Mapped[str | None] = mapped_column(String(20))
     # Last SL seen on the open position; SL moved to entry = breakeven violation (PRD 6.9).
     last_sl: Mapped[Decimal | None] = mapped_column(PRICE)
     tp: Mapped[Decimal | None] = mapped_column(PRICE)

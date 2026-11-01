@@ -33,6 +33,7 @@ class Account(TimestampMixin, Base):
     firm: Mapped[str] = mapped_column(String(100))
     program: Mapped[str] = mapped_column(String(100))
     phase: Mapped[str] = mapped_column(String(20))
+    # The investor password is not stored here: it lives in .env as MT5_PASSWORD_<login>.
     login: Mapped[int] = mapped_column(BigInteger)
     server: Mapped[str] = mapped_column(String(100))
     # Portable terminal folder / terminal64.exe path; nullable so archived accounts need none.
@@ -45,8 +46,6 @@ class Account(TimestampMixin, Base):
     daily_loss_pct: Mapped[Decimal | None] = mapped_column(RATIO)
     max_drawdown_pct: Mapped[Decimal | None] = mapped_column(RATIO)
     profit_target_pct: Mapped[Decimal | None] = mapped_column(RATIO)
-    # Name of the .env key holding the investor password. Never the password itself.
-    password_ref: Mapped[str | None] = mapped_column(String(100))
     # Broker server time minus UTC in whole hours, detected by the worker (PRD 6.3).
     server_offset_hours: Mapped[int | None] = mapped_column(SmallInteger)
     server_offset_detected_at: Mapped[datetime | None]

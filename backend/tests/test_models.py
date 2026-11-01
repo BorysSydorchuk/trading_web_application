@@ -292,3 +292,15 @@ def test_new_sync_columns_nullable(db_session: Session) -> None:
     db_session.flush()
     db_session.refresh(account)
     assert account.balance == Decimal("100250.00")
+
+
+@pytest.mark.parametrize("source", ["deal", "order", "position", "user", None])
+def test_initial_sl_source_values(db_session: Session, source: str | None) -> None:
+    trade = _trade(db_session, _account(db_session), initial_sl_source=source)
+    db_session.refresh(trade)
+    assert trade.initial_sl_source == source
+
+
+def test_initial_sl_source_invalid_rejected(db_session: Session) -> None:
+    with pytest.raises(IntegrityError, match="ck_trades_initial_sl_source_valid"):
+        _trade(db_session, _account(db_session), initial_sl_source="guess")

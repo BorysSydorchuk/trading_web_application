@@ -44,3 +44,6 @@ One line per decision: date, decision, reason. Product decisions live in PRD.md.
 - 2026-11-01: Initial SL source order: opening deal `sl` → opening order `sl` → first SL seen on the open position by the worker → user input (`needs_sl`). Stored in `trades.initial_sl_source`.
 - 2026-11-01: Rules engine recomputes `source=auto` violations on every trade update (idempotent); `source=user` violations are never touched by it.
 - 2026-11-01: Launcher console messages are Ukrainian (PM asked for a Ukrainian Docker message; one language for the console). Code/log messages stay English.
+- 2026-11-01: API decimal input accepts JSON strings or ints, rejects floats/bools/NaN; more decimals than the DB scale (money 2, pct 4) is a 422, not rounded; output at DB scale. Login must be a JSON integer. Unknown body fields are rejected (422). Currency must be 3 uppercase letters (UI uppercases).
+- 2026-11-01: terminal_path is validated by file name only (`terminal64.exe`), not existence; the worker reports `terminal_not_found`. 409 conflicts detected from the unique constraint name (name → `name`, login+server → `login`).
+- 2026-11-01: `mt5_password_for(login)` reads env (wins) then `.env` at call time (no cache, edits apply without restart); empty value = not configured.

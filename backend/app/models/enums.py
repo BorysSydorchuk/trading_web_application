@@ -35,6 +35,15 @@ class TradeStatus(enum.StrEnum):
     COMPLETE = "complete"
 
 
+class InitialSlSource(enum.StrEnum):
+    """Where trades.initial_sl came from, in lookup order (DECISIONS.md 2026-11-01)."""
+
+    DEAL = "deal"  # opening deal's sl
+    ORDER = "order"  # opening order's sl
+    POSITION = "position"  # first SL the worker saw on the open position
+    USER = "user"  # entered by the user (needs_sl)
+
+
 class TradingSession(enum.StrEnum):
     LONDON = "london"
     PREMARKET = "premarket"
