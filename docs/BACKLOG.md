@@ -9,3 +9,4 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-10-31 | Review `npm audit` moderate advisory (minimatch via eslint/typescript-eslint, dev-only) | frontend-dev (M0) | Re-check on next eslint upgrade |
 | 2026-10-31 | README note: two checkouts running at once need different `POSTGRES_PORT` in `.env` | code-reviewer (M0) | One line in README |
 | 2026-11-01 | Avoid cmd "Terminate batch job (Y/N)?" prompt after Ctrl+C in start.bat | PM (M0 review) | Moved out of M1 by PM |
+| 2026-11-01 | Netting accounts: support `inout` position reversals in the trade builder (currently skipped with a visible reason) | code-reviewer (M1) | FundedNext accounts are hedging; only needed for a netting broker |
