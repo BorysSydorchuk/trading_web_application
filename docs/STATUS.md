@@ -12,7 +12,7 @@ Last update: 2026-11-01. Committed so far in M1: M1-02 config, M1-03 domain, M1-
 In progress (uncommitted files in the tree — check `git status`):
 - M1-01 launcher clean restart (scripts/dev.py, start.bat, stop.bat, README, tests/test_dev_script.py): built, IN REVIEW.
 - M1-06 MT5 source (backend/app/mt5/, fixtures, recorder, docs/MT5_SETUP.md, pyproject deps MetaTrader5+tzdata): being built.
-- M1-09 trades/inbox/sync-status API (backend/app/api/trades.py, sync_status.py, schemas, tests): built, IN REVIEW. TODO for M1-08: recompute violations on PATCH initial_sl.
+- M1-09 committed. TODO for M1-08: recompute violations on PATCH initial_sl.
 - M1-11 Journal table + Inbox list UI (frontend/): being built.
 Next after those: M1-08 sync service + worker job (needs M1-06), M1-12 trade check table tool, M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
 To resume in a new session: read CLAUDE.md, this file, DECISIONS.md; run `git status`; for each uncommitted task above, run its checks and send it to code-reviewer before committing. Per-agent test DBs exist: trading_journal_test_a..d.
@@ -30,7 +30,7 @@ Wave 2:
 - [ ] M1-06 MT5 source: read-only wrapper over `MetaTrader5` + fixture source + fixture recorder script; `docs/MT5_SETUP.md` (backend-dev)
 - [x] M1-07 Rules engine v1 (PRD 6.9) on top of domain logic (backend-dev)
 - [ ] M1-08 Sync service + worker job: sequential accounts, upserts, open positions, status transitions, specs, balance, offset, sync_log, cadence from rules.yaml (backend-dev)
-- [ ] M1-09 Trades/inbox/sync-status API (backend-dev)
+- [x] M1-09 Trades/inbox/sync-status API (backend-dev)
 - [x] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
 - [ ] M1-11 UI: Journal table (filters, sort, column chooser) and Inbox list with SL input (frontend-dev)
 - [ ] M1-12 Trade check table tool for the 5-trade comparison (backend-dev)

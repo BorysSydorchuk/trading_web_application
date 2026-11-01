@@ -92,7 +92,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
   "server_offset_hours": 2, "open_positions": 0
 } ] }
 ```
-`state`: `ok` (last attempt succeeded), `error` (last attempt failed), `running`, `never` (no sync yet), `stale` (last success older than 3 × the expected interval: the worker is probably not running).
+`state`: `ok` (last attempt succeeded), `error` (last attempt failed), `running`, `never` (no sync yet), `stale` (latest attempt older than 3 × the expected interval, whatever its outcome: the worker is probably not running or hung; the latest error stays in error_code/error_message).
 `error_code` (worker side): `password_missing`, `terminal_not_found`, `terminal_start_failed`, `login_failed`, `timeout`, `mt5_error`, `internal_error`. `error_message`: short English text; the UI shows Ukrainian text via `uk.ts` `sync.errors.<code>`.
 
 ### Trades
