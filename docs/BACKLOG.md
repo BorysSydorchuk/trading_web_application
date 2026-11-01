@@ -8,3 +8,4 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-10-31 | Frontend unit tests (Vitest) for `api/client.ts` and `lib/errors.ts` | code-reviewer (M0) | Add when frontend logic grows (M1/M2) |
 | 2026-10-31 | Review `npm audit` moderate advisory (minimatch via eslint/typescript-eslint, dev-only) | frontend-dev (M0) | Re-check on next eslint upgrade |
 | 2026-10-31 | README note: two checkouts running at once need different `POSTGRES_PORT` in `.env` | code-reviewer (M0) | One line in README |
+| 2026-11-01 | Avoid cmd "Terminate batch job (Y/N)?" prompt after Ctrl+C in start.bat | PM (M0 review) | Moved out of M1 by PM |

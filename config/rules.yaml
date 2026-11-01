@@ -1,0 +1,40 @@
+# Trading rules and session boundaries (PRD 6.3, 6.9).
+# Times are Europe/Brussels local time, "HH:MM", start inclusive, end exclusive.
+# Editing this file changes classification for trades synced/recomputed afterwards.
+
+timezone: Europe/Brussels
+
+sessions:
+  london:    { start: "08:00", end: "11:00", entries_allowed: true }
+  premarket: { start: "11:00", end: "13:00", entries_allowed: false }
+  ny:        { start: "13:00", end: "16:00", entries_allowed: true }
+  # anything else is "outside" (entries not allowed)
+
+# MT5 sync cadence (PRD 6.2): every 60 s on trading days during trading hours, else every 15 min.
+sync:
+  trading_days: [mon, tue, wed, thu, fri]
+  trading_hours: { start: "08:00", end: "16:00" }
+  interval_trading_seconds: 60
+  interval_idle_seconds: 900
+  initial_history_days: 30   # first sync of a new account
+  overlap_days: 3            # later syncs re-read this many days back (idempotent upsert)
+  # Symbols whose specs are always synced (plus every traded symbol). Broker suffixes are matched by prefix.
+  watch_symbols: [EURUSD, GBPUSD, XAUUSD, GER40]
+
+# Broker server time (PRD 6.3). FundedNext MT5 servers run on "New York close" time:
+# UTC+2 in winter, UTC+3 while US daylight saving is active. The offset detected from
+# symbol_info_tick() must match this rule; if it doesn't, the detected fixed offset is used and a warning logged.
+broker_time: ny_close
+
+rules:
+  max_risk_pct:          { value: 1.1,  enabled: true }   # flag if actual risk % > 1.1 (target 1 %)
+  daily_stop_loss_pct:   { value: -3.0, enabled: true }   # entries after day P&L <= -3 % are violations
+  daily_stop_profit_pct: { value: 5.0,  enabled: true }   # entries after day P&L >= +5 % are violations
+  weekly_stop_loss_pct:  { value: -6.0, enabled: true }
+  weekly_stop_profit_pct: { value: 10.0, enabled: true }
+  max_trades_per_week:   { value: 10,   enabled: true }   # the 11th+ trade of a Mon–Sun Brussels week is flagged
+  max_reentries_per_idea: { value: 1,   enabled: true }   # idea = same symbol + direction + session + day
+  min_planned_rr:        { value: 1.5,  enabled: true }
+  entry_session:         { enabled: true }                # entries only in sessions with entries_allowed
+  qm_not_in_ny:          { enabled: true, entry_model: "QM M5", session: ny }
+  no_breakeven:          { enabled: true }                # SL moved to entry price (within 1 tick)
