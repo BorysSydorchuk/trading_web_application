@@ -36,5 +36,5 @@ rules:
   max_reentries_per_idea: { value: 1,   enabled: true }   # idea = same symbol + direction + session + day
   min_planned_rr:        { value: 1.5,  enabled: true }
   entry_session:         { enabled: true }                # entries only in sessions with entries_allowed
-  qm_not_in_ny:          { enabled: true, entry_model: "QM M5", session: ny }
+  qm_not_in_ny:          { enabled: true, entry_model: qm_m5, session: ny }  # entry_model = option value in journal_fields.yaml
   no_breakeven:          { enabled: true }                # SL moved to entry price (within 1 tick)

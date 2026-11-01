@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter
 
-from app.api import accounts, health
+from app.api import accounts, config_files, health
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
 api_router.include_router(accounts.router)
+api_router.include_router(config_files.router)
 
 __all__ = ["api_router"]

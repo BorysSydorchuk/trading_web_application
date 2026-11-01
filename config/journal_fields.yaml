@@ -1,0 +1,182 @@
+# Journal field definitions (PRD 6.4). The describe form (in this order), the AI extraction
+# schema and digest breakdowns are generated from this file. Validated at API start.
+#
+# Field keys:
+#   key            stable snake_case id (a trades column, or a key in trades.extra)
+#   label          Ukrainian label shown in the UI
+#   type           enum | multi_enum | bool | int | text | links | auto
+#                  (auto = computed by the app, the user may override; links = chart links)
+#   options        enum/multi_enum/auto/links: list of {value, label, deprecated}
+#                  `value` is stored in the DB: never rename or delete it, set
+#                  `deprecated: true` instead so old trades keep their value.
+#   required       a trade cannot be "complete" without it (links: at least one "before" link)
+#   analytics      used in digest breakdowns
+#   storage        column (real trades column) | extra (JSONB trades.extra, experimental fields)
+#   text_key       optional free text stored next to an option field
+#   allow_other_text  true: text_key is the text for the "other" option only
+#                     false: text_key is an optional note for any value
+#   min, max       int fields only
+#
+# YAML note: yes/no/on/off are plain strings in this file (only true/false are booleans).
+
+fields:
+  - key: setup_context
+    label: "Контекст (Flow H1 синхронний з H4)"
+    type: enum
+    options:
+      - { value: yes, label: "так" }
+      - { value: no, label: "ні" }
+      - { value: partially, label: "частково" }
+    required: true
+    analytics: true
+    storage: column
+
+  - key: poi_type
+    label: "Тип POI"
+    type: enum
+    options:
+      - { value: fvg_h4, label: "FVG H4" }
+      - { value: fvg_h1, label: "FVG H1" }
+      - { value: other, label: "інше" }
+    required: true
+    analytics: true
+    storage: column
+    text_key: poi_type_other
+    allow_other_text: true
+
+  - key: fvg_kind
+    label: "Тип FVG"
+    type: enum
+    options:
+      - { value: fractal_updating, label: "оновлює фрактал" }
+      - { value: post_manipulation, label: "після маніпуляції" }
+      - { value: na, label: "н/з" }
+    required: true
+    analytics: true
+    storage: column
+
+  - key: entry_model
+    label: "Модель входу"
+    type: enum
+    options:
+      - { value: ifvg_m5, label: "IFVG M5" }
+      - { value: qm_m5, label: "QM M5" }
+      - { value: other, label: "інше" }
+    required: true
+    analytics: true
+    storage: column
+
+  - key: exit_reason
+    label: "Причина виходу"
+    type: enum
+    options:
+      - { value: fractal_update, label: "оновлення фракталу" }
+      - { value: point_b, label: "ціль: точка B" }
+      - { value: sl, label: "SL" }
+      - { value: tp, label: "TP" }
+      - { value: manual, label: "вручну" }
+      - { value: other, label: "інше" }
+    required: true
+    analytics: true
+    storage: column
+
+  # Computed from the bias entries (PRD 6.6); the user may override it with a reason.
+  # Not required: the app fills it, it never blocks completing a trade.
+  - key: bias_alignment
+    label: "Відповідність біасу"
+    type: auto
+    options:
+      - { value: aligned, label: "за біасом" }
+      - { value: counter, label: "проти біасу" }
+      - { value: neutral_bias, label: "нейтральний біас" }
+      - { value: no_bias, label: "без біасу" }
+    required: false
+    analytics: true
+    storage: column
+
+  - key: followed_plan
+    label: "Дотримався плану"
+    type: bool
+    required: true
+    analytics: true
+    storage: column
+
+  # Auto-detected by the rules engine (config/rules.yaml) plus user-added; values are rule keys.
+  - key: rule_violations
+    label: "Порушення правил"
+    type: multi_enum
+    options:
+      - { value: max_risk_pct, label: "ризик на угоду вище ліміту" }
+      - { value: daily_stop_loss_pct, label: "вхід після денного стоп-лосу" }
+      - { value: daily_stop_profit_pct, label: "вхід після денного стоп-профіту" }
+      - { value: weekly_stop_loss_pct, label: "вхід після тижневого стоп-лосу" }
+      - { value: weekly_stop_profit_pct, label: "вхід після тижневого стоп-профіту" }
+      - { value: max_trades_per_week, label: "перевищено ліміт угод на тиждень" }
+      - { value: max_reentries_per_idea, label: "забагато перезаходів в ідею" }
+      - { value: min_planned_rr, label: "плановий RR нижче мінімуму" }
+      - { value: entry_session, label: "вхід поза дозволеною сесією" }
+      - { value: qm_not_in_ny, label: "QM у сесії NY" }
+      - { value: no_breakeven, label: "перенесення в беззбиток" }
+    required: false
+    analytics: true
+    storage: column
+
+  - key: emotion_before
+    label: "Емоція до входу"
+    type: enum
+    options: &emotions
+      - { value: calm, label: "спокій" }
+      - { value: confidence, label: "впевненість" }
+      - { value: fomo, label: "FOMO" }
+      - { value: fear, label: "страх" }
+      - { value: revenge, label: "реванш" }
+      - { value: fatigue, label: "втома" }
+      - { value: boredom, label: "нудьга" }
+    required: true
+    analytics: true
+    storage: column
+    text_key: emotion_before_text
+    allow_other_text: false
+
+  - key: emotion_after
+    label: "Емоція після угоди"
+    type: enum
+    options: *emotions
+    required: true
+    analytics: true
+    storage: column
+    text_key: emotion_after_text
+    allow_other_text: false
+
+  - key: mistakes
+    label: "Помилки"
+    type: text
+    required: false
+    analytics: false
+    storage: column
+
+  - key: lesson
+    label: "Урок"
+    type: text
+    required: false
+    analytics: false
+    storage: column
+
+  - key: quality_rating
+    label: "Якість сетапу (1–5, незалежно від результату)"
+    type: int
+    min: 1
+    max: 5
+    required: true
+    analytics: true
+    storage: column
+
+  - key: chart_links
+    label: "Посилання на графік (TradingView)"
+    type: links
+    options:
+      - { value: before, label: "до входу" }
+      - { value: after, label: "після угоди" }
+    required: true
+    analytics: false
+    storage: column

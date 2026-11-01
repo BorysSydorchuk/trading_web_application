@@ -15,7 +15,7 @@ Any non-2xx response has this body:
 - `message`: English, for logs and developers.
 - `details`: optional object (for example validation errors: `{ "fields": { "name": "required" } }`).
 
-Known codes: `validation_error` (422, `details.fields` maps field path → English message), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
+Known codes: `validation_error` (422, `details.fields` maps field path → English message), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `config_error` (500, broken config/*.yaml; `details: {file, problems[]}`), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
 Unhandled exceptions are logged with a traceback to `logs/` and returned as `internal_error`; the API never returns an HTML error page.
 
 ## M0
@@ -130,7 +130,8 @@ The investor password is never sent through the API. It lives in `.env` under `M
   "required": true, "analytics": true, "storage": "column", "allow_other_text": false }
 ```
 `type`: `enum | multi_enum | bool | int | text | links | auto`. `storage`: `column` (real trade column) or `extra` (JSONB `trades.extra`).
+Optional attributes: `text_key` (companion free-text column; with `allow_other_text: true` it applies only to the `other` option, otherwise it is an optional note for any value), `min`/`max` (int fields). `rule_violations` is `multi_enum` whose options are the rules.yaml rule keys. `chart_links` is `links`; `required` means at least one `before` link. `bias_alignment` is `auto` (not required until the bias module exists).
 
 ### Rules config
 
-- `GET /api/rules` → the parsed `config/rules.yaml` (sessions, rules) for display in the UI.
+- `GET /api/rules` → `{ timezone, sessions: [{name, start, end, entries_allowed}] (sorted by start), sync, broker_time, rules: {key: {enabled, value?, ...}} }`; decimals as strings, counts as ints.

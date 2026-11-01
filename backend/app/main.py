@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from app.api import api_router
 from app.api.health import app_version
 from app.config import Settings, get_settings
+from app.config_files import check_config_files
 from app.db import dispose_engine
 from app.errors import install_error_handlers
 from app.logging_setup import setup_logging
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("API starting, version %s", app_version())
+    check_config_files()  # broken YAML is logged loudly; endpoints return config_error
     yield
     dispose_engine()
     logger.info("API stopped")
