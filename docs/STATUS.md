@@ -8,14 +8,20 @@ Current milestone: **M1 MT5 sync and trade data** (in progress). M0 accepted by 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-01. Committed so far in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-10 sync chips/badge/notifications.
-In progress (uncommitted files in the tree — check `git status`):
-- M1-01 launcher clean restart (scripts/dev.py, start.bat, stop.bat, README, tests/test_dev_script.py): built, IN REVIEW.
-- M1-06 MT5 source (backend/app/mt5/, fixtures, recorder, docs/MT5_SETUP.md, pyproject deps MetaTrader5+tzdata): being built.
-- M1-09 committed. TODO for M1-08: recompute violations on PATCH initial_sl.
-- M1-11 Journal table + Inbox list UI (frontend/): being built.
-Next after those: M1-08 sync service + worker job (needs M1-06), M1-12 trade check table tool, M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
-To resume in a new session: read CLAUDE.md, this file, DECISIONS.md; run `git status`; for each uncommitted task above, run its checks and send it to code-reviewer before committing. Per-agent test DBs exist: trading_journal_test_a..d.
+Last update: 2026-11-01, agents stopped on Borys's request.
+Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-09 trades/inbox/sync API, M1-10 sync chips/badge/notifications.
+
+Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
+- M1-01 launcher (scripts/dev.py, start.bat, stop.bat, Makefile, README.md, backend/tests/test_dev_script.py): feature built and verified; review asked for 3 fixes, agent was stopped mid-fix:
+  1. start Docker Desktop outside our process tree (`cmd /c start "" <exe>`) so taskkill /T never kills it;
+  2. check taskkill return code + re-check the process is gone before printing "Зупинено"; in start mode fail if ours survived; test with a kill that leaves the process alive;
+  3. README example `Зупинено: api uv.exe (PID 1234).`
+  Some of fix 1–3 may be half-applied: run `pytest tests/test_dev_script.py` and re-review.
+- M1-06 MT5 source (backend/app/mt5/ partial, backend/pyproject.toml + uv.lock with MetaTrader5/tzdata deps): stopped mid-build (protocol/adapter stage). No fixtures, recorder, tests or docs/MT5_SETUP.md yet. Last known: mypy errors in app/mt5/types.py. Easiest: restart the task from its spec (see M1 tasks) keeping or discarding app/mt5/.
+- M1-11 Journal + Inbox UI (frontend/src/features/journal/, features/trades/, components/MultiSelectFilter.tsx, edits in api/client.ts, inbox/*, i18n/uk.ts, lib/decimal.ts, lib/time.ts): stopped mid-build (table/detail dialog stage). Needs: run lint/typecheck, finish, review. Backend for it (M1-09) is committed. Must add `errors.trade_open` and client-side SL checks (positive, != entry, below entry for buy / above for sell).
+
+Next after those: M1-08 sync service + worker job (needs M1-06; also wire violation recompute into PATCH initial_sl), M1-12 trade check table tool (needs M1-06), M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; finish/verify each partial task above, code-review, commit. Per-agent test DBs exist: trading_journal_test_a..d.
 
 ## M1 tasks
 
@@ -57,3 +63,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-10-31: T6 launcher: review found password-fragment leak in URL errors, README PowerShell command, missing tests, double Ctrl+C; fixed, approved, committed (47394f4). T7 QA fresh clone: AC pass except fixed Docker container_name broke a second checkout → removed; npm install quieter; README notes cmd prompt. M0 report written.
 - 2026-11-01: M0 accepted. M1 planned (rules.yaml, api.md M1 contract, decisions written).
 - 2026-11-01: Committed M1-04 (8053c0b), M1-05 (eec7fb5), M1-03 (cebf099), M1-02 (223facc), M1-10 (0a38909), M1-07 (2714eac).
+- 2026-11-01: M1-09 committed (e33f4a5). Agents stopped on request; partial M1-01/M1-06/M1-11 left uncommitted (see resume notes).
