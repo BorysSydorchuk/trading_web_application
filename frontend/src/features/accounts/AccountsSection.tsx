@@ -16,6 +16,14 @@ export function AccountsSection() {
   const archivedToggleId = useId()
   const [includeArchived, setIncludeArchived] = useState(false)
   const { data, isPending, isError, error, refetch, isFetching } = useAccounts(includeArchived)
+  // Only asked when the active list is empty: tells "no accounts" from "all archived".
+  const probeEnabled = !includeArchived && data !== undefined && data.items.length === 0
+  const archivedProbe = useAccounts(true, { enabled: probeEnabled })
+  const allArchived =
+    !includeArchived &&
+    data?.items.length === 0 &&
+    archivedProbe.data !== undefined &&
+    archivedProbe.data.items.length > 0
 
   // Kept separately from `open` so the dialog content does not change during the close animation.
   const [formOpen, setFormOpen] = useState(false)
@@ -39,7 +47,7 @@ export function AccountsSection() {
   }
 
   let body
-  if (isPending) {
+  if (isPending || (probeEnabled && archivedProbe.isPending)) {
     body = <LoadingRows />
   } else if (isError) {
     body = (
@@ -49,6 +57,15 @@ export function AccountsSection() {
         <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
           {isFetching && <Loader2 className="animate-spin" aria-hidden />}
           {uk.common.retry}
+        </Button>
+      </div>
+    )
+  } else if (allArchived) {
+    body = (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+        <p className="text-muted-foreground">{t.allArchived}</p>
+        <Button variant="outline" size="sm" onClick={() => setIncludeArchived(true)}>
+          {t.showArchived}
         </Button>
       </div>
     )

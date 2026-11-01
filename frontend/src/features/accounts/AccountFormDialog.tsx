@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useIsMutating } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
-import { useCreateAccount, useUpdateAccount } from './api'
+import { accountKeys, useCreateAccount, useUpdateAccount } from './api'
 import {
   DECIMAL_FIELDS,
   EMPTY_VALUES,
@@ -43,8 +44,15 @@ interface AccountFormDialogProps {
 }
 
 export function AccountFormDialog({ open, onOpenChange, account }: AccountFormDialogProps) {
+  const isSaving = useIsMutating({ mutationKey: accountKeys.save }) > 0
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Escape / outside click / close button must not drop a save in flight.
+        if (!isSaving) onOpenChange(next)
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{account ? t.editTitle : t.createTitle}</DialogTitle>

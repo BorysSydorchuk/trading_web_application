@@ -45,3 +45,20 @@ export function formatRecentBrussels(isoUtc: string, now: Date = new Date()): st
   if (dateKeyFormatter.format(date) === dateKeyFormatter.format(now)) return time
   return `${dayMonthFormatter.format(date)} ${time}`
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat('uk-UA', {
+  timeZone: APP_TIME_ZONE,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
+/** Full Brussels date and time of a UTC instant, e.g. "01.11.2026, 14:32:05". */
+export function formatDateTimeBrussels(isoUtc: string): string {
+  const date = new Date(isoUtc)
+  return Number.isNaN(date.getTime()) ? isoUtc : dateTimeFormatter.format(date)
+}

@@ -1,4 +1,6 @@
 import { useHealth } from '@/api/health'
+import { NotificationPrompt } from '@/features/inbox/NotificationPrompt'
+import { SyncChips } from '@/features/sync/SyncChips'
 import { uk } from '@/i18n/uk'
 import { formatTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -37,16 +39,17 @@ export function StatusBar() {
 
   return (
     <footer
-      role="status"
       aria-label={uk.statusBar.label}
-      aria-live="polite"
       className="flex h-7 shrink-0 items-center gap-4 border-t border-sidebar-border bg-sidebar px-3 text-xs text-muted-foreground"
     >
-      <span className="flex items-center gap-2">
+      {/* Only the server/DB state is announced; sync chips and the clock would be noise every poll. */}
+      <span role="status" aria-live="polite" className="flex shrink-0 items-center gap-2">
         <span className={cn('size-2 rounded-full', dotClass[tone])} aria-hidden />
         <span className={cn(tone === 'down' && 'text-loss')}>{text}</span>
       </span>
-      <span className="ml-auto flex items-center gap-4">
+      <SyncChips />
+      <span className="ml-auto flex shrink-0 items-center gap-4">
+        <NotificationPrompt />
         {version !== null && (
           <span>
             {uk.statusBar.version} <span className="num">{version}</span>

@@ -5,10 +5,13 @@ import type { Account, AccountInput, AccountList } from './types'
 export const accountKeys = {
   all: ['accounts'] as const,
   list: (includeArchived: boolean) => ['accounts', 'list', { includeArchived }] as const,
+  /** Shared key of the create/update mutations (lets the form dialog know a save is running). */
+  save: ['accounts', 'save'] as const,
 }
 
-export function useAccounts(includeArchived: boolean) {
+export function useAccounts(includeArchived: boolean, options: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled: options.enabled ?? true,
     queryKey: accountKeys.list(includeArchived),
     queryFn: ({ signal }) =>
       apiGet<AccountList>('/accounts', { signal, query: { include_archived: includeArchived } }),
@@ -20,6 +23,7 @@ export function useAccounts(includeArchived: boolean) {
 export function useCreateAccount() {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: accountKeys.save,
     mutationFn: (input: AccountInput) =>
       apiRequest<Account>('/accounts', { method: 'POST', body: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: accountKeys.all }),
@@ -29,6 +33,7 @@ export function useCreateAccount() {
 export function useUpdateAccount() {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: accountKeys.save,
     mutationFn: ({ id, patch }: { id: number; patch: Partial<AccountInput> }) =>
       apiRequest<Account>(`/accounts/${id}`, { method: 'PATCH', body: patch }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: accountKeys.all }),
