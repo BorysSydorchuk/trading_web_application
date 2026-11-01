@@ -7,21 +7,31 @@ Current milestone: **M1 MT5 sync and trade data** (in progress). M0 accepted by 
 - Installed for this project: `uv` 0.13.1 (`pip install --user uv`), GNU make 4.4.1 (`winget install ezwinports.make`).
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
+## Where we stopped / how to resume (updated continuously)
+Last update: 2026-11-01. Committed so far in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-10 sync chips/badge/notifications.
+In progress (uncommitted files in the tree — check `git status`):
+- M1-01 launcher clean restart (scripts/dev.py, start.bat, stop.bat, README, tests/test_dev_script.py): built, IN REVIEW.
+- M1-06 MT5 source (backend/app/mt5/, fixtures, recorder, docs/MT5_SETUP.md, pyproject deps MetaTrader5+tzdata): being built.
+- M1-09 trades/inbox/sync-status API (backend/app/api/trades.py, sync_status.py): being built.
+- M1-11 Journal table + Inbox list UI (frontend/): being built.
+Next after those: M1-08 sync service + worker job (needs M1-06), M1-12 trade check table tool, M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
+To resume in a new session: read CLAUDE.md, this file, DECISIONS.md; run `git status`; for each uncommitted task above, run its checks and send it to code-reviewer before committing. Per-agent test DBs exist: trading_journal_test_a..d.
+
 ## M1 tasks
 
 Wave 1 (parallel):
 - [ ] M1-01 Launcher clean restart: run file with PIDs, auto-stop our previous run when ports are busy, `stop.bat`; Docker Desktop check/start with 60 s wait; Ukrainian console messages (backend-dev)
-- [ ] M1-02 Config loaders: `config/rules.yaml` + `config/journal_fields.yaml` (PRD 6.4 fields) with validation, `GET /api/journal-fields`, `GET /api/rules` (backend-dev)
-- [ ] M1-03 Domain logic (pure, no DB): broker time ↔ UTC (ny_close rule, offset detection, DST tests), session classification, trade building from deals (partial closes, scaling in, VWAP), initial SL selection, computed fields (risk, R, planned RR, P&L %, balance at open, weekday/hour, re-entry) (backend-dev)
-- [ ] M1-04 Accounts API + migration (drop password_ref, add trades.initial_sl_source), `.env.example` MT5 keys (backend-dev)
-- [ ] M1-05 Settings page: accounts CRUD (frontend-dev)
+- [x] M1-02 Config loaders: `config/rules.yaml` + `config/journal_fields.yaml` (PRD 6.4 fields) with validation, `GET /api/journal-fields`, `GET /api/rules` (backend-dev)
+- [x] M1-03 Domain logic (pure, no DB): broker time ↔ UTC (ny_close rule, offset detection, DST tests), session classification, trade building from deals (partial closes, scaling in, VWAP), initial SL selection, computed fields (risk, R, planned RR, P&L %, balance at open, weekday/hour, re-entry) (backend-dev)
+- [x] M1-04 Accounts API + migration (drop password_ref, add trades.initial_sl_source), `.env.example` MT5 keys (backend-dev)
+- [x] M1-05 Settings page: accounts CRUD (frontend-dev)
 
 Wave 2:
 - [ ] M1-06 MT5 source: read-only wrapper over `MetaTrader5` + fixture source + fixture recorder script; `docs/MT5_SETUP.md` (backend-dev)
-- [ ] M1-07 Rules engine v1 (PRD 6.9) on top of domain logic (backend-dev)
+- [x] M1-07 Rules engine v1 (PRD 6.9) on top of domain logic (backend-dev)
 - [ ] M1-08 Sync service + worker job: sequential accounts, upserts, open positions, status transitions, specs, balance, offset, sync_log, cadence from rules.yaml (backend-dev)
 - [ ] M1-09 Trades/inbox/sync-status API (backend-dev)
-- [ ] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
+- [x] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
 - [ ] M1-11 UI: Journal table (filters, sort, column chooser) and Inbox list with SL input (frontend-dev)
 - [ ] M1-12 Trade check table tool for the 5-trade comparison (backend-dev)
 - [ ] M1-13 QA: fixture scenarios end-to-end through mock source, AC verification (qa-tester)
@@ -46,3 +56,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-10-31: T4 schema: review requested balance/equity, last_sl, deal reason, CHECK drift test; fixed, approved, committed (45f25f0). T5 worker: private-API override replaced with public API, approved, startup-failure nit fixed by orchestrator, committed (6278ef4). T6 launcher in progress.
 - 2026-10-31: T6 launcher: review found password-fragment leak in URL errors, README PowerShell command, missing tests, double Ctrl+C; fixed, approved, committed (47394f4). T7 QA fresh clone: AC pass except fixed Docker container_name broke a second checkout → removed; npm install quieter; README notes cmd prompt. M0 report written.
 - 2026-11-01: M0 accepted. M1 planned (rules.yaml, api.md M1 contract, decisions written).
+- 2026-11-01: Committed M1-04 (8053c0b), M1-05 (eec7fb5), M1-03 (cebf099), M1-02 (223facc), M1-10 (0a38909), M1-07 (2714eac).
