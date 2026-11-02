@@ -438,12 +438,26 @@ def test_patch_without_spec_or_move_leaves_risk_null(
     assert data["r_multiple"] is None
 
 
-def test_patch_correction_keeps_draft_and_violations(client: TestClient, seed: Seed) -> None:
+def test_patch_correction_keeps_draft_and_recomputes_violations(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
     trade = seed.trades["draft"]
+    add_violation(session, trade, "no_breakeven", "user")
     data = client.patch(f"/api/trades/{trade.id}", json={"initial_sl": "2640.00"}).json()
     assert data["status"] == "draft"
     assert data["risk_amount"] == "500.00"
-    assert data["violations"] == ["entry_session"]  # rules engine not run here
+    # The stale auto row (seeded without a session) is gone; the user's row stays.
+    assert data["violations"] == ["no_breakeven"]
+
+
+def test_patch_wide_sl_adds_risk_and_rr_violations(client: TestClient, seed: Seed) -> None:
+    trade = seed.trades["needs_sl"]
+    data = client.patch(f"/api/trades/{trade.id}", json={"initial_sl": "2600.00"}).json()
+    assert data["risk_amount"] == "2500.00"  # 500 * 50 / 10
+    assert data["risk_pct"] == "2.5000"
+    assert data["planned_rr"] == "0.4000"
+    assert data["violations"] == ["max_risk_pct", "min_planned_rr"]
+    assert {v["source"] for v in data["rule_violations"]} == {"auto"}
 
 
 def test_patch_sell_side(client: TestClient, session: Session, seed: Seed) -> None:

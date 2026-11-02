@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config_files import ConfigError, get_rules
 from app.db import get_db
 from app.domain import metrics
 from app.domain.sessions import DEFAULT_TZ
@@ -22,6 +23,7 @@ from app.errors import ApiError
 from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
+from app.services.trade_rules import recompute_rules
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +208,7 @@ def _check_stop_side(trade: Trade, sl: Decimal) -> None:
 
 
 def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
-    """Set a user-entered initial SL and recompute risk, risk %, R and planned RR."""
+    """Set a user-entered initial SL; recompute risk, risk %, R, planned RR and violations."""
     spec = db.scalar(
         select(SymbolSpec).where(
             SymbolSpec.account_id == trade.account_id, SymbolSpec.symbol == trade.symbol
@@ -230,8 +232,16 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     trade.r_multiple = metrics.r_multiple(trade.net_pnl, risk)
     trade.planned_rr = metrics.planned_rr(trade.entry_price, sl, trade.tp)
     trade.status = next_status(trade.status, is_closed=True, has_initial_sl=True).value
-    # Rule violations (max_risk_pct, min_planned_rr, ...) are recomputed by the rules
-    # service, wired in by the sync/rules task; this endpoint does not touch them.
+    # Same recompute as the MT5 sync (risk %, planned RR and breakeven depend on the SL).
+    try:
+        rules = get_rules()
+    except ConfigError as exc:
+        # The SL is still saved; violations catch up on the next sync once the file is fixed.
+        logger.error(
+            "Trade %s: violations not recomputed, rules.yaml is invalid: %s", trade.id, exc
+        )
+        return
+    recompute_rules(db, trade.account_id, trade.open_time, rules)
 
 
 @router.patch("/trades/{trade_id}", response_model=schemas.TradeDetail)

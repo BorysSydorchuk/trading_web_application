@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     api_port: int = 8000
     frontend_port: int = 5173
 
+    # MT5 data source for the worker: "real" (MetaTrader5 terminals) or
+    # "fixture:<path to JSON>" (demo/QA without a terminal, see README).
+    mt5_source: str = "real"
+
     # AI (used from M2)
     anthropic_api_key: SecretStr = SecretStr("")
     anthropic_model: str = "claude-sonnet-5-5"

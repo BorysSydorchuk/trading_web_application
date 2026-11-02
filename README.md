@@ -108,6 +108,24 @@ If the database is reachable, the launcher never touches Docker.
 
 Coming in milestone M1 (one portable terminal per account, read-only investor password in `.env`).
 
+### Running the worker without a terminal (demo / QA)
+
+The worker reads MT5 through a data source chosen by `MT5_SOURCE` in `.env`:
+
+- `MT5_SOURCE=real` (default): the MetaTrader5 terminals of the accounts.
+- `MT5_SOURCE=fixture:<path to JSON>`: recorded data from `backend/tests/fixtures/mt5/`
+  (path relative to the repo root), no terminal needed. Example:
+  `MT5_SOURCE=fixture:backend/tests/fixtures/mt5/basic_week.json`. Create an active account
+  with the fixture's login and server (`51234567` @ `FundedNext-Server` for `basic_week.json`,
+  see `backend/tests/fixtures/mt5/README.md`) and set any non-empty
+  `MT5_PASSWORD_51234567=...`. The worker then syncs it like a real account (the log warns
+  that fixture data is in use). Remove the line to go back to real terminals.
+
+The worker syncs every active account (status `active`; passed/failed/archived accounts are
+skipped) one after another: every 60 s during trading hours, every 15 min otherwise
+(`sync` in `config/rules.yaml`). Each attempt is a row in `sync_log`; failures show in the
+UI status bar and in `logs/worker.log`.
+
 ## Logs
 
 - `logs/api.log`, `logs/worker.log`: rotating log files (UTC timestamps). Errors shown in the

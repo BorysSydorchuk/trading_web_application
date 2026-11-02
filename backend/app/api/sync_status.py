@@ -55,8 +55,9 @@ def stale_after(now: datetime, last_attempt: datetime) -> timedelta:
 
 
 def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
-    """never | running | error | ok while the worker is active; stale once nothing (not
-    even a failed or running attempt) happened for 3x the expected interval."""
+    """never | running | error | warning | ok while the worker is active; stale once
+    nothing (not even a failed or running attempt) happened for 3x the expected interval.
+    `warning` = the sync succeeded but recorded a problem (e.g. positions_skipped)."""
     if latest is None:
         return "never"
     last_attempt = latest.finished_at or latest.started_at
@@ -64,7 +65,9 @@ def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
         return "stale"
     if latest.ok is None:
         return "running"
-    return "ok" if latest.ok else "error"
+    if not latest.ok:
+        return "error"
+    return "warning" if latest.error_code else "ok"
 
 
 @router.get("/status", response_model=SyncStatusList)
@@ -99,7 +102,8 @@ def sync_status(db: Session = Depends(get_db), now: datetime = Depends(utc_now))
     for account in accounts:
         row = latest.get(account.id)
         success = last_ok.get(account.id)
-        failed = row is not None and row.ok is False
+        # Error details of a failed attempt or of a successful one with a warning.
+        failed = row is not None and row.ok is not None and row.error_code is not None
         items.append(
             AccountSyncStatus(
                 account_id=account.id,

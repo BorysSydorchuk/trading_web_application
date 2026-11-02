@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import Settings
 from app.worker.main import HEARTBEAT_JOB_ID, build_scheduler, heartbeat
+from app.worker.sync_job import SYNC_JOB_ID
 
 
 class _BrokenEngine:
@@ -36,7 +37,24 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
     assert isinstance(job.trigger, IntervalTrigger)
     assert job.trigger.interval == timedelta(seconds=60)
     assert str(scheduler.timezone) == str(UTC)
-    assert [j.id for j in scheduler.get_jobs()] == [HEARTBEAT_JOB_ID]
+    assert [j.id for j in scheduler.get_jobs()] == [HEARTBEAT_JOB_ID, SYNC_JOB_ID]
+    sync = scheduler.get_job(SYNC_JOB_ID)
+    assert sync is not None
+    assert isinstance(sync.trigger, IntervalTrigger)
+    assert sync.trigger.interval == timedelta(seconds=60)
+
+
+def test_sync_job_errors_are_contained(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    def exploding_sync() -> None:
+        raise RuntimeError("sync boom")
+
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine, sync_job=exploding_sync)
+    job = scheduler.get_job(SYNC_JOB_ID)
+    assert job is not None
+    job.func()  # must not raise
+    assert "Job 'mt5_sync' failed" in caplog.text
 
 
 def test_heartbeat_logs_when_db_ok(db_engine: Engine, caplog: pytest.LogCaptureFixture) -> None:

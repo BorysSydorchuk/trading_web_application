@@ -1,7 +1,7 @@
 """Worker process: an APScheduler BackgroundScheduler (UTC) running periodic jobs;
 the main thread just waits for a stop signal.
 
-M0 has a single `heartbeat` job. M1 adds the MT5 sync job via `build_scheduler`.
+Jobs: `heartbeat` (DB check) and `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`).
 Every job is wrapped by `_safe` so an exception is logged and the scheduler keeps running.
 """
 
@@ -21,8 +21,17 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings, get_settings
-from app.db import dispose_engine, get_engine
+from app.config_files import check_config_files
+from app.db import dispose_engine, get_engine, get_session_factory
 from app.logging_setup import setup_logging
+from app.mt5.source import Mt5Source
+from app.worker.sync_job import (
+    SYNC_JOB_ID,
+    SYNC_JOB_INTERVAL_S,
+    make_source,
+    mark_interrupted_runs,
+    run_sync_cycle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +77,26 @@ def heartbeat(engine_getter: Callable[[], Engine] = get_engine) -> bool:
     return True
 
 
+def default_sync_job(settings: Settings) -> Callable[[], None]:
+    """One MT5 source for the process (created on first run), DB sessions per account."""
+    source: list[Mt5Source] = []
+
+    def job() -> None:
+        if not source:
+            source.append(make_source(settings))
+        run_sync_cycle(get_session_factory(), source[0])
+
+    return job
+
+
 def build_scheduler(
     settings: Settings | None = None,
     *,
     engine_getter: Callable[[], Engine] = get_engine,
+    sync_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
-    _ = settings or get_settings()  # M1: sync interval and accounts come from settings/config
+    settings = settings or get_settings()
     scheduler = BackgroundScheduler(
         timezone=UTC,
         job_defaults={
@@ -93,6 +115,14 @@ def build_scheduler(
         id=HEARTBEAT_JOB_ID,
         name=HEARTBEAT_JOB_ID,
         next_run_time=datetime.now(UTC),  # first beat right after start
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(SYNC_JOB_ID, sync_job or default_sync_job(settings)),
+        trigger=IntervalTrigger(seconds=SYNC_JOB_INTERVAL_S, timezone=UTC),
+        id=SYNC_JOB_ID,
+        name=SYNC_JOB_ID,
+        next_run_time=datetime.now(UTC),  # due accounts sync right after start
         replace_existing=True,
     )
     return scheduler
@@ -114,6 +144,8 @@ def main() -> int:
     settings = get_settings()
     log_path = setup_logging("worker.log", settings)
     logger.info("Worker starting (env=%s), logging to %s", settings.app_env, log_path)
+    check_config_files()  # broken YAML is logged loudly; the sync job retries every cycle
+    mark_interrupted_runs(get_session_factory())
     stop = threading.Event()
     _install_signal_handlers(stop)
     scheduler = build_scheduler(settings)

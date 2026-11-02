@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.schemas.common import UtcDatetime
 
-SyncState = Literal["ok", "error", "running", "never", "stale"]
+SyncState = Literal["ok", "warning", "error", "running", "never", "stale"]
 
 
 class AccountSyncStatus(BaseModel):
