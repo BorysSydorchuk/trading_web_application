@@ -35,19 +35,39 @@ double-click `start.bat` in Explorer. On the first run it:
 
 1. creates `.env` from `.env.example` (edit it later for API keys and MT5 passwords),
 2. installs backend (`uv sync`) and frontend (`npm install`) dependencies (a few minutes once),
-3. starts PostgreSQL in Docker if it is not reachable (Docker Desktop must be installed; the
-   launcher tries to start it and waits, otherwise start it yourself),
+3. starts PostgreSQL in Docker if it is not reachable (Docker Desktop must be installed; if it
+   is not running the launcher starts it and waits up to 60 s:
+   `Docker Desktop не запущено — запускаю, чекаю до 60 с…`),
 4. applies DB migrations,
 5. starts the API (`[api]`), the worker (`[worker]`) and the UI dev server (`[web]`) in one
    window, waits until they respond and opens http://127.0.0.1:5173 in your browser.
 
 **What you should see:** the dark UI with the sidebar (Головна, Потрібен опис, Журнал, Біас,
 Дайджести, Калькулятор, Налаштування), empty pages, and a green status bar (backend and DB OK).
-The console prints `Ready in N s`; a warm start takes a few seconds.
+The console prints `Готово за N с: http://127.0.0.1:5173/ (стан API: ok)`; a warm start takes a
+few seconds. Launcher messages (`[dev]`) are in Ukrainian.
 
 Stop with **Ctrl+C** in that window (all processes are stopped). If cmd then asks
 `Terminate batch job (Y/N)?`, answer `Y`; the app is already stopped. `.\start.bat --no-browser`
 starts without opening the browser.
+
+### Stopping and restarting
+
+- **`.\stop.bat`** (or double-click it) stops a running app from any window and prints what it
+  stopped, e.g. `Зупинено: api uv.exe (PID 1234).` and `Застосунок зупинено.` When nothing
+  runs it prints `Застосунок не запущено, нічого зупиняти.` A launcher that is still running
+  gets a stop request and shuts its processes down itself, so its window closes normally.
+- **Automatic cleanup on start:** `start.bat` first stops a previous run of this app, for
+  example when the launcher window was closed or killed from Task Manager and the API/UI were
+  left running (`Знайдено попередній запуск застосунку: … Зупиняю його…`). You never need to
+  hunt for PIDs.
+- How it knows what is "ours": the launcher writes `logs/dev-run.json` with its own PID and
+  every child PID, each with the process creation time and command line, and deletes it on a
+  clean exit. A recorded PID is stopped only if creation time and command line still match
+  (a reused PID is never touched). If the file is lost, the API, UI and worker of this checkout
+  are still recognised by their command line (`backend\.venv`, `frontend\node_modules`).
+- A port held by **another program** is never stopped; the launcher names it and exits:
+  `Порт 8000 зайнятий іншою програмою: python.exe (PID 4321). …`
 
 ## Everyday commands
 
@@ -56,12 +76,13 @@ Run from the repo root (needs GNU make):
 | Command | What it does |
 | --- | --- |
 | `make dev` | same as `start.bat` (`python scripts/dev.py`) |
+| `make stop` | same as `stop.bat` (`python scripts/dev.py --stop`) |
 | `make check` | lint (ruff, eslint), type check (mypy, tsc), tests (pytest); starts the DB if needed |
 | `make migrate` | apply Alembic migrations (`alembic upgrade head`) |
 | `make db-ensure` | start the DB if needed and migrate, then exit |
 | `make install` | install backend and frontend dependencies |
 
-Without make: `python scripts/dev.py [--no-browser | --ensure-db]`.
+Without make: `python scripts/dev.py [--no-browser | --ensure-db | --stop]`.
 
 ## Using native PostgreSQL instead of Docker
 
@@ -101,7 +122,7 @@ backend/            FastAPI app (package app), worker (app/worker), Alembic migr
 frontend/           React + TypeScript + Vite UI; all UI strings in src/i18n/uk.ts
 config/             YAML config (journal fields, rules) from M1
 docker/             Postgres init scripts (creates the test DB)
-scripts/dev.py      launcher used by start.bat and make dev
+scripts/dev.py      launcher used by start.bat, stop.bat, make dev and make stop
 docs/               PRD, roadmap, API contract, decisions, status, milestone reports
 logs/, data/        runtime logs and data (gitignored)
 docker-compose.yml  local PostgreSQL 16 (service db, port 5432)
@@ -109,13 +130,14 @@ docker-compose.yml  local PostgreSQL 16 (service db, port 5432)
 
 ## Troubleshooting
 
-- **"Docker daemon is not running"**: start Docker Desktop, wait until it shows "Engine
+- **`Docker Desktop не запустився за 60 с`** (or `Docker Desktop не запущено, і запустити його
+  автоматично не вдалося`): start Docker Desktop yourself, wait until it shows "Engine
   running", run `.\start.bat` again. First start downloads the `postgres:16` image.
-- **"Port(s) 8000/5173 already in use"**: the app is probably already running in another
-  window; close it. Otherwise find the process: `netstat -ano | findstr :8000`, then
-  `taskkill /PID <pid> /F`.
-- **"PostgreSQL is not reachable"** with native Postgres: check the service is running
-  (`services.msc`, postgresql-x64-16) and `DATABASE_URL` in `.env`.
+- **`Порт 8000 зайнятий іншою програмою: <name> (PID <pid>)`**: some other program (not this
+  app) uses the port. Close it or run `taskkill /PID <pid> /F`. A previous run of this app is
+  stopped automatically and never causes this error; `.\stop.bat` stops it explicitly.
+- **`PostgreSQL недоступний на 127.0.0.1:5432`** with native Postgres: check the service is
+  running (`services.msc`, postgresql-x64-16) and `DATABASE_URL` in `.env`.
 - **Port 5432 taken by a native Postgres** while you want Docker: set `POSTGRES_PORT=5433` and
   use port 5433 in both URLs in `.env`.
 - **`uv`, `node` or `python` not found** right after installing: open a new terminal.

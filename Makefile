@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend
+.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend
 
 install:
 	cd backend && uv sync
@@ -7,6 +7,10 @@ install:
 
 dev:
 	python scripts/dev.py
+
+# Stop a running app (previous `make dev` / start.bat), like stop.bat.
+stop:
+	python scripts/dev.py --stop
 
 # Start PostgreSQL if needed (Docker) and apply migrations; no-op when already up.
 db-ensure:

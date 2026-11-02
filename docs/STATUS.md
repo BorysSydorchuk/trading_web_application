@@ -12,11 +12,7 @@ Last update: 2026-11-02. Borys asked to finish the sprint; M1-01, M1-06, M1-11 a
 Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-09 trades/inbox/sync API, M1-10 sync chips/badge/notifications.
 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
-- M1-01 launcher (scripts/dev.py, start.bat, stop.bat, Makefile, README.md, backend/tests/test_dev_script.py): feature built and verified; review asked for 3 fixes, agent was stopped mid-fix:
-  1. start Docker Desktop outside our process tree (`cmd /c start "" <exe>`) so taskkill /T never kills it;
-  2. check taskkill return code + re-check the process is gone before printing "Зупинено"; in start mode fail if ours survived; test with a kill that leaves the process alive;
-  3. README example `Зупинено: api uv.exe (PID 1234).`
-  Some of fix 1–3 may be half-applied: run `pytest tests/test_dev_script.py` and re-review.
+- M1-01 launcher: DONE, committed.
 - M1-06 MT5 source (backend/app/mt5/ partial, backend/pyproject.toml + uv.lock with MetaTrader5/tzdata deps): stopped mid-build (protocol/adapter stage). No fixtures, recorder, tests or docs/MT5_SETUP.md yet. Last known: mypy errors in app/mt5/types.py. Easiest: restart the task from its spec (see M1 tasks) keeping or discarding app/mt5/.
 - M1-11 Journal + Inbox UI (frontend/src/features/journal/, features/trades/, components/MultiSelectFilter.tsx, edits in api/client.ts, inbox/*, i18n/uk.ts, lib/decimal.ts, lib/time.ts): stopped mid-build (table/detail dialog stage). Needs: run lint/typecheck, finish, review. Backend for it (M1-09) is committed. Must add `errors.trade_open` and client-side SL checks (positive, != entry, below entry for buy / above for sell).
 
@@ -26,7 +22,7 @@ To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; finish/verify 
 ## M1 tasks
 
 Wave 1 (parallel):
-- [ ] M1-01 Launcher clean restart: run file with PIDs, auto-stop our previous run when ports are busy, `stop.bat`; Docker Desktop check/start with 60 s wait; Ukrainian console messages (backend-dev)
+- [x] M1-01 Launcher clean restart: run file with PIDs, auto-stop our previous run when ports are busy, `stop.bat`; Docker Desktop check/start with 60 s wait; Ukrainian console messages (backend-dev)
 - [x] M1-02 Config loaders: `config/rules.yaml` + `config/journal_fields.yaml` (PRD 6.4 fields) with validation, `GET /api/journal-fields`, `GET /api/rules` (backend-dev)
 - [x] M1-03 Domain logic (pure, no DB): broker time ↔ UTC (ny_close rule, offset detection, DST tests), session classification, trade building from deals (partial closes, scaling in, VWAP), initial SL selection, computed fields (risk, R, planned RR, P&L %, balance at open, weekday/hour, re-entry) (backend-dev)
 - [x] M1-04 Accounts API + migration (drop password_ref, add trades.initial_sl_source), `.env.example` MT5 keys (backend-dev)
