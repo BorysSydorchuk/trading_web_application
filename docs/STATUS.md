@@ -14,7 +14,7 @@ Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
 - M1-06 MT5 source: DONE, committed.
-- M1-12 trade check tool (backend/app/tools/trade_check.py, Makefile target): being built.
+- M1-12 trade check tool: DONE, committed (make trade-check ACCOUNT=.. N=5).
 - M1-08 sync service + worker job: finished (app/services/sync.py, trade_rules.py, worker/sync_job.py, main.py, api/trades.py, config.py, .env.example, README, tests), IN REVIEW.
 - M1-11 Journal + Inbox UI: DONE, committed.
 
@@ -37,7 +37,7 @@ Wave 2:
 - [x] M1-09 Trades/inbox/sync-status API (backend-dev)
 - [x] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
 - [x] M1-11 UI: Journal table (filters, sort, column chooser) and Inbox list with SL input (frontend-dev)
-- [ ] M1-12 Trade check table tool for the 5-trade comparison (backend-dev)
+- [x] M1-12 Trade check table tool for the 5-trade comparison (backend-dev)
 - [ ] M1-13 QA: fixture scenarios end-to-end through mock source, AC verification (qa-tester)
 - [ ] M1-14 Live check with demo account (Monday, markets open Sun 23:00 Brussels) + M1 report (orchestrator + Borys)
 
