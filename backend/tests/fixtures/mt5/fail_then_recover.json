@@ -1,0 +1,124 @@
+{
+ "format": 1,
+ "description": "Step 0: terminal does not start (MT5 -10004); step 1: next cycle succeeds",
+ "account": {
+  "login": 51234569,
+  "server": "FundedNext-Server",
+  "balance": "10019.40",
+  "equity": "10019.40",
+  "currency": "USD"
+ },
+ "ticks": {
+  "EURUSD": 1793106000
+ },
+ "symbols": [
+  {
+   "name": "EURUSD",
+   "digits": 5,
+   "contract_size": "100000",
+   "tick_size": "0.00001",
+   "tick_value": "1",
+   "volume_min": "0.01",
+   "volume_step": "0.01",
+   "volume_max": "50",
+   "currency_profit": "USD",
+   "currency_margin": "EUR"
+  }
+ ],
+ "deals": [
+  {
+   "_server_time": "2026-10-26 09:00:00",
+   "ticket": 5000001,
+   "order": 0,
+   "position_id": 0,
+   "time": 1793005200,
+   "time_msc": 1793005200000,
+   "type": 2,
+   "entry": 0,
+   "reason": 0,
+   "magic": 0,
+   "volume": "0",
+   "price": "0",
+   "profit": "10000",
+   "commission": "0",
+   "swap": "0",
+   "fee": "0",
+   "symbol": "",
+   "sl": "0",
+   "tp": "0"
+  },
+  {
+   "_server_time": "2026-10-27 11:00:00",
+   "ticket": 5000101,
+   "order": 6000101,
+   "position_id": 6000101,
+   "time": 1793098800,
+   "time_msc": 1793098800000,
+   "type": 0,
+   "entry": 0,
+   "reason": 0,
+   "magic": 0,
+   "volume": "0.1",
+   "price": "1.16",
+   "profit": "0",
+   "commission": "-0.3",
+   "swap": "0",
+   "fee": "0",
+   "symbol": "EURUSD",
+   "sl": "1.159",
+   "tp": "1.162"
+  },
+  {
+   "_server_time": "2026-10-27 12:00:00",
+   "ticket": 5000102,
+   "order": 6000102,
+   "position_id": 6000101,
+   "time": 1793102400,
+   "time_msc": 1793102400000,
+   "type": 1,
+   "entry": 1,
+   "reason": 5,
+   "magic": 0,
+   "volume": "0.1",
+   "price": "1.162",
+   "profit": "20",
+   "commission": "-0.3",
+   "swap": "0",
+   "fee": "0",
+   "symbol": "EURUSD",
+   "sl": "0",
+   "tp": "0"
+  }
+ ],
+ "orders": [
+  {
+   "_server_time": "2026-10-27 11:00:00",
+   "ticket": 6000101,
+   "position_id": 6000101,
+   "time_setup": 1793098800,
+   "time_setup_msc": 1793098800000,
+   "type": 0,
+   "state": 4,
+   "volume_initial": "0.1",
+   "price_open": "1.16",
+   "sl": "1.159",
+   "tp": "1.162",
+   "symbol": "EURUSD"
+  }
+ ],
+ "positions": [],
+ "failures": {
+  "connect": {
+   "last_error": [
+    -10004,
+    "IPC initialize failed, no IPC connection"
+   ]
+  }
+ },
+ "steps": [
+  {
+   "name": "terminal started",
+   "failures": {}
+  }
+ ]
+}

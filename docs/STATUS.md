@@ -13,7 +13,7 @@ Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings 
 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
-- M1-06 MT5 source: finished (backend/app/mt5, tests/mt5, tests/fixtures/mt5, pyproject deps), IN REVIEW. docs/MT5_SETUP.md was committed early inside 1aa7ce1.
+- M1-06 MT5 source: DONE, committed.
 - M1-08 sync service + worker job: being built (app/services/sync.py, worker wiring, PATCH initial_sl violation recompute).
 - M1-11 Journal + Inbox UI: DONE, committed.
 
@@ -30,7 +30,7 @@ Wave 1 (parallel):
 - [x] M1-05 Settings page: accounts CRUD (frontend-dev)
 
 Wave 2:
-- [ ] M1-06 MT5 source: read-only wrapper over `MetaTrader5` + fixture source + fixture recorder script; `docs/MT5_SETUP.md` (backend-dev)
+- [x] M1-06 MT5 source: read-only wrapper over `MetaTrader5` + fixture source + fixture recorder script; `docs/MT5_SETUP.md` (backend-dev)
 - [x] M1-07 Rules engine v1 (PRD 6.9) on top of domain logic (backend-dev)
 - [ ] M1-08 Sync service + worker job: sequential accounts, upserts, open positions, status transitions, specs, balance, offset, sync_log, cadence from rules.yaml (backend-dev)
 - [x] M1-09 Trades/inbox/sync-status API (backend-dev)
