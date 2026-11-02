@@ -1,4 +1,5 @@
-"""GET /api/sync/status: one row per non-archived account, from the worker's sync_log."""
+"""GET /api/sync/status: one row per active account (the only ones the worker
+syncs), from the worker's sync_log."""
 
 from __future__ import annotations
 
@@ -74,7 +75,7 @@ def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
 def sync_status(db: Session = Depends(get_db), now: datetime = Depends(utc_now)) -> SyncStatusList:
     accounts = db.scalars(
         select(Account)
-        .where(Account.status != AccountStatus.ARCHIVED.value)
+        .where(Account.status == AccountStatus.ACTIVE.value)
         .order_by(func.lower(Account.name), Account.id)
     ).all()
     ids = [a.id for a in accounts]

@@ -213,9 +213,13 @@ def test_idle_gap_at_session_start_not_stale(
 
 
 @pytest.mark.usefixtures("clock")
-def test_archived_excluded_and_sorted(client: TestClient, session: Session) -> None:
+def test_only_active_listed_and_sorted(client: TestClient, session: Session) -> None:
+    # The worker syncs only active accounts; passed/failed/archived would show a stale chip.
     add_account(session, "b")
-    add_account(session, "A")
+    add_account(session, "A", status=AccountStatus.ACTIVE.value)
+    passed = add_account(session, "Passed", status=AccountStatus.PASSED.value)
+    add_sync(session, passed, timedelta(hours=2), True)
+    add_account(session, "Failed", status=AccountStatus.FAILED.value)
     add_account(session, "Gone", status=AccountStatus.ARCHIVED.value)
     names = [i["account_name"] for i in client.get("/api/sync/status").json()["items"]]
     assert names == ["A", "b"]

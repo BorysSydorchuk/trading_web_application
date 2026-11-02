@@ -82,7 +82,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
 
 ### Sync status (PRD 6.2)
 
-- `GET /api/sync/status` → one row per non-archived account:
+- `GET /api/sync/status` → one row per active account (`status=active`). Passed, failed and archived accounts are not synced by the worker, so they are not listed:
 ```json
 { "items": [ {
   "account_id": 1, "account_name": "FN Stellar P1",
