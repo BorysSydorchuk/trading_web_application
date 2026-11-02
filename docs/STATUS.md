@@ -8,19 +8,17 @@ Current milestone: **M1 MT5 sync and trade data** (in progress). M0 accepted by 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-02. Borys asked to finish the sprint; M1-01, M1-06, M1-11 agents resumed.
-Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-09 trades/inbox/sync API, M1-10 sync chips/badge/notifications.
+Last update: 2026-11-02, agents stopped on Borys's request.
 
-Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
-- M1-01 launcher: DONE, committed.
-- M1-06 MT5 source: DONE, committed.
-- M1-12 trade check tool: DONE, committed (make trade-check ACCOUNT=.. N=5).
-- M1-08 sync service + worker job: DONE, committed (a118ffb). `make check` green: 546 tests.
-- M1-13 QA end-to-end with fixture source: in progress.
-- M1-11 Journal + Inbox UI: DONE, committed.
+M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
 
-Next after those: M1-08 sync service + worker job (needs M1-06; also wire violation recompute into PATCH initial_sl), M1-12 trade check table tool (needs M1-06), M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; finish/verify each partial task above, code-review, commit. Per-agent test DBs exist: trading_journal_test_a..d.
+Remaining:
+- M1-13 QA end-to-end with fixture source — STARTED, then stopped (no results kept). Restart it from scratch: qa-tester prompt = verify with MT5_SOURCE=fixture:backend/tests/fixtures/mt5/basic_week.json on a throwaway DB (never a real terminal): start app, create account via API, worker sync → trades match tests/fixtures/mt5/README.md, `make trade-check` 5/5, simulate a trade closing (time-shifted fixture copy, close ≈ now) and measure time to inbox (< 2 min), error fixture → status `error` + recovery, PATCH initial_sl flow, headless-Chrome screenshots of /journal /inbox /settings, launcher kill/restart + stop.bat, `make check`, list AC left for the live check. Clean up qa DBs and processes afterwards.
+- M1-14 live check with Borys (demo account, markets open): needs Borys — follow docs/MT5_SETUP.md (portable demo terminal, investor password in .env as MT5_PASSWORD_<login>, account in Settings), then: real account 30 days + `make trade-check ACCOUNT=<name> N=5`; close a demo trade → in "Потрібен опис" within 2 min; close the terminal → error in status bar; confirm browser auto-open on start (PM M0 note).
+- Then write docs/reports/M1.md (built, how to run, tested, known issues, PM questions, assumptions) and stop for PM review.
+
+Known issues/notes for the M1 report: realised-conversion risk is noisy near breakeven (spec fallback below 10 % move); MT5 threading assumptions (calls from a worker thread, GIL release) to confirm live; netting `inout` positions skipped (BACKLOG); DUE_SLACK 30 s; docs/MT5_SETUP.md was committed inside 1aa7ce1.
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; restart M1-13 QA. Per-agent test DBs exist: trading_journal_test_a..d.
 
 ## M1 tasks
 
@@ -63,3 +61,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-01: M0 accepted. M1 planned (rules.yaml, api.md M1 contract, decisions written).
 - 2026-11-01: Committed M1-04 (8053c0b), M1-05 (eec7fb5), M1-03 (cebf099), M1-02 (223facc), M1-10 (0a38909), M1-07 (2714eac).
 - 2026-11-01: M1-09 committed (e33f4a5). Agents stopped on request; partial M1-01/M1-06/M1-11 left uncommitted (see resume notes).
+- 2026-11-02: M1-01, M1-06, M1-08, M1-11, M1-12 committed; make check 546 passed. M1-13 QA started then stopped on request; qa DBs dropped.
