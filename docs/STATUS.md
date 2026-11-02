@@ -37,7 +37,8 @@ Wave 2:
 - [x] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
 - [x] M1-11 UI: Journal table (filters, sort, column chooser) and Inbox list with SL input (frontend-dev)
 - [x] M1-12 Trade check table tool for the 5-trade comparison (backend-dev)
-- [ ] M1-13 QA: fixture scenarios end-to-end through mock source, AC verification (qa-tester)
+- [x] M1-13 QA: fixture scenarios end-to-end through mock source, AC verification (qa-tester) — 9/9 pass, screenshots docs/reports/M1-screens/; found: passed/failed accounts show stale chip → fix M1-13a
+- [ ] M1-13a Sync status lists only active accounts (backend-dev)
 - [ ] M1-14 Live check with demo account (Monday, markets open Sun 23:00 Brussels) + M1 report (orchestrator + Borys)
 
 ## M0 tasks
@@ -63,3 +64,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-01: M1-09 committed (e33f4a5). Agents stopped on request; partial M1-01/M1-06/M1-11 left uncommitted (see resume notes).
 - 2026-11-02: M1-01, M1-06, M1-08, M1-11, M1-12 committed; make check 546 passed. M1-13 QA started then stopped on request; qa DBs dropped.
 - 2026-11-02: M1-13 QA restarted from scratch (qa-tester).
+- 2026-11-03: M1-13 QA done: 9/9 scenarios pass (README match, trade-check 5/5, inbox 64 s, error+recovery, PATCH SL, screenshots, launcher, make check 547). M1-13a fix in progress. Note for M1-14: 2-min AC holds inside trading hours only (night cadence 900 s by design); confirm real error code of a closed terminal.
