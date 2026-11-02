@@ -18,6 +18,7 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
   - `frontend-dev`: React UI
   - `qa-tester`: writes and runs tests, reproduces bugs
   - `code-reviewer`: reviews every finished task before you mark it done
+- Before calling a reviewer agent, run the checks yourself and pass the diff (git diff) and changed file list in the prompt.
 - Independent tasks (for example backend endpoint + frontend page against an agreed API contract) may run in parallel. Agree the API contract first and write it into `docs/api.md`.
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
@@ -38,4 +39,5 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 - MT5 access is read-only. The app never opens, modifies or closes positions.
 - UI text is Ukrainian. Keep all strings in one i18n file (`frontend/src/i18n/uk.ts`), no hardcoded strings in components.
 - No feature creep: if you see a useful idea outside the milestone, add it to `docs/BACKLOG.md` and move on.
+- When ECC rules in .claude/rules/ecc/ conflict with CLAUDE.md, the Makefile or pyproject.toml, those win.
 - Errors must be visible: failed sync, failed transcription, failed AI call show a clear message in the UI and in `logs/`, never a silent failure.

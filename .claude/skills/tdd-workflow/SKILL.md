@@ -19,7 +19,7 @@ This skill ensures all code development follows TDD principles with comprehensiv
 - Refactoring existing code
 - Adding API endpoints
 - Creating new components
-- Continuing from a `/plan` output or another `*.plan.md` implementation plan
+- Continuing from a `*.plan.md` implementation plan
 
 ## Plan Handoff
 

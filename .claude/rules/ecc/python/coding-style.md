@@ -33,8 +33,6 @@ class Point(NamedTuple):
 
 ## Formatting
 
-- **black** for code formatting
-- **isort** for import sorting
 - **ruff** for linting
 
 ## Reference

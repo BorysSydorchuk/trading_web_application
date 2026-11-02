@@ -1,6 +1,8 @@
 # Testing Requirements
 
-## Minimum Test Coverage: 80%
+## Test Coverage
+
+80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 
 Test Types (ALL required):
 1. **Unit Tests** - Individual functions, utilities, components
@@ -15,7 +17,7 @@ MANDATORY workflow:
 3. Write minimal implementation (GREEN)
 4. Run test - it should PASS
 5. Refactor (IMPROVE)
-6. Verify coverage (80%+)
+6. Verify coverage (see Test Coverage above)
 
 ## Troubleshooting Test Failures
 

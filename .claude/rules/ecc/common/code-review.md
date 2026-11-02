@@ -34,7 +34,7 @@ Before marking code complete:
 - [ ] No hardcoded secrets or credentials
 - [ ] No console.log or debug statements
 - [ ] Tests exist for new functionality
-- [ ] Test coverage meets 80% minimum
+- [ ] Test coverage: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 
 ## Security Review Triggers
 
@@ -65,10 +65,7 @@ Use these agents for code review:
 |-------|---------|
 | **code-reviewer** | General code quality, patterns, best practices |
 | **security-reviewer** | Security vulnerabilities, OWASP Top 10 |
-| **typescript-reviewer** | TypeScript/JavaScript specific issues |
 | **python-reviewer** | Python specific issues |
-| **go-reviewer** | Go specific issues |
-| **rust-reviewer** | Rust specific issues |
 
 ## Review Workflow
 
@@ -77,7 +74,7 @@ Use these agents for code review:
 2. Check security checklist first
 3. Review code quality checklist
 4. Run relevant tests
-5. Verify coverage >= 80%
+5. Verify coverage: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 6. Use appropriate agent for detailed review
 ```
 
