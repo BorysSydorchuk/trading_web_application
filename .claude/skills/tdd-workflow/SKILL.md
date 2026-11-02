@@ -1,6 +1,6 @@
 ---
 name: tdd-workflow
-description: "Test-driven development workflow: write a failing test first, watch it fail, implement the smallest change to green, then refactor with 80%+ coverage across unit, integration, and E2E tests. Use when writing a new feature, fixing a bug, refactoring, or when told to write failing tests first."
+description: "Test-driven development workflow: write a failing test first, watch it fail, implement the smallest change to green, then refactor, with unit, integration, and E2E tests (80% coverage required for risk-limit and position-size code; elsewhere follow the PRD). Use when writing a new feature, fixing a bug, refactoring, or when told to write failing tests first."
 argument-hint: <path/to/*.plan.md>
 metadata:
   origin: ECC
@@ -46,7 +46,7 @@ Do not treat the plan as permission to skip TDD. The plan supplies intent and ta
 ALWAYS write tests first, then implement code to make tests pass.
 
 ### 2. Coverage Requirements
-- Minimum 80% coverage (unit + integration + E2E)
+- 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 - All edge cases covered
 - Error scenarios tested
 - Boundary conditions verified
@@ -170,7 +170,7 @@ Recommended commit message format:
 ### Step 7: Verify Coverage
 ```bash
 pytest --cov
-# Verify 80%+ coverage achieved
+# 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 ```
 
 ### Step 8: Write a TDD Evidence Report
@@ -239,7 +239,7 @@ pytest && ruff check .
 
 ## Success Metrics
 
-- 80%+ code coverage achieved
+- Coverage met: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 - All tests passing (green)
 - No skipped or disabled tests
 - Fast test execution (< 30s for unit tests)

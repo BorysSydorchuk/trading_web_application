@@ -41,8 +41,7 @@ def add(a, b):
 
 ### Coverage Requirements
 
-- **Target**: 80%+ code coverage
-- **Critical paths**: 100% coverage required
+- 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 - Use `pytest --cov` to measure coverage
 
 ```bash
@@ -653,7 +652,7 @@ class TestUserService:
 - **Use fixtures**: Eliminate duplication with fixtures
 - **Mock external dependencies**: Don't depend on external services
 - **Test edge cases**: Empty inputs, None values, boundary conditions
-- **Aim for 80%+ coverage**: Focus on critical paths
+- **Coverage**: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 - **Keep tests fast**: Use marks to separate slow tests
 
 ### DON'T

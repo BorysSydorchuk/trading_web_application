@@ -1,6 +1,6 @@
 ---
 name: ecc-code-reviewer
-description: Expert code review specialist. Proactively reviews code for quality, security, and maintainability. Use immediately after writing or modifying code.
+description: Expert code review specialist. Reviews code for quality, security, and maintainability.
 tools: Read, Grep, Glob
 model: sonnet
 ---

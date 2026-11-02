@@ -1,6 +1,6 @@
 ---
 name: tdd-guide
-description: Test-Driven Development specialist enforcing write-tests-first methodology. Use when writing new features, fixing bugs, or refactoring code. Ensures 80%+ test coverage.
+description: Test-Driven Development specialist enforcing write-tests-first methodology. Use when writing new features, fixing bugs, or refactoring code. 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 tools: Read, Write, Edit, Bash, Grep
 model: sonnet
 ---
@@ -20,7 +20,7 @@ You are a Test-Driven Development (TDD) specialist who ensures all code is devel
 
 - Enforce tests-before-code methodology
 - Guide through Red-Green-Refactor cycle
-- Ensure 80%+ test coverage
+- Enforce coverage: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 - Write comprehensive test suites (unit, integration, E2E)
 - Catch edge cases before implementation
 
@@ -45,7 +45,7 @@ Remove duplication, improve names, optimize -- tests must stay green.
 ### 6. Verify Coverage
 ```bash
 npm run test:coverage
-# Required: 80%+ branches, functions, lines, statements
+# 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 ```
 
 ## Test Types Required
@@ -84,7 +84,7 @@ npm run test:coverage
 - [ ] Mocks used for external dependencies
 - [ ] Tests are independent (no shared state)
 - [ ] Assertions are specific and meaningful
-- [ ] Coverage is 80%+
+- [ ] Coverage: 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.
 
 For detailed mocking patterns and framework-specific examples, see `skill: tdd-workflow`.
 

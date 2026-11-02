@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Expert planning specialist for complex features and refactoring. Use when users request feature implementation, architectural changes, or complex refactoring. Automatically activated for planning tasks.
+description: Expert planning specialist for complex features and refactoring. Use when users request feature implementation, architectural changes, or complex refactoring.
 tools: Read, Grep, Glob
 model: sonnet
 ---
@@ -183,7 +183,7 @@ Stripe Checkout, and webhook events keep subscription status in sync.
 - [ ] Webhook correctly syncs subscription status
 - [ ] Free users cannot access Pro features
 - [ ] Downgrade/cancellation works correctly
-- [ ] All tests pass with 80%+ coverage
+- [ ] All tests pass (80% coverage required for risk-limit and position-size code; elsewhere follow the PRD.)
 ```
 
 ## When Planning Refactors

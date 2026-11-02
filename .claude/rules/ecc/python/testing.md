@@ -14,7 +14,7 @@ Use **pytest** as the testing framework.
 ## Coverage
 
 ```bash
-pytest --cov=src --cov-report=term-missing
+pytest --cov=app --cov-report=term-missing
 ```
 
 ## Reference
