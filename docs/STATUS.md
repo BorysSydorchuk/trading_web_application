@@ -15,7 +15,8 @@ Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
 - M1-06 MT5 source: DONE, committed.
 - M1-12 trade check tool: DONE, committed (make trade-check ACCOUNT=.. N=5).
-- M1-08 sync service + worker job: review CHANGES REQUESTED (dup insert on long holds, weekend stale-tick offset, cadence drift, skipped positions silent → new `warning` sync state); agent fixing. Then frontend: render `warning` state (amber chip).
+- M1-08 sync service + worker job: DONE, committed (a118ffb). `make check` green: 546 tests.
+- M1-13 QA end-to-end with fixture source: in progress.
 - M1-11 Journal + Inbox UI: DONE, committed.
 
 Next after those: M1-08 sync service + worker job (needs M1-06; also wire violation recompute into PATCH initial_sl), M1-12 trade check table tool (needs M1-06), M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
@@ -33,7 +34,7 @@ Wave 1 (parallel):
 Wave 2:
 - [x] M1-06 MT5 source: read-only wrapper over `MetaTrader5` + fixture source + fixture recorder script; `docs/MT5_SETUP.md` (backend-dev)
 - [x] M1-07 Rules engine v1 (PRD 6.9) on top of domain logic (backend-dev)
-- [ ] M1-08 Sync service + worker job: sequential accounts, upserts, open positions, status transitions, specs, balance, offset, sync_log, cadence from rules.yaml (backend-dev)
+- [x] M1-08 Sync service + worker job: sequential accounts, upserts, open positions, status transitions, specs, balance, offset, sync_log, cadence from rules.yaml (backend-dev)
 - [x] M1-09 Trades/inbox/sync-status API (backend-dev)
 - [x] M1-10 UI: status bar per-account sync state + sidebar inbox badge + browser notification (frontend-dev)
 - [x] M1-11 UI: Journal table (filters, sort, column chooser) and Inbox list with SL input (frontend-dev)
