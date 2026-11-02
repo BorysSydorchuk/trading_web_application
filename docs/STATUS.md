@@ -8,7 +8,7 @@ Current milestone: **M1 MT5 sync and trade data** (in progress). M0 accepted by 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-01, agents stopped on Borys's request.
+Last update: 2026-11-02. Borys asked to finish the sprint; M1-01, M1-06, M1-11 agents resumed.
 Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings UI, M1-07 rules engine, M1-09 trades/inbox/sync API, M1-10 sync chips/badge/notifications.
 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
