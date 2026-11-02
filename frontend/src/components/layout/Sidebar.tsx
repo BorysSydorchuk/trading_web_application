@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router'
 import { navItems } from '@/app/nav'
 import { pendingCount, useInboxCounts, type InboxCounts } from '@/features/inbox/api'
 import { useNewTradeNotifications } from '@/features/inbox/notifications'
+import { useRefreshTradesOnInboxChange } from '@/features/trades/api'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +14,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const openInbox = useCallback(() => void navigate(INBOX_PATH), [navigate])
   useNewTradeNotifications(counts ? pendingCount(counts) : undefined, openInbox)
+  useRefreshTradesOnInboxChange(counts)
 
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">

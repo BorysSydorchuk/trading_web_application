@@ -68,7 +68,11 @@ async function readJson(response: Response): Promise<unknown> {
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
-  query?: Record<string, string | number | boolean | null | undefined>
+  /** Arrays become repeated parameters (`status=a&status=b`). */
+  query?: Record<
+    string,
+    string | number | boolean | null | undefined | readonly (string | number)[]
+  >
   signal?: AbortSignal
   timeoutMs?: number
 }
@@ -78,7 +82,11 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
   if (!query) return url
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
+    if (Array.isArray(value)) {
+      for (const item of value as readonly (string | number)[]) params.append(key, String(item))
+    } else if (value !== undefined && value !== null && value !== '') {
+      params.set(key, String(value))
+    }
   }
   const qs = params.toString()
   return qs ? `${url}?${qs}` : url

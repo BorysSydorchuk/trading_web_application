@@ -1,31 +1,49 @@
 import { createBrowserRouter } from 'react-router'
 import { RouteErrorFallback } from '@/components/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { BiasPage } from '@/pages/BiasPage'
-import { CalculatorPage } from '@/pages/CalculatorPage'
-import { DigestsPage } from '@/pages/DigestsPage'
-import { HomePage } from '@/pages/HomePage'
-import { InboxPage } from '@/pages/InboxPage'
-import { JournalPage } from '@/pages/JournalPage'
+import { PageLoading } from '@/components/PageLoading'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { SettingsPage } from '@/pages/SettingsPage'
 
+// Route-level code splitting: each page is its own chunk, loaded by the router on navigation
+// (the current page stays on screen until the next one is ready).
 export const router = createBrowserRouter([
   {
     element: <AppLayout />,
     errorElement: <RouteErrorFallback />,
+    hydrateFallbackElement: <PageLoading />,
     children: [
       {
         // Page crashes render inside the layout, so sidebar and status bar stay usable.
         errorElement: <RouteErrorFallback />,
         children: [
-          { index: true, element: <HomePage /> },
-          { path: 'inbox', element: <InboxPage /> },
-          { path: 'journal', element: <JournalPage /> },
-          { path: 'bias', element: <BiasPage /> },
-          { path: 'digests', element: <DigestsPage /> },
-          { path: 'calculator', element: <CalculatorPage /> },
-          { path: 'settings', element: <SettingsPage /> },
+          {
+            index: true,
+            lazy: async () => ({ Component: (await import('@/pages/HomePage')).HomePage }),
+          },
+          {
+            path: 'inbox',
+            lazy: async () => ({ Component: (await import('@/pages/InboxPage')).InboxPage }),
+          },
+          {
+            path: 'journal',
+            lazy: async () => ({ Component: (await import('@/pages/JournalPage')).JournalPage }),
+          },
+          {
+            path: 'bias',
+            lazy: async () => ({ Component: (await import('@/pages/BiasPage')).BiasPage }),
+          },
+          {
+            path: 'digests',
+            lazy: async () => ({ Component: (await import('@/pages/DigestsPage')).DigestsPage }),
+          },
+          {
+            path: 'calculator',
+            lazy: async () => ({ Component: (await import('@/pages/CalculatorPage')).CalculatorPage }),
+          },
+          {
+            path: 'settings',
+            lazy: async () => ({ Component: (await import('@/pages/SettingsPage')).SettingsPage }),
+          },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

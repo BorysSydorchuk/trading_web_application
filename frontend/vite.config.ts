@@ -11,6 +11,20 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(rootDir, 'src') },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vendor chunks: cached across app releases and keep every chunk under the 500 kB warning.
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'vendor-router', test: /node_modules[\\/]react-router[\\/]/ },
+            { name: 'vendor', test: /node_modules[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

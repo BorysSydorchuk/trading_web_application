@@ -7,7 +7,24 @@ export function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
 }
 
+// In-memory copy so dismissal works for this session even if localStorage is unavailable.
+let dismissedInSession = false
+const promptListeners = new Set<() => void>()
+
+function emitPromptChange(): void {
+  for (const listener of promptListeners) listener()
+}
+
+/** useSyncExternalStore subscription: every prompt instance updates together. */
+export function subscribePrompt(listener: () => void): () => void {
+  promptListeners.add(listener)
+  return () => {
+    promptListeners.delete(listener)
+  }
+}
+
 export function isPromptDismissed(): boolean {
+  if (dismissedInSession) return true
   try {
     return window.localStorage.getItem(PROMPT_DISMISSED_KEY) === '1'
   } catch {
@@ -15,11 +32,29 @@ export function isPromptDismissed(): boolean {
   }
 }
 
+/** Prompt is shown only while permission is undecided and the user did not dismiss it. */
+export function isPromptVisible(): boolean {
+  return notificationsSupported() && Notification.permission === 'default' && !isPromptDismissed()
+}
+
 export function rememberPromptDismissed(): void {
+  dismissedInSession = true
   try {
     window.localStorage.setItem(PROMPT_DISMISSED_KEY, '1')
   } catch {
-    // Storage unavailable (private mode, quota): the prompt just comes back next time.
+    // Storage unavailable (private mode, quota): dismissal lasts for this session only.
+  }
+  emitPromptChange()
+}
+
+/** Asks the browser for permission (only ever called from a click). */
+export async function requestNotificationPermission(): Promise<void> {
+  try {
+    await Notification.requestPermission()
+  } catch (error) {
+    console.error(error)
+  } finally {
+    emitPromptChange()
   }
 }
 
