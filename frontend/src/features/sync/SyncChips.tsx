@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { uk } from '@/i18n/uk'
 import { formatDateTimeBrussels, formatRecentBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { useSyncStatus, type SyncState, type SyncStatusRow } from './api'
+import { knownSyncState, useSyncStatus, type SyncState, type SyncStatusRow } from './api'
 import { syncErrorText } from './errors'
 
 const s = uk.sync
@@ -12,6 +12,7 @@ const s = uk.sync
 // Status dots, not P&L: kept small and muted except for problems.
 const dotClass: Record<SyncState, string> = {
   ok: 'bg-profit/70',
+  warning: 'bg-amber-400',
   running: 'bg-muted-foreground animate-pulse',
   never: 'bg-muted-foreground/40',
   stale: 'bg-amber-400',
@@ -20,34 +21,55 @@ const dotClass: Record<SyncState, string> = {
 
 const textClass: Record<SyncState, string> = {
   ok: 'text-muted-foreground',
+  warning: 'text-amber-400',
   running: 'text-muted-foreground',
   never: 'text-muted-foreground',
   stale: 'text-amber-400',
   error: 'text-loss',
 }
 
+/** Unknown (future) states: neutral grey. */
+const NEUTRAL_DOT = 'bg-muted-foreground/60'
+const NEUTRAL_TEXT = 'text-muted-foreground'
+
 function minutesSince(isoUtc: string, nowMs: number): number | null {
   const then = Date.parse(isoUtc)
   return Number.isNaN(then) ? null : Math.max(0, Math.floor((nowMs - then) / 60_000))
 }
 
+function syncedText(row: SyncStatusRow): string | null {
+  return row.last_success_utc ? `${s.syncedAt} ${formatRecentBrussels(row.last_success_utc)}` : null
+}
+
 function shortText(row: SyncStatusRow, nowMs: number): string {
-  switch (row.state) {
+  const state = knownSyncState(row.state)
+  switch (state) {
     case 'ok':
-      return row.last_success_utc
-        ? `${s.syncedAt} ${formatRecentBrussels(row.last_success_utc)}`
-        : s.states.ok
+      return syncedText(row) ?? s.states.ok
+    case 'warning': {
+      const synced = syncedText(row)
+      return synced ? `${synced} · ${s.attention}` : s.states.warning
+    }
     case 'running':
       return s.running
     case 'never':
       return s.never
     case 'stale': {
-      const minutes = row.last_success_utc ? minutesSince(row.last_success_utc, nowMs) : null
+      // "stale" = the latest attempt is too old (docs/api.md), whatever its outcome.
+      const since = row.last_attempt_utc ?? row.last_success_utc
+      const minutes = since ? minutesSince(since, nowMs) : null
       return minutes === null ? s.staleNoSuccess : s.staleMinutes(minutes)
     }
     case 'error':
       return syncErrorText(row.error_code)
+    case null:
+      return row.state
   }
+}
+
+function stateLabel(state: string): string {
+  const known = knownSyncState(state)
+  return known ? s.states[known] : state
 }
 
 /**
@@ -80,6 +102,7 @@ export function SyncChips() {
 
 function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
   const text = shortText(row, nowMs)
+  const state = knownSyncState(row.state)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -87,13 +110,16 @@ function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
           type="button"
           className={cn(
             'flex items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
-            row.state === 'error' && 'border-loss/40',
+            state === 'error' && 'border-loss/40',
+            state === 'warning' && 'border-amber-400/40',
           )}
           aria-label={`${row.account_name}: ${text}`}
         >
-          <span className={cn('size-2 shrink-0 rounded-full', dotClass[row.state])} aria-hidden />
+          <span className={cn('size-2 shrink-0 rounded-full', state ? dotClass[state] : NEUTRAL_DOT)} aria-hidden />
           <span className="max-w-32 truncate text-sidebar-foreground">{row.account_name}</span>
-          <span className={cn('whitespace-nowrap tabular-nums', textClass[row.state])}>{text}</span>
+          <span className={cn('whitespace-nowrap tabular-nums', state ? textClass[state] : NEUTRAL_TEXT)}>
+            {text}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 text-xs">
@@ -105,12 +131,18 @@ function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
 
 function SyncDetails({ row }: { row: SyncStatusRow }) {
   const d = s.details
+  const state = knownSyncState(row.state)
+  // Warning (sync worked, something needs attention) is amber; any error kept on the row is red.
+  const isWarning = state === 'warning' || row.error_code === 'positions_skipped'
+  const hasProblem = row.error_code !== null || row.error_message !== null
+  const problemText =
+    row.error_code === null && isWarning ? s.states.warning : syncErrorText(row.error_code)
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium">{row.account_name}</p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
         <DetailRow label={d.state}>
-          <span className={textClass[row.state]}>{s.states[row.state]}</span>
+          <span className={state ? textClass[state] : NEUTRAL_TEXT}>{stateLabel(row.state)}</span>
         </DetailRow>
         <DetailRow label={d.lastAttempt}>
           <TimeValue value={row.last_attempt_utc} />
@@ -129,12 +161,17 @@ function SyncDetails({ row }: { row: SyncStatusRow }) {
           <span className="num">{row.open_positions ?? uk.common.empty}</span>
         </DetailRow>
       </dl>
-      {row.state === 'error' && (
-        <div className="flex flex-col gap-0.5 rounded border border-loss/40 px-2 py-1.5">
-          <p className="text-loss">
-            {d.error}
+      {hasProblem && (
+        <div
+          className={cn(
+            'flex flex-col gap-0.5 rounded border px-2 py-1.5',
+            isWarning ? 'border-amber-400/40' : 'border-loss/40',
+          )}
+        >
+          <p className={isWarning ? 'text-amber-400' : 'text-loss'}>
+            {isWarning ? d.warning : d.error}
             {': '}
-            {syncErrorText(row.error_code)}
+            {problemText}
           </p>
           {row.error_message && (
             <p className="break-words text-muted-foreground">{row.error_message}</p>

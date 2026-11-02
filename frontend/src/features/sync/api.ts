@@ -2,13 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/api/client'
 
 /** docs/api.md "Sync status" (PRD 6.2). */
-export const SYNC_STATES = ['ok', 'error', 'running', 'never', 'stale'] as const
+export const SYNC_STATES = ['ok', 'warning', 'error', 'running', 'never', 'stale'] as const
 export type SyncState = (typeof SYNC_STATES)[number]
+
+/** Known state, or null for a state added to the API later (rendered as a neutral chip). */
+export function knownSyncState(state: string): SyncState | null {
+  return (SYNC_STATES as readonly string[]).includes(state) ? (state as SyncState) : null
+}
 
 export interface SyncStatusRow {
   account_id: number
   account_name: string
-  state: SyncState
+  /** A SyncState; typed as string so unknown future states do not break rendering. */
+  state: string
   last_attempt_utc: string | null
   last_success_utc: string | null
   error_code: string | null

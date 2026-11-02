@@ -212,6 +212,7 @@ export const uk = {
     label: 'Синхронізація рахунків',
     loadError: 'Не вдалося отримати стан синхронізації',
     syncedAt: 'синхр.',
+    attention: 'увага',
     running: 'синхронізація…',
     never: 'ще не синхронізовано',
     staleMinutes: (minutes: number) => `немає синхронізації ${minutes} хв — чи запущено воркер?`,
@@ -221,6 +222,7 @@ export const uk = {
       running: 'триває синхронізація',
       never: 'ще не синхронізовано',
       stale: 'синхронізація зупинилась',
+      warning: 'синхронізовано, потрібна увага',
       error: 'помилка синхронізації',
     },
     details: {
@@ -230,10 +232,12 @@ export const uk = {
       serverOffset: 'Час сервера MT5',
       openPositions: 'Відкриті позиції',
       error: 'Помилка',
+      warning: 'Увага',
       timeZoneNote: 'Час указано за Брюсселем.',
     },
     utcOffset: (hours: number) => `UTC${hours >= 0 ? '+' : '−'}${Math.abs(hours)}`,
     errors: {
+      positions_skipped: 'Деякі позиції пропущено — неповна історія угод',
       password_missing: 'немає пароля в .env',
       terminal_not_found: 'термінал не знайдено',
       terminal_start_failed: 'термінал не запустився',
