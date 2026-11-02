@@ -8,7 +8,7 @@ Current milestone: **M1 MT5 sync and trade data** (in progress). M0 accepted by 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-02, agents stopped on Borys's request.
+Last update: 2026-11-02, M1-13 QA restarted (qa-tester running, fixture source, throwaway DB trading_journal_qa).
 
 M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
 
@@ -62,3 +62,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-01: Committed M1-04 (8053c0b), M1-05 (eec7fb5), M1-03 (cebf099), M1-02 (223facc), M1-10 (0a38909), M1-07 (2714eac).
 - 2026-11-01: M1-09 committed (e33f4a5). Agents stopped on request; partial M1-01/M1-06/M1-11 left uncommitted (see resume notes).
 - 2026-11-02: M1-01, M1-06, M1-08, M1-11, M1-12 committed; make check 546 passed. M1-13 QA started then stopped on request; qa DBs dropped.
+- 2026-11-02: M1-13 QA restarted from scratch (qa-tester).
