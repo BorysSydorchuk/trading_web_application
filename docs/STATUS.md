@@ -14,6 +14,7 @@ Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
 - M1-06 MT5 source: DONE, committed.
+- M1-12 trade check tool (backend/app/tools/trade_check.py, Makefile target): being built.
 - M1-08 sync service + worker job: being built (app/services/sync.py, worker wiring, PATCH initial_sl violation recompute).
 - M1-11 Journal + Inbox UI: DONE, committed.
 
