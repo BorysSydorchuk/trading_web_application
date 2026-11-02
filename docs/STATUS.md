@@ -15,7 +15,7 @@ Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
 - M1-06 MT5 source: DONE, committed.
 - M1-12 trade check tool: DONE, committed (make trade-check ACCOUNT=.. N=5).
-- M1-08 sync service + worker job: finished (app/services/sync.py, trade_rules.py, worker/sync_job.py, main.py, api/trades.py, config.py, .env.example, README, tests), IN REVIEW.
+- M1-08 sync service + worker job: review CHANGES REQUESTED (dup insert on long holds, weekend stale-tick offset, cadence drift, skipped positions silent → new `warning` sync state); agent fixing. Then frontend: render `warning` state (amber chip).
 - M1-11 Journal + Inbox UI: DONE, committed.
 
 Next after those: M1-08 sync service + worker job (needs M1-06; also wire violation recompute into PATCH initial_sl), M1-12 trade check table tool (needs M1-06), M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
