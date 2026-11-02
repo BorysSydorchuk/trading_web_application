@@ -14,7 +14,7 @@ Committed in M1: M1-02 config, M1-03 domain, M1-04 accounts API, M1-05 Settings 
 Uncommitted work left in the tree (PARTIAL — not reviewed, check before use):
 - M1-01 launcher: DONE, committed.
 - M1-06 MT5 source (backend/app/mt5/ partial, backend/pyproject.toml + uv.lock with MetaTrader5/tzdata deps): stopped mid-build (protocol/adapter stage). No fixtures, recorder, tests or docs/MT5_SETUP.md yet. Last known: mypy errors in app/mt5/types.py. Easiest: restart the task from its spec (see M1 tasks) keeping or discarding app/mt5/.
-- M1-11 Journal + Inbox UI (frontend/src/features/journal/, features/trades/, components/MultiSelectFilter.tsx, edits in api/client.ts, inbox/*, i18n/uk.ts, lib/decimal.ts, lib/time.ts): stopped mid-build (table/detail dialog stage). Needs: run lint/typecheck, finish, review. Backend for it (M1-09) is committed. Must add `errors.trade_open` and client-side SL checks (positive, != entry, below entry for buy / above for sell).
+- M1-11 Journal + Inbox UI: finished, IN REVIEW.
 
 Next after those: M1-08 sync service + worker job (needs M1-06; also wire violation recompute into PATCH initial_sl), M1-12 trade check table tool (needs M1-06), M1-13 QA, M1-14 live demo check Monday + docs/reports/M1.md.
 To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; finish/verify each partial task above, code-review, commit. Per-agent test DBs exist: trading_journal_test_a..d.
