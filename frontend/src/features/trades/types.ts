@@ -77,10 +77,29 @@ export interface RuleViolation {
   details: string | null
 }
 
+/** A saved chart link (docs/api.md M2). `preview_url` is null for /chart links. */
+export interface ChartLink {
+  id: number
+  url: string
+  kind: string
+  preview_url: string | null
+}
+
+/** Journal value as sent by the API: enum/text → string, multi_enum → array, bool, int. */
+export type JournalValue = string | number | boolean | string[] | null
+
+/** docs/api.md "TradeDetail in M2". `journal` has every YAML key (fields and text_keys). */
 export interface TradeDetail extends TradeRow {
   initial_sl_source: string | null
   exit_deals: ExitDeal[]
   rule_violations: RuleViolation[]
+  journal: Record<string, JournalValue>
+  chart_links: ChartLink[]
+  raw_text: string | null
+  transcript: string | null
+  ai_filled_fields: string[]
+  described_at: string | null
+  missing_required: string[]
 }
 
 export interface TradeQuery {
@@ -101,11 +120,22 @@ export interface JournalFieldOption {
   deprecated: boolean
 }
 
+/** `enum | multi_enum | bool | int | text | links | auto`; kept as string so a new type never crashes the UI. */
+export type JournalFieldType = string
+
+/** One field from config/journal_fields.yaml (GET /api/journal-fields). */
 export interface JournalField {
   key: string
   label: string
-  type: string
+  type: JournalFieldType
   options?: JournalFieldOption[]
+  required?: boolean
+  analytics?: boolean
+  storage?: string
+  allow_other_text?: boolean
+  text_key?: string
+  min?: number
+  max?: number
 }
 
 export interface JournalFieldList {

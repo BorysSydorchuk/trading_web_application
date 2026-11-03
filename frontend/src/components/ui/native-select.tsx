@@ -4,9 +4,13 @@ import { ChevronDownIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /** shadcn/ui NativeSelect: a styled <select>, keyboard and screen-reader friendly by default. */
-function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
+function NativeSelect({
+  className,
+  wrapperClassName,
+  ...props
+}: React.ComponentProps<'select'> & { wrapperClassName?: string }) {
   return (
-    <div className="relative w-full" data-slot="native-select-wrapper">
+    <div className={cn('relative w-full', wrapperClassName)} data-slot="native-select-wrapper">
       <select
         data-slot="native-select"
         className={cn(
