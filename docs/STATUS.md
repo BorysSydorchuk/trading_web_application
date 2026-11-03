@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M1 MT5 sync and trade data**: done, report in docs/reports/M1.md, waiting for PM review. M0 accepted by PM 2026-11-01.
+Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 accepted by PM 2026-11-03 (open item: 2-minute live check, Borys reports the time; >2 min → first M2 bug). M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -8,7 +8,7 @@ Current milestone: **M1 MT5 sync and trade data**: done, report in docs/reports/
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-03. M1 finished: live check done by Borys, report written. Waiting for PM review of docs/reports/M1.md. Only open item: 2-minute AC on the real account, checked on Borys's next real trade. Next milestone (after PM OK) starts on branch m2/<topic>.
+Last update: 2026-11-03. M2 planned. M2-01 (Program Files guard) in progress on branch m2/terminal-path-guard (backend-dev). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Waiting for Borys: OK for new dependency `anthropic`, default model.
 
 M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
 
@@ -19,6 +19,19 @@ Remaining:
 
 Known issues/notes for the M1 report: realised-conversion risk is noisy near breakeven (spec fallback below 10 % move); MT5 threading assumptions (calls from a worker thread, GIL release) to confirm live; netting `inout` positions skipped (BACKLOG); DUE_SLACK 30 s; docs/MT5_SETUP.md was committed inside 1aa7ce1.
 To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; restart M1-13 QA. Per-agent test DBs exist: trading_journal_test_a..d.
+
+## M2 tasks
+
+Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPROVE + green `make check`, push main after each merge.
+
+- [ ] M2-01 Settings rejects terminal paths under Program Files (env vars, both slashes, case, 8.3, `..`), worker guard too; Ukrainian error → MT5_SETUP.md step 1; tests (backend-dev, then frontend-dev for uk.ts) — branch m2/terminal-path-guard
+- [ ] M2-02 M2 API contract in docs/api.md (journal save, chart links, extract, AI usage) + decisions (orchestrator) — branch m2/contract
+- [ ] M2-03 Journal save API: `PUT /api/trades/{id}/journal`, validation generated from journal_fields.yaml (types, options, deprecated, extra storage), required check for complete, status flow, user violations, TradingView link validation + preview_url; test: new YAML field works without code changes (backend-dev) — branch m2/journal-save
+- [ ] M2-04 AI extraction: `anthropic` SDK (needs Borys OK), prompt in backend/prompts/ with glossary, schema from YAML with evidence quotes, server guards (evidence, options, questions), errors (ai_not_configured / ai_error), usage log logs/ai_usage.jsonl + config/ai_pricing.yaml + `GET /api/ai/usage` (backend-dev) — branch m2/ai-extraction
+- [ ] M2-05 Describe screen: auto data left; text box + links; "Заповнити з тексту" with progress; form generated from /api/journal-fields with AI markers, red missing fields, "Не вистачає: …"; save draft / complete; inbox → describe (frontend-dev) — branch m2/describe-ui
+- [ ] M2-06 Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
+- [ ] M2-07 Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
+- [ ] M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
 
 ## M1 tasks
 
@@ -68,3 +81,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-03: M1-13a committed (sync status only active accounts). Waiting for Borys for M1-14.
 - 2026-11-03: Borys: M1 stays on main (chore/ecc-setup was a stale pointer, deleted). From M2, one branch per milestone `m<N>/<topic>` (rule added to CLAUDE.md).
 - 2026-11-03: M1-14 live check by Borys passed (2-min test pending on next real trade). MT5_SETUP.md fixes applied. docs/reports/M1.md written. Stopped for PM review.
+- 2026-11-03: M1 accepted by PM. PM decisions + git workflow recorded, main pushed. M2 planned; M2-01 started.
