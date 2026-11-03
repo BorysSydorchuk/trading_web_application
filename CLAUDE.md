@@ -24,7 +24,9 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
 
 ## Git workflow
-- M0 and M1 live on `main`. From M2 on, start each milestone on a new branch named `m<N>/<topic>` (for example `m2/describe-trade`), created from up-to-date `main`. Commit the milestone's tasks there.
+- M0 and M1 live on `main`. From M2 on, one branch per topic: `m<N>/<topic>` (for example `m2/terminal-path-guard`), created from up-to-date `main`. Commit the topic's tasks there.
+- Merge a topic branch into `main` with `git merge --no-ff` only after code-reviewer APPROVE and a green `make check`. Push `main` after every merge.
+- Never force-push `main`.
 - Each milestone report (`docs/reports/M<n>.md`) lists the milestone's commit range.
 
 ## Decisions and questions
