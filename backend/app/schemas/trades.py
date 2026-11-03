@@ -1,12 +1,13 @@
-"""Trades / inbox API schemas (docs/api.md M1 "Trades")."""
+"""Trades / inbox / journal API schemas (docs/api.md M1 "Trades", M2 journal)."""
 
 from __future__ import annotations
 
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.domain.chart_links import MAX_LINKS, MAX_URL_LENGTH, is_valid_chart_url
 from app.models.enums import InitialSlSource
 from app.schemas.common import DecimalIn, UtcDatetime
 
@@ -23,6 +24,9 @@ TradeSort = Literal[
     "status",
 ]
 SortOrder = Literal["asc", "desc"]
+
+RAW_TEXT_MAX_LENGTH = 20000
+MAX_AI_FILLED_FIELDS = 100
 
 # NUMERIC(20,8) like every price column.
 Price = Annotated[DecimalIn, Field(gt=0, max_digits=20, decimal_places=8)]
@@ -84,39 +88,62 @@ class RuleViolationOut(BaseModel):
     details: str | None
 
 
+class ChartLinkOut(BaseModel):
+    id: int
+    url: str
+    kind: str
+    preview_url: str | None  # snapshot image; None for /chart links
+
+
 class TradeDetail(TradeRow):
+    """M2 shape (docs/api.md "TradeDetail in M2"): journal values live in `journal`."""
+
     initial_sl_source: InitialSlSource | None
     exit_deals: list[ExitDeal]
     rule_violations: list[RuleViolationOut]
-    # Journal fields (PRD 6.4): stored values as-is; filled from M2.
-    setup_context: str | None
-    poi_type: str | None
-    poi_type_other: str | None
-    fvg_kind: str | None
-    entry_model: str | None
-    exit_reason: str | None
-    bias_alignment: str | None
-    bias_alignment_weekly: str | None
-    bias_alignment_monthly: str | None
-    bias_alignment_override: str | None
-    bias_alignment_override_reason: str | None
-    followed_plan: bool | None
-    emotion_before: str | None
-    emotion_before_text: str | None
-    emotion_after: str | None
-    emotion_after_text: str | None
-    mistakes: str | None
-    lesson: str | None
-    quality_rating: int | None
+    # Every YAML key except links fields (config/journal_fields.yaml), None when empty.
+    journal: dict[str, Any]
+    chart_links: list[ChartLinkOut]
     raw_text: str | None
     transcript: str | None
     ai_filled_fields: list[str]
-    extra: dict[str, Any]
     described_at: UtcDatetime | None
+    missing_required: list[str]  # what blocks `complete` now, YAML order
+
+
+class ChartLinkIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    url: str
+    kind: Literal["before", "after"]
+
+    @field_validator("url")
+    @classmethod
+    def _tradingview(cls, value: str) -> str:
+        if len(value) > MAX_URL_LENGTH:
+            raise ValueError(f"must be at most {MAX_URL_LENGTH} characters")
+        if not is_valid_chart_url(value):
+            raise ValueError("must be a TradingView snapshot (/x/<id>) or chart (/chart) link")
+        return value
+
+
+class JournalInput(BaseModel):
+    """PUT /api/trades/{id}/journal (docs/api.md "Journal save"). All keys required.
+
+    `fields` values are validated against config/journal_fields.yaml by the service.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    fields: dict[str, Any]
+    chart_links: list[ChartLinkIn] = Field(max_length=MAX_LINKS)
+    raw_text: str | None = Field(max_length=RAW_TEXT_MAX_LENGTH)
+    ai_filled_fields: list[str] = Field(max_length=MAX_AI_FILLED_FIELDS)
+    complete: bool
 
 
 class TradePatch(BaseModel):
-    """M1 accepts only the initial SL (docs/api.md). Journal fields come in M2."""
+    """Only the initial SL (docs/api.md); journal fields use PUT .../journal."""
 
     model_config = ConfigDict(extra="forbid")
 
