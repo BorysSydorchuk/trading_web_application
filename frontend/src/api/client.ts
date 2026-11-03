@@ -2,7 +2,7 @@
  * Fetch wrapper for the backend API (docs/api.md).
  * - Base URL `/api` (proxied by Vite to 127.0.0.1:8000).
  * - Non-2xx responses carry `{ error: { code, message, details } }` -> thrown as ApiError.
- * - Network failures / timeouts -> ApiError with code `network_error`.
+ * - Network failures -> ApiError with code `network_error`; client-side timeout -> code `timeout`.
  * - Decimal values arrive as JSON strings and are passed through untouched.
  */
 
@@ -111,6 +111,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   } catch (cause) {
     // Caller cancelled (e.g. TanStack Query cancellation): let the abort propagate as is.
     if (signal?.aborted) throw cause
+    if (timeoutSignal.aborted) throw new ApiError('timeout', `No response within ${timeoutMs} ms`, 0)
     const message = cause instanceof Error ? cause.message : 'Network request failed'
     throw new ApiError('network_error', message, 0)
   }
