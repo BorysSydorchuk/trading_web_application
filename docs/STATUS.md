@@ -8,7 +8,7 @@ Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 acce
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-03. M2 planned. M2-01 (Program Files guard) in progress on branch m2/terminal-path-guard (backend-dev). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Waiting for Borys: OK for new dependency `anthropic`, default model.
+Last update: 2026-11-03. M2 planned. M2-01 (Program Files guard) in progress on branch m2/terminal-path-guard (backend-dev). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Borys approved `anthropic` dep; models per PM: extraction claude-sonnet-5-5, summary claude-opus-5-5, fallback only on overload/5xx/timeout.
 
 M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
 
