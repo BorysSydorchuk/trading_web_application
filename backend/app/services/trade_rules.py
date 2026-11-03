@@ -8,18 +8,22 @@ the earliest changed trade onward is recomputed. Idempotent; flushes, never comm
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config_files.rules import RulesConfig
+from app.config_files.loader import ConfigError
+from app.config_files.rules import RulesConfig, get_rules
 from app.domain.metrics import ReentryCandidate, reentry_flags
 from app.domain.rules import RuleExitDeal, RuleTradeInput, evaluate
 from app.domain.sessions import to_local
 from app.models import SymbolSpec, Trade
 from app.services.violations import apply_auto_violations
+
+logger = logging.getLogger(__name__)
 
 
 def week_start_utc(moment: datetime, tz: str) -> datetime:
@@ -102,3 +106,21 @@ def recompute_rules(
         violations = evaluate(_rule_input(trade), context, rules, ticks.get(trade.symbol))
         apply_auto_violations(session, trade.id, violations)
     return len(targets)
+
+
+def recompute_rules_for_trade(session: Session, trade: Trade, reason: str) -> bool:
+    """Recompute after a user edit of ``trade``. A broken rules.yaml does not block the
+    edit: it is logged at ERROR and violations catch up on the next sync. Returns False then.
+    """
+    try:
+        rules = get_rules()
+    except ConfigError as exc:
+        logger.error(
+            "Trade %s: violations not recomputed after %s, rules.yaml is invalid: %s",
+            trade.id,
+            reason,
+            exc,
+        )
+        return False
+    recompute_rules(session, trade.account_id, trade.open_time, rules)
+    return True

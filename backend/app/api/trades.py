@@ -1,4 +1,4 @@
-"""Trades read API, initial-SL entry and inbox counts (docs/api.md M1 "Trades")."""
+"""Trades read API, initial-SL entry, journal save and inbox counts (docs/api.md)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config_files import ConfigError, get_rules
+from app.api.config_files import config_error
+from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
 from app.db import get_db
 from app.domain import metrics
 from app.domain.sessions import DEFAULT_TZ
@@ -23,7 +24,8 @@ from app.errors import ApiError
 from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
-from app.services.trade_rules import recompute_rules
+from app.services.trade_journal import journal_view, save_journal
+from app.services.trade_rules import recompute_rules_for_trade
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,13 @@ router = APIRouter(tags=["trades"])
 INBOX_STATUSES = (TradeStatus.NEEDS_SL, TradeStatus.NEEDS_DESCRIPTION, TradeStatus.DRAFT)
 
 _ROW_EXTRA = {"account_name", "violations"}
-_DETAIL_EXTRA = _ROW_EXTRA | {"exit_deals", "rule_violations"}
+_DETAIL_EXTRA = _ROW_EXTRA | {
+    "exit_deals",
+    "rule_violations",
+    "journal",
+    "chart_links",
+    "missing_required",
+}
 ROW_COLUMNS = [f for f in schemas.TradeRow.model_fields if f not in _ROW_EXTRA]
 DETAIL_COLUMNS = [f for f in schemas.TradeDetail.model_fields if f not in _DETAIL_EXTRA]
 
@@ -112,13 +120,17 @@ def to_row(trade: Trade, account_name: str, violations: list[str]) -> schemas.Tr
     )
 
 
-def to_detail(trade: Trade, account_name: str) -> schemas.TradeDetail:
+def to_detail(trade: Trade, account_name: str, config: JournalFieldsConfig) -> schemas.TradeDetail:
     data: dict[str, Any] = {f: getattr(trade, f) for f in DETAIL_COLUMNS}
     violations = sorted(trade.rule_violations, key=lambda v: v.rule_key)
+    view = journal_view(trade, config)
     return schemas.TradeDetail.model_validate(
         data
         | {
             "account_name": account_name,
+            "journal": view.journal,
+            "chart_links": view.chart_links,
+            "missing_required": view.missing_required,
             "violations": [v.rule_key for v in violations],
             "rule_violations": [
                 {"rule_key": v.rule_key, "source": v.source, "details": v.details}
@@ -141,12 +153,23 @@ def to_detail(trade: Trade, account_name: str) -> schemas.TradeDetail:
     )
 
 
+def journal_config() -> JournalFieldsConfig:
+    try:
+        return get_journal_fields()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
 def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
     row = db.execute(
         select(Trade, Account.name)
         .join(Account, Account.id == Trade.account_id)
         .where(Trade.id == trade_id)
-        .options(selectinload(Trade.exit_deals), selectinload(Trade.rule_violations))
+        .options(
+            selectinload(Trade.exit_deals),
+            selectinload(Trade.rule_violations),
+            selectinload(Trade.chart_links),
+        )
     ).one_or_none()
     if row is None:
         raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
@@ -195,7 +218,8 @@ def trade_symbols(db: Session = Depends(get_db)) -> schemas.SymbolList:
 
 @router.get("/trades/{trade_id}", response_model=schemas.TradeDetail)
 def get_trade(trade_id: int, db: Session = Depends(get_db)) -> schemas.TradeDetail:
-    return to_detail(*_load_detail(db, trade_id))
+    config = journal_config()
+    return to_detail(*_load_detail(db, trade_id), config)
 
 
 def _check_stop_side(trade: Trade, sl: Decimal) -> None:
@@ -233,21 +257,14 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     trade.planned_rr = metrics.planned_rr(trade.entry_price, sl, trade.tp)
     trade.status = next_status(trade.status, is_closed=True, has_initial_sl=True).value
     # Same recompute as the MT5 sync (risk %, planned RR and breakeven depend on the SL).
-    try:
-        rules = get_rules()
-    except ConfigError as exc:
-        # The SL is still saved; violations catch up on the next sync once the file is fixed.
-        logger.error(
-            "Trade %s: violations not recomputed, rules.yaml is invalid: %s", trade.id, exc
-        )
-        return
-    recompute_rules(db, trade.account_id, trade.open_time, rules)
+    recompute_rules_for_trade(db, trade, "initial SL")
 
 
 @router.patch("/trades/{trade_id}", response_model=schemas.TradeDetail)
 def update_trade(
     trade_id: int, body: schemas.TradePatch, db: Session = Depends(get_db)
 ) -> schemas.TradeDetail:
+    config = journal_config()
     trade, account_name = _load_detail(db, trade_id)
     if trade.status == TradeStatus.OPEN.value or trade.close_time is None:
         raise ApiError(
@@ -262,7 +279,20 @@ def update_trade(
     )
     db.expire(trade)  # reload as stored (NUMERIC scale), not the in-memory input values
     trade, account_name = _load_detail(db, trade_id)
-    return to_detail(trade, account_name)
+    return to_detail(trade, account_name, config)
+
+
+@router.put("/trades/{trade_id}/journal", response_model=schemas.TradeDetail)
+def put_journal(
+    trade_id: int, body: schemas.JournalInput, db: Session = Depends(get_db)
+) -> schemas.TradeDetail:
+    """Save the journal (docs/api.md M2 "Journal save"): draft or complete."""
+    config = journal_config()
+    trade, _ = _load_detail(db, trade_id)
+    save_journal(db, trade, body, config, now=datetime.now(UTC))
+    db.commit()
+    db.expire_all()
+    return to_detail(*_load_detail(db, trade_id), config)
 
 
 @router.get("/inbox/counts", response_model=schemas.InboxCounts)

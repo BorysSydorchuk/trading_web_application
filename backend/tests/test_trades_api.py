@@ -360,9 +360,12 @@ def test_detail(client: TestClient, session: Session, seed: Seed) -> None:
     ]
     assert data["violations"] == ["max_risk_pct", "min_planned_rr"]
     for key in ("setup_context", "entry_model", "followed_plan", "quality_rating", "lesson"):
-        assert data[key] is None
+        assert key not in data
+        assert data["journal"][key] is None
+    assert data["journal"]["rule_violations"] == ["max_risk_pct", "min_planned_rr"]
+    assert "extra" not in data
+    assert data["chart_links"] == []
     assert data["ai_filled_fields"] == []
-    assert data["extra"] == {}
     assert data["described_at"] is None
 
 

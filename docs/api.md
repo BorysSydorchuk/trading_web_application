@@ -165,7 +165,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   "missing_required": ["fvg_kind", "chart_links"]
 }
 ```
-- `journal` has every YAML key (fields and `text_key`s, `column` and `extra` storage), `null` when empty. Values: `enum` → string, `multi_enum` → array, `bool`, `int`, text → string.
+- `journal` has every YAML key (fields and `text_key`s, `column` and `extra` storage) except `type: links` fields (links are only in `chart_links`); `null` when empty (also an empty `multi_enum` and `rule_violations` with no violations). Values: `enum` → string, `multi_enum` → array, `bool`, `int`, text → string.
 - `journal.rule_violations` = all rule keys on the trade (auto + user), sorted; the source of each is in `TradeDetail.rule_violations[]` (`{rule_key, source, details}`).
 - `journal.bias_alignment` = effective value (`bias_alignment_override` ?? `bias_alignment`), read-only in M2 (bias module comes later).
 - `missing_required`: what blocks `complete` right now (same rule as the save below). Order = YAML order; `chart_links` when no `before` link.
@@ -196,8 +196,8 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   - `rule_violations` (the user's confirmed list):
     - a key that is not an auto violation on the trade → stored as a `source=user` violation; a user violation missing from the list is deleted;
     - auto violations are never deleted or duplicated by this endpoint: an auto key missing from the list is ignored (the UI shows auto entries as locked); an auto key in the list keeps the auto row and creates no user row.
-- **`chart_links`:** full replacement, 0–10 items, no duplicate URLs (compared as lower-case scheme + host + path with exactly one trailing slash; query and fragment ignored; backend and frontend use the same rule). `kind`: `before | after` (`bias` → 422). URL rule (backend and frontend use the same regex):
-  - `^https://([a-z0-9-]+\.)?tradingview\.com/(x/[A-Za-z0-9]+/?|chart(/([A-Za-z0-9]+/?)?)?)(\?[^#\s]*)?(#\S*)?$` (case-insensitive for the scheme and host; the snapshot id is case-sensitive);
+- **`chart_links`:** full replacement, 0–10 items, no duplicate URLs (compared as lower-case scheme + host, path **as-is** (ids are case-sensitive) with exactly one trailing slash; query and fragment ignored; backend and frontend use the same rule; the later duplicate gets the error). Saving replaces links, so link ids change on every save. `kind`: `before | after` (`bias` → 422). URL rule (backend and frontend use the same regex):
+  - `^https://([a-z0-9-]+\.)?tradingview\.com/(x/[A-Za-z0-9]+/?|chart(/([A-Za-z0-9]+/?)?)?)(\?[^#\s]*)?(#\S*)?$` (matched after lower-casing scheme and host only; the path is case-sensitive, so `/X/<id>` is rejected);
   - i.e. snapshot `/x/<id>` with optional trailing slash, or chart `/chart` with an optional trailing slash and optional layout id; query and fragment allowed; ≤ 500 chars.
   - Errors: 422 with `details.fields["chart_links.<i>.url"]` / `["chart_links.<i>.kind"]`.
 - **`raw_text`:** `null` or a string ≤ 20000 chars, stored in `trades.raw_text`.
