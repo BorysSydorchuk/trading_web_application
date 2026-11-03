@@ -15,7 +15,7 @@ Any non-2xx response has this body:
 - `message`: English, for logs and developers.
 - `details`: optional object (for example validation errors: `{ "fields": { "name": "required" } }`).
 
-Known codes: `validation_error` (422, `details.fields` maps field path → English message; optional `details.field_codes` maps field path → stable code for the few field errors the UI shows specific text for, see Accounts), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `config_error` (500, broken config/*.yaml; `details: {file, problems[]}`), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
+Known codes: `validation_error` (422, `details.fields` maps field path → English message; optional `details.field_codes` maps field path → stable code for the few field errors the UI shows specific text for, see Accounts), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `config_error` (500, broken config/*.yaml; `details: {file, problems[]}`), `internal_error` (500), `http_error` (other). M2 adds: `journal_incomplete` (422, `details.missing[]`), `needs_sl` (409, from `PUT .../journal` and `POST .../extract`), `trade_open` (409, M1), `ai_not_configured` (503), `ai_error` (502, `details.kind`). Backend raises custom codes via `app.errors.ApiError`.
 Unhandled exceptions are logged with a traceback to `logs/` and returned as `internal_error`; the API never returns an HTML error page.
 
 ## M0
@@ -107,7 +107,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
 - `GET /api/trades` → `{ "items": TradeRow[], "total": 123 }`
   Query: `account_id` (repeatable), `symbol` (repeatable), `status` (repeatable), `from`, `to` (ISO date or datetime; filter on `close_time`, open trades on `open_time`), `sort` (any TradeRow field among: `open_time`, `close_time`, `symbol`, `net_pnl`, `r_multiple`, `risk_pct`, `volume`, `session`, `status`; default `close_time`), `order` (`asc|desc`, default `desc`), `limit` (1–500, default 100), `offset`.
 - `GET /api/trades/{id}` → `TradeDetail`
-- `PATCH /api/trades/{id}` body `{ "initial_sl": "2650.50" }` → `TradeDetail`. M1 accepts only `initial_sl` (and only when status is `needs_sl`, or to correct it later). Recomputes risk/R/planned RR/violations; `needs_sl` → `needs_description`. Journal fields come in M2.
+- `PATCH /api/trades/{id}` body `{ "initial_sl": "2650.50" }` → `TradeDetail`. Accepts only `initial_sl` (and only when status is `needs_sl`, or to correct it later). Recomputes risk/R/planned RR/violations; `needs_sl` → `needs_description`. Journal fields are saved with `PUT /api/trades/{id}/journal` (M2).
 - `GET /api/inbox/counts` → `{ "needs_sl": 0, "needs_description": 3, "draft": 1 }`
 - `GET /api/trades/symbols` → `{ "items": ["EURUSD", "XAUUSD"] }` (distinct symbols, for filters)
 
@@ -126,7 +126,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
   "violations": ["min_planned_rr"]
 }
 ```
-`TradeDetail` = `TradeRow` + `exit_deals: [{ticket, time, price, volume, profit, commission, swap, reason}]`, `rule_violations: [{rule_key, source, details}]`, `initial_sl_source` (`deal|order|position|user|null`), and the journal fields (null in M1).
+`TradeDetail` = `TradeRow` + `exit_deals: [{ticket, time, price, volume, profit, commission, swap, reason}]`, `rule_violations: [{rule_key, source, details}]`, `initial_sl_source` (`deal|order|position|user|null`), and the journal fields (null in M1; in M2 they move into `journal`, see "TradeDetail in M2").
 
 ### Journal field definitions (PRD 6.4)
 
@@ -142,3 +142,110 @@ Optional attributes: `text_key` (companion free-text column; with `allow_other_t
 ### Rules config
 
 - `GET /api/rules` → `{ timezone, sessions: [{name, start, end, entries_allowed}] (sorted by start), sync, broker_time, rules: {key: {enabled, value?, ...}} }`; decimals as strings, counts as ints.
+
+
+## M2
+
+Everything journal-related is driven by `config/journal_fields.yaml`: no field list in code. "YAML field" below means a field `key` from that file; "YAML key" means a field `key` or a `text_key`.
+
+### TradeDetail in M2
+
+`TradeDetail` keeps everything from M1 except the journal: the top-level journal columns (`setup_context` … `quality_rating`, `poi_type_other`, `emotion_*_text`, `bias_alignment*`) and `extra` are **replaced** by one object `journal`. These stay top-level: `raw_text`, `transcript`, `ai_filled_fields`, `described_at`. New: `chart_links`, `missing_required`.
+
+```json
+{
+  "...": "TradeRow + exit_deals + rule_violations + initial_sl_source as in M1",
+  "journal": { "setup_context": "yes", "poi_type": "other", "poi_type_other": "OB H4",
+               "followed_plan": true, "quality_rating": 4,
+               "rule_violations": ["min_planned_rr", "max_risk_pct"], "bias_alignment": null },
+  "chart_links": [ { "id": 3, "url": "https://www.tradingview.com/x/AbCd1234/", "kind": "before",
+                     "preview_url": "https://s3.tradingview.com/snapshots/a/AbCd1234.png" } ],
+  "raw_text": "...", "transcript": null, "ai_filled_fields": ["setup_context"],
+  "described_at": "2026-11-03T10:00:00Z",
+  "missing_required": ["fvg_kind", "chart_links"]
+}
+```
+- `journal` has every YAML key (fields and `text_key`s, `column` and `extra` storage), `null` when empty. Values: `enum` → string, `multi_enum` → array, `bool`, `int`, text → string.
+- `journal.rule_violations` = all rule keys on the trade (auto + user), sorted; the source of each is in `TradeDetail.rule_violations[]` (`{rule_key, source, details}`).
+- `journal.bias_alignment` = effective value (`bias_alignment_override` ?? `bias_alignment`), read-only in M2 (bias module comes later).
+- `missing_required`: what blocks `complete` right now (same rule as the save below). Order = YAML order; `chart_links` when no `before` link.
+- `chart_links[].preview_url`: for a snapshot link → `https://s3.tradingview.com/snapshots/<first char of id, lowercase>/<id>.png`; `null` for chart links (the UI shows the plain link).
+- `extra` keys that are no longer in the YAML are not shown in `journal` but are kept in the DB.
+
+### Journal save (PRD 6.4, 6.5)
+
+- `PUT /api/trades/{id}/journal` body `JournalInput` → `TradeDetail`
+```json
+{
+  "fields": { "setup_context": "yes", "poi_type": "other", "poi_type_other": "OB H4",
+              "emotion_before": "calm", "followed_plan": true, "quality_rating": 4,
+              "rule_violations": ["max_risk_pct"] },
+  "chart_links": [ { "url": "https://www.tradingview.com/x/AbCd1234/", "kind": "before" } ],
+  "raw_text": "опис угоди як є",
+  "ai_filled_fields": ["setup_context", "emotion_before"],
+  "complete": false
+}
+```
+- **Top level:** all five keys are required (`raw_text` may be `null`); unknown top-level keys → 422 `validation_error`.
+- **`fields`:** keys = YAML keys, except `type: auto` (e.g. `bias_alignment`) and `type: links` (`chart_links`). Any other key (unknown, or `auto`/`links`) → 422 with `details.fields["fields.<key>"]`.
+  - Full replacement **of the keys currently defined in the YAML**: a YAML key missing from `fields`, or `null`, is cleared. `trades.extra` keys that are not in the YAML are kept as they are.
+  - Types: `enum` → option `value` string; `multi_enum` → array of option values, no duplicates; `bool` → `true`/`false`; `int` → JSON integer within `min`/`max`; text fields and `text_key`s → string, trimmed, ≤ 5000 chars, empty → `null`.
+  - Deprecated options: rejected as new values, accepted when the trade already stores that same value.
+  - `text_key` with `allow_other_text: true` (e.g. `poi_type_other`): only allowed when its enum is `other`; otherwise it is cleared (saved as `null`, no error).
+  - `storage: column` → trades column; `storage: extra` → `trades.extra[key]`.
+  - `rule_violations` (the user's confirmed list):
+    - a key that is not an auto violation on the trade → stored as a `source=user` violation; a user violation missing from the list is deleted;
+    - auto violations are never deleted or duplicated by this endpoint: an auto key missing from the list is ignored (the UI shows auto entries as locked); an auto key in the list keeps the auto row and creates no user row.
+- **`chart_links`:** full replacement, 0–10 items, no duplicate URLs (compared as lower-case scheme + host + path with exactly one trailing slash; query and fragment ignored; backend and frontend use the same rule). `kind`: `before | after` (`bias` → 422). URL rule (backend and frontend use the same regex):
+  - `^https://([a-z0-9-]+\.)?tradingview\.com/(x/[A-Za-z0-9]+/?|chart(/([A-Za-z0-9]+/?)?)?)(\?[^#\s]*)?(#\S*)?$` (case-insensitive for the scheme and host; the snapshot id is case-sensitive);
+  - i.e. snapshot `/x/<id>` with optional trailing slash, or chart `/chart` with an optional trailing slash and optional layout id; query and fragment allowed; ≤ 500 chars.
+  - Errors: 422 with `details.fields["chart_links.<i>.url"]` / `["chart_links.<i>.kind"]`.
+- **`raw_text`:** `null` or a string ≤ 20000 chars, stored in `trades.raw_text`.
+- **`ai_filled_fields`:** keys the AI filled and the user did not change (the UI keeps this list). Keys that are not in `fields` with a non-null value are ignored.
+- **`complete`:**
+  - `false` → status `draft`.
+  - `true` → every `required: true` YAML field must be non-null; a `text_key` with `allow_other_text` is required when its enum is `other`; at least one `before` chart link when `chart_links` is required. Otherwise 422 `journal_incomplete` with `details: { "missing": [...] }` (same keys/order as `missing_required`) and nothing is saved.
+- **Status rules:** allowed from `needs_description`, `draft`, `complete`. `needs_sl` → 409 `needs_sl` (set the initial SL first). Open trade → 409 `trade_open`. Saving `complete: false` on a complete trade moves it back to `draft`.
+- `described_at` is set on the first successful save and updated on every later save.
+- The worker sync never changes `status` (once `draft`/`complete`), journal fields, `raw_text`, `ai_filled_fields`, user violations or chart links.
+
+### AI extraction (PRD 6.5)
+
+- `POST /api/trades/{id}/extract` body `{ "text": "..." }` (1–20000 chars; unknown keys → 422) → `ExtractResult`. Saves nothing except the usage log; the UI puts the result into the form and the user saves with `PUT .../journal`.
+```json
+{
+  "fields": { "setup_context": "yes", "entry_model": "ifvg_m5", "lesson": "..." },
+  "ai_filled_fields": ["setup_context", "entry_model", "lesson"],
+  "missing_required": ["poi_type", "fvg_kind", "chart_links"],
+  "dropped": [ { "key": "exit_reason", "reason": "evidence_not_in_text" } ],
+  "usage": { "model": "claude-sonnet-5-5", "fallback_used": false, "input_tokens": 1830,
+             "output_tokens": 210, "cost_usd": "0.0058", "duration_ms": 4200 }
+}
+```
+- Allowed for trades in `needs_description`, `draft`, `complete`. `needs_sl` → 409 `needs_sl` (the UI shows the SL form first); open → 409 `trade_open`.
+- The extraction schema is generated from the YAML. Fillable: `enum`, `multi_enum` (except `rule_violations`), `bool`, `int`, `text`, and `text_key`s. Never filled by the model: `auto`, `links`, `rule_violations`.
+- `fields` contains only keys the model filled and that survived the guards; `missing_required` is computed by the server from these `fields` (no chart links in the text → `chart_links` is listed).
+- **Guards** (server side, after the model answers; each removed value is listed in `dropped` with its `reason`):
+  - `evidence_not_in_text`: every value must come with an `evidence` quote that appears in the input text (case-insensitive, whitespace-normalised);
+  - `invalid_option`: enum values must be valid, non-deprecated options; `out_of_range`: ints within `min`/`max`;
+  - `parent_not_other`: a `text_key` with `allow_other_text` is dropped when its enum was not filled as `other`;
+  - `question`: a text value containing `?` while its evidence does not;
+  - the output has no free-form message field, so the model cannot ask questions.
+- **Model:** `ANTHROPIC_MODEL_EXTRACTION` (default `claude-sonnet-5-5`). On overload (529), 5xx, connection error or timeout, after the SDK's own retries, one attempt on `ANTHROPIC_MODEL_FALLBACK` (default `claude-opus-5-5`); the whole call stays within the 30 s target. Never on refusal. `usage.model` is the model that answered.
+- **Errors** (all logged to `logs/api.log` and `logs/ai_usage.jsonl`). The UI shows `uk.ts` `errors.<code>`; for `ai_error` it shows `errors.ai_error_kinds.<kind>`, falling back to `errors.ai_error`:
+  - `503 ai_not_configured`: `ANTHROPIC_API_KEY` empty. The manual form still works.
+  - `502 ai_error` with `details.kind`: `auth` | `rate_limit` | `overloaded` | `timeout` | `connection` | `api` | `refusal` | `invalid_output`. `refusal` is logged at ERROR as a prompt bug.
+  - `409 needs_sl` / `409 trade_open`; `404 not_found`; `422 validation_error`.
+
+### AI usage
+
+- Every AI call (success or failure) appends one JSON line to `logs/ai_usage.jsonl`:
+  `{ "ts": "...Z", "purpose": "extract", "trade_id": 10, "requested_model": "...", "model": "<model that answered, or null>", "fallback_used": false, "input_tokens": 0, "output_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "cost_usd": "0.0058" | null, "ok": true, "error_kind": null, "duration_ms": 4200 }`
+  - Append-only plain file append, **not** the rotating log handler and never rotated (the monthly total is read from it).
+  - No input text, no output values, no key in this file. Fallback = two lines (one per attempt).
+- Prices per million tokens live in `config/ai_pricing.yaml` (`input`, `output`, `cache_write`, `cache_read` per model id). Unknown model → `cost_usd: null` and a WARNING log.
+- `GET /api/ai/usage` → `{ "month": "2026-11", "cost_usd": "0.1234", "calls": 12, "failed_calls": 1, "unpriced_calls": 0, "input_tokens": 0, "output_tokens": 0, "configured": true, "extraction_model": "claude-sonnet-5-5" }`.
+  - `calls` / `failed_calls` count attempts (lines), not user actions: a fallback is 2 calls.
+  - Month = current Europe/Brussels calendar month (by `ts`). Lines with `cost_usd: null` are not in `cost_usd` and are counted in `unpriced_calls`; the UI then shows that the total is incomplete.
+  - Broken lines in the file are skipped with a WARNING (never a 500).
+  - Settings shows the month-to-date cost, the model and whether the key is set.
