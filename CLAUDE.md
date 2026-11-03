@@ -23,6 +23,10 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
 
+## Git workflow
+- M0 and M1 live on `main`. From M2 on, start each milestone on a new branch named `m<N>/<topic>` (for example `m2/describe-trade`), created from up-to-date `main`. Commit the milestone's tasks there.
+- Each milestone report (`docs/reports/M<n>.md`) lists the milestone's commit range.
+
 ## Decisions and questions
 - The PRD answers product questions. **Do not ask Borys to re-confirm decisions written in the PRD.**
 - For technical choices not covered by the PRD: pick the simplest robust option, record it in `docs/DECISIONS.md` (one line: date, decision, reason), continue.
