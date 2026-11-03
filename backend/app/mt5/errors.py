@@ -16,6 +16,7 @@ MASK = "***"
 class Mt5ErrorCode(enum.StrEnum):
     PASSWORD_MISSING = "password_missing"  # noqa: S105 - error code, not a secret
     TERMINAL_NOT_FOUND = "terminal_not_found"
+    TERMINAL_IN_PROGRAM_FILES = "terminal_in_program_files"  # MT5_SETUP.md step 1
     TERMINAL_START_FAILED = "terminal_start_failed"
     LOGIN_FAILED = "login_failed"
     TIMEOUT = "timeout"

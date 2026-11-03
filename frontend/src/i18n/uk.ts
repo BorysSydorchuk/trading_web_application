@@ -167,7 +167,8 @@ export const uk = {
         pct: '5.00',
       },
       hints: {
-        terminal_path: 'Необовʼязково. Повний шлях до terminal64.exe портативного терміналу цього рахунку.',
+        terminal_path:
+          'Необовʼязково. Повний шлях до terminal64.exe портативної копії термінала цього рахунку, напр. D:\\MT5\\<назва-рахунку>\\terminal64.exe. Не з C:\\Program Files.',
         reference_balance: 'Необовʼязково. Якщо порожньо, ризик рахується від поточного балансу.',
         passwordKey: 'Пароль шукатиметься в .env під ключем',
         pct: 'Необовʼязково, від 0 до 100.',
@@ -191,6 +192,8 @@ export const uk = {
       pctRange: 'Значення від 0 до 100',
       currency: 'Три латинські літери, напр. USD',
       terminalPath: 'Шлях має закінчуватися на terminal64.exe',
+      terminal_in_program_files:
+        'Термінал не можна брати з C:\\Program Files. Скопіюйте папку термінала в D:\\MT5\\<назва-рахунку>\\ і вкажіть шлях до копії (див. docs/MT5_SETUP.md, крок 1).',
       invalidOption: 'Оберіть значення зі списку',
       serverRejected: 'Сервер не прийняв це значення',
       duplicateName: 'Рахунок з такою назвою вже існує',
@@ -240,6 +243,7 @@ export const uk = {
       positions_skipped: 'Деякі позиції пропущено — неповна історія угод',
       password_missing: 'немає пароля в .env',
       terminal_not_found: 'термінал не знайдено',
+      terminal_in_program_files: 'термінал у C:\\Program Files — див. MT5_SETUP.md, крок 1',
       terminal_start_failed: 'термінал не запустився',
       login_failed: 'не вдалося увійти в MT5',
       timeout: 'MT5 не відповідає',

@@ -6,11 +6,17 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic_core import PydanticCustomError
 
+from app.domain.terminal_path import (
+    PROGRAM_FILES_CODE,
+    PROGRAM_FILES_MESSAGE,
+    TERMINAL_EXE,
+    is_in_program_files,
+)
 from app.models.enums import AccountPhase, AccountStatus
 from app.schemas.common import DecimalIn, UtcDatetime
 
-TERMINAL_EXE = "terminal64.exe"
 MAX_LOGIN = 2**63 - 1  # accounts.login is BIGINT
 
 Name100 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
@@ -23,10 +29,14 @@ TerminalPath = Annotated[str, StringConstraints(strip_whitespace=True, max_lengt
 
 
 def _check_terminal_path(value: str | None) -> str | None:
-    """Blank means "not set". Only the file name is checked, not existence: the API may run
-    before the terminal is installed, and the worker reports `terminal_not_found` anyway."""
+    """Blank means "not set". Existence is not checked: the API may run before the terminal
+    is installed, and the worker reports `terminal_not_found` anyway. A path under
+    Program Files fails with the stable type `terminal_in_program_files` (API
+    `details.field_codes`); it is checked first, as it is the more useful hint."""
     if value is None or value == "":
         return None
+    if is_in_program_files(value):
+        raise PydanticCustomError(PROGRAM_FILES_CODE, PROGRAM_FILES_MESSAGE)
     name = value.replace("/", "\\").rsplit("\\", 1)[-1]
     if name.lower() != TERMINAL_EXE:
         raise ValueError(f"must be the full path to {TERMINAL_EXE}")

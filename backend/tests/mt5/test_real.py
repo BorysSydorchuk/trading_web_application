@@ -15,6 +15,7 @@ from pydantic import SecretStr
 
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.real import ALLOWED_FUNCTIONS, RealMt5Source
+from app.mt5.source import resolve_terminal
 
 PASSWORD = "S3cr3t-Inv!"  # noqa: S105 - fake test password
 LOGIN = 51234567
@@ -514,3 +515,37 @@ def test_missing_package_is_typed_error(monkeypatch: pytest.MonkeyPatch, termina
         connect(src, terminal)
     assert err.value.code is Mt5ErrorCode.MT5_ERROR
     assert "MetaTrader5" in err.value.message
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "C:\\Program Files\\FundedNext MT5 Terminal\\terminal64.exe",
+        "C:/PROGRAM FILES (X86)/MT5",
+        '"%ProgramFiles%\\MT5\\terminal64.exe"',
+    ],
+)
+def test_terminal_in_program_files_refused(
+    fake: FakeMt5, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """Defence in depth for accounts saved before the API check existed."""
+    monkeypatch.setenv("ProgramFiles", "C:\\Program Files")
+    src, _ = make_source(fake)
+    with pytest.raises(Mt5Error) as err:
+        src.connect(path, LOGIN, SecretStr(PASSWORD), SERVER, timeout_s=30)
+    assert err.value.code is Mt5ErrorCode.TERMINAL_IN_PROGRAM_FILES
+    assert "docs/MT5_SETUP.md step 1" in err.value.message
+    assert fake.init_path is None
+
+
+def test_resolve_terminal_guard_uses_env_target(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    exe = tmp_path / "MT5" / "terminal64.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"")
+    assert resolve_terminal(str(exe)) == exe
+    monkeypatch.setenv("ProgramFiles", str(tmp_path))
+    with pytest.raises(Mt5Error) as err:
+        resolve_terminal(str(exe))
+    assert err.value.code is Mt5ErrorCode.TERMINAL_IN_PROGRAM_FILES

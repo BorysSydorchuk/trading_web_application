@@ -18,11 +18,11 @@ from typing import Protocol
 from pydantic import SecretStr
 
 from app.config import mt5_password_key
+from app.domain.terminal_path import PROGRAM_FILES_MESSAGE, TERMINAL_EXE, is_in_program_files
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
 
 DEFAULT_CONNECT_TIMEOUT_S = 60.0
-TERMINAL_EXE = "terminal64.exe"
 
 
 class Mt5Source(Protocol):
@@ -82,9 +82,15 @@ def require_password(login: int, password: SecretStr | None) -> str:
 
 
 def resolve_terminal(terminal_path: str) -> Path:
-    """Accept the terminal64.exe path or its folder; `Mt5Error(terminal_not_found)` if absent."""
+    """Accept the terminal64.exe path or its folder; `Mt5Error(terminal_not_found)` if absent.
+
+    A path under Program Files is refused before any file access (accounts saved before the
+    API check existed): `Mt5Error(terminal_in_program_files)`.
+    """
     if not terminal_path.strip():
         raise Mt5Error(Mt5ErrorCode.TERMINAL_NOT_FOUND, "terminal path is not set for the account")
+    if is_in_program_files(terminal_path):
+        raise Mt5Error(Mt5ErrorCode.TERMINAL_IN_PROGRAM_FILES, PROGRAM_FILES_MESSAGE)
     path = Path(terminal_path.strip().strip('"'))
     if path.is_dir():
         path = path / TERMINAL_EXE

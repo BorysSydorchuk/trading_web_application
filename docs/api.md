@@ -15,7 +15,7 @@ Any non-2xx response has this body:
 - `message`: English, for logs and developers.
 - `details`: optional object (for example validation errors: `{ "fields": { "name": "required" } }`).
 
-Known codes: `validation_error` (422, `details.fields` maps field path → English message), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `config_error` (500, broken config/*.yaml; `details: {file, problems[]}`), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
+Known codes: `validation_error` (422, `details.fields` maps field path → English message; optional `details.field_codes` maps field path → stable code for the few field errors the UI shows specific text for, see Accounts), `not_found` (404), `method_not_allowed` (405), `conflict` (409), `bad_request` (400), `unauthorized` (401), `forbidden` (403), `service_unavailable` (503, non-DB), `db_unavailable` (503), `config_error` (500, broken config/*.yaml; `details: {file, problems[]}`), `internal_error` (500), `http_error` (other). Backend raises custom codes via `app.errors.ApiError`.
 Unhandled exceptions are logged with a traceback to `logs/` and returned as `internal_error`; the API never returns an HTML error page.
 
 ## M0
@@ -66,6 +66,13 @@ Conventions: list endpoints return `{ "items": [...] }` (plus `"total"` when pag
 Optional: `terminal_path`, `status` (default `active`), `reference_balance`, the three `*_pct`.
 `phase`: `phase_1 | phase_2 | funded`. `status`: `active | passed | failed | archived`. `currency`: 3 letters.
 Errors: `409 conflict` (`details.field` = `name` or `login`) for a duplicate name or login+server; `422 validation_error`.
+`terminal_path`: blank = not set; otherwise must end in `terminal64.exe` and must **not** be under Program Files (MT5_SETUP.md step 1). Rejected: `C:\Program Files\…`, `C:\Program Files (x86)\…`, the 8.3 names `C:\PROGRA~1`/`C:\PROGRA~2`, and wherever `%ProgramFiles%`, `%ProgramFiles(x86)%`, `%ProgramW6432%`, `%ProgramFiles(Arm)%` point on the server machine; case-insensitive, `/` or `\`, repeated separators, `.`/`..`, surrounding quotes and `%VAR%` expansion are normalised first. Not rejected: lookalikes such as `C:\Program Files Backup\…`, `D:\Program Files\…`, `C:\MT5\Program Files\…`. The value is stored as sent (not expanded). Response for POST and PATCH:
+```json
+{ "error": { "code": "validation_error", "message": "Request validation failed",
+  "details": { "fields": { "terminal_path": "the terminal must not be under C:\\Program Files; … (docs/MT5_SETUP.md step 1)" },
+               "field_codes": { "terminal_path": "terminal_in_program_files" } } } }
+```
+`details.field_codes` is present only when at least one field has a stable code; today the only one is `terminal_in_program_files`. Other field errors have only `details.fields`.
 
 `Account` = `AccountInput` + read-only:
 ```json
@@ -93,7 +100,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
 } ] }
 ```
 `state`: `ok` (last attempt succeeded), `warning` (last attempt succeeded but something needs attention, e.g. `error_code=positions_skipped` with the details in `error_message`), `error` (last attempt failed), `running`, `never` (no sync yet), `stale` (latest attempt older than 3 × the expected interval, whatever its outcome: the worker is probably not running or hung; the latest error stays in error_code/error_message).
-`error_code` (worker side): `positions_skipped` (warning only), `password_missing`, `terminal_not_found`, `terminal_start_failed`, `login_failed`, `timeout`, `mt5_error`, `internal_error`. `error_message`: short English text; the UI shows Ukrainian text via `uk.ts` `sync.errors.<code>`.
+`error_code` (worker side): `positions_skipped` (warning only), `password_missing`, `terminal_not_found`, `terminal_in_program_files` (saved terminal_path is under Program Files; the worker refuses to start it, MT5_SETUP.md step 1), `terminal_start_failed`, `login_failed`, `timeout`, `mt5_error`, `internal_error`. `error_message`: short English text; the UI shows Ukrainian text via `uk.ts` `sync.errors.<code>`.
 
 ### Trades
 

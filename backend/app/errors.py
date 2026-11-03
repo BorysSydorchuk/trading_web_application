@@ -13,6 +13,8 @@ from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.domain.terminal_path import PROGRAM_FILES_CODE
+
 logger = logging.getLogger(__name__)
 
 _HTTP_CODES: dict[int, str] = {
@@ -27,6 +29,10 @@ _HTTP_CODES: dict[int, str] = {
 }
 
 _LOCATION_PREFIXES = {"body", "query", "path", "header", "cookie"}
+
+# Validation error types the UI may map to its own text (422 `details.field_codes`).
+# Other (pydantic) types are not part of the contract and are not exposed.
+FIELD_ERROR_CODES: frozenset[str] = frozenset({PROGRAM_FILES_CODE})
 
 
 class ApiError(Exception):
@@ -87,10 +93,18 @@ async def _validation_handler(_: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, RequestValidationError):
         raise exc
     fields: dict[str, str] = {}
+    field_codes: dict[str, str] = {}
     for err in exc.errors():
         key = _field_key(tuple(err.get("loc", ())))
-        fields.setdefault(key, str(err.get("msg", "invalid")))
-    return error_response(422, "validation_error", "Request validation failed", {"fields": fields})
+        if key in fields:
+            continue
+        fields[key] = str(err.get("msg", "invalid"))
+        if err.get("type") in FIELD_ERROR_CODES:
+            field_codes[key] = str(err["type"])
+    details: dict[str, Any] = {"fields": fields}
+    if field_codes:
+        details["field_codes"] = field_codes
+    return error_response(422, "validation_error", "Request validation failed", details)
 
 
 async def _db_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:

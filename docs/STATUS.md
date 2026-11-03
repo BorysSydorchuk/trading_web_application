@@ -8,7 +8,7 @@ Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 acce
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-03. M2 planned. M2-01 (Program Files guard) in progress on branch m2/terminal-path-guard (backend-dev). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Borys approved `anthropic` dep; models per PM: extraction claude-sonnet-5-5, summary claude-opus-5-5, fallback only on overload/5xx/timeout.
+Last update: 2026-11-03. M2-01 merged to main. Next: M2-02 contract (branch m2/contract; draft in scratch was moved into docs/api.md). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Borys approved `anthropic` dep; models per PM: extraction claude-sonnet-5-5, summary claude-opus-5-5, fallback only on overload/5xx/timeout.
 
 M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
 
@@ -24,7 +24,7 @@ To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; restart M1-13 
 
 Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPROVE + green `make check`, push main after each merge.
 
-- [ ] M2-01 Settings rejects terminal paths under Program Files (env vars, both slashes, case, 8.3, `..`), worker guard too; Ukrainian error → MT5_SETUP.md step 1; tests (backend-dev, then frontend-dev for uk.ts) — branch m2/terminal-path-guard
+- [x] M2-01 Settings rejects terminal paths under Program Files (env vars, both slashes, case, 8.3, `..`), worker guard too; Ukrainian error → MT5_SETUP.md step 1; tests (backend-dev, then frontend-dev for uk.ts) — branch m2/terminal-path-guard
 - [ ] M2-02 M2 API contract in docs/api.md (journal save, chart links, extract, AI usage) + decisions (orchestrator) — branch m2/contract
 - [ ] M2-03 Journal save API: `PUT /api/trades/{id}/journal`, validation generated from journal_fields.yaml (types, options, deprecated, extra storage), required check for complete, status flow, user violations, TradingView link validation + preview_url; test: new YAML field works without code changes (backend-dev) — branch m2/journal-save
 - [ ] M2-04 AI extraction: `anthropic` SDK (needs Borys OK), prompt in backend/prompts/ with glossary, schema from YAML with evidence quotes, server guards (evidence, options, questions), errors (ai_not_configured / ai_error), usage log logs/ai_usage.jsonl + config/ai_pricing.yaml + `GET /api/ai/usage` (backend-dev) — branch m2/ai-extraction
