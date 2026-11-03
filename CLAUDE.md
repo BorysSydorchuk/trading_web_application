@@ -18,6 +18,9 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
   - `frontend-dev`: React UI
   - `qa-tester`: writes and runs tests, reproduces bugs
   - `code-reviewer`: reviews every finished task before you mark it done
+  - `tdd-guide` (with the `tdd-workflow` skill): required for position-size, risk-limit, P&L and R calculation code
+  - `database-reviewer`: required for every Alembic migration
+  - `security-reviewer`: one pass before the Telegram bot milestone is accepted; not on every task
 - Before calling a reviewer agent, run the checks yourself and pass the diff (git diff) and changed file list in the prompt.
 - Independent tasks (for example backend endpoint + frontend page against an agreed API contract) may run in parallel. Agree the API contract first and write it into `docs/api.md`.
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
