@@ -129,6 +129,19 @@ function validatePct(value: string): string | undefined {
   return undefined
 }
 
+/**
+ * Simplified client mirror of backend app/domain/terminal_path.py (the server stays
+ * authoritative and also checks where the env vars point on its machine):
+ * literal Program Files roots, their 8.3 names and %ProgramFiles%-style prefixes.
+ */
+const PROGRAM_FILES_ROOT =
+  /^(?:c:\\program files(?: \(x86\))?|c:\\progra~[12]|%programfiles(?:\(x86\)|\(arm\))?%|%programw6432%)(?:\\|$)/i
+
+export function isInProgramFiles(path: string): boolean {
+  const normalized = path.trim().replace(/^"+|"+$/g, '').trim().replace(/[\\/]+/g, '\\')
+  return PROGRAM_FILES_ROOT.test(normalized)
+}
+
 function validateField(field: FormField, raw: string): string | undefined {
   const value = DECIMAL_FIELDS.has(field) ? normalizeDecimalInput(raw) : raw.trim()
   if (value === '') return REQUIRED_FIELDS.has(field) ? v.required : undefined
@@ -149,6 +162,7 @@ function validateField(field: FormField, raw: string): string | undefined {
         : v.login
     case 'terminal_path':
       if (value.length > PATH_MAX) return v.tooLong
+      if (isInProgramFiles(value)) return v.terminal_in_program_files
       // Same rule as the backend: the file name after the last \ or / is terminal64.exe.
       return value.split(/[\\/]/).pop()?.toLowerCase() === 'terminal64.exe'
         ? undefined
@@ -223,9 +237,22 @@ export interface ServerFormErrors {
   general: boolean
 }
 
+/** Stable 422 `details.field_codes` values (docs/api.md, Accounts) → Ukrainian text. */
+const FIELD_CODE_MESSAGES: Readonly<Record<string, string>> = {
+  terminal_in_program_files: v.terminal_in_program_files,
+}
+
+function fieldCodeMessage(fieldCodes: unknown, path: string): string | undefined {
+  if (typeof fieldCodes !== 'object' || fieldCodes === null) return undefined
+  const code = (fieldCodes as Record<string, unknown>)[path]
+  if (typeof code !== 'string' || !Object.hasOwn(FIELD_CODE_MESSAGES, code)) return undefined
+  return FIELD_CODE_MESSAGES[code]
+}
+
 /**
  * Maps 422 `details.fields` (field path → English message) and 409 `details.field`
- * to Ukrainian messages next to the fields. The global toast is shown separately.
+ * to Ukrainian messages next to the fields. A known `details.field_codes` entry gives
+ * specific text; otherwise the generic `serverRejected`. The global toast is shown separately.
  */
 export function serverFormErrors(error: unknown): ServerFormErrors {
   const result: ServerFormErrors = { fields: {}, general: false }
@@ -245,10 +272,14 @@ export function serverFormErrors(error: unknown): ServerFormErrors {
       result.general = true
       return result
     }
+    const fieldCodes = error.details?.field_codes
     for (const [path, message] of Object.entries(fields)) {
       // Paths may look like "login" or "body.login"; the English message goes to the console only.
       const field = path.split('.').find(isFormField)
-      if (field) result.fields[field] = v.serverRejected
+      if (field) {
+        result.fields[field] =
+          fieldCodeMessage(fieldCodes, path) ?? fieldCodeMessage(fieldCodes, field) ?? v.serverRejected
+      }
       else result.general = true
       console.warn(`Server rejected ${path}: ${String(message)}`)
     }

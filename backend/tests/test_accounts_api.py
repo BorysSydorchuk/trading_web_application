@@ -451,3 +451,71 @@ def test_patch_float_rejected(client: TestClient) -> None:
     created = _create(client)
     fields = _fields(client.patch(f"/api/accounts/{created['id']}", json={"starting_balance": 1.1}))
     assert "starting_balance" in fields
+
+
+# --- terminal under Program Files (DECISIONS 2026-11-03, MT5_SETUP.md step 1) ---
+
+PROGRAM_FILES_PATHS = [
+    "C:\\Program Files\\FundedNext MT5 Terminal\\terminal64.exe",
+    "c:/program files (x86)/MT5/terminal64.exe",
+    '"C:\\Program Files\\MT5\\terminal64.exe"',
+    "C:\\MT5\\..\\Program Files\\x\\terminal64.exe",
+    "C:\\PROGRA~1\\MT5\\terminal64.exe",
+    "%ProgramFiles%\\MT5\\terminal64.exe",
+    "C:\\Program Files\\MT5",  # folder: the Program Files reason wins over the file name
+]
+
+
+def _assert_program_files_error(response: Any) -> None:
+    fields = _fields(response)
+    assert set(fields) == {"terminal_path"}
+    assert "docs/MT5_SETUP.md step 1" in fields["terminal_path"]
+    details = response.json()["error"]["details"]
+    assert details["field_codes"] == {"terminal_path": "terminal_in_program_files"}
+
+
+@pytest.fixture
+def default_program_files_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ProgramFiles", "C:\\Program Files")
+    monkeypatch.setenv("ProgramFiles(x86)", "C:\\Program Files (x86)")
+
+
+@pytest.mark.usefixtures("default_program_files_env")
+@pytest.mark.parametrize("path", PROGRAM_FILES_PATHS)
+def test_create_rejects_terminal_in_program_files(client: TestClient, path: str) -> None:
+    _assert_program_files_error(client.post("/api/accounts", json=_body(terminal_path=path)))
+    assert client.get("/api/accounts").json()["items"] == []
+
+
+@pytest.mark.usefixtures("default_program_files_env")
+@pytest.mark.parametrize("path", PROGRAM_FILES_PATHS)
+def test_update_rejects_terminal_in_program_files(client: TestClient, path: str) -> None:
+    created = _create(client)
+    response = client.patch(f"/api/accounts/{created['id']}", json={"terminal_path": path})
+    _assert_program_files_error(response)
+    stored = client.get(f"/api/accounts/{created['id']}").json()
+    assert stored["terminal_path"] == created["terminal_path"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "C:\\Program Files Backup\\MT5\\terminal64.exe",
+        "D:\\Program Files\\MT5\\terminal64.exe",
+        "C:\\MT5\\Program Files\\terminal64.exe",
+    ],
+)
+def test_program_files_lookalikes_accepted(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    monkeypatch.setenv("ProgramFiles", "C:\\Program Files")
+    monkeypatch.delenv("ProgramW6432", raising=False)
+    monkeypatch.delenv("ProgramFiles(x86)", raising=False)
+    monkeypatch.delenv("ProgramFiles(Arm)", raising=False)
+    assert _create(client, terminal_path=path)["terminal_path"] == path
+
+
+def test_other_validation_errors_have_no_field_codes(client: TestClient) -> None:
+    response = client.post("/api/accounts", json=_body(terminal_path="D:\\MT5\\terminal.exe"))
+    assert "terminal_path" in _fields(response)
+    assert "field_codes" not in response.json()["error"]["details"]
