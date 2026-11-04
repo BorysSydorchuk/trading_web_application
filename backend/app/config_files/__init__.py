@@ -1,5 +1,5 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
-ai_pricing.yaml, extraction.yaml).
+ai_pricing.yaml, extraction.yaml, transcription.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -32,6 +32,11 @@ from app.config_files.rules import (
     clear_rules_cache,
     get_rules,
 )
+from app.config_files.transcription import (
+    TranscriptionConfig,
+    clear_transcription_cache,
+    get_transcription,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +47,7 @@ def reload_config() -> None:
     clear_journal_fields_cache()
     clear_ai_pricing_cache()
     clear_extraction_cache()
+    clear_transcription_cache()
 
 
 def check_config_files() -> list[ConfigError]:
@@ -52,6 +58,7 @@ def check_config_files() -> list[ConfigError]:
         get_journal_fields,
         get_ai_pricing,
         get_number_words,
+        get_transcription,
     ]
     for load in loaders:
         try:
@@ -74,11 +81,13 @@ __all__ = [
     "ModelPrice",
     "RulesConfig",
     "SessionWindow",
+    "TranscriptionConfig",
     "check_config_files",
     "config_dir",
     "get_ai_pricing",
     "get_journal_fields",
     "get_number_words",
     "get_rules",
+    "get_transcription",
     "reload_config",
 ]

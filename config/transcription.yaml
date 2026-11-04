@@ -1,0 +1,24 @@
+# Voice-note transcription (faster-whisper in the worker, docs/api.md M3).
+#
+# glossary: trading terms Borys says in his voice notes. They are passed to Whisper as a
+# short hint sentence ("initial_prompt") so it spells them the way he writes them
+# (FVG, not "еф ві джі"). Keep the list short: Whisper reads only the last ~220 tokens
+# of the hint. Each term is plain text, at most 40 characters, no duplicates.
+# Changes are picked up by the next note, no restart needed.
+
+glossary:
+  - FVG
+  - IFVG
+  - QM
+  - POI
+  - BOS
+  - SMT
+  - Flow
+  - фрактал
+  - точка B
+  - лондон
+  - нью-йорк
+  - GER40
+  - XAUUSD
+  - EURUSD
+  - GBPUSD

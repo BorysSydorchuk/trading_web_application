@@ -1,8 +1,9 @@
 """Worker process: an APScheduler BackgroundScheduler (UTC) running periodic jobs;
 the main thread just waits for a stop signal.
 
-Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`) and
-`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`).
+Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`),
+`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`)
+and `transcription` (voice notes -> text, see `app.worker.transcription_job`).
 Every job is wrapped by `_safe` so an exception is logged and the scheduler keeps running.
 """
 
@@ -27,12 +28,19 @@ from app.db import dispose_engine, get_engine, get_session_factory
 from app.logging_setup import setup_logging
 from app.mt5.source import Mt5Source
 from app.services.ai.warmup import WARMUP_JOB_ID, WARMUP_JOB_INTERVAL_S, WarmupJob
+from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.worker.sync_job import (
     SYNC_JOB_ID,
     SYNC_JOB_INTERVAL_S,
     make_source,
     mark_interrupted_runs,
     run_sync_cycle,
+)
+from app.worker.transcription_job import (
+    TRANSCRIPTION_JOB_ID,
+    TRANSCRIPTION_JOB_INTERVAL_S,
+    reset_interrupted_notes,
+    run_transcription_cycle,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,12 +99,37 @@ def default_sync_job(settings: Settings) -> Callable[[], None]:
     return job
 
 
+def default_transcription_job(settings: Settings) -> Callable[[], None]:
+    """One Whisper transcriber per process; the model loads on the first note."""
+    transcriber: list[Transcriber] = []
+
+    def job() -> None:
+        if not transcriber:
+            transcriber.append(WhisperTranscriber(WhisperOptions.from_settings(settings)))
+        run_transcription_cycle(get_session_factory(), transcriber[0], settings.data_dir)
+
+    return job
+
+
+class _SkipNoiseFilter(logging.Filter):
+    """Drop APScheduler's "skipped: maximum number of running instances" line for the
+    transcription job: it runs every 2 s while one note can take a minute."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not (
+            "maximum number of running instances" in message
+            and f"{TRANSCRIPTION_JOB_ID}" in message
+        )
+
+
 def build_scheduler(
     settings: Settings | None = None,
     *,
     engine_getter: Callable[[], Engine] = get_engine,
     sync_job: Callable[[], None] | None = None,
     warmup_job: Callable[[], None] | None = None,
+    transcription_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -137,6 +170,16 @@ def build_scheduler(
         next_run_time=datetime.now(UTC),
         replace_existing=True,
     )
+    scheduler.add_job(
+        _safe(TRANSCRIPTION_JOB_ID, transcription_job or default_transcription_job(settings)),
+        trigger=IntervalTrigger(seconds=TRANSCRIPTION_JOB_INTERVAL_S, timezone=UTC),
+        id=TRANSCRIPTION_JOB_ID,
+        name=TRANSCRIPTION_JOB_ID,
+        max_instances=1,  # one note at a time
+        coalesce=True,
+        next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
     return scheduler
 
 
@@ -160,6 +203,8 @@ def main() -> int:
     # too: the warm-up job makes AI calls and prices them.
     check_config_files()
     mark_interrupted_runs(get_session_factory())
+    reset_interrupted_notes(get_session_factory())
+    logging.getLogger("apscheduler.scheduler").addFilter(_SkipNoiseFilter())
     stop = threading.Event()
     _install_signal_handlers(stop)
     scheduler = build_scheduler(settings)

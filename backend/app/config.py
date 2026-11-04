@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     # Extraction is a mapping task: `low` is faster and cheaper; QA measures p95 in M2-07.
     anthropic_effort: AnthropicEffort = "low"
 
+    # Voice notes (M3): local faster-whisper in the worker (docs/api.md M3).
+    whisper_model: str = Field(default="small", min_length=1)
+    whisper_compute_type: str = Field(default="int8", min_length=1)
+    # Language code for Whisper; empty = auto-detect per note.
+    whisper_language: str = "uk"
+    whisper_beam_size: int = Field(default=5, ge=1, le=20)
+    # 0 = library default (CTranslate2 picks the thread count).
+    whisper_cpu_threads: int = Field(default=0, ge=0, le=256)
+
     @property
     def ai_configured(self) -> bool:
         """True when ANTHROPIC_API_KEY is set (non-blank)."""
@@ -84,6 +93,12 @@ class Settings(BaseSettings):
         """DATA_DIR resolved against the repo root (not the CWD) when relative."""
         path = value.expanduser()
         return (path if path.is_absolute() else REPO_ROOT / path).resolve()
+
+    @property
+    def whisper_language_code(self) -> str | None:
+        """WHISPER_LANGUAGE stripped, or None (auto-detect) when empty."""
+        code = self.whisper_language.strip()
+        return code or None
 
 
 @lru_cache(maxsize=1)

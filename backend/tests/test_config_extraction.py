@@ -18,7 +18,13 @@ from app.config_files.loader import CONFIG_DIR_ENV
 from app.domain.number_words import number_in_evidence
 
 REAL_CONFIG = REPO_ROOT / "config"
-CONFIG_FILES = ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml", "extraction.yaml")
+CONFIG_FILES = (
+    "rules.yaml",
+    "journal_fields.yaml",
+    "ai_pricing.yaml",
+    "extraction.yaml",
+    "transcription.yaml",
+)
 
 # The list that was hardcoded as NUMBER_WORDS in app/domain/extraction.py before M3-02.
 M2_NUMBER_WORDS = {

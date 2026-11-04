@@ -6,11 +6,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, enum_check
-from app.models.enums import ChartLinkKind, TranscriptionStatus
+from app.models.enums import ChartLinkKind, TranscriptionErrorCode, TranscriptionStatus
 
 if TYPE_CHECKING:
     from app.models.bias import BiasEntry
@@ -47,6 +47,18 @@ class AudioNote(TimestampMixin, Base):
         CheckConstraint(_ONE_OWNER, name="one_owner"),
         enum_check("transcription_status", TranscriptionStatus, "transcription_status_valid"),
         CheckConstraint("duration_seconds >= 0", name="duration_non_negative"),
+        CheckConstraint("progress >= 0 AND progress <= 1", name="progress_range"),
+        enum_check("error_code", TranscriptionErrorCode, "error_code_valid"),
+        CheckConstraint(
+            "error_code IS NULL OR transcription_status = 'failed'", name="error_code_only_failed"
+        ),
+        # Worker claim: oldest pending note first (docs/api.md M3).
+        Index(
+            "ix_audio_notes_pending_created_at",
+            "created_at",
+            "id",
+            postgresql_where=text("transcription_status = 'pending'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -64,7 +76,12 @@ class AudioNote(TimestampMixin, Base):
     transcription_status: Mapped[str] = mapped_column(
         String(20), index=True, server_default=TranscriptionStatus.PENDING.value
     )
+    # English detail for logs/debugging; never shown in the UI (the UI uses error_code).
     transcription_error: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(30))
+    # Transcribed audio seconds / duration while processing, 1 when done, else NULL.
+    progress: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    started_at: Mapped[datetime | None]  # when the worker claimed the note
     transcribed_at: Mapped[datetime | None]
 
     trade: Mapped[Trade | None] = relationship(back_populates="audio_notes")
