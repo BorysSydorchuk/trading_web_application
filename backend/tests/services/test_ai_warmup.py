@@ -16,6 +16,7 @@ from app.config_files import ConfigError, JournalFieldsConfig, get_journal_field
 from app.domain.extraction import build_extraction_schema
 from app.services.ai import warmup
 from app.services.ai.client import AiCallError, ModelClient, ModelReply, ModelRequest
+from app.services.ai.prompt import PromptError
 from app.services.ai.usage_log import summarise_month, usage_log_path
 from app.services.ai.warmup import (
     RETRY_AFTER_FAILURE_S,
@@ -287,6 +288,51 @@ def test_unexpected_error_never_raises_and_backs_off(
 
     assert client.calls == 1
     assert "AI warm-up: unexpected error" in caplog.text
+    assert not warmup_state_path(ai_settings).exists()
+
+
+def test_state_write_error_logs_error_and_backs_off(
+    ai_settings: Settings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def failing_write(_path: Path, _state: WarmupState) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(warmup, "write_state", failing_write)
+    clock = Clock()
+    client = FakeClient([reply(), reply()])
+    job, _ = make_job(ai_settings, client, clock)
+
+    job()
+    assert len(client.requests) == 1  # the call itself succeeded
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("AI warm-up done, but cannot write" in r.getMessage() for r in errors)
+    assert not warmup_state_path(ai_settings).exists()
+
+    clock.t += RETRY_AFTER_FAILURE_S - 1
+    job()
+    assert len(client.requests) == 1  # no paid call every minute
+
+
+def test_prompt_error_logs_warning_and_backs_off(
+    ai_settings: Settings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls: list[str] = []
+
+    def missing_prompt(text: str, **_kwargs: object) -> None:
+        calls.append(text)
+        raise PromptError("Cannot read prompt extract_trade.md")
+
+    monkeypatch.setattr(warmup, "extract_trade_fields", missing_prompt)
+    clock = Clock()
+    job, _ = make_job(ai_settings, FakeClient([]), clock)
+
+    job()
+    clock.t += RETRY_AFTER_FAILURE_S - 1
+    job()
+
+    assert calls == [WARMUP_TEXT]
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("AI warm-up failed (Cannot read prompt" in r.getMessage() for r in warnings)
     assert not warmup_state_path(ai_settings).exists()
 
 
