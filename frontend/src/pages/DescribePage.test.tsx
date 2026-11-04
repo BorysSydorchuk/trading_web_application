@@ -147,6 +147,26 @@ describe('DescribePage', () => {
     expect(saved[0]).toMatchObject({ complete: true, fields: { quality_rating: null }, chart_links: [] })
   })
 
+  it('drops a new field from the note once it is filled and hides the note when none are left', async () => {
+    const trade = fixtureTrade({ status: 'complete', missing_new_fields: ['setup_context', 'quality_rating'] })
+    serveTrade(trade)
+    const { user } = renderPage(trade)
+
+    const hint = await screen.findByRole('note')
+    expect(hint).toHaveTextContent(`${labelOf('setup_context')}, ${labelOf('quality_rating')}`)
+
+    const context = document.getElementById(fieldDomId('setup_context'))
+    if (!context) throw new Error('no setup_context field')
+    await user.click(within(context).getByRole('button', { name: 'yes' }))
+    expect(hint).not.toHaveTextContent(labelOf('setup_context'))
+    expect(hint).toHaveTextContent(labelOf('quality_rating'))
+
+    const quality = document.getElementById(fieldDomId('quality_rating'))
+    if (!quality) throw new Error('no quality_rating field')
+    await user.click(within(quality).getByRole('button', { name: '4' }))
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
   it('shows the raw key when a new field has no label', async () => {
     const trade = fixtureTrade({ missing_new_fields: ['unknown_key'] })
     serveTrade(trade)

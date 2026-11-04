@@ -44,6 +44,20 @@ export function fieldsForTrade(fields: readonly JournalField[], newFields: reado
   return fields.map((field) => (exempt.has(field.key) && field.required ? { ...field, required: false } : field))
 }
 
+/**
+ * `keys` that are still empty in the form, with the same emptiness rule as `missingKeys`
+ * (a links field needs a `before` link). A key not in `fields` is kept (shown raw).
+ */
+export function stillEmptyKeys(
+  fields: readonly JournalField[],
+  keys: readonly string[],
+  values: FormValues,
+  links: readonly LinkDraft[],
+): string[] {
+  const types = new Map(fields.map((field) => [field.key, field.type]))
+  return keys.filter((key) => (types.get(key) === 'links' ? !hasBeforeLink(links) : isEmptyValue(values[key])))
+}
+
 /** Fields rendered in the form (everything except links, which have their own editor). */
 export function formFields(fields: readonly JournalField[]): JournalField[] {
   return fields.filter((field) => field.type !== 'links')
