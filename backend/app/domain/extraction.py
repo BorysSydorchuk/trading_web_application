@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.config_files.journal_fields import JournalFieldsConfig
-from app.domain.chart_links import is_valid_chart_url
 from app.domain.journal import (
     OTHER_OPTION,
     InvalidJournalValue,
@@ -48,22 +47,17 @@ _RANGE_ISSUES: frozenset[IssueCode] = frozenset({"out_of_range", "too_long"})
 # keyboards mix them): apostrophes, quotes, dashes, non-breaking spaces.
 _FOLD = str.maketrans(
     {
-        "’": "'",
-        "‘": "'",
-        "ʼ": "'",
-        "`": "'",
-        "“": '"',
-        "”": '"',
-        "«": '"',
-        "»": '"',
-        "–": "-",
-        "—": "-",
-        " ": " ",
+        **dict.fromkeys(map(chr, (0x2019, 0x2018, 0x02BC, 0x60)), "'"),
+        **dict.fromkeys(map(chr, (0x201C, 0x201D, 0x00AB, 0x00BB)), '"'),
+        **dict.fromkeys(map(chr, (0x2013, 0x2014)), "-"),
+        chr(0x00A0): " ",
     }
 )
 _WHITESPACE = re.compile(r"\s+")
-_URL = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
-_URL_TRAILING = ".,;:!?)]}"
+# Evidence must be at least this long after normalisation (1-2 letter quotes match anywhere).
+MIN_EVIDENCE_CHARS = 3
+# Besides letters and digits these belong to a word for the word-boundary check.
+_WORD_EXTRA = frozenset("'_")
 
 
 # --- schema ---
@@ -140,7 +134,9 @@ def _catalogue_lines(spec: JournalKey) -> list[str]:
     match spec.type:
         case "enum" | "multi_enum":
             many = "one or more option values" if spec.type == "multi_enum" else "one option value"
-            options = [f"  - `{o.value}`: {o.label}" for o in spec.field.options if not o.deprecated]
+            options = [
+                f"  - `{o.value}`: {o.label}" for o in spec.field.options if not o.deprecated
+            ]
             return [f"{head}: {many}:", *options]
         case "bool":
             return [f"{head}: true or false."]
@@ -183,11 +179,44 @@ def normalise_for_match(text: str) -> str:
     return _WHITESPACE.sub(" ", text.translate(_FOLD).casefold()).strip()
 
 
+def _word_char(char: str) -> bool:
+    return char.isalnum() or char in _WORD_EXTRA
+
+
+def contains_phrase(phrase: str, normalised_text: str) -> bool:
+    """`phrase` (already normalised) occurs in the text starting and ending at word edges:
+    no letter/digit/apostrophe/underscore right before a phrase that starts with one, or
+    right after a phrase that ends with one ("лан" does not match inside "план")."""
+    if not phrase:
+        return False
+    start = normalised_text.find(phrase)
+    while start != -1:
+        end = start + len(phrase)
+        before_ok = (
+            not _word_char(phrase[0]) or start == 0 or not _word_char(normalised_text[start - 1])
+        )
+        after_ok = (
+            not _word_char(phrase[-1])
+            or end == len(normalised_text)
+            or not _word_char(normalised_text[end])
+        )
+        if before_ok and after_ok:
+            return True
+        start = normalised_text.find(phrase, start + 1)
+    return False
+
+
 def evidence_in_text(evidence: Any, normalised_text: str) -> bool:
+    """The quote is at least MIN_EVIDENCE_CHARS (normalised) and occurs in the text on word
+    boundaries (case-insensitive, whitespace-normalised)."""
     if not isinstance(evidence, str):
         return False
     quote = normalise_for_match(evidence)
-    return quote != "" and quote in normalised_text
+    return len(quote) >= MIN_EVIDENCE_CHARS and contains_phrase(quote, normalised_text)
+
+
+def _number_in(value: int, evidence: str) -> bool:
+    return re.search(rf"(?<!\d){value}(?!\d)", evidence) is not None
 
 
 def _issue_reason(code: IssueCode) -> DropReason:
@@ -196,6 +225,8 @@ def _issue_reason(code: IssueCode) -> DropReason:
 
 def _check_entry(spec: JournalKey, entry: Any, text: str) -> tuple[Any, DropReason | None]:
     """(normalised value or None, drop reason or None). None/None = not filled."""
+    if entry is None:
+        return None, None
     if not isinstance(entry, Mapping):
         return None, "evidence_not_in_text"
     raw = entry.get(VALUE_KEY)
@@ -208,14 +239,25 @@ def _check_entry(spec: JournalKey, entry: Any, text: str) -> tuple[Any, DropReas
         value = normalise_value(spec, raw)
     except InvalidJournalValue as exc:
         return None, _issue_reason(exc.issue.code)
-    if spec.type == "text" and value is not None and "?" in value and "?" not in str(evidence):
-        return None, "question"
-    return value, None
+    return value, _value_issue(spec, value, str(evidence), text)
 
 
-def apply_guards(
-    config: JournalFieldsConfig, output: Mapping[str, Any], text: str
-) -> GuardResult:
+def _value_issue(spec: JournalKey, value: Any, evidence: str, text: str) -> DropReason | None:
+    """Ties the value to the text: an int must appear as digits in its evidence; a text
+    value must be his own words (a word-boundary substring of the input text)."""
+    if value is None:
+        return None
+    if spec.type == "int" and not _number_in(value, evidence):
+        return "evidence_not_in_text"
+    if spec.type == "text":
+        if "?" in value and "?" not in evidence:
+            return "question"
+        if not contains_phrase(normalise_for_match(value), text):
+            return "evidence_not_in_text"
+    return None
+
+
+def apply_guards(config: JournalFieldsConfig, output: Mapping[str, Any], text: str) -> GuardResult:
     """Drop every value the text does not support (docs/api.md "Guards").
 
     `output` is the parsed model answer (an object); `text` is the user's input.
@@ -249,11 +291,7 @@ def apply_guards(
 # --- completeness ---
 
 
-def has_chart_link(text: str) -> bool:
-    """True when the text contains a valid TradingView chart/snapshot link."""
-    return any(is_valid_chart_url(m.group(0).rstrip(_URL_TRAILING)) for m in _URL.finditer(text))
-
-
-def extraction_missing(config: JournalFieldsConfig, fields: Mapping[str, Any], text: str) -> list[str]:
-    """`missing_required` of an extraction result (same rule as the journal save)."""
-    return missing_required(config, fields, has_before_link=has_chart_link(text))
+def extraction_missing(config: JournalFieldsConfig, fields: Mapping[str, Any]) -> list[str]:
+    """`missing_required` of an extraction result: same rule as the journal save. The
+    extraction never returns chart links, so `chart_links` is listed when it is required."""
+    return missing_required(config, fields, has_before_link=False)

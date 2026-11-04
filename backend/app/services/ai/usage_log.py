@@ -188,5 +188,9 @@ def summarise_month(path: Path, now: datetime, tz: str = DEFAULT_TZ) -> MonthUsa
         else:
             cost += line.cost_usd
     if broken:
-        logger.warning("%s: skipped %d broken line(s), first at line %d", path, len(broken), broken[0])
-    return MonthUsage(month, cost.quantize(COST_QUANTUM), calls, failed, unpriced, tokens_in, tokens_out)
+        logger.warning(
+            "%s: skipped %d broken line(s), first at line %d", path, len(broken), broken[0]
+        )
+    return MonthUsage(
+        month, cost.quantize(COST_QUANTUM), calls, failed, unpriced, tokens_in, tokens_out
+    )

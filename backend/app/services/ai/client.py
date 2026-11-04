@@ -17,6 +17,8 @@ import anthropic
 import httpx2
 from pydantic import SecretStr
 
+from app.config import AnthropicEffort
+
 logger = logging.getLogger(__name__)
 
 AiErrorKind = Literal[
@@ -25,8 +27,10 @@ AiErrorKind = Literal[
 
 OVERLOADED_STATUS = 529
 SERVER_ERROR_MIN = 500
-# SDK retries per attempt (after the first try). Kept small so primary + fallback fit 30 s.
-SDK_MAX_RETRIES = 1
+# Default SDK retries: none. Retryable errors go to our own one-attempt fallback, so the
+# primary + fallback worst case stays within the 30 s target (requests set it explicitly).
+SDK_MAX_RETRIES = 0
+ERROR_DETAIL_MAX_CHARS = 200
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,7 @@ class ModelRequest:
     system: str
     user_text: str
     schema: dict[str, Any]
-    effort: str
+    effort: AnthropicEffort
     max_tokens: int
     timeout_s: float
     max_retries: int
@@ -107,13 +111,29 @@ def classify_error(exc: Exception) -> tuple[AiErrorKind, bool]:
     return "api", False
 
 
+def _api_error_detail(exc: anthropic.APIStatusError) -> str | None:
+    """`<type>: <message>` from an Anthropic error body (no key in it), truncated."""
+    body = exc.body
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return None
+    detail = f"{error.get('type', 'error')}: {error.get('message', '')}".strip()
+    if len(detail) > ERROR_DETAIL_MAX_CHARS:
+        detail = detail[: ERROR_DETAIL_MAX_CHARS - 3] + "..."
+    return detail
+
+
 def describe_error(exc: Exception) -> str:
-    """Short English description for logs: class, HTTP status, request id. No body/key."""
+    """Short English description for logs: class, HTTP status, request id, and for a 4xx
+    the API error type and message (<= 200 chars). Never the key or the request body."""
     parts = [type(exc).__name__]
     if isinstance(exc, anthropic.APIStatusError):
         parts.append(f"HTTP {exc.status_code}")
         if exc.request_id:
             parts.append(f"request_id={exc.request_id}")
+        detail = _api_error_detail(exc) if exc.status_code < SERVER_ERROR_MIN else None
+        if detail:
+            parts.append(f"({detail})")
     return " ".join(parts)
 
 
@@ -167,7 +187,7 @@ class AnthropicModelClient:
                 messages=[{"role": "user", "content": request.user_text}],
                 output_config={
                     "format": {"type": "json_schema", "schema": request.schema},
-                    "effort": request.effort,  # type: ignore[typeddict-item]
+                    "effort": request.effort,
                 },
             )
         except anthropic.AnthropicError as exc:

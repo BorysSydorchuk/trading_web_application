@@ -62,7 +62,8 @@ class Settings(BaseSettings):
     anthropic_model_summary: str = Field(default="claude-opus-5-5", min_length=1)
     # One attempt on this model after the primary failed with overload/5xx/timeout/connection.
     anthropic_model_fallback: str = Field(default="claude-opus-5-5", min_length=1)
-    anthropic_effort: AnthropicEffort = "medium"
+    # Extraction is a mapping task: `low` is faster and cheaper; QA measures p95 in M2-07.
+    anthropic_effort: AnthropicEffort = "low"
 
     @property
     def ai_configured(self) -> bool:

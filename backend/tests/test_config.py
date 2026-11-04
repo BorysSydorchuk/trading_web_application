@@ -16,6 +16,10 @@ _SETTINGS_ENV_VARS = (
     "LOG_LEVEL",
     "API_PORT",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL_EXTRACTION",
+    "ANTHROPIC_MODEL_SUMMARY",
+    "ANTHROPIC_MODEL_FALLBACK",
+    "ANTHROPIC_EFFORT",
     "POSTGRES_PASSWORD",
 )
 
@@ -74,6 +78,49 @@ def test_secrets_not_in_repr(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> N
         assert "sk-ant-hidden" not in rendered
 
 
+def test_ai_settings_defaults_and_empty_key(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = _write_env(tmp_path / ".env", "DATABASE_URL=postgresql+psycopg://a@h/x\n")
+    settings = Settings(_env_file=env)
+    assert settings.anthropic_model_extraction == "claude-sonnet-5-5"
+    assert settings.anthropic_model_summary == "claude-opus-5-5"
+    assert settings.anthropic_model_fallback == "claude-opus-5-5"
+    assert settings.anthropic_effort == "low"
+    assert settings.anthropic_api_key.get_secret_value() == ""
+    assert settings.ai_configured is False
+
+
+def test_ai_settings_from_env_file(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = _write_env(
+        tmp_path / ".env",
+        "DATABASE_URL=postgresql+psycopg://a@h/x\n"
+        "ANTHROPIC_API_KEY=sk-ant-hidden\n"
+        "ANTHROPIC_MODEL_EXTRACTION=claude-opus-5-5\n"
+        "ANTHROPIC_MODEL_FALLBACK=claude-sonnet-5-5\n"
+        "ANTHROPIC_EFFORT=low\n",
+    )
+    settings = Settings(_env_file=env)
+    assert settings.anthropic_model_extraction == "claude-opus-5-5"
+    assert settings.anthropic_model_fallback == "claude-sonnet-5-5"
+    assert settings.anthropic_effort == "low"
+    assert settings.ai_configured is True
+
+
+def test_blank_key_is_not_configured(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = _write_env(tmp_path / ".env", "DATABASE_URL=postgresql+psycopg://a@h/x\n")
+    clean_env.setenv("ANTHROPIC_API_KEY", "   ")
+    assert Settings(_env_file=env).ai_configured is False
+
+
+@pytest.mark.parametrize("effort", ["max", "xhigh", "MEDIUMish", ""])
+def test_invalid_effort_rejected(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, effort: str
+) -> None:
+    env = _write_env(tmp_path / ".env", "DATABASE_URL=postgresql+psycopg://a@h/x\n")
+    clean_env.setenv("ANTHROPIC_EFFORT", effort)
+    with pytest.raises(ValidationError, match="anthropic_effort"):
+        Settings(_env_file=env)
+
+
 def test_missing_database_url_fails_clearly(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
     env = _write_env(tmp_path / ".env", "LOG_LEVEL=INFO\n")
     with pytest.raises(ValidationError, match="database_url"):
@@ -116,3 +163,32 @@ def test_setup_logging_writes_file_in_utc(clean_env: pytest.MonkeyPatch, tmp_pat
     assert content.count("hello from test") == 1
     assert "Z INFO" in content
     assert len(ours) == 2
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "WARNING"])
+def test_http_and_sdk_loggers_never_log_debug(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, level: str
+) -> None:
+    env = _write_env(
+        tmp_path / ".env",
+        "DATABASE_URL=postgresql+psycopg://a@h/x\n"
+        f"LOG_DIR={tmp_path / 'logs'}\n"
+        f"LOG_LEVEL={level}\n",
+    )
+    settings = Settings(_env_file=env)
+    root = logging.getLogger()
+    saved = list(root.handlers), root.level
+    try:
+        setup_logging("x.log", settings)
+        levels = {
+            name: logging.getLogger(name).getEffectiveLevel()
+            for name in ("anthropic", "httpx", "httpx2", "httpcore", "httpcore2")
+        }
+    finally:
+        for handler in list(root.handlers):
+            if handler not in saved[0]:
+                root.removeHandler(handler)
+                handler.close()
+        root.setLevel(saved[1])
+    expected = max(logging.INFO, logging.getLevelName(level))
+    assert set(levels.values()) == {expected}

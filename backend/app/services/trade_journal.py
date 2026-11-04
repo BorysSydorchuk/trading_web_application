@@ -91,7 +91,8 @@ def journal_view(trade: Trade, config: JournalFieldsConfig) -> JournalView:
 # --- save ---
 
 
-def _check_status(trade: Trade) -> None:
+def check_describable(trade: Trade) -> None:
+    """409 trade_open / needs_sl: the journal (and AI extraction) need a closed trade with SL."""
     if trade.status == TradeStatus.OPEN.value or trade.close_time is None:
         raise ApiError(409, "trade_open", "An open trade cannot be described yet", {"id": trade.id})
     if trade.status == TradeStatus.NEEDS_SL.value:
@@ -155,7 +156,7 @@ def save_journal(
     Raises ApiError: 409 trade_open / needs_sl, 422 validation_error, 422
     journal_incomplete (the session is rolled back: nothing is saved).
     """
-    _check_status(trade)
+    check_describable(trade)
     values, errors = _input_errors(data, config, trade)
     if errors:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": errors})

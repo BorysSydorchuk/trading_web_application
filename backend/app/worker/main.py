@@ -144,7 +144,8 @@ def main() -> int:
     settings = get_settings()
     log_path = setup_logging("worker.log", settings)
     logger.info("Worker starting (env=%s), logging to %s", settings.app_env, log_path)
-    check_config_files(include_ai=False)  # broken YAML is logged loudly; the sync job retries every cycle
+    # Broken YAML is logged loudly; the sync job retries every cycle. No AI calls here.
+    check_config_files(include_ai=False)
     mark_interrupted_runs(get_session_factory())
     stop = threading.Event()
     _install_signal_handlers(stop)
