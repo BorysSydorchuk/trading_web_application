@@ -16,7 +16,7 @@ import {
 const TICK_MS = 250
 
 export type RecorderError = MicErrorKind | 'recorder'
-export type RecorderNotice = 'tooShort' | 'maxReached'
+export type RecorderNotice = 'tooShort' | 'maxReached' | 'interrupted'
 
 export interface RecorderState {
   phase: 'idle' | 'starting' | 'recording'
@@ -68,6 +68,11 @@ function clearTimers(session: Session): void {
   window.clearTimeout(session.limit)
 }
 
+function finishNotice(session: Session): RecorderNotice | null {
+  if (session.failed) return 'interrupted'
+  return session.maxReached ? 'maxReached' : null
+}
+
 function createRecorder(stream: MediaStream): MediaRecorder {
   const mimeType = pickMimeType((type) => MediaRecorder.isTypeSupported(type))
   return new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
@@ -106,11 +111,13 @@ export function useRecorder(onRecorded: (blob: Blob, seconds: number) => void) {
     releaseMic(session.stream)
     if (sessionRef.current !== session) return
     sessionRef.current = null
-    if (session.failed) return setState({ ...IDLE, error: 'recorder' })
-    if (session.durationMs < MIN_RECORDING_MS) return setState({ ...IDLE, notice: 'tooShort' })
+    const long = session.durationMs >= MIN_RECORDING_MS
     const blob = new Blob(session.chunks, { type: baseMimeType(session.recorder?.mimeType || session.chunks[0]?.type) })
+    // A browser error mid-recording: keep what was recorded when it is a real note (≥ 1 s).
+    if (session.failed && (!long || blob.size === 0)) return setState({ ...IDLE, error: 'recorder' })
+    if (!long) return setState({ ...IDLE, notice: 'tooShort' })
     if (blob.size === 0) return setState({ ...IDLE, error: 'recorder' })
-    setState({ ...IDLE, notice: session.maxReached ? 'maxReached' : null })
+    setState({ ...IDLE, notice: finishNotice(session) })
     onRecordedRef.current(blob, durationSeconds(session.durationMs))
   }
 
@@ -126,7 +133,12 @@ export function useRecorder(onRecorded: (blob: Blob, seconds: number) => void) {
     session.maxReached = maxReached
     session.durationMs = Date.now() - session.startedAt
     clearTimers(session)
-    session.recorder.stop()
+    try {
+      session.recorder.stop()
+    } catch {
+      // Already inactive (older browsers throw InvalidStateError after an error): finish now.
+      finish(session)
+    }
   }
 
   function begin(session: Session, stream: MediaStream): void {

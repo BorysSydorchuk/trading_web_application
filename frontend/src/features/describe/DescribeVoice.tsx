@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { AlertCircle, Loader2, Upload } from 'lucide-react'
+import { AlertCircle, Loader2, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AudioNoteRow } from '@/features/voice/AudioNoteRow'
 import { useAudioNotes, useRetryAudio, useUploadTradeAudio } from '@/features/voice/api'
@@ -17,13 +17,15 @@ interface DescribeVoiceProps {
   tradeNotes: readonly AudioNote[]
   /** Append a transcript to the description text box. */
   onTranscript: (transcript: string) => void
+  /** True while a recording exists only in the browser (uploading or upload failed). */
+  onUnsentChange: (unsent: boolean) => void
 }
 
 /**
  * Recorder + this trade's voice notes. A note that finishes while the page is open goes into the
  * text box once; notes that were already done get a "Вставити в текст" button instead.
  */
-export function DescribeVoice({ tradeId, tradeNotes, onTranscript }: DescribeVoiceProps) {
+export function DescribeVoice({ tradeId, tradeNotes, onTranscript, onUnsentChange }: DescribeVoiceProps) {
   const [doneAtOpen] = useState(() => new Set(tradeNotes.filter((n) => n.status === 'done').map((n) => n.id)))
   const [uploadedIds, setUploadedIds] = useState<number[]>([])
   const [manuallyInserted, setManuallyInserted] = useState<ReadonlySet<number>>(new Set())
@@ -33,6 +35,10 @@ export function DescribeVoice({ tradeId, tradeNotes, onTranscript }: DescribeVoi
   const notes = queries.map((query) => query.data)
   const upload = useTradeUpload(tradeId, (note) => setUploadedIds((prev) => [...prev, note.id]))
   const retry = useRetryAudio()
+
+  const unsent = upload.pending || upload.failed !== null
+  const reportUnsent = useEffectEvent((value: boolean) => onUnsentChange(value))
+  useEffect(() => reportUnsent(unsent), [unsent])
 
   const insertFinished = useEffectEvent(() => {
     for (const note of notesToInsert(notes, doneAtOpen, insertedRef.current)) {
@@ -52,11 +58,12 @@ export function DescribeVoice({ tradeId, tradeNotes, onTranscript }: DescribeVoi
 
   return (
     <div role="group" aria-label={t.title} className="flex flex-col gap-2">
-      <VoiceRecorder onRecorded={upload.send} disabled={upload.pending} />
+      {/* Blocked until a failed upload is re-sent or discarded, so that blob is never dropped. */}
+      <VoiceRecorder onRecorded={upload.send} disabled={unsent} />
       <UploadState upload={upload} />
       {ids.length > 0 && (
         <>
-          <ul aria-label={t.title} className="flex flex-col gap-1.5">
+          <ul aria-label={t.listLabel} className="flex flex-col gap-1.5">
             {ids.map((id, i) => {
               const note = notes[i]
               return (
@@ -108,15 +115,27 @@ function useTradeUpload(tradeId: number, onUploaded: (note: AudioNote) => void) 
     setFailed(next)
   }
 
+  /** The failed blob stays until its re-send succeeds or the user discards it; another blob is refused. */
   function send(blob: Blob) {
-    remember(null)
+    const kept = failedRef.current
+    if (kept && kept.blob !== blob) return
     mutation.mutate(blob, {
-      onSuccess: onUploaded,
-      onError: () => remember({ blob, url: objectUrl(blob) }),
+      onSuccess: (note) => {
+        remember(null)
+        onUploaded(note)
+      },
+      onError: () => {
+        if (failedRef.current?.blob !== blob) remember({ blob, url: objectUrl(blob) })
+      },
     })
   }
 
-  return { send, pending: mutation.isPending, error: mutation.error, failed }
+  function discard() {
+    remember(null)
+    mutation.reset()
+  }
+
+  return { send, discard, pending: mutation.isPending, error: mutation.error, failed }
 }
 
 function UploadState({ upload }: { upload: ReturnType<typeof useTradeUpload> }) {
@@ -143,8 +162,13 @@ function UploadState({ upload }: { upload: ReturnType<typeof useTradeUpload> }) 
           <Upload aria-hidden />
           {t.retryUpload}
         </Button>
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={upload.discard}>
+          <Trash2 aria-hidden />
+          {t.discard}
+        </Button>
         <span className="text-muted-foreground">{t.localCopy}</span>
       </div>
+      <p className="text-muted-foreground">{t.resolveFirst}</p>
       {failed.url && <audio controls src={failed.url} className="h-8 w-full max-w-md" aria-label={t.localPlayer} />}
     </div>
   )

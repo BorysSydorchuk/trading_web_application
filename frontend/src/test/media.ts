@@ -43,19 +43,40 @@ export interface FakeMic {
   getUserMedia: ReturnType<typeof vi.fn>
   /** stop() of the single audio track: called when the microphone is released. */
   stopTrack: ReturnType<typeof vi.fn>
+  /** With `hold: true`: opens the pending microphone request. */
+  grant: () => void
 }
 
-/** Installs a working microphone, or one whose getUserMedia rejects with `reject`. */
-export function installMic(options: { reject?: unknown } = {}): FakeMic {
+interface MicOptions {
+  /** getUserMedia rejects with this. */
+  reject?: unknown
+  /** getUserMedia stays pending until `grant()` (the permission prompt is still open). */
+  hold?: boolean
+}
+
+/** Installs a working microphone, one whose getUserMedia rejects, or one that waits for `grant()`. */
+export function installMic(options: MicOptions = {}): FakeMic {
   const stopTrack = vi.fn()
   const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream
-  const getUserMedia = vi.fn(() =>
-    options.reject === undefined ? Promise.resolve(stream) : Promise.reject(options.reject),
-  )
+  let grant: () => void = () => undefined
+  const getUserMedia = vi.fn(() => {
+    if (options.reject !== undefined) return Promise.reject(options.reject)
+    if (!options.hold) return Promise.resolve(stream)
+    return new Promise<MediaStream>((resolve) => {
+      grant = () => resolve(stream)
+    })
+  })
   Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true })
   FakeMediaRecorder.instances = []
   vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
-  return { getUserMedia, stopTrack }
+  return { getUserMedia, stopTrack, grant: () => grant() }
+}
+
+/** The recorder created by the last press. */
+export function lastRecorder(): FakeMediaRecorder {
+  const recorder = FakeMediaRecorder.instances.at(-1)
+  if (!recorder) throw new Error('no MediaRecorder was created')
+  return recorder
 }
 
 /** A browser without navigator.mediaDevices (insecure context, very old browser). */

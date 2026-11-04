@@ -41,6 +41,13 @@ export function VoiceRecorder({ onRecorded, disabled = false }: VoiceRecorderPro
     press()
   }
 
+  /** Without pointer capture, leaving the button counts as letting go (pointerup would be missed). */
+  function onPointerLeave(event: PointerEvent<HTMLButtonElement>) {
+    const target = event.currentTarget
+    const captured = 'hasPointerCapture' in target && target.hasPointerCapture(event.pointerId)
+    if (!captured) recorder.stop()
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (!HOLD_KEYS.has(event.key)) return
     event.preventDefault()
@@ -67,6 +74,8 @@ export function VoiceRecorder({ onRecorded, disabled = false }: VoiceRecorderPro
           onPointerDown={onPointerDown}
           onPointerUp={recorder.stop}
           onPointerCancel={recorder.stop}
+          onLostPointerCapture={recorder.stop}
+          onPointerLeave={onPointerLeave}
           onKeyDown={onKeyDown}
           onKeyUp={onKeyUp}
           onBlur={recorder.stop}
@@ -105,7 +114,7 @@ function RecorderStatus({ state }: { state: RecorderState }) {
   if (state.notice) {
     return (
       <span role="status" className="text-xs text-muted-foreground">
-        {state.notice === 'tooShort' ? t.tooShort : t.maxReached}
+        {t.notices[state.notice]}
       </span>
     )
   }

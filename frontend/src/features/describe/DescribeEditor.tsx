@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
@@ -30,6 +30,7 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
   const actions = useDescribeActions(trade.id, form)
   const { save, extract } = actions
   const links = linksField(fields)
+  const [unsentRecording, setUnsentRecording] = useState(false)
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
@@ -52,6 +53,7 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
                 tradeId={trade.id}
                 tradeNotes={trade.audio_notes ?? NO_NOTES}
                 onTranscript={form.appendTranscript}
+                onUnsentChange={setUnsentRecording}
               />
             }
           />
@@ -73,7 +75,8 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
           onSave={actions.submit}
         />
       </div>
-      <UnsavedChangesGuard dirty={form.dirty} allowLeaveRef={actions.allowLeaveRef} />
+      {/* A recording that only exists in the browser is lost on leaving, like unsaved edits. */}
+      <UnsavedChangesGuard dirty={form.dirty || unsentRecording} allowLeaveRef={actions.allowLeaveRef} />
     </div>
   )
 }

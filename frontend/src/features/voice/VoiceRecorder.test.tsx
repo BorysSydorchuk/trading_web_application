@@ -1,8 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { uk } from '@/i18n/uk'
-import { controlClock, denied, FAKE_AUDIO, installMic, removeMic, restoreMic } from '@/test/media'
+import {
+  controlClock,
+  denied,
+  FAKE_AUDIO,
+  FakeMediaRecorder,
+  installMic,
+  lastRecorder,
+  removeMic,
+  restoreMic,
+} from '@/test/media'
+import { MAX_RECORDING_MS } from './recorderModel'
 import { VoiceRecorder } from './VoiceRecorder'
 
 const t = uk.voice.recorder
@@ -59,7 +69,7 @@ describe('VoiceRecorder', () => {
     await user.pointer({ keys: '[MouseLeft>]', target: button })
     await user.pointer({ keys: '[/MouseLeft]', target: button })
 
-    expect(await screen.findByText(t.tooShort)).toBeInTheDocument()
+    expect(await screen.findByText(t.notices.tooShort)).toBeInTheDocument()
     await waitFor(() => expect(mic.stopTrack).toHaveBeenCalled())
     expect(onRecorded).not.toHaveBeenCalled()
   })
@@ -91,6 +101,143 @@ describe('VoiceRecorder', () => {
     await user.pointer({ keys: '[MouseLeft>]', target: button })
 
     expect(await screen.findByRole('alert')).toHaveTextContent(t.errors.no_mic)
+  })
+
+  it('stops by itself after 10 minutes and keeps the recording', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const mic = installMic()
+      const onRecorded = vi.fn()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<VoiceRecorder onRecorded={onRecorded} />)
+      const button = screen.getByRole('button', { name: t.hold })
+
+      await user.pointer({ keys: '[MouseLeft>]', target: button })
+      expect(await screen.findByText(t.recording)).toBeInTheDocument()
+      await act(() => vi.advanceTimersByTimeAsync(MAX_RECORDING_MS))
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+      expect(onRecorded.mock.calls[0]?.[1]).toBeGreaterThanOrEqual(MAX_RECORDING_MS / 1000)
+      expect(screen.getByText(t.notices.maxReached)).toBeInTheDocument()
+      expect(mic.stopTrack).toHaveBeenCalled()
+      // Letting go afterwards does not start or send anything.
+      await user.pointer({ keys: '[/MouseLeft]', target: button })
+      expect(onRecorded).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops the recording and frees the mic when unmounted while recording', async () => {
+    const mic = installMic()
+    const onRecorded = vi.fn()
+    const user = userEvent.setup()
+    const { unmount } = render(<VoiceRecorder onRecorded={onRecorded} />)
+
+    await user.pointer({ keys: '[MouseLeft>]', target: screen.getByRole('button', { name: t.hold }) })
+    await screen.findByText(t.recording)
+    unmount()
+
+    expect(mic.stopTrack).toHaveBeenCalled()
+    await new Promise((resolve) => window.setTimeout(resolve, 20))
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('frees the mic granted after an unmount during the permission prompt', async () => {
+    const mic = installMic({ hold: true })
+    const onRecorded = vi.fn()
+    const user = userEvent.setup()
+    const { unmount } = render(<VoiceRecorder onRecorded={onRecorded} />)
+
+    await user.pointer({ keys: '[MouseLeft>]', target: screen.getByRole('button', { name: t.hold }) })
+    expect(await screen.findByText(t.starting)).toBeInTheDocument()
+    unmount()
+    await act(async () => mic.grant())
+
+    await waitFor(() => expect(mic.stopTrack).toHaveBeenCalled())
+    expect(FakeMediaRecorder.instances).toHaveLength(0)
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('treats a release during the permission prompt as a short press', async () => {
+    const mic = installMic({ hold: true })
+    const { user, onRecorded, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await user.pointer({ keys: '[/MouseLeft]', target: button })
+    await act(async () => mic.grant())
+
+    expect(await screen.findByText(t.notices.tooShort)).toBeInTheDocument()
+    expect(mic.stopTrack).toHaveBeenCalled()
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('stops on pointercancel (e.g. the browser takes over the touch)', async () => {
+    installMic()
+    const clock = controlClock()
+    const { user, onRecorded, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await screen.findByText(t.recording)
+    clock.advance(1_500)
+    fireEvent.pointerCancel(button)
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+  })
+
+  it('stops when the pointer leaves the button without capture', async () => {
+    installMic()
+    const clock = controlClock()
+    const { user, onRecorded, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await screen.findByText(t.recording)
+    clock.advance(1_500)
+    fireEvent.pointerLeave(button)
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+  })
+
+  it('stops when the focused button loses focus while Space is held', async () => {
+    installMic()
+    const clock = controlClock()
+    const { user, onRecorded, button } = setup()
+
+    button.focus()
+    await user.keyboard('[Space>]')
+    await screen.findByText(t.recording)
+    clock.advance(1_500)
+    act(() => button.blur())
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows a recorder error when the browser fails a short recording', async () => {
+    const mic = installMic()
+    const { user, onRecorded, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await screen.findByText(t.recording)
+    act(() => lastRecorder().onerror?.())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.errors.recorder)
+    expect(mic.stopTrack).toHaveBeenCalled()
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('keeps what was recorded when the browser fails after 1 s', async () => {
+    installMic()
+    const clock = controlClock()
+    const { user, onRecorded, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await screen.findByText(t.recording)
+    clock.advance(2_000)
+    act(() => lastRecorder().onerror?.())
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+    expect(screen.getByText(t.notices.interrupted)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('does not start while disabled', async () => {

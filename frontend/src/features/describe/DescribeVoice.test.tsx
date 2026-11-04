@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TradeDetail } from '@/features/trades/types'
@@ -41,6 +41,7 @@ function renderPage(trade: TradeDetail) {
   return renderWithProviders(<DescribePage />, {
     path: '/trades/:id/describe',
     url: `/trades/${trade.id}/describe`,
+    routes: [{ path: '/inbox', element: <div data-testid="inbox-page" /> }],
   })
 }
 
@@ -163,6 +164,85 @@ describe('Describe screen voice notes', () => {
     await user.type(box, 'Опис текстом')
     expect(box).toHaveValue('Опис текстом')
     expect(screen.getByRole('button', { name: t.input.extract })).toBeEnabled()
+  })
+
+  it('keeps a failed note when its retry fails twice', async () => {
+    const trade = fixtureTrade({ audio_notes: [fixtureNote({ id: 9, status: 'failed', error_code: 'timeout' })] })
+    serveTrade(trade)
+    let retried = 0
+    mockApi(
+      http.post('/api/audio/9/retry', () => {
+        retried += 1
+        return HttpResponse.json({ error: { code: 'db_unavailable', message: 'down' } }, { status: 503 })
+      }),
+    )
+    const { user } = renderPage(trade)
+
+    const row = await screen.findByRole('listitem', { name: v.notes.label(1) })
+    const retry = within(row).getByRole('button', { name: v.notes.retry })
+    await user.click(retry)
+    await waitFor(() => expect(retry).toBeEnabled())
+    await user.click(retry)
+    await waitFor(() => expect(retried).toBe(2))
+
+    await waitFor(() => expect(retry).toBeEnabled())
+    expect(within(row).getByRole('alert')).toHaveTextContent(uk.errors.transcription.timeout)
+    expect(within(row).getByLabelText(v.notes.player(1))).toHaveAttribute('src', '/api/audio/9/file')
+  })
+
+  it('shows a failed poll on the row and recovers on the next one', async () => {
+    const trade = fixtureTrade({ audio_notes: [fixtureNote({ id: 13, status: 'pending' })] })
+    serveTrade(trade)
+    let calls = 0
+    mockApi(
+      http.get('/api/audio/13', () => {
+        calls += 1
+        if (calls === 1) return HttpResponse.json({ error: { code: 'db_unavailable', message: 'down' } }, { status: 503 })
+        return HttpResponse.json(fixtureNote({ id: 13, status: 'done', progress: 1, transcript: TRANSCRIPT }))
+      }),
+    )
+    renderPage(trade)
+
+    const row = await screen.findByRole('listitem', { name: v.notes.label(1) })
+    expect(await within(row).findByText(v.notes.pollError, {}, POLL_WAIT)).toBeInTheDocument()
+    expect(await within(row).findByText(v.notes.done, {}, POLL_WAIT)).toBeInTheDocument()
+    expect(within(row).queryByText(v.notes.pollError)).not.toBeInTheDocument()
+    expect(await textBox()).toHaveValue(TRANSCRIPT)
+  })
+
+  it('blocks a new recording while a failed upload is kept, until it is discarded', async () => {
+    const mic = installMic()
+    const clock = controlClock()
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    mockApi(
+      http.post(`/api/trades/${trade.id}/audio`, () =>
+        HttpResponse.json({ error: { code: 'unsupported_media_type', message: 'no' } }, { status: 415 }),
+      ),
+    )
+    const { user, router } = renderPage(trade)
+
+    const record = await screen.findByRole('button', { name: v.recorder.hold })
+    await user.pointer({ keys: '[MouseLeft>]', target: record })
+    await screen.findByText(v.recorder.recording)
+    clock.advance(2_000)
+    await user.pointer({ keys: '[/MouseLeft]', target: record })
+
+    const group = screen.getByRole('group', { name: t.voice.title })
+    expect(await within(group).findByRole('alert')).toHaveTextContent(uk.errors.unsupported_media_type)
+    expect(record).toBeDisabled()
+    expect(within(group).getByText(t.voice.resolveFirst)).toBeInTheDocument()
+    await user.pointer({ keys: '[MouseLeft>]', target: record })
+    expect(mic.getUserMedia).toHaveBeenCalledTimes(1)
+
+    // Leaving with only an unsent recording (text untouched) asks first.
+    await act(() => router.navigate('/inbox'))
+    expect(await screen.findByText(t.unsaved.title)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: t.unsaved.stay }))
+
+    await user.click(within(group).getByRole('button', { name: t.voice.discard }))
+    expect(within(group).queryByRole('alert')).not.toBeInTheDocument()
+    expect(record).toBeEnabled()
   })
 
   it('keeps a recording whose upload failed and sends it again', async () => {

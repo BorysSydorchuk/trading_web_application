@@ -34,7 +34,7 @@ export function AudioNoteRow(props: AudioNoteRowProps) {
         <p role="alert" className="flex items-start gap-1.5 text-destructive">
           <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />
           <span>
-            {transcriptionErrorText(note.error_code)} {t.audioKept}
+            {t.failed} {transcriptionErrorText(note.error_code)} {t.audioKept}
           </span>
         </p>
       )}
@@ -71,9 +71,8 @@ function Progress({ note, index }: { note: AudioNote; index: number }) {
   const percent = progressPercent(note)
   return (
     <span className="flex items-center gap-2 text-muted-foreground">
-      <span role="status" className="num">
-        {t.processing(percent)}
-      </span>
+      {/* Not a live region: a new percentage every second would flood screen readers; the bar carries it. */}
+      <span className="num">{t.processing(percent)}</span>
       <span
         role="progressbar"
         aria-label={t.progress(index)}
