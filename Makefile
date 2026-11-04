@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend trade-check
+.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend trade-check ai-eval
 
 install:
 	cd backend && uv sync
@@ -51,3 +51,10 @@ ACCOUNT ?=
 N ?= 5
 trade-check:
 	uv run --project backend python -m app.tools.trade_check --account "$(ACCOUNT)" --last $(N) $(if $(OUT),--out "$(OUT)") $(if $(SOURCE),--source "$(SOURCE)")
+
+# Live AI extraction eval on backend/tests/fixtures/extraction (real API, costs money; needs
+# ANTHROPIC_API_KEY): make ai-eval [AI_MODEL=claude-opus-5-5] [AI_EFFORT=low|medium|high]
+AI_MODEL ?=
+AI_EFFORT ?=
+ai-eval:
+	uv run --project backend python -m app.tools.ai_eval $(if $(AI_MODEL),--model "$(AI_MODEL)") $(if $(AI_EFFORT),--effort "$(AI_EFFORT)")

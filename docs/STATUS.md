@@ -8,7 +8,7 @@ Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 acce
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-03, agents stopped on Borys's request.
+Last update: 2026-11-04. M2-01..M2-07 merged into LOCAL main (not pushed: Borys pushes himself). Remaining: live eval `make ai-eval` + `make ai-eval AI_MODEL=claude-opus-5-5` (needs ANTHROPIC_API_KEY in .env, Borys also updates .env.example AI block), M2-08 end-to-end QA against the real backend, docs/reports/M2.md (known issue: spaced range "4 - 5" passes the int guard), then Borys describes 3 real trades. Open questions: Vitest OK? security-reviewer line (Telegram bot gone): M7 or delete?
 
 M2 status: M2-01 (Program Files guard), M2-02 (contract), M2-03 (journal save API), M2-05 + M2-06 (Describe screen, AI usage in Settings) are reviewed, merged into main and pushed. make check green on main (772 backend tests; frontend lint/typecheck).
 
@@ -31,7 +31,7 @@ Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M2-04 AI extraction: `anthropic` SDK (needs Borys OK), prompt in backend/prompts/ with glossary, schema from YAML with evidence quotes, server guards (evidence, options, questions), errors (ai_not_configured / ai_error), usage log logs/ai_usage.jsonl + config/ai_pricing.yaml + `GET /api/ai/usage` (backend-dev) — branch m2/ai-extraction
 - [x] M2-05 Describe screen: auto data left; text box + links; "Заповнити з тексту" with progress; form generated from /api/journal-fields with AI markers, red missing fields, "Не вистачає: …"; save draft / complete; inbox → describe (frontend-dev) — branch m2/describe-ui
 - [x] M2-06 (done inside M2-05) Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
-- [ ] M2-07 Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
+- [x] M2-07 (offline; live eval pending API key) Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
 - [ ] M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
 
 ## M1 tasks

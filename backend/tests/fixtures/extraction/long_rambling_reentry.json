@@ -1,0 +1,40 @@
+{
+  "description": "long rambling multi-line UA/RU text about a stop then a re-entry; BE ('БУ') is not the exit (closed by hand); verbatim mistakes/lesson and an emotion note; 'сетап на 4'",
+  "text": "Короче, день був дивний. З ранку дивився DAX, тобто GER40, на премаркеті нічого не робив, чекав Лондон.\nFlow H1 синхронний з H4, обидва вниз, тут без питань. POI — FVG H4, причому фвг после манипуляции, сняли ликвидность над хаем азії.\nПерший вхід по IFVG на M5 вибило по стопу, потім перезайшов, теж IFVG M5, і от тут уже поїхало. Переставив в БУ, потім ще трохи потримав і закрив руками перед новинами, до точки B не дотягнуло пунктів 10.\nПеред другим входом було FOMO, боявся що піде без мене. Після — спокійно, нормально.\nПомилка: перезайшов занадто швидко, не дочекався нового фракталу.\nУрок: після стопу почекати хоча б одну свічку M5 і тільки тоді шукати новий вхід.\nЗагалом по плану, сетап на 4.",
+  "model_output": {
+    "setup_context": { "value": "yes", "evidence": "Flow H1 синхронний з H4" },
+    "poi_type": { "value": "fvg_h4", "evidence": "POI — FVG H4" },
+    "fvg_kind": { "value": "post_manipulation", "evidence": "фвг после манипуляции, сняли ликвидность" },
+    "entry_model": { "value": "ifvg_m5", "evidence": "перезайшов, теж IFVG M5" },
+    "exit_reason": { "value": "manual", "evidence": "закрив руками перед новинами" },
+    "followed_plan": { "value": true, "evidence": "Загалом по плану" },
+    "emotion_before": { "value": "fomo", "evidence": "Перед другим входом було FOMO" },
+    "emotion_before_text": { "value": "боявся що піде без мене", "evidence": "боявся що піде без мене" },
+    "emotion_after": { "value": "calm", "evidence": "Після — спокійно" },
+    "mistakes": {
+      "value": "перезайшов занадто швидко, не дочекався нового фракталу.",
+      "evidence": "Помилка: перезайшов занадто швидко, не дочекався нового фракталу."
+    },
+    "lesson": {
+      "value": "після стопу почекати хоча б одну свічку M5 і тільки тоді шукати новий вхід.",
+      "evidence": "Урок: після стопу почекати хоча б одну свічку M5 і тільки тоді шукати новий вхід."
+    },
+    "quality_rating": { "value": 4, "evidence": "сетап на 4" }
+  },
+  "expected_fields": {
+    "setup_context": "yes",
+    "poi_type": "fvg_h4",
+    "fvg_kind": "post_manipulation",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "manual",
+    "followed_plan": true,
+    "emotion_before": "fomo",
+    "emotion_before_text": "боявся що піде без мене",
+    "emotion_after": "calm",
+    "mistakes": "перезайшов занадто швидко, не дочекався нового фракталу.",
+    "lesson": "після стопу почекати хоча б одну свічку M5 і тільки тоді шукати новий вхід.",
+    "quality_rating": 4
+  },
+  "expected_dropped": [],
+  "expected_missing_required": ["chart_links"]
+}

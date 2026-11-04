@@ -1,0 +1,31 @@
+{
+  "description": "EURUSD London; the text contains his own question to himself. Kept verbatim in lesson (his words, '?' in the evidence); bad part: the model turns it into its own question in mistakes (dropped: question)",
+  "text": "EURUSD, Лондон. Вход по IFVG M5, POI FVG H1. Выбило по стопу. Чи не рано я зайшов? Може треба було чекати закриття свічки M5. Емоції до входу — впевнено.",
+  "model_output": {
+    "poi_type": { "value": "fvg_h1", "evidence": "POI FVG H1" },
+    "entry_model": { "value": "ifvg_m5", "evidence": "Вход по IFVG M5" },
+    "exit_reason": { "value": "sl", "evidence": "Выбило по стопу" },
+    "emotion_before": { "value": "confidence", "evidence": "Емоції до входу — впевнено" },
+    "mistakes": { "value": "Чому ти зайшов так рано?", "evidence": "Чи не рано я зайшов" },
+    "lesson": {
+      "value": "Чи не рано я зайшов? Може треба було чекати закриття свічки M5.",
+      "evidence": "Чи не рано я зайшов? Може треба було чекати закриття свічки M5."
+    }
+  },
+  "expected_fields": {
+    "poi_type": "fvg_h1",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "sl",
+    "emotion_before": "confidence",
+    "lesson": "Чи не рано я зайшов? Може треба було чекати закриття свічки M5."
+  },
+  "expected_dropped": [{ "key": "mistakes", "reason": "question" }],
+  "expected_missing_required": [
+    "setup_context",
+    "fvg_kind",
+    "followed_plan",
+    "emotion_after",
+    "quality_rating",
+    "chart_links"
+  ]
+}

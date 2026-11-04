@@ -1,0 +1,24 @@
+{
+  "description": "XAUUSD London, short RU text with 'QM-ка' slang; only 3 fields stated, the rest must stay missing (no guessing POI/emotions/rating)",
+  "text": "XAUUSD Лондон. QM-ка на M5, взял тейк. Контекст частично: H4 вниз, H1 еще не развернулся.",
+  "model_output": {
+    "setup_context": { "value": "partially", "evidence": "Контекст частично" },
+    "entry_model": { "value": "qm_m5", "evidence": "QM-ка на M5" },
+    "exit_reason": { "value": "tp", "evidence": "взял тейк" }
+  },
+  "expected_fields": {
+    "setup_context": "partially",
+    "entry_model": "qm_m5",
+    "exit_reason": "tp"
+  },
+  "expected_dropped": [],
+  "expected_missing_required": [
+    "poi_type",
+    "fvg_kind",
+    "followed_plan",
+    "emotion_before",
+    "emotion_after",
+    "quality_rating",
+    "chart_links"
+  ]
+}

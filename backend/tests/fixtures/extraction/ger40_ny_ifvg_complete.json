@@ -1,0 +1,28 @@
+{
+  "description": "GER40 NY, every required field stated (UA with RU 'Зашел' and EN 'point B'); evidence with a hyphen where the text has an em dash (typographic fold)",
+  "text": "GER40, сесія NY. Flow H1 синхронний з H4, POI — FVG H1, FVG оновлює фрактал. Зашел по IFVG на M5 після ретесту, закрив у point B. Все по плану. Перед входом спокійно, після угоди впевненість. Якість 5.",
+  "model_output": {
+    "setup_context": { "value": "yes", "evidence": "Flow H1 синхронний з H4" },
+    "poi_type": { "value": "fvg_h1", "evidence": "POI - FVG H1" },
+    "fvg_kind": { "value": "fractal_updating", "evidence": "FVG оновлює фрактал" },
+    "entry_model": { "value": "ifvg_m5", "evidence": "Зашел по IFVG на M5" },
+    "exit_reason": { "value": "point_b", "evidence": "закрив у point B" },
+    "followed_plan": { "value": true, "evidence": "Все по плану" },
+    "emotion_before": { "value": "calm", "evidence": "Перед входом спокійно" },
+    "emotion_after": { "value": "confidence", "evidence": "після угоди впевненість" },
+    "quality_rating": { "value": 5, "evidence": "Якість 5" }
+  },
+  "expected_fields": {
+    "setup_context": "yes",
+    "poi_type": "fvg_h1",
+    "fvg_kind": "fractal_updating",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "point_b",
+    "followed_plan": true,
+    "emotion_before": "calm",
+    "emotion_after": "confidence",
+    "quality_rating": 5
+  },
+  "expected_dropped": [],
+  "expected_missing_required": ["chart_links"]
+}

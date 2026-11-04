@@ -1,0 +1,32 @@
+{
+  "description": "GER40 London with a TradingView link in the text; all fields stated (counter-flow, 'імбаланс', revenge, fatigue); the model also returns chart_links, dropped as not_fillable, and chart_links stays missing",
+  "text": "GER40 London. До входу: https://www.tradingview.com/x/aB3dE9fG/\nФлоу H1 не синхрон з H4, брав проти. POI FVG H1, імбаланс після маніпуляції. Entry IFVG M5, вибило по стопу. Не по плану, реванш після вчорашнього мінуса. Після — втома. Якість 2.",
+  "model_output": {
+    "setup_context": { "value": "no", "evidence": "Флоу H1 не синхрон з H4" },
+    "poi_type": { "value": "fvg_h1", "evidence": "POI FVG H1" },
+    "fvg_kind": { "value": "post_manipulation", "evidence": "імбаланс після маніпуляції" },
+    "entry_model": { "value": "ifvg_m5", "evidence": "Entry IFVG M5" },
+    "exit_reason": { "value": "sl", "evidence": "вибило по стопу" },
+    "followed_plan": { "value": false, "evidence": "Не по плану" },
+    "emotion_before": { "value": "revenge", "evidence": "реванш після вчорашнього мінуса" },
+    "emotion_after": { "value": "fatigue", "evidence": "Після — втома" },
+    "quality_rating": { "value": 2, "evidence": "Якість 2" },
+    "chart_links": {
+      "value": [{ "url": "https://www.tradingview.com/x/aB3dE9fG/", "kind": "before" }],
+      "evidence": "https://www.tradingview.com/x/aB3dE9fG/"
+    }
+  },
+  "expected_fields": {
+    "setup_context": "no",
+    "poi_type": "fvg_h1",
+    "fvg_kind": "post_manipulation",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "sl",
+    "followed_plan": false,
+    "emotion_before": "revenge",
+    "emotion_after": "fatigue",
+    "quality_rating": 2
+  },
+  "expected_dropped": [{ "key": "chart_links", "reason": "not_fillable" }],
+  "expected_missing_required": ["chart_links"]
+}

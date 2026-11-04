@@ -1,0 +1,62 @@
+{
+  "description": "G1/G2/G3 guards: rating 5 taken from the denominator of 'оцінка 3 из 5' is dropped (the text also has the trap tokens 'M5', 'H4', '4.5'; single-token cases are in tests/domain/test_extraction_numbers.py); evidence 'TP.' (< 3 letters/digits) is dropped; 'Всё' in the text matches 'Все' in the evidence",
+  "text": "Всё по плану. Вхід по IFVG M5 від FVG H4, якість 4.5 з натяжкою. Закрив по TP. Спокійно. Ризик великий, оцінка 3 из 5.",
+  "model_output": {
+    "entry_model": {
+      "value": "ifvg_m5",
+      "evidence": "Вхід по IFVG M5"
+    },
+    "poi_type": {
+      "value": "fvg_h4",
+      "evidence": "від FVG H4"
+    },
+    "followed_plan": {
+      "value": true,
+      "evidence": "Все по плану"
+    },
+    "exit_reason": {
+      "value": "tp",
+      "evidence": "TP."
+    },
+    "emotion_before": {
+      "value": "calm",
+      "evidence": "Спокійно"
+    },
+    "quality_rating": {
+      "value": 5,
+      "evidence": "оцінка 3 из 5"
+    }
+  },
+  "expected_fields": {
+    "poi_type": "fvg_h4",
+    "entry_model": "ifvg_m5",
+    "followed_plan": true,
+    "emotion_before": "calm"
+  },
+  "eval_expected_fields": {
+    "poi_type": "fvg_h4",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "tp",
+    "followed_plan": true,
+    "emotion_before": "calm",
+    "quality_rating": 3
+  },
+  "expected_dropped": [
+    {
+      "key": "exit_reason",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "key": "quality_rating",
+      "reason": "evidence_not_in_text"
+    }
+  ],
+  "expected_missing_required": [
+    "setup_context",
+    "fvg_kind",
+    "exit_reason",
+    "emotion_after",
+    "quality_rating",
+    "chart_links"
+  ]
+}
