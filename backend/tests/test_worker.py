@@ -13,7 +13,12 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import Settings
 from app.services.ai.warmup import WARMUP_JOB_ID
-from app.worker.main import HEARTBEAT_JOB_ID, build_scheduler, heartbeat
+from app.worker.main import (
+    HEARTBEAT_JOB_ID,
+    REQUIREMENTS_JOB_ID,
+    build_scheduler,
+    heartbeat,
+)
 from app.worker.sync_job import SYNC_JOB_ID
 from app.worker.transcription_job import TRANSCRIPTION_JOB_ID
 
@@ -44,6 +49,7 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
         SYNC_JOB_ID,
         WARMUP_JOB_ID,
         TRANSCRIPTION_JOB_ID,
+        REQUIREMENTS_JOB_ID,
     ]
     sync = scheduler.get_job(SYNC_JOB_ID)
     assert sync is not None
@@ -60,6 +66,10 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
     assert transcription.trigger.interval == timedelta(seconds=2)
     assert transcription.max_instances == 1
     assert transcription.coalesce is True
+    requirements = scheduler.get_job(REQUIREMENTS_JOB_ID)
+    assert requirements is not None
+    assert isinstance(requirements.trigger, IntervalTrigger)
+    assert requirements.trigger.interval == timedelta(seconds=60)
 
 
 def test_sync_job_errors_are_contained(

@@ -2,8 +2,10 @@
 the main thread just waits for a stop signal.
 
 Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`),
-`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`)
-and `transcription` (voice notes -> text, see `app.worker.transcription_job`).
+`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`),
+`transcription` (voice notes -> text, see `app.worker.transcription_job`) and
+`journal_requirements` (stamps required_since soon after a journal_fields.yaml change, see
+`app.services.journal_requirements`; the API syncs too, on every journal read).
 Every job is wrapped by `_safe` so an exception is logged and the scheduler keeps running.
 """
 
@@ -21,13 +23,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings, get_settings
-from app.config_files import check_config_files
+from app.config_files import ConfigError, check_config_files, get_journal_fields
 from app.db import dispose_engine, get_engine, get_session_factory
 from app.logging_setup import setup_logging
 from app.mt5.source import Mt5Source
 from app.services.ai.warmup import WARMUP_JOB_ID, WARMUP_JOB_INTERVAL_S, WarmupJob
+from app.services.journal_requirements import sync_requirements
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.worker.sync_job import (
     SYNC_JOB_ID,
@@ -47,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 HEARTBEAT_JOB_ID = "heartbeat"
 HEARTBEAT_INTERVAL_S = 60
+REQUIREMENTS_JOB_ID = "journal_requirements"
+REQUIREMENTS_JOB_INTERVAL_S = 60
 # How often the main thread wakes while waiting for a stop signal. On Windows, Python only
 # runs signal handlers (Ctrl+C, SIGTERM, Ctrl+Break) when the main thread wakes up, so a
 # short wait keeps shutdown prompt.
@@ -85,6 +91,18 @@ def heartbeat(engine_getter: Callable[[], Engine] = get_engine) -> bool:
         return False
     logger.info("Heartbeat: worker alive, database ok")
     return True
+
+
+def sync_journal_requirements(session_factory: sessionmaker[Session] | None = None) -> None:
+    """Sync journal_field_requirements with journal_fields.yaml (one SELECT when nothing
+    changed). A broken YAML leaves the table alone (already reported at start, DEBUG)."""
+    try:
+        config = get_journal_fields()
+    except ConfigError:
+        logger.debug("journal_requirements: journal_fields.yaml is invalid, table not touched")
+        return
+    with (session_factory or get_session_factory())() as db:
+        sync_requirements(db, config)
 
 
 def default_sync_job(settings: Settings) -> Callable[[], None]:
@@ -129,6 +147,7 @@ def build_scheduler(
     sync_job: Callable[[], None] | None = None,
     warmup_job: Callable[[], None] | None = None,
     transcription_job: Callable[[], None] | None = None,
+    requirements_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -176,6 +195,14 @@ def build_scheduler(
         name=TRANSCRIPTION_JOB_ID,
         max_instances=1,  # one note at a time
         coalesce=True,
+        next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(REQUIREMENTS_JOB_ID, requirements_job or sync_journal_requirements),
+        trigger=IntervalTrigger(seconds=REQUIREMENTS_JOB_INTERVAL_S, timezone=UTC),
+        id=REQUIREMENTS_JOB_ID,
+        name=REQUIREMENTS_JOB_ID,
         next_run_time=datetime.now(UTC),
         replace_existing=True,
     )

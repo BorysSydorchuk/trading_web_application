@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from app.api.config_files import config_error
-from app.api.trades import journal_config
+from app.api.trades import journal_context
 from app.config import get_settings
 from app.config_files import ConfigError, get_number_words
 from app.db import get_db
@@ -28,7 +28,7 @@ from app.services.ai.extraction import (
     extract_trade_fields,
 )
 from app.services.ai.usage_log import UsageLog, summarise_month, usage_log_path
-from app.services.trade_journal import check_describable
+from app.services.trade_journal import check_describable, requirement_scope
 
 logger = logging.getLogger(__name__)
 
@@ -86,12 +86,13 @@ def extract(
     usage_log: UsageLog = Depends(get_usage_log),
 ) -> schemas.ExtractResult:
     """Prefill the journal from a description. Saves nothing except the usage log."""
-    config = journal_config()
+    config, required_since = journal_context(db)
     number_words = _number_words()
     trade = db.get(Trade, trade_id)
     if trade is None:
         raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
     check_describable(trade)
+    scope = requirement_scope(trade, required_since)
     db.rollback()  # no transaction stays open during the (slow) AI call
     if client is None:
         logger.warning("AI extraction for trade %s: ANTHROPIC_API_KEY is not set", trade_id)
@@ -110,6 +111,7 @@ def extract(
                 effort=settings.anthropic_effort,
             ),
             usage_log=usage_log,
+            scope=scope,
         )
     except ExtractionFailed as exc:
         raise ApiError(

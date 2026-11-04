@@ -110,6 +110,8 @@ class TradeDetail(TradeRow):
     ai_filled_fields: list[str]
     described_at: UtcDatetime | None
     missing_required: list[str]  # what blocks `complete` now, YAML order
+    # Required now, empty, made required after this trade closed (M3, informational).
+    missing_new_fields: list[str]
     audio_notes: list[AudioNoteOut]  # oldest first (M3)
 
 

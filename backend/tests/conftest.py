@@ -84,6 +84,22 @@ def db_engine() -> Iterator[Engine]:
     app_db.dispose_engine()
 
 
+def reset_journal_requirements(engine: Engine) -> None:
+    """Back to "never synced": empty journal_field_requirements, marker initial_fill_at NULL.
+    The first sync of the test then stamps 1970 (every required field applies)."""
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM journal_field_requirements"))
+        conn.execute(text("UPDATE journal_requirements_state SET initial_fill_at = NULL"))
+
+
+@pytest.fixture(autouse=True)
+def _fresh_journal_requirements(request: pytest.FixtureRequest) -> None:
+    """Tests that use the DB start with the required-since table in its post-migration
+    state, so the result never depends on what an earlier test synced."""
+    if "db_engine" in request.fixturenames:
+        reset_journal_requirements(request.getfixturevalue("db_engine"))
+
+
 @pytest.fixture
 def db_session(db_engine: Engine) -> Iterator[Session]:
     session = app_db.make_session_factory(db_engine)()
