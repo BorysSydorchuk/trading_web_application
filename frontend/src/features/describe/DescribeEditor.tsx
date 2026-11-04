@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
@@ -27,10 +27,17 @@ interface DescribeEditorProps {
 /** Describe screen body (PRD 6.5): auto data left, text + links + generated form right. */
 export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
   const form = useDescribeForm(trade, fields)
-  const actions = useDescribeActions(trade.id, form)
+  const [unsentRecording, setUnsentRecordingState] = useState(false)
+  // Read when a save lands (after this render), so a ref next to the state.
+  const unsentRecordingRef = useRef(false)
+  const actions = useDescribeActions(trade.id, form, unsentRecordingRef)
   const { save, extract } = actions
   const links = linksField(fields)
-  const [unsentRecording, setUnsentRecording] = useState(false)
+
+  function setUnsentRecording(unsent: boolean) {
+    unsentRecordingRef.current = unsent
+    setUnsentRecordingState(unsent)
+  }
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">

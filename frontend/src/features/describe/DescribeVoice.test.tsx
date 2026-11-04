@@ -245,6 +245,40 @@ describe('Describe screen voice notes', () => {
     expect(record).toBeEnabled()
   })
 
+  it('saves the journal but stays on the page while a recording is not sent', async () => {
+    installMic()
+    const clock = controlClock()
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    let saves = 0
+    mockApi(
+      http.post(`/api/trades/${trade.id}/audio`, () =>
+        HttpResponse.json({ error: { code: 'audio_too_large', message: 'big' } }, { status: 413 }),
+      ),
+      http.put(`/api/trades/${trade.id}/journal`, () => {
+        saves += 1
+        return HttpResponse.json({ ...trade, status: 'draft' })
+      }),
+    )
+    const { user, router } = renderPage(trade)
+
+    const record = await screen.findByRole('button', { name: v.recorder.hold })
+    await user.pointer({ keys: '[MouseLeft>]', target: record })
+    await screen.findByText(v.recorder.recording)
+    clock.advance(2_000)
+    await user.pointer({ keys: '[/MouseLeft]', target: record })
+    const group = screen.getByRole('group', { name: t.voice.title })
+    await within(group).findByRole('alert')
+
+    await user.click(screen.getByRole('button', { name: t.save.draft }))
+
+    expect(await screen.findByText(t.save.savedRecordingUnsent)).toBeInTheDocument()
+    expect(saves).toBe(1)
+    expect(router.state.location.pathname).toBe(`/trades/${trade.id}/describe`)
+    expect(screen.queryByTestId('inbox-page')).not.toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: t.voice.retryUpload })).toBeInTheDocument()
+  })
+
   it('keeps a recording whose upload failed and sends it again', async () => {
     installMic()
     const clock = controlClock()
