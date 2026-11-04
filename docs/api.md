@@ -224,12 +224,13 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
 ```
 - Allowed for trades in `needs_description`, `draft`, `complete`. `needs_sl` → 409 `needs_sl` (the UI shows the SL form first); open → 409 `trade_open`.
 - The extraction schema is generated from the YAML. Fillable: `enum`, `multi_enum` (except `rule_violations`), `bool`, `int`, `text`, and `text_key`s. Never filled by the model: `auto`, `links`, `rule_violations`.
-- `fields` contains only keys the model filled and that survived the guards; `missing_required` is computed by the server from these `fields` (no chart links in the text → `chart_links` is listed).
+- `fields` contains only keys the model filled and that survived the guards; `missing_required` is computed by the server from these `fields` (extraction never returns links, so `chart_links` is listed whenever it is required; links in the text are not detected). Text fields and `text_key`s must be Borys's own words: the value has to appear verbatim in the input text.
 - **Guards** (server side, after the model answers; each removed value is listed in `dropped` with its `reason`):
   - `evidence_not_in_text`: every value must come with an `evidence` quote that appears in the input text (case-insensitive, whitespace-normalised);
   - `invalid_option`: enum values must be valid, non-deprecated options; `out_of_range`: ints within `min`/`max`;
   - `parent_not_other`: a `text_key` with `allow_other_text` is dropped when its enum was not filled as `other`;
   - `question`: a text value containing `?` while its evidence does not;
+  - `not_fillable`: a key the model returned that is not in the schema (auto, links, `rule_violations`, unknown) is dropped;
   - the output has no free-form message field, so the model cannot ask questions.
 - **Model:** `ANTHROPIC_MODEL_EXTRACTION` (default `claude-sonnet-5-5`). On overload (529), 5xx, connection error or timeout, after the SDK's own retries, one attempt on `ANTHROPIC_MODEL_FALLBACK` (default `claude-opus-5-5`); the whole call stays within the 30 s target. Never on refusal. `usage.model` is the model that answered.
 - **Errors** (all logged to `logs/api.log` and `logs/ai_usage.jsonl`). The UI shows `uk.ts` `errors.<code>`; for `ai_error` it shows `errors.ai_error_kinds.<kind>`, falling back to `errors.ai_error`:

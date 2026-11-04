@@ -1,0 +1,22 @@
+# Anthropic API prices in USD per million tokens, per model id (docs/api.md "AI usage").
+# Used to compute `cost_usd` in logs/ai_usage.jsonl and the month-to-date total in Settings.
+# A model that is not listed here is logged with `cost_usd: null` and a WARNING.
+#
+#   input        regular input tokens
+#   output       output tokens (includes thinking tokens)
+#   cache_write  input tokens written to the prompt cache
+#   cache_read   input tokens read from the prompt cache
+#
+# Quote the prices ("2.00") so they are read as exact decimals.
+
+models:
+  claude-sonnet-5-5:
+    input: "2.00"
+    output: "10.00"
+    cache_write: "2.50"
+    cache_read: "0.20"
+  claude-opus-5-5:
+    input: "4.00"
+    output: "20.00"
+    cache_write: "5.00"
+    cache_read: "0.20"

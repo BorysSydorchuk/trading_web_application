@@ -5,6 +5,7 @@ description = "Trading Journal backend: FastAPI API and MT5 sync worker"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.20.1",
+    "anthropic>=2.4.0",
     "apscheduler>=3,<4",
     "fastapi>=0.162.0",
     "metatrader5>=5.0.45 ; sys_platform == 'win32'",

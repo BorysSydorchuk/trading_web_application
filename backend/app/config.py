@@ -20,6 +20,7 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 ENV_FILE: Path = REPO_ROOT / ".env"
 
 LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
+AnthropicEffort = Literal["low", "medium", "high"]
 
 
 class Settings(BaseSettings):
@@ -52,9 +53,22 @@ class Settings(BaseSettings):
     # "fixture:<path to JSON>" (demo/QA without a terminal, see README).
     mt5_source: str = "real"
 
-    # AI (used from M2)
+    # AI (from M2). An empty key is allowed: the app starts, AI endpoints answer
+    # `ai_not_configured` and the manual journal form still works.
     anthropic_api_key: SecretStr = SecretStr("")
-    anthropic_model: str = "claude-sonnet-5-5"
+    # Trade (and later bias) extraction: mid-tier model (PRD 5, budget 5-7 USD/month).
+    anthropic_model_extraction: str = Field(default="claude-sonnet-5-5", min_length=1)
+    # Optional weekly/monthly AI summary (M6); unused until then.
+    anthropic_model_summary: str = Field(default="claude-opus-5-5", min_length=1)
+    # One attempt on this model after the primary failed with overload/5xx/timeout/connection.
+    anthropic_model_fallback: str = Field(default="claude-opus-5-5", min_length=1)
+    # Extraction is a mapping task: `low` is faster and cheaper; QA measures p95 in M2-07.
+    anthropic_effort: AnthropicEffort = "low"
+
+    @property
+    def ai_configured(self) -> bool:
+        """True when ANTHROPIC_API_KEY is set (non-blank)."""
+        return self.anthropic_api_key.get_secret_value().strip() != ""
 
     @property
     def log_dir_path(self) -> Path:

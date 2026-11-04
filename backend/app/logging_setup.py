@@ -23,6 +23,10 @@ BACKUP_COUNT = 5
 # Third-party loggers that do not propagate to root; give them our handlers too.
 _NON_PROPAGATING_LOGGERS = ("uvicorn", "uvicorn.access")
 
+# HTTP/SDK loggers log request bodies (the prompt and the trade description) at DEBUG:
+# never below INFO, whatever LOG_LEVEL is.
+_QUIET_LOGGERS = ("anthropic", "httpx", "httpx2", "httpcore", "httpcore2")
+
 _HANDLER_MARK = "_trading_journal_handler"
 
 
@@ -66,6 +70,9 @@ def setup_logging(log_file_name: str = "api.log", settings: Settings | None = No
     root.setLevel(settings.log_level)
     root.addHandler(console)
     root.addHandler(file_handler)
+    quiet_level = max(logging.INFO, root.level)
+    for name in _QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(quiet_level)
 
     # uvicorn already logs to the console itself; only add the file.
     for name in _NON_PROPAGATING_LOGGERS:

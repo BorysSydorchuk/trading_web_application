@@ -1,0 +1,26 @@
+{
+  "description": "bad model answer: invents fields not in the text, asks a question, comments, fills a rule violation",
+  "text": "Зайшов по QM M5 в Нью-Йорку, вибило по стопу. Злий.",
+  "model_output": {
+    "entry_model": { "value": "qm_m5", "evidence": "Зайшов по QM M5" },
+    "exit_reason": { "value": "sl", "evidence": "вибило по стопу" },
+    "setup_context": { "value": "no", "evidence": "Flow H1 не синхронний з H4" },
+    "quality_rating": { "value": 2, "evidence": "погана якість сетапу" },
+    "emotion_after": { "value": "anger", "evidence": "Злий" },
+    "mistakes": { "value": "Чому ти зайшов у NY, якщо QM там заборонений?", "evidence": "Зайшов по QM M5 в Нью-Йорку" },
+    "lesson": { "value": "Не варто торгувати QM у Нью-Йорку", "evidence": "не варто" },
+    "rule_violations": { "value": ["qm_not_in_ny"], "evidence": "QM M5 в Нью-Йорку" }
+  },
+  "expected_fields": {
+    "entry_model": "qm_m5",
+    "exit_reason": "sl"
+  },
+  "expected_dropped": [
+    { "key": "setup_context", "reason": "evidence_not_in_text" },
+    { "key": "emotion_after", "reason": "invalid_option" },
+    { "key": "mistakes", "reason": "question" },
+    { "key": "lesson", "reason": "evidence_not_in_text" },
+    { "key": "quality_rating", "reason": "evidence_not_in_text" },
+    { "key": "rule_violations", "reason": "not_fillable" }
+  ]
+}

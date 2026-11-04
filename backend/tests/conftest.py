@@ -29,6 +29,8 @@ if not _base_settings.test_database_url:
 TEST_DATABASE_URL: str = _base_settings.test_database_url
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["LOG_DIR"] = tempfile.mkdtemp(prefix="tj-test-logs-")
+# Tests never call the real Anthropic API: no key unless a test sets one (with a fake client).
+os.environ["ANTHROPIC_API_KEY"] = ""
 get_settings.cache_clear()
 
 from app import db as app_db  # noqa: E402
