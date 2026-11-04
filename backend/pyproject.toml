@@ -36,6 +36,11 @@ dev = [
     "types-pyyaml>=6.0.12.20261030",
 ]
 
+[tool.uv]
+# faster-whisper 1.2.1 calls av.open(..., metadata_errors=...), which PyAV 19 removed
+# (every transcription failed with a TypeError). Drop when faster-whisper supports av 19.
+constraint-dependencies = ["av<19"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
