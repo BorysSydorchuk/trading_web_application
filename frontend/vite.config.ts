@@ -35,9 +35,23 @@ export default defineConfig({
     },
   },
   test: {
-    // Pure-logic unit tests only (no DOM yet): node environment, explicit imports from 'vitest'.
-    include: ['src/**/*.test.ts'],
-    environment: 'node',
+    // Explicit imports from 'vitest' (no globals). Two projects, one `vitest run`:
+    // pure-logic tests (*.test.ts) in Node, component tests (*.test.tsx) in jsdom with MSW.
+    projects: [
+      {
+        extends: true,
+        test: { name: 'logic', include: ['src/**/*.test.ts'], environment: 'node' },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'components',
+          include: ['src/**/*.test.tsx'],
+          environment: 'jsdom',
+          setupFiles: ['./src/test/setup.ts'],
+        },
+      },
+    ],
   },
   preview: {
     host: '127.0.0.1',
