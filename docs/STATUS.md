@@ -17,7 +17,7 @@ To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; `git branch` t
 Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Migrations → database-reviewer.
 
 - [x] M3-01 M3 API contract (docs/api.md "## M3") + decisions (orchestrator) — branch m3/contract
-- [ ] M3-02 Number words from code to `config/extraction.yaml` (loader, validation, reload); tests for "4", "четвірка", "четвёрка", "four", "на 4 з 5", ambiguous → empty (backend-dev) — branch m3/number-words
+- [x] M3-02 Number words from code to `config/extraction.yaml` (loader, validation, reload); tests for "4", "четвірка", "четвёрка", "four", "на 4 з 5", ambiguous → empty (backend-dev) — branch m3/number-words
 - [x] M3-03 AI warm-up in the worker on schema-hash change (`data/ai_warmup.json`, purpose `warmup`); find out what causes the ~25 s first call and write it in DECISIONS (backend-dev) — branch m3/ai-warmup
 - [ ] M3-04 Transcription backend: `faster-whisper` dep, settings, `config/transcription.yaml` glossary, audio upload/get/file/retry, worker queue job with progress, migration for progress/error_code (backend-dev, database-reviewer) — branch m3/transcription
 - [x] M3-05 Frontend test setup: jsdom + Testing Library + MSW (dev only), first component tests (frontend-dev) — branch m3/component-tests
