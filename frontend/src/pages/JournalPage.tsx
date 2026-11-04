@@ -24,6 +24,11 @@ import { brusselsToday } from '@/lib/time'
 
 const j = uk.journal
 
+function emptyText(filters: JournalFilters): string {
+  if (filters.missingNewFields) return j.emptyMissingNewFields
+  return hasActiveFilters(filters) ? j.empty : j.emptyNoFilters
+}
+
 export function JournalPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])
@@ -83,7 +88,7 @@ export function JournalPage() {
     const filtered = hasActiveFilters(filters)
     body = (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
-        <p className="text-muted-foreground">{filtered ? j.empty : j.emptyNoFilters}</p>
+        <p className="text-muted-foreground">{emptyText(filters)}</p>
         {filtered && (
           <Button variant="outline" size="sm" onClick={() => setFilters(clearedFilters(filters))}>
             {j.resetFilters}

@@ -103,6 +103,11 @@ export interface TradeDetail extends TradeRow {
   ai_filled_fields: string[]
   described_at: string | null
   missing_required: string[]
+  /**
+   * M3: required fields that are empty on this trade and were made required after it closed.
+   * Informational only: never in `missing_required`, never blocks `complete`.
+   */
+  missing_new_fields: string[]
 }
 
 export interface TradeQuery {
@@ -111,6 +116,8 @@ export interface TradeQuery {
   status?: string[]
   from?: string
   to?: string
+  /** M3: only closed trades with a non-empty `missing_new_fields`. Absent = no filter. */
+  missing_new_fields?: boolean
   sort?: TradeSort
   order?: SortOrder
   limit?: number

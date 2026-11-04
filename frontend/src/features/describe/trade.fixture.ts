@@ -52,6 +52,7 @@ export function fixtureTrade(overrides: Partial<TradeDetail> = {}): TradeDetail 
     ai_filled_fields: [],
     described_at: null,
     missing_required: [],
+    missing_new_fields: [],
     ...overrides,
   }
 }

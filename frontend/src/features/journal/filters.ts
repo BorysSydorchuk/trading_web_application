@@ -21,6 +21,8 @@ const DEFAULT_PAGE_SIZE = 50
 const DEFAULT_SORT: TradeSort = 'close_time'
 const DEFAULT_ORDER: SortOrder = 'desc'
 const DEFAULT_PERIOD: PeriodPreset = 'all'
+/** Same name and value in the page URL and the API query (docs/api.md M3). */
+const MISSING_NEW_FIELDS_PARAM = 'missing_new_fields'
 
 export interface JournalFilters {
   accounts: number[]
@@ -30,6 +32,8 @@ export interface JournalFilters {
   /** Only used with period=custom. "YYYY-MM-DD" or "". */
   from: string
   to: string
+  /** Only closed trades with required fields added after they closed (`missing_new_fields=true`). */
+  missingNewFields: boolean
   sort: TradeSort
   order: SortOrder
   /** 1-based. */
@@ -61,6 +65,7 @@ export function parseFilters(params: URLSearchParams): JournalFilters {
     period: oneOf(PERIOD_PRESETS, params.get('period'), DEFAULT_PERIOD),
     from: isIsoDate(params.get('from') ?? '') ? (params.get('from') ?? '') : '',
     to: isIsoDate(params.get('to') ?? '') ? (params.get('to') ?? '') : '',
+    missingNewFields: params.get(MISSING_NEW_FIELDS_PARAM) === 'true',
     sort: oneOf(TRADE_SORT_FIELDS, params.get('sort'), DEFAULT_SORT),
     order: oneOf(['asc', 'desc'] as const, params.get('order'), DEFAULT_ORDER),
     page: positiveInt(params.get('page')) ?? 1,
@@ -80,6 +85,7 @@ export function filtersToParams(f: JournalFilters): URLSearchParams {
     if (f.from) params.set('from', f.from)
     if (f.to) params.set('to', f.to)
   }
+  if (f.missingNewFields) params.set(MISSING_NEW_FIELDS_PARAM, 'true')
   if (f.sort !== DEFAULT_SORT) params.set('sort', f.sort)
   if (f.order !== DEFAULT_ORDER) params.set('order', f.order)
   if (f.page > 1) params.set('page', String(f.page))
@@ -111,6 +117,7 @@ export function toTradeQuery(f: JournalFilters, today: string = brusselsToday())
     symbol: f.symbols,
     status: f.statuses,
     ...periodRange(f, today),
+    ...(f.missingNewFields ? { missing_new_fields: true } : {}),
     sort: f.sort,
     order: f.order,
     limit: f.limit,
@@ -123,11 +130,22 @@ export function hasActiveFilters(f: JournalFilters): boolean {
     f.accounts.length > 0 ||
     f.symbols.length > 0 ||
     f.statuses.length > 0 ||
-    f.period !== DEFAULT_PERIOD
+    f.period !== DEFAULT_PERIOD ||
+    f.missingNewFields
   )
 }
 
 /** Filters with every filter cleared (sort and page size kept). */
 export function clearedFilters(f: JournalFilters): JournalFilters {
-  return { ...f, accounts: [], symbols: [], statuses: [], period: DEFAULT_PERIOD, from: '', to: '', page: 1 }
+  return {
+    ...f,
+    accounts: [],
+    symbols: [],
+    statuses: [],
+    period: DEFAULT_PERIOD,
+    from: '',
+    to: '',
+    missingNewFields: false,
+    page: 1,
+  }
 }
