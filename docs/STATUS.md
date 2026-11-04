@@ -8,10 +8,10 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04 (M3-08 merged; M3-09 QA next). Never push (Borys pushes).
+Last update: 2026-11-04 (M3-09 QA done; waiting for Borys: 3 voice recordings + decision on beam size). Never push (Borys pushes).
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
-**Next task to pick up: M3-09 QA** (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
+**M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
 
 Notes for the next session:
 - faster-whisper `small` is already downloaded on this laptop (HF cache, took ~14 min); model load ~1.4 s. PyAV pinned < 19 (faster-whisper 1.2.1 incompatibility, guarded by a default test).
@@ -32,7 +32,7 @@ Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M3-06 Reusable hold-to-record component + Describe screen integration: upload, progress, transcript into the editable text box, failed → message + retry + replay, mic denied / no mic message (frontend-dev) — branch m3/voice-ui
 - [x] M3-07 Required-since: table + migration, `missing_required` by close time, `missing_new_fields`, `GET /api/trades?missing_new_fields=true` (backend-dev, database-reviewer) — branch m3/required-since
 - [x] M3-08 Journal filter "Неповні за новими полями" + new-field hint on Describe (frontend-dev) — branch m3/new-fields-ui
-- [ ] M3-09 QA: real timing for 30 s / 1 min / 2 min notes on this laptop (small int8; base too if 2 min > 30 s), failure + retry, mic denied, end-to-end; 3 fixtures of Borys's voice (qa-tester)
+- [x] M3-09 QA (2-min AC fails with defaults, see M3-qa.md): real timing for 30 s / 1 min / 2 min notes on this laptop (small int8; base too if 2 min > 30 s), failure + retry, mic denied, end-to-end; 3 fixtures of Borys's voice (qa-tester)
 - [ ] M3-10 Live check by Borys + M3 report (orchestrator)
 
 ## M2 tasks
@@ -105,3 +105,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-04: Resumed; M3-04 and M3-06 reviewed, fixed, merged. Stopped on request before M3-07.
 - 2026-11-04: M3-07 required-since done (table + marker, sync in API and worker, missing_new_fields, list filter), reviewed, merged.
 - 2026-11-04: M3-08 Journal filter + Describe new-fields note done, reviewed, merged. Screens not yet seen in a browser (check in M3-09).
+- 2026-11-04: M3-09 QA report: 2-min note 47–72 s with small beam 5 (FAIL), failure/retry pass; waiting for Borys's recordings.
