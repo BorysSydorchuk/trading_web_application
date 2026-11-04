@@ -1,5 +1,5 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
-ai_pricing.yaml).
+ai_pricing.yaml, extraction.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -16,6 +16,7 @@ from app.config_files.ai_pricing import (
     clear_ai_pricing_cache,
     get_ai_pricing,
 )
+from app.config_files.extraction import clear_extraction_cache, get_number_words
 from app.config_files.journal_fields import (
     JournalField,
     JournalFieldsConfig,
@@ -40,12 +41,18 @@ def reload_config() -> None:
     clear_rules_cache()
     clear_journal_fields_cache()
     clear_ai_pricing_cache()
+    clear_extraction_cache()
 
 
 def check_config_files() -> list[ConfigError]:
     """Load every config file once; log each problem loudly. Used at API and worker start."""
     errors: list[ConfigError] = []
-    loaders: list[Callable[[], object]] = [get_rules, get_journal_fields, get_ai_pricing]
+    loaders: list[Callable[[], object]] = [
+        get_rules,
+        get_journal_fields,
+        get_ai_pricing,
+        get_number_words,
+    ]
     for load in loaders:
         try:
             load()
@@ -71,6 +78,7 @@ __all__ = [
     "config_dir",
     "get_ai_pricing",
     "get_journal_fields",
+    "get_number_words",
     "get_rules",
     "reload_config",
 ]

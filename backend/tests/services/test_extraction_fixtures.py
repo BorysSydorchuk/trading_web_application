@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from app.config_files import get_journal_fields
+from app.config_files import get_journal_fields, get_number_words
 from app.domain.extraction import contains_phrase, evidence_in_text, normalise_for_match
 from app.domain.journal import ai_fillable_keys
 from app.services.ai.extraction import ExtractionSettings, extract_trade_fields
@@ -47,6 +47,7 @@ def test_extraction_fixture(path: Path, tmp_path: Path) -> None:
         text,
         trade_id=1,
         config=config,
+        number_words=get_number_words(),
         client=FakeClient([reply(output)]),
         settings=SETTINGS,
         usage_log=UsageLog(tmp_path / "ai_usage.jsonl"),

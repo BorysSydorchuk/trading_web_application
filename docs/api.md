@@ -289,7 +289,7 @@ number_words:
   1: [один, одна, одиниця, единица, единичка, one]
   ...
 ```
-Same matching rules as M2 (whole words, after normalisation, ё → е). Broken file → `config_error` like the other config files.
+Same matching rules as M2 (whole words, after normalisation, ё → е; words in the file are normalised on load, multi-word phrases allowed). A word may not mean two different numbers. An `int` value is kept only when it is the only number said in its evidence (a denominator of "4 з 5" does not count): "4 або 5", "four or five", "4 - 5" → left empty. Broken file → `config_error` like the other config files (extract: 500 `config_error` with `details.file: "extraction.yaml"`, before any AI call).
 
 ### New required fields (M2 follow-up)
 

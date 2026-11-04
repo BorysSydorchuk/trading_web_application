@@ -11,9 +11,12 @@ from fastapi import APIRouter, Depends
 from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
+from app.api.config_files import config_error
 from app.api.trades import journal_config
 from app.config import get_settings
+from app.config_files import ConfigError, get_number_words
 from app.db import get_db
+from app.domain.extraction import NumberWords
 from app.errors import ApiError
 from app.models import Trade
 from app.schemas import ai as schemas
@@ -67,6 +70,13 @@ def _to_result(outcome: ExtractionOutcome) -> schemas.ExtractResult:
     )
 
 
+def _number_words() -> NumberWords:
+    try:
+        return get_number_words()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
 @router.post("/trades/{trade_id}/extract", response_model=schemas.ExtractResult)
 def extract(
     trade_id: int,
@@ -77,6 +87,7 @@ def extract(
 ) -> schemas.ExtractResult:
     """Prefill the journal from a description. Saves nothing except the usage log."""
     config = journal_config()
+    number_words = _number_words()
     trade = db.get(Trade, trade_id)
     if trade is None:
         raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
@@ -91,6 +102,7 @@ def extract(
             body.text,
             trade_id=trade_id,
             config=config,
+            number_words=number_words,
             client=client,
             settings=ExtractionSettings(
                 primary_model=settings.anthropic_model_extraction,

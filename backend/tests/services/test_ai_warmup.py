@@ -13,7 +13,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
-from app.domain.extraction import build_extraction_schema
+from app.domain.extraction import NumberWords, build_extraction_schema
 from app.services.ai import warmup
 from app.services.ai.client import AiCallError, ModelClient, ModelReply, ModelRequest
 from app.services.ai.prompt import PromptError
@@ -161,6 +161,21 @@ def test_broken_journal_fields_makes_no_call(
 
     job()  # never raises
     assert client.requests == []
+
+
+def test_broken_extraction_yaml_makes_no_call(
+    ai_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken() -> NumberWords:
+        raise ConfigError(Path("extraction.yaml"), ["number_words: broken"])
+
+    monkeypatch.setattr(warmup, "get_number_words", broken)
+    client = FakeClient([])
+    job, _ = make_job(ai_settings, client)
+
+    job()  # never raises
+    assert client.requests == []
+    assert not warmup_state_path(ai_settings).exists()
 
 
 def test_same_hash_makes_no_call(ai_settings: Settings, config: JournalFieldsConfig) -> None:

@@ -38,7 +38,7 @@ REAL_CONFIG = REPO_ROOT / "config"
 @pytest.fixture
 def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """A writable copy of the real config dir, active via CONFIG_DIR."""
-    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml"):
+    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml", "extraction.yaml"):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
     reload_config()

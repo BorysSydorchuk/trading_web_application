@@ -29,6 +29,9 @@ from app.domain.journal import (
     missing_required,
     normalise_value,
 )
+from app.domain.number_words import NumberWords as NumberWords
+from app.domain.number_words import number_in_evidence as number_in_evidence
+from app.domain.text_match import normalise_for_match as normalise_for_match
 
 FIELDS_KEY = "fields"
 KEY_KEY = "key"
@@ -47,45 +50,10 @@ DropReason = Literal[
 # FieldIssue codes (app.domain.journal) that mean "value outside the allowed range".
 _RANGE_ISSUES: frozenset[IssueCode] = frozenset({"out_of_range", "too_long"})
 
-# Typographic variants folded before the evidence comparison (speech-to-text and phone
-# keyboards mix them): apostrophes, quotes, dashes, non-breaking spaces.
-_FOLD = str.maketrans(
-    {
-        **dict.fromkeys(map(chr, (0x2019, 0x2018, 0x02BC, 0x60)), "'"),
-        **dict.fromkeys(map(chr, (0x201C, 0x201D, 0x00AB, 0x00BB)), '"'),
-        **dict.fromkeys(map(chr, (0x2013, 0x2014)), "-"),
-        chr(0x00A0): " ",
-        chr(0x0451): chr(0x0435),  # Cyrillic yo -> ie (Russian texts mix them)
-        chr(0x0401): chr(0x0415),
-    }
-)
-_WHITESPACE = re.compile(r"\s+")
 # Evidence needs at least this many letters/digits (1-2 letter quotes match anywhere;
 # punctuation and spaces do not count).
 MIN_EVIDENCE_CHARS = 3
 
-# Number words accepted for an int value (closed list, 1-5 = quality_rating range), after
-# normalise_for_match (casefold, apostrophes -> ', yo -> ie). Whole words only.
-NUMBER_WORDS: dict[str, int] = {
-    **dict.fromkeys(("один", "одна", "одиниця", "единица", "единичка", "one"), 1),
-    **dict.fromkeys(("два", "дві", "двійка", "двойка", "two"), 2),
-    **dict.fromkeys(("три", "трійка", "тройка", "three"), 3),
-    **dict.fromkeys(("чотири", "четыре", "четвірка", "четверка", "four"), 4),
-    **dict.fromkeys(("п'ять", "пять", "п'ятірка", "пятерка", "five"), 5),
-}
-_NUMBER_WORD = re.compile(r"(?<![\w'])(" + "|".join(map(re.escape, NUMBER_WORDS)) + r")(?![\w'])")
-_NUMBER = re.compile(r"\d+")
-# "N из/з/із/of/out of M" or "N/M" right before a number: that number is the denominator.
-_DENOMINATOR_PREFIX = re.compile(r"\d\s*(?:/|(?<!\w)(?:из|з|із|of|out of)\s)\s*$")
-# Part of a decimal (4.5, 4,5), a clock time (9:05, 14:30) or a range (4-5; en/em dashes are
-# folded to "-"): the number is not a value on its own.
-_JOINED_BEFORE = re.compile(r"\d[.,:-]$")
-_JOINED_AFTER = re.compile(r"[.,:-]\d")
-# Money or percent signs glued to the number ($5, 5€, 1%).
-_UNIT_BEFORE = frozenset("$€£")
-_UNIT_AFTER = frozenset("%$€£")
-# An apostrophe at a word edge is a quote mark ('п'ять'), not part of the word.
-_EDGE_APOSTROPHE = re.compile(r"(?<!\w)'|'(?!\w)")
 # Besides letters and digits these belong to a word for the word-boundary check.
 _WORD_EXTRA = frozenset("'_")
 
@@ -257,11 +225,6 @@ class GuardResult:
         return list(self.fields)
 
 
-def normalise_for_match(text: str) -> str:
-    """Case-insensitive, whitespace-normalised form used to find evidence in the text."""
-    return _WHITESPACE.sub(" ", text.translate(_FOLD).casefold()).strip()
-
-
 def _word_char(char: str) -> bool:
     return char.isalnum() or char in _WORD_EXTRA
 
@@ -299,38 +262,13 @@ def evidence_in_text(evidence: Any, normalised_text: str) -> bool:
     return letters_digits >= MIN_EVIDENCE_CHARS and contains_phrase(quote, normalised_text)
 
 
-def _standalone_numbers(text: str) -> list[int]:
-    """Numbers in `text` that stand alone: no letter/digit glued on either side (M5, H4),
-    not part of a decimal, time or range (4.5, 4,5, 9:05, 4-5), no money/percent sign glued
-    on ($5, 5€, 1%) and not the denominator of "N из/з/із/of M", "N/M"."""
-    numbers: list[int] = []
-    for match in _NUMBER.finditer(text):
-        before, after = text[: match.start()], text[match.end() :]
-        if (before and before[-1].isalnum()) or (after and after[0].isalnum()):
-            continue
-        if _JOINED_BEFORE.search(before) or _JOINED_AFTER.match(after):
-            continue
-        if (before and before[-1] in _UNIT_BEFORE) or (after and after[0] in _UNIT_AFTER):
-            continue
-        if _DENOMINATOR_PREFIX.search(before):
-            continue
-        numbers.append(int(match.group()))
-    return numbers
-
-
-def number_in_evidence(value: int, evidence: str) -> bool:
-    """The int value is said in its evidence: as a standalone number, or as one of the
-    closed list of number words (NUMBER_WORDS, 1-5), whole words, case-insensitive."""
-    quote = _EDGE_APOSTROPHE.sub("", normalise_for_match(evidence))
-    quote = _NUMBER_WORD.sub(lambda m: str(NUMBER_WORDS[m.group(1)]), quote)
-    return value in _standalone_numbers(quote)
-
-
 def _issue_reason(code: IssueCode) -> DropReason:
     return "out_of_range" if code in _RANGE_ISSUES else "invalid_option"
 
 
-def _check_entry(spec: JournalKey, entry: Any, text: str) -> tuple[Any, DropReason | None]:
+def _check_entry(
+    spec: JournalKey, entry: Any, text: str, number_words: NumberWords
+) -> tuple[Any, DropReason | None]:
     """(normalised value or None, drop reason or None). None/None = not filled."""
     if entry is None:
         return None, None
@@ -349,15 +287,17 @@ def _check_entry(spec: JournalKey, entry: Any, text: str) -> tuple[Any, DropReas
         value = normalise_value(spec, raw)
     except InvalidJournalValue as exc:
         return None, _issue_reason(exc.issue.code)
-    return value, _value_issue(spec, value, str(evidence), text)
+    return value, _value_issue(spec, value, str(evidence), text, number_words)
 
 
-def _value_issue(spec: JournalKey, value: Any, evidence: str, text: str) -> DropReason | None:
+def _value_issue(
+    spec: JournalKey, value: Any, evidence: str, text: str, number_words: NumberWords
+) -> DropReason | None:
     """Ties the value to the text: an int must be said in its evidence (number_in_evidence); a text
     value must be his own words (a word-boundary substring of the input text)."""
     if value is None:
         return None
-    if spec.type == "int" and not number_in_evidence(value, evidence):
+    if spec.type == "int" and not number_in_evidence(value, evidence, number_words):
         return "evidence_not_in_text"
     if spec.type == "text":
         if "?" in value and "?" not in evidence:
@@ -367,10 +307,16 @@ def _value_issue(spec: JournalKey, value: Any, evidence: str, text: str) -> Drop
     return None
 
 
-def apply_guards(config: JournalFieldsConfig, output: Mapping[str, Any], text: str) -> GuardResult:
+def apply_guards(
+    config: JournalFieldsConfig,
+    output: Mapping[str, Any],
+    text: str,
+    number_words: NumberWords,
+) -> GuardResult:
     """Drop every value the text does not support (docs/api.md "Guards").
 
-    `output` is the parsed model answer (an object); `text` is the user's input.
+    `output` is the parsed model answer (an object); `text` is the user's input;
+    `number_words` comes from config/extraction.yaml (the int guard).
     """
     specs = {spec.key: spec for spec in ai_fillable_keys(config)}
     order = {key: i for i, key in enumerate(specs)}
@@ -383,7 +329,7 @@ def apply_guards(config: JournalFieldsConfig, output: Mapping[str, Any], text: s
             if entry is not None:
                 dropped.append(Dropped(key, "not_fillable"))
             continue
-        value, reason = _check_entry(spec, entry, normalised_text)
+        value, reason = _check_entry(spec, entry, normalised_text, number_words)
         if reason is not None:
             dropped.append(Dropped(key, reason))
         elif value is not None:
