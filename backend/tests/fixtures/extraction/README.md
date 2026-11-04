@@ -17,7 +17,10 @@ with a fake model that replays `model_output`. It never calls the real API.
 ```
 
 - `model_output`: the model's JSON answer (recorded from a real run, or hand-written to
-  simulate a bad answer). Must be an object; each entry `{value, evidence}` or `null`.
+  simulate a bad answer), written per key: an object, each entry `{value, evidence}` or
+  `null` (values typed: strings, numbers, true/false, lists for multi-choice). The fake
+  model sends it in the real wire format `{"fields": [{"key", "value", "evidence"}]}`
+  (`tests/services/ai_fakes.py` `to_wire`), so the conversion is tested too.
 - `expected_fields`: exactly the `fields` of the result (keys and values), after guards.
 - `expected_dropped` (optional, default `[]`): the `dropped` list, in YAML key order.
 - `expected_missing_required` (optional): if present, compared exactly.

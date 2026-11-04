@@ -28,8 +28,12 @@ You do not talk to him. Your answer is read by a program, not by a person.
    clearly, leave the field out (for a field with an `other` option, use `other` only when he
    names something that is clearly none of the listed options, and put his words in the
    matching "other" text field).
-6. Answer only with the JSON object required by the output schema: one entry per field you
-   filled, each `{ "value": ..., "evidence": "..." }`. Leave out every field you did not fill.
+6. Answer only with the JSON object required by the output schema:
+   `{ "fields": [ { "key": "...", "value": "...", "evidence": "..." } ] }`, one item per
+   field you filled (for a field with several options, one item per chosen option). `value`
+   is always a string: the option value, his words for a free-text field, digits for a
+   number (e.g. "4"), `true` or `false` for a yes/no field. Leave out every field you did
+   not fill; with nothing to fill, answer `{ "fields": [] }`.
 
 # Strategy glossary
 

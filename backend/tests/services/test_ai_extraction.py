@@ -99,7 +99,8 @@ def test_success_result_and_request(config: JournalFieldsConfig, log: UsageLog) 
     assert req.user_text == TEXT
     assert FIELDS_PLACEHOLDER not in req.system
     assert "`ifvg_m5`: IFVG M5" in req.system
-    assert set(req.schema["properties"]) >= {"entry_model", "lesson"}
+    keys = req.schema["properties"]["fields"]["items"]["properties"]["key"]["enum"]
+    assert {"entry_model", "lesson"} <= set(keys)
 
 
 def test_success_usage_line_has_no_text_values_or_key(
@@ -147,7 +148,7 @@ def test_fallback_on_overload_5xx_timeout_connection(
     fallback = client.requests[1]
     assert fallback.max_retries == 0  # one attempt only
     assert MIN_FALLBACK_S <= fallback.timeout_s <= FALLBACK_TIMEOUT_MAX_S
-    assert PRIMARY_TIMEOUT_S + FALLBACK_TIMEOUT_MAX_S <= TOTAL_BUDGET_S
+    assert PRIMARY_TIMEOUT_S < TOTAL_BUDGET_S
     assert (outcome.usage.model, outcome.usage.fallback_used) == ("claude-opus-5-5", True)
     assert str(outcome.usage.cost_usd) == "0.0115"  # opus: 1830 * 4 + 210 * 20 per million
     first, second = lines(log)
@@ -269,3 +270,32 @@ def test_model_question_and_invented_field_are_dropped(
         ("quality_rating", "evidence_not_in_text"),
         ("followed_plan", "evidence_not_in_text"),
     }
+
+
+def test_no_fallback_after_a_primary_timeout(config: JournalFieldsConfig, log: UsageLog) -> None:
+    """A primary timeout spends the budget: the fallback would not fit in 30 s."""
+    timeout = AiCallError("timeout", "no answer within 28.0 s", fallback_ok=True)
+    client = FakeClient([timeout, reply(GOOD)])
+    clock = Clock(step=PRIMARY_TIMEOUT_S / 3)  # start, attempt start, attempt end
+    with pytest.raises(ExtractionFailed) as caught:
+        run(client, config, log, clock=clock)
+    assert caught.value.kind == "timeout"
+    assert len(client.requests) == 1
+
+
+def test_fast_failure_leaves_the_fallback_most_of_the_budget(
+    config: JournalFieldsConfig, log: UsageLog
+) -> None:
+    client = FakeClient([overloaded(), reply(GOOD, model="claude-opus-5-5")])
+    run(client, config, log, clock=Clock(step=0.5))
+    assert client.requests[1].timeout_s == FALLBACK_TIMEOUT_MAX_S
+
+
+def test_answer_with_wrong_shape_is_invalid_output(
+    config: JournalFieldsConfig, log: UsageLog
+) -> None:
+    client = FakeClient([reply(text='{"entry_model": {"value": "ifvg_m5", "evidence": "x"}}')])
+    with pytest.raises(ExtractionFailed) as caught:
+        run(client, config, log)
+    assert caught.value.kind == "invalid_output"
+    assert lines(log)[0]["error_kind"] == "invalid_output"

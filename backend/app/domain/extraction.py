@@ -5,8 +5,10 @@ Everything is generated from `config/journal_fields.yaml` via `ai_fillable_keys`
 - `render_field_catalogue`: the field/option list injected into the system prompt;
 - `apply_guards`: the server-side anti-invention checks on the model's answer.
 
-The model answers `{ "<key>": { "value": ..., "evidence": "<verbatim quote>" }, ... }` with
-only the keys it could fill. There is no free-form message field, so it cannot ask
+The model answers `{"fields": [{"key", "value", "evidence": "<verbatim quote>"}, ...]}` with
+only the keys it could fill; `answer_entries` turns that into per-key entries
+`{"<key>": {"value": <typed>, "evidence": ...}}`, the shape the guards (and the
+extraction fixtures' `model_output`) use. There is no free-form message field, so it cannot ask
 questions or comment; what is missing is computed by the server.
 """
 
@@ -28,6 +30,8 @@ from app.domain.journal import (
     normalise_value,
 )
 
+FIELDS_KEY = "fields"
+KEY_KEY = "key"
 VALUE_KEY = "value"
 EVIDENCE_KEY = "evidence"
 
@@ -93,21 +97,6 @@ def _options(spec: JournalKey) -> list[str]:
     return spec.field.option_values(include_deprecated=False)
 
 
-def _value_schema(spec: JournalKey) -> dict[str, Any]:
-    match spec.type:
-        case "enum":
-            return {"type": "string", "enum": _options(spec)}
-        case "multi_enum":
-            return {"type": "array", "items": {"type": "string", "enum": _options(spec)}}
-        case "bool":
-            return {"type": "boolean"}
-        case "int":
-            # Numeric bounds are enforced by the guards (out_of_range), not the schema.
-            return {"type": "integer", "description": _int_range(spec)}
-        case _:
-            return {"type": "string"}
-
-
 def _int_range(spec: JournalKey) -> str:
     low, high = spec.field.min, spec.field.max
     if low is not None and high is not None:
@@ -119,33 +108,101 @@ def _int_range(spec: JournalKey) -> str:
     return "integer"
 
 
-def _entry_schema(spec: JournalKey) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "description": spec.field.label if not spec.is_text_key else f"{spec.field.label}: текст",
-        "properties": {
-            VALUE_KEY: _value_schema(spec),
-            EVIDENCE_KEY: {
-                "type": "string",
-                "description": "exact verbatim quote from the user's text that states the value",
-            },
-        },
-        "required": [VALUE_KEY, EVIDENCE_KEY],
-        "additionalProperties": False,
-    }
-
-
 def build_extraction_schema(config: JournalFieldsConfig) -> dict[str, Any]:
-    """Strict JSON schema: one optional `{value, evidence}` property per AI-fillable key.
+    """Strict JSON schema of the answer: `{"fields": [{"key", "value", "evidence"}, ...]}`.
 
-    Keys are optional (a field the text does not state is simply left out); no union
-    types and no free-form text property, so the model can only fill fields.
+    Deliberately flat (one item shape, every property required, no optional properties,
+    no unions): the API compiles the schema into a grammar, and the earlier one-optional-
+    object-per-key schema was rejected as "too complex" or took 40+ s. `value` is always a
+    string; `answer_entries` types it from the YAML. No free-form text property, so the
+    model can only fill fields.
     """
-    return {
+    keys = [spec.key for spec in ai_fillable_keys(config)]
+    item = {
         "type": "object",
-        "properties": {spec.key: _entry_schema(spec) for spec in ai_fillable_keys(config)},
+        "properties": {
+            KEY_KEY: {"type": "string", "enum": keys},
+            VALUE_KEY: {"type": "string"},
+            EVIDENCE_KEY: {"type": "string"},
+        },
+        "required": [KEY_KEY, VALUE_KEY, EVIDENCE_KEY],
         "additionalProperties": False,
     }
+    return {
+        "type": "object",
+        "properties": {FIELDS_KEY: {"type": "array", "items": item}},
+        "required": [FIELDS_KEY],
+        "additionalProperties": False,
+    }
+
+
+# --- model answer -> per-key entries ---
+
+
+class InvalidAnswer(ValueError):  # noqa: N818 - reads as "raise InvalidAnswer"
+    """The answer does not have the schema's shape (an `invalid_output`)."""
+
+
+_INT_TEXT = re.compile(r"[+-]?\d+")
+_BOOL_TEXT = {"true": True, "false": False}
+# A single-value key answered twice with different values: dropped as invalid_option.
+CONFLICT = object()
+
+
+def _typed(spec: JournalKey | None, raw: str) -> Any:
+    """String value from the answer -> the type of its YAML field (unchanged when it does
+    not parse, so the guards report it as invalid_option)."""
+    text = raw.strip()
+    if spec is None or text == "":
+        return text or None
+    if spec.type == "int" and _INT_TEXT.fullmatch(text):
+        return int(text)
+    if spec.type == "bool":
+        return _BOOL_TEXT.get(text.casefold(), raw)
+    return raw
+
+
+def _items(answer: Mapping[str, Any]) -> list[tuple[str, str, str]]:
+    items = answer.get(FIELDS_KEY)
+    if not isinstance(items, list):
+        raise InvalidAnswer(f"`{FIELDS_KEY}` is not an array")
+    out: list[tuple[str, str, str]] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            raise InvalidAnswer("an item is not an object")
+        key, value, evidence = (item.get(k) for k in (KEY_KEY, VALUE_KEY, EVIDENCE_KEY))
+        if not (isinstance(key, str) and isinstance(value, str) and isinstance(evidence, str)):
+            raise InvalidAnswer("an item needs string key, value and evidence")
+        out.append((key, value, evidence))
+    return out
+
+
+def answer_entries(config: JournalFieldsConfig, answer: Mapping[str, Any]) -> dict[str, Any]:
+    """The schema answer as per-key entries `{key: {"value", "evidence"}}` for apply_guards.
+
+    multi_enum: one item per option, merged into `{"value": [...], "evidence": [...]}`.
+    Single-value keys: a repeated identical value is ignored, a different one is a
+    conflict (dropped). Raises InvalidAnswer when the shape is wrong.
+    """
+    specs = {spec.key: spec for spec in ai_fillable_keys(config)}
+    entries: dict[str, Any] = {}
+    for key, raw, evidence in _items(answer):
+        spec = specs.get(key)
+        value = _typed(spec, raw)
+        if value is None:
+            continue
+        current = entries.get(key)
+        if spec is not None and spec.type == "multi_enum":
+            merged = current or {VALUE_KEY: [], EVIDENCE_KEY: []}
+            entries[key] = {
+                VALUE_KEY: [*merged[VALUE_KEY], value],
+                EVIDENCE_KEY: [*merged[EVIDENCE_KEY], evidence],
+            }
+        elif current is None:
+            entries[key] = {VALUE_KEY: value, EVIDENCE_KEY: evidence}
+        elif current is not CONFLICT and current[VALUE_KEY] != value:
+            entries[key] = CONFLICT
+    return entries
 
 
 # --- prompt field catalogue ---
@@ -277,13 +334,16 @@ def _check_entry(spec: JournalKey, entry: Any, text: str) -> tuple[Any, DropReas
     """(normalised value or None, drop reason or None). None/None = not filled."""
     if entry is None:
         return None, None
+    if entry is CONFLICT:
+        return None, "invalid_option"
     if not isinstance(entry, Mapping):
         return None, "evidence_not_in_text"
     raw = entry.get(VALUE_KEY)
     if raw is None:
         return None, None
     evidence = entry.get(EVIDENCE_KEY)
-    if not evidence_in_text(evidence, text):
+    quotes = evidence if isinstance(evidence, list) else [evidence]  # multi_enum: one per option
+    if not quotes or not all(evidence_in_text(quote, text) for quote in quotes):
         return None, "evidence_not_in_text"
     try:
         value = normalise_value(spec, raw)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -31,6 +32,10 @@ SERVER_ERROR_MIN = 500
 # primary + fallback worst case stays within the 30 s target (requests set it explicitly).
 SDK_MAX_RETRIES = 0
 ERROR_DETAIL_MAX_CHARS = 200
+# Connect timeout per attempt, and the extra HTTP time an abandoned call gets after the
+# wall-clock deadline before httpx gives up.
+CONNECT_TIMEOUT_S = 5.0
+HTTP_GRACE_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -90,7 +95,7 @@ class AiCallError(Exception):
 
 class ModelClient(Protocol):
     def create(self, request: ModelRequest) -> ModelReply:
-        """One messages call (with the SDK's own retries). Raises AiCallError."""
+        """One messages call within `request.timeout_s` (wall clock). Raises AiCallError."""
         ...
 
 
@@ -154,6 +159,36 @@ def _usage(message: anthropic.types.Message) -> TokenUsage:
     )
 
 
+class DeadlineExceeded(Exception):  # noqa: N818 - reads as "raise DeadlineExceeded"
+    pass
+
+
+def run_with_deadline[T](call: Callable[[], T], timeout_s: float) -> T:
+    """Run `call` in a daemon thread and wait at most `timeout_s` (wall clock).
+
+    Raises DeadlineExceeded when it is not done in time (the thread is abandoned and ends
+    on its own HTTP timeout); exceptions of `call` are re-raised here.
+    """
+    done = threading.Event()
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["value"] = call()
+        except BaseException as exc:  # re-raised in the caller's thread
+            box["error"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=run, name="ai-call", daemon=True).start()
+    if not done.wait(timeout_s):
+        raise DeadlineExceeded
+    if "error" in box:
+        raise box["error"]
+    value: T = box["value"]
+    return value
+
+
 class AnthropicModelClient:
     """`ModelClient` on the real API. The SDK client is created on first use."""
 
@@ -174,22 +209,19 @@ class AnthropicModelClient:
             return self._sdk
 
     def create(self, request: ModelRequest) -> ModelReply:
-        # No temperature/top_p/top_k and no `thinking` (5.5 models think adaptively;
-        # `disabled` is rejected). No server-side `fallbacks`: we fall back ourselves.
-        client = self._client().with_options(
-            max_retries=request.max_retries, timeout=request.timeout_s
-        )
+        """One call, bounded by `request.timeout_s` of wall-clock time (httpx timeouts only
+        bound each network read, so a slow answer could run far past them)."""
         try:
-            message = client.messages.create(
-                model=request.model,
-                max_tokens=request.max_tokens,
-                system=request.system,
-                messages=[{"role": "user", "content": request.user_text}],
-                output_config={
-                    "format": {"type": "json_schema", "schema": request.schema},
-                    "effort": request.effort,
-                },
+            message = run_with_deadline(lambda: self._send(request), request.timeout_s)
+        except DeadlineExceeded:
+            logger.warning(
+                "AI call on %s abandoned after %.1f s (wall clock); it may still be billed",
+                request.model,
+                request.timeout_s,
             )
+            raise AiCallError(
+                "timeout", f"no answer within {request.timeout_s:.1f} s", fallback_ok=True
+            ) from None
         except anthropic.AnthropicError as exc:
             kind, fallback_ok = classify_error(exc)
             raise AiCallError(kind, describe_error(exc), fallback_ok=fallback_ok) from exc
@@ -198,4 +230,23 @@ class AnthropicModelClient:
             stop_reason=message.stop_reason,
             text=_first_text(message),
             usage=_usage(message),
+        )
+
+    def _send(self, request: ModelRequest) -> anthropic.types.Message:
+        # No temperature/top_p/top_k and no `thinking` (5.5 models think adaptively;
+        # `disabled` is rejected). No server-side `fallbacks`: we fall back ourselves.
+        # The httpx timeout only lets an abandoned call end soon after the deadline.
+        timeout = httpx2.Timeout(
+            request.timeout_s + HTTP_GRACE_S, connect=min(CONNECT_TIMEOUT_S, request.timeout_s)
+        )
+        client = self._client().with_options(max_retries=request.max_retries, timeout=timeout)
+        return client.messages.create(
+            model=request.model,
+            max_tokens=request.max_tokens,
+            system=request.system,
+            messages=[{"role": "user", "content": request.user_text}],
+            output_config={
+                "format": {"type": "json_schema", "schema": request.schema},
+                "effort": request.effort,
+            },
         )
