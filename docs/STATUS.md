@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M2 Describe a trade (text + links)**: done, report in docs/reports/M2.md, waiting for PM review. M1 accepted 2026-11-03, M0 accepted 2026-11-01.
+Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -8,18 +8,23 @@ Current milestone: **M2 Describe a trade (text + links)**: done, report in docs/
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04. M2 finished (all tasks merged into LOCAL main, not pushed — Borys pushes). Report docs/reports/M2.md written; stopped for PM review. Uncommitted: .env.example (Borys's AI block edit, left for him). Next: PM review of M2, then M3 on branch m3/<topic>.
+Last update: 2026-11-04. M2 accepted (decisions in DECISIONS.md 2026-11-04 PM). M3 planned: contract in docs/api.md "## M3", tasks below. Never push (Borys pushes).
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; continue with the first unchecked task.
 
-M2 status: M2-01 (Program Files guard), M2-02 (contract), M2-03 (journal save API), M2-05 + M2-06 (Describe screen, AI usage in Settings) are reviewed, merged into main and pushed. make check green on main (772 backend tests; frontend lint/typecheck).
+## M3 tasks
 
-In progress: **M2-04 AI extraction** on branch `m2/ai-extraction` (pushed). One WIP commit, NOT reviewed, `make check` not run: settings split (ANTHROPIC_MODEL_EXTRACTION / _SUMMARY / _FALLBACK / _EFFORT), `anthropic` dep added, config/ai_pricing.yaml + loader, services/ai/client.py, services/ai/usage_log.py, domain/extraction.py. Agent stopped while writing the system prompt (backend/prompts/extract_trade.md) and loader. Still to do for M2-04: prompt + loader, schema builder from YAML (with evidence), guards, POST /api/trades/{id}/extract, GET /api/ai/usage, tests, fixture format for QA, .env.example. Resume: `git switch m2/ai-extraction`, run `make check`, give backend-dev the original M2-04 brief (this file's M2-04 line + docs/api.md "AI extraction"/"AI usage" + DECISIONS 2026-11-03) and say what already exists; then code-reviewer, merge --no-ff, push.
+Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Migrations → database-reviewer.
 
-Then: M2-07 extraction fixtures (10 texts UA/RU/EN, Sonnet time/cost per call, compare with Opus if quality is clearly worse → numbers to PM), M2-08 QA end-to-end against the real backend (Describe screen was only clicked through against a mock API) + docs/reports/M2.md (commit range: first M2 commit 6686f93 "docs: M2 plan"), then Borys describes 3 real trades (needs ANTHROPIC_API_KEY in .env).
-
-Open questions for Borys: (1) OK to add Vitest (frontend dev dependency) for tests of chartLinks/formModel/aiMerge/serverErrors? (2) CLAUDE.md security-reviewer line refers to a Telegram bot that no longer exists: point it at M7 Hardening or delete?
-
-Leftover: folder `.claude/worktrees/agent-a532538fd24d93aac` could not be deleted (Windows lock); it is gitignored and no longer a git worktree, delete it by hand when nothing runs. Per-agent test DBs trading_journal_test_a..d exist.
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; continue M2-04.
+- [x] M3-01 M3 API contract (docs/api.md "## M3") + decisions (orchestrator) — branch m3/contract
+- [ ] M3-02 Number words from code to `config/extraction.yaml` (loader, validation, reload); tests for "4", "четвірка", "четвёрка", "four", "на 4 з 5", ambiguous → empty (backend-dev) — branch m3/number-words
+- [ ] M3-03 AI warm-up in the worker on schema-hash change (`data/ai_warmup.json`, purpose `warmup`); find out what causes the ~25 s first call and write it in DECISIONS (backend-dev) — branch m3/ai-warmup
+- [ ] M3-04 Transcription backend: `faster-whisper` dep, settings, `config/transcription.yaml` glossary, audio upload/get/file/retry, worker queue job with progress, migration for progress/error_code (backend-dev, database-reviewer) — branch m3/transcription
+- [ ] M3-05 Frontend test setup: jsdom + Testing Library + MSW (dev only), first component tests (frontend-dev) — branch m3/component-tests
+- [ ] M3-06 Reusable hold-to-record component + Describe screen integration: upload, progress, transcript into the editable text box, failed → message + retry + replay, mic denied / no mic message (frontend-dev) — branch m3/voice-ui
+- [ ] M3-07 Required-since: table + migration, `missing_required` by close time, `missing_new_fields`, `GET /api/trades?missing_new_fields=true` (backend-dev, database-reviewer) — branch m3/required-since
+- [ ] M3-08 Journal filter "Неповні за новими полями" + new-field hint on Describe (frontend-dev) — branch m3/new-fields-ui
+- [ ] M3-09 QA: real timing for 30 s / 1 min / 2 min notes on this laptop (small int8; base too if 2 min > 30 s), failure + retry, mic denied, end-to-end; 3 fixtures of Borys's voice (qa-tester)
+- [ ] M3-10 Live check by Borys + M3 report (orchestrator)
 
 ## M2 tasks
 
@@ -86,3 +91,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-03: M1 accepted by PM. PM decisions + git workflow recorded, main pushed. M2 planned; M2-01 started.
 - 2026-11-03: M2-01, M2-02, M2-03, M2-05/06 merged. M2-04 started, stopped on request (WIP commit on m2/ai-extraction).
 - 2026-11-04: M2 done: live eval (Sonnet 90.7 %, p95 3.8 s), Borys check OK, M2 report written. Stopped for PM review.
+- 2026-11-04: M2 accepted by PM. M3 planned (contract, 10 tasks).
