@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import type { ColumnKey } from '@/features/journal/columns'
 import { NUMERIC_COLUMNS } from '@/features/journal/columns'
 import { useTrades } from '@/features/trades/api'
 import { TradeCell } from '@/features/trades/TradeCell'
 import { TradeDetailDialog } from '@/features/trades/TradeDetailDialog'
+import { describePath } from '@/features/trades/links'
 import { INBOX_STATUSES, type InboxStatus, type TradeQuery, type TradeRow } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
@@ -144,7 +146,9 @@ function InboxGroup({ status, trades, onOpen }: InboxGroupProps) {
                     {status === 'needs_sl' ? (
                       <InitialSlForm trade={trade} />
                     ) : (
-                      <span className="text-xs whitespace-nowrap text-muted-foreground">{p.descriptionLater}</span>
+                      <Button asChild size="sm" className="h-7 text-xs">
+                        <Link to={describePath(trade.id)}>{status === 'draft' ? p.continueDraft : p.describe}</Link>
+                      </Button>
                     )}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onOpen(trade.id)}>
                       {p.details}

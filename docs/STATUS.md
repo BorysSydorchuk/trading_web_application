@@ -8,17 +8,18 @@ Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 acce
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-03. M2-01 merged to main. Next: M2-02 contract (branch m2/contract; draft in scratch was moved into docs/api.md). M2 API contract drafted (to go into docs/api.md after M2-01 merges). Borys approved `anthropic` dep; models per PM: extraction claude-sonnet-5-5, summary claude-opus-5-5, fallback only on overload/5xx/timeout.
+Last update: 2026-11-03, agents stopped on Borys's request.
 
-M1 status: ALL development tasks done, reviewed and committed (M1-01 … M1-12, plus sync `warning` chip). `make check` green: 546 tests. Working tree clean.
+M2 status: M2-01 (Program Files guard), M2-02 (contract), M2-03 (journal save API), M2-05 + M2-06 (Describe screen, AI usage in Settings) are reviewed, merged into main and pushed. make check green on main (772 backend tests; frontend lint/typecheck).
 
-Remaining:
-- M1-13 QA end-to-end with fixture source — STARTED, then stopped (no results kept). Restart it from scratch: qa-tester prompt = verify with MT5_SOURCE=fixture:backend/tests/fixtures/mt5/basic_week.json on a throwaway DB (never a real terminal): start app, create account via API, worker sync → trades match tests/fixtures/mt5/README.md, `make trade-check` 5/5, simulate a trade closing (time-shifted fixture copy, close ≈ now) and measure time to inbox (< 2 min), error fixture → status `error` + recovery, PATCH initial_sl flow, headless-Chrome screenshots of /journal /inbox /settings, launcher kill/restart + stop.bat, `make check`, list AC left for the live check. Clean up qa DBs and processes afterwards.
-- M1-14 live check with Borys (demo account, markets open): needs Borys — follow docs/MT5_SETUP.md (portable demo terminal, investor password in .env as MT5_PASSWORD_<login>, account in Settings), then: real account 30 days + `make trade-check ACCOUNT=<name> N=5`; close a demo trade → in "Потрібен опис" within 2 min; close the terminal → error in status bar; confirm browser auto-open on start (PM M0 note).
-- Then write docs/reports/M1.md (include the M1 commit range: from 5ec29b2 "docs: M1 plan…" to the last M1 commit, i.e. `git log 467ff6d..<last>`; note that c4d90c2/7a75f38/a2a397e in that range are Claude tooling setup, not M1 features; everything is on main) (built, how to run, tested, known issues, PM questions, assumptions) and stop for PM review.
+In progress: **M2-04 AI extraction** on branch `m2/ai-extraction` (pushed). One WIP commit, NOT reviewed, `make check` not run: settings split (ANTHROPIC_MODEL_EXTRACTION / _SUMMARY / _FALLBACK / _EFFORT), `anthropic` dep added, config/ai_pricing.yaml + loader, services/ai/client.py, services/ai/usage_log.py, domain/extraction.py. Agent stopped while writing the system prompt (backend/prompts/extract_trade.md) and loader. Still to do for M2-04: prompt + loader, schema builder from YAML (with evidence), guards, POST /api/trades/{id}/extract, GET /api/ai/usage, tests, fixture format for QA, .env.example. Resume: `git switch m2/ai-extraction`, run `make check`, give backend-dev the original M2-04 brief (this file's M2-04 line + docs/api.md "AI extraction"/"AI usage" + DECISIONS 2026-11-03) and say what already exists; then code-reviewer, merge --no-ff, push.
 
-Known issues/notes for the M1 report: realised-conversion risk is noisy near breakeven (spec fallback below 10 % move); MT5 threading assumptions (calls from a worker thread, GIL release) to confirm live; netting `inout` positions skipped (BACKLOG); DUE_SLACK 30 s; docs/MT5_SETUP.md was committed inside 1aa7ce1.
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; restart M1-13 QA. Per-agent test DBs exist: trading_journal_test_a..d.
+Then: M2-07 extraction fixtures (10 texts UA/RU/EN, Sonnet time/cost per call, compare with Opus if quality is clearly worse → numbers to PM), M2-08 QA end-to-end against the real backend (Describe screen was only clicked through against a mock API) + docs/reports/M2.md (commit range: first M2 commit 6686f93 "docs: M2 plan"), then Borys describes 3 real trades (needs ANTHROPIC_API_KEY in .env).
+
+Open questions for Borys: (1) OK to add Vitest (frontend dev dependency) for tests of chartLinks/formModel/aiMerge/serverErrors? (2) CLAUDE.md security-reviewer line refers to a Telegram bot that no longer exists: point it at M7 Hardening or delete?
+
+Leftover: folder `.claude/worktrees/agent-a532538fd24d93aac` could not be deleted (Windows lock); it is gitignored and no longer a git worktree, delete it by hand when nothing runs. Per-agent test DBs trading_journal_test_a..d exist.
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; continue M2-04.
 
 ## M2 tasks
 
@@ -27,9 +28,9 @@ Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M2-01 Settings rejects terminal paths under Program Files (env vars, both slashes, case, 8.3, `..`), worker guard too; Ukrainian error → MT5_SETUP.md step 1; tests (backend-dev, then frontend-dev for uk.ts) — branch m2/terminal-path-guard
 - [x] M2-02 M2 API contract in docs/api.md (journal save, chart links, extract, AI usage) + decisions (orchestrator) — branch m2/contract
 - [x] M2-03 Journal save API: `PUT /api/trades/{id}/journal`, validation generated from journal_fields.yaml (types, options, deprecated, extra storage), required check for complete, status flow, user violations, TradingView link validation + preview_url; test: new YAML field works without code changes (backend-dev) — branch m2/journal-save
-- [ ] M2-04 AI extraction: `anthropic` SDK (needs Borys OK), prompt in backend/prompts/ with glossary, schema from YAML with evidence quotes, server guards (evidence, options, questions), errors (ai_not_configured / ai_error), usage log logs/ai_usage.jsonl + config/ai_pricing.yaml + `GET /api/ai/usage` (backend-dev) — branch m2/ai-extraction
-- [ ] M2-05 Describe screen: auto data left; text box + links; "Заповнити з тексту" with progress; form generated from /api/journal-fields with AI markers, red missing fields, "Не вистачає: …"; save draft / complete; inbox → describe (frontend-dev) — branch m2/describe-ui
-- [ ] M2-06 Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
+- [ ] (WIP on m2/ai-extraction) M2-04 AI extraction: `anthropic` SDK (needs Borys OK), prompt in backend/prompts/ with glossary, schema from YAML with evidence quotes, server guards (evidence, options, questions), errors (ai_not_configured / ai_error), usage log logs/ai_usage.jsonl + config/ai_pricing.yaml + `GET /api/ai/usage` (backend-dev) — branch m2/ai-extraction
+- [x] M2-05 Describe screen: auto data left; text box + links; "Заповнити з тексту" with progress; form generated from /api/journal-fields with AI markers, red missing fields, "Не вистачає: …"; save draft / complete; inbox → describe (frontend-dev) — branch m2/describe-ui
+- [x] M2-06 (done inside M2-05) Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
 - [ ] M2-07 Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
 - [ ] M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
 
@@ -82,3 +83,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-03: Borys: M1 stays on main (chore/ecc-setup was a stale pointer, deleted). From M2, one branch per milestone `m<N>/<topic>` (rule added to CLAUDE.md).
 - 2026-11-03: M1-14 live check by Borys passed (2-min test pending on next real trade). MT5_SETUP.md fixes applied. docs/reports/M1.md written. Stopped for PM review.
 - 2026-11-03: M1 accepted by PM. PM decisions + git workflow recorded, main pushed. M2 planned; M2-01 started.
+- 2026-11-03: M2-01, M2-02, M2-03, M2-05/06 merged. M2-04 started, stopped on request (WIP commit on m2/ai-extraction).
