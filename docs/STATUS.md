@@ -8,16 +8,17 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04 (stopped on Borys's request; all agents stopped). Never push (Borys pushes).
-Merged into local main: M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-05 component tests. make check green on main (1079 backend, 159 frontend).
+Last update: 2026-11-04 (stopped on Borys's request; no agents running). Never push (Borys pushes).
+Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes). No open m3/* branches.
 
-Not merged yet (branches exist, worktrees under .claude/worktrees/, gitignored):
-- **M3-04 m3/transcription** (worktree agent-ac4660f1efec4d461, test DB _a), based on main b66d941. Commits 92dd83c (transcription backend: upload, audio API, worker queue, faster-whisper) + a0a9a7d (PyAV < 19 pin). The agent was stopped right after that, before its final report, so the work is NOT verified by me and NOT reviewed. Resume: in that worktree run backend lint/typecheck/pytest (TEST_DATABASE_URL=postgresql+psycopg://journal:journal@127.0.0.1:5432/trading_journal_test_a), check against docs/api.md "## M3 / Voice notes" and the M3-04 brief (STATUS line), then code-reviewer + database-reviewer (migration), fix, merge --no-ff.
-- **M3-06 m3/voice-ui** (worktree agent-a332ab852e1bd7211), commits 8a0cf2b + 502a9c1, 203 frontend tests green. Code review: CHANGES REQUESTED. To fix: (1 HIGH) DescribeVoice.tsx: recording a new note while a failed upload is held drops the failed blob — disable the recorder while an upload failed (hint: re-send first) + test; (2 MED) unsent failed recording should make the UnsavedChangesGuard dirty; (3 MED) VoiceRecorder.tsx: onLostPointerCapture / onPointerLeave fallback to stop; (4 MED) tests: 10-min auto-stop, unmount during recording/starting, pointercancel/blur, MediaRecorder onerror, retry failing twice, poll error recovery; (5 LOW) useRecorder.ts: keep chunks ≥ 1 s on mid-recording error; (6 LOW) DescribePage.tsx: show LoadError only when isError && !data; (7 LOW) a11y: duplicate label on ul, role=status re-announcing every poll; (8 LOW) unused uk.ts voice.notes.failed.
-Next after those: M3-07 required-since (after M3-04 merges, migration chain), M3-08 UI, M3-09 QA (timing 30 s/1 min/2 min; 3 fixtures of Borys's voice), M3-10 live check + report.
-For Borys: new .env keys to add to .env.example (WHISPER_MODEL=small, WHISPER_COMPUTE_TYPE=int8, WHISPER_LANGUAGE=uk, WHISPER_BEAM_SIZE=5, WHISPER_CPU_THREADS=0, DATA_DIR=data) — confirm the final list from the M3-04 branch.
-PM question for the M3 report: the grammar cache expires 24 h after last use, so the first call after a quiet day is ~25 s even without a YAML change (hash-only warm-up doesn't cover it).
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; `git branch`; continue with the two branches above.
+**Next task to pick up: M3-07 required-since** (backend-dev + database-reviewer for the migration; contract in docs/api.md "## M3 / New required fields"; branch m3/required-since from main). Then M3-08 (Journal filter "Неповні за новими полями" + new-field hint on Describe, frontend-dev), M3-09 QA (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
+
+Notes for the next session:
+- faster-whisper `small` is already downloaded on this laptop (HF cache, took ~14 min); model load ~1.4 s. PyAV pinned < 19 (faster-whisper 1.2.1 incompatibility, guarded by a default test).
+- For Borys: add to .env.example (all optional, defaults shown): WHISPER_MODEL=small, WHISPER_COMPUTE_TYPE=int8, WHISPER_LANGUAGE=uk (empty = auto-detect), WHISPER_BEAM_SIZE=5, WHISPER_CPU_THREADS=0, DATA_DIR=data. Agents must not edit .env/.env.example.
+- PM question for the M3 report: the structured-output grammar cache expires 24 h after last use (Anthropic docs), so the first AI fill after a quiet day is ~25 s even without a YAML change; hash-only warm-up doesn't cover it (option: also warm up when the last warm-up is > 24 h old, ~0.30 USD/month).
+- Leftover worktree folders under .claude/worktrees/ (gitignored) may remain if Windows locked them; delete by hand.
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; start M3-07.
 
 ## M3 tasks
 
@@ -26,7 +27,7 @@ Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M3-01 M3 API contract (docs/api.md "## M3") + decisions (orchestrator) — branch m3/contract
 - [x] M3-02 Number words from code to `config/extraction.yaml` (loader, validation, reload); tests for "4", "четвірка", "четвёрка", "four", "на 4 з 5", ambiguous → empty (backend-dev) — branch m3/number-words
 - [x] M3-03 AI warm-up in the worker on schema-hash change (`data/ai_warmup.json`, purpose `warmup`); find out what causes the ~25 s first call and write it in DECISIONS (backend-dev) — branch m3/ai-warmup
-- [ ] M3-04 Transcription backend: `faster-whisper` dep, settings, `config/transcription.yaml` glossary, audio upload/get/file/retry, worker queue job with progress, migration for progress/error_code (backend-dev, database-reviewer) — branch m3/transcription
+- [x] M3-04 Transcription backend: `faster-whisper` dep, settings, `config/transcription.yaml` glossary, audio upload/get/file/retry, worker queue job with progress, migration for progress/error_code (backend-dev, database-reviewer) — branch m3/transcription
 - [x] M3-05 Frontend test setup: jsdom + Testing Library + MSW (dev only), first component tests (frontend-dev) — branch m3/component-tests
 - [x] M3-06 Reusable hold-to-record component + Describe screen integration: upload, progress, transcript into the editable text box, failed → message + retry + replay, mic denied / no mic message (frontend-dev) — branch m3/voice-ui
 - [ ] M3-07 Required-since: table + migration, `missing_required` by close time, `missing_new_fields`, `GET /api/trades?missing_new_fields=true` (backend-dev, database-reviewer) — branch m3/required-since
@@ -101,3 +102,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-04: M2 done: live eval (Sonnet 90.7 %, p95 3.8 s), Borys check OK, M2 report written. Stopped for PM review.
 - 2026-11-04: M2 accepted by PM. M3 planned (contract, 10 tasks).
 - 2026-11-04: M3-02, M3-03, M3-05 merged. M3-04 and M3-06 on branches (not merged). Stopped on request.
+- 2026-11-04: Resumed; M3-04 and M3-06 reviewed, fixed, merged. Stopped on request before M3-07.
