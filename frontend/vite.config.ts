@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -32,6 +33,11 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false },
     },
+  },
+  test: {
+    // Pure-logic unit tests only (no DOM yet): node environment, explicit imports from 'vitest'.
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
   },
   preview: {
     host: '127.0.0.1',
