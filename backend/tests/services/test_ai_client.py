@@ -17,6 +17,7 @@ from app.services.ai.client import (
     ModelRequest,
     classify_error,
     describe_error,
+    run_with_deadline,
 )
 
 KEY = "sk-ant-test-not-a-real-key"
@@ -87,7 +88,8 @@ def test_request_body_matches_the_contract() -> None:
     body = json.loads(seen[0].content)
     assert str(seen[0].url) == URL
     assert KEY in seen[0].headers["authorization"]
-    assert seen[0].headers["x-stainless-read-timeout"] == "5.0"  # per-attempt timeout
+    # httpx gets the deadline + grace; the wall-clock bound is enforced by run_with_deadline
+    assert seen[0].headers["x-stainless-read-timeout"] == "10.0"
     assert body["model"] == "claude-sonnet-5-5"
     assert body["max_tokens"] == 4000
     assert body["system"] == "SYSTEM"
@@ -189,3 +191,24 @@ def test_describe_error_has_no_body_detail_for_5xx() -> None:
     with pytest.raises(AiCallError) as caught:
         client_with(status_error(500)).create(request())
     assert caught.value.message == "InternalServerError HTTP 500 request_id=req_1"
+
+
+def test_attempt_is_bounded_by_wall_clock_time() -> None:
+    """httpx timeouts bound each read only; a slow answer must not run past timeout_s."""
+    import time
+
+    def slow(req: httpx2.Request) -> httpx2.Response:
+        time.sleep(1.5)
+        return httpx2.Response(200, json=message())
+
+    started = time.monotonic()
+    with pytest.raises(AiCallError) as caught:
+        client_with(slow).create(request(timeout_s=0.3))
+    assert time.monotonic() - started < 1.0
+    assert (caught.value.kind, caught.value.fallback_ok) == ("timeout", True)
+
+
+def test_run_with_deadline_returns_value_and_reraises() -> None:
+    assert run_with_deadline(lambda: 42, 1.0) == 42
+    with pytest.raises(ZeroDivisionError):
+        run_with_deadline(lambda: 1 // 0, 1.0)

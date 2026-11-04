@@ -14,6 +14,8 @@ from app.config_files import JournalFieldsConfig, get_journal_fields, reload_con
 from app.config_files.loader import CONFIG_DIR_ENV
 from app.domain.extraction import (
     Dropped,
+    InvalidAnswer,
+    answer_entries,
     apply_guards,
     build_extraction_schema,
     evidence_in_text,
@@ -48,43 +50,6 @@ def entry(value: Any, evidence: str) -> dict[str, Any]:
     return {"value": value, "evidence": evidence}
 
 
-# --- schema ---
-
-
-def test_schema_is_strict_object_with_optional_value_evidence_entries(
-    config: JournalFieldsConfig,
-) -> None:
-    schema = build_extraction_schema(config)
-    assert schema["type"] == "object"
-    assert schema["additionalProperties"] is False
-    assert "required" not in schema  # every field optional: unknown means left out
-    for prop in schema["properties"].values():
-        assert prop["additionalProperties"] is False
-        assert prop["required"] == ["value", "evidence"]
-        assert set(prop["properties"]) == {"value", "evidence"}
-        assert prop["properties"]["evidence"]["type"] == "string"
-
-
-def test_schema_types_follow_the_yaml(config: JournalFieldsConfig) -> None:
-    props = build_extraction_schema(config)["properties"]
-    assert props["entry_model"]["properties"]["value"] == {
-        "type": "string",
-        "enum": ["ifvg_m5", "qm_m5", "other"],
-    }
-    assert props["followed_plan"]["properties"]["value"] == {"type": "boolean"}
-    assert props["quality_rating"]["properties"]["value"]["type"] == "integer"
-    assert props["poi_type_other"]["properties"]["value"] == {"type": "string"}
-    assert props["lesson"]["properties"]["value"] == {"type": "string"}
-
-
-def test_schema_never_offers_auto_links_rule_violations_or_a_message(
-    config: JournalFieldsConfig,
-) -> None:
-    keys = set(build_extraction_schema(config)["properties"])
-    assert {"bias_alignment", "chart_links", "rule_violations"}.isdisjoint(keys)
-    assert {"message", "question", "comment", "notes"}.isdisjoint(keys)
-
-
 NEW_FIELDS = """
   - key: market_phase
     label: "Фаза ринку"
@@ -112,6 +77,52 @@ NEW_FIELDS = """
 """
 
 
+# --- schema ---
+
+
+def schema_keys(config: JournalFieldsConfig) -> list[str]:
+    item = build_extraction_schema(config)["properties"]["fields"]["items"]
+    keys: list[str] = item["properties"]["key"]["enum"]
+    return keys
+
+
+def test_schema_is_one_flat_array_of_key_value_evidence(config: JournalFieldsConfig) -> None:
+    """Flat on purpose: the API rejected one optional object per key as too complex."""
+    schema = build_extraction_schema(config)
+    assert schema == {
+        "type": "object",
+        "properties": {
+            "fields": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "key": {"type": "string", "enum": schema_keys(config)},
+                        "value": {"type": "string"},
+                        "evidence": {"type": "string"},
+                    },
+                    "required": ["key", "value", "evidence"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["fields"],
+        "additionalProperties": False,
+    }
+
+
+def test_schema_keys_are_the_ai_fillable_keys_in_yaml_order(config: JournalFieldsConfig) -> None:
+    keys = schema_keys(config)
+    assert keys[:4] == ["setup_context", "poi_type", "poi_type_other", "fvg_kind"]
+    assert {"entry_model", "followed_plan", "quality_rating", "lesson"} <= set(keys)
+    assert {"bias_alignment", "chart_links", "rule_violations"}.isdisjoint(keys)
+    assert {"message", "question", "comment", "notes"}.isdisjoint(keys)
+
+
+def test_schema_is_deterministic(config: JournalFieldsConfig) -> None:
+    assert build_extraction_schema(config) == build_extraction_schema(config)
+
+
 def test_field_added_to_yaml_appears_in_schema_and_prompt_without_code_changes(
     cfg_dir: Path,
 ) -> None:
@@ -120,17 +131,84 @@ def test_field_added_to_yaml_appears_in_schema_and_prompt_without_code_changes(
     reload_config()
     config = get_journal_fields()
 
-    props = build_extraction_schema(config)["properties"]
-    assert props["market_phase"]["properties"]["value"]["enum"] == ["trend", "range", "other"]
-    assert props["market_phase_other"]["properties"]["value"] == {"type": "string"}
-    assert props["tags"]["properties"]["value"] == {
-        "type": "array",
-        "items": {"type": "string", "enum": ["news", "gap"]},
-    }
+    assert schema_keys(config)[-3:] == ["market_phase", "market_phase_other", "tags"]
     catalogue = render_field_catalogue(config)
     assert "`market_phase` (Фаза ринку)" in catalogue
     assert "`range`: флет" in catalogue
     assert "`old`" not in catalogue  # deprecated options are not offered
+    assert "`tags` (Теги): one or more option values:" in catalogue
+
+
+# --- answer -> entries ---
+
+
+def wire(*items: tuple[str, str, str]) -> dict[str, Any]:
+    return {"fields": [{"key": k, "value": v, "evidence": e} for k, v, e in items]}
+
+
+def test_answer_entries_types_values_from_the_yaml(config: JournalFieldsConfig) -> None:
+    answer = wire(
+        ("entry_model", "ifvg_m5", "Вхід по IFVG M5"),
+        ("followed_plan", "True", "по плану"),
+        ("quality_rating", " 4 ", "на 4"),
+        ("lesson", "чекати", "Урок: чекати"),
+        ("mistakes", "  ", "x"),  # blank = not filled
+    )
+    assert answer_entries(config, answer) == {
+        "entry_model": {"value": "ifvg_m5", "evidence": "Вхід по IFVG M5"},
+        "followed_plan": {"value": True, "evidence": "по плану"},
+        "quality_rating": {"value": 4, "evidence": "на 4"},
+        "lesson": {"value": "чекати", "evidence": "Урок: чекати"},
+    }
+
+
+def test_answer_values_that_do_not_parse_are_kept_for_the_guards(
+    config: JournalFieldsConfig,
+) -> None:
+    answer = wire(("followed_plan", "так", "по плану"), ("quality_rating", "4.5", "на 4.5"))
+    entries = answer_entries(config, answer)
+    assert entries["followed_plan"]["value"] == "так"
+    assert entries["quality_rating"]["value"] == "4.5"
+    result = apply_guards(config, entries, "Все по плану, на 4.5")  # noqa: RUF001
+    assert {d.reason for d in result.dropped} == {"invalid_option"}
+
+
+def test_answer_repeated_key(config: JournalFieldsConfig) -> None:
+    same = wire(("exit_reason", "tp", "по тейку"), ("exit_reason", "tp", "закрив по тейку"))
+    assert answer_entries(config, same)["exit_reason"]["evidence"] == "по тейку"
+    conflict = answer_entries(
+        config, wire(("exit_reason", "tp", "по тейку"), ("exit_reason", "sl", "по стопу"))
+    )
+    result = apply_guards(config, conflict, "закрив по тейку, по стопу")
+    assert result.dropped == [Dropped("exit_reason", "invalid_option")]
+
+
+def test_answer_multi_enum_items_are_merged_and_each_evidence_checked(cfg_dir: Path) -> None:
+    path = cfg_dir / "journal_fields.yaml"
+    path.write_text(path.read_text(encoding="utf-8") + NEW_FIELDS, encoding="utf-8")
+    reload_config()
+    config = get_journal_fields()
+    entries = answer_entries(config, wire(("tags", "news", "на новинах"), ("tags", "gap", "гап")))
+    assert entries["tags"] == {"value": ["news", "gap"], "evidence": ["на новинах", "гап"]}
+    text = "Вхід на новинах після гапу"
+    assert apply_guards(config, entries, text).dropped == [Dropped("tags", "evidence_not_in_text")]
+    ok = apply_guards(config, entries, text + ", гап закрився")
+    assert ok.fields == {"tags": ["news", "gap"]}
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {},
+        {"fields": "x"},
+        {"fields": [1]},
+        {"fields": [{"key": "lesson", "value": 4, "evidence": "x"}]},
+        {"fields": [{"key": "lesson", "value": "x"}]},
+    ],
+)
+def test_answer_with_wrong_shape_is_invalid(config: JournalFieldsConfig, answer: Any) -> None:
+    with pytest.raises(InvalidAnswer):
+        answer_entries(config, answer)
 
 
 # --- prompt catalogue ---

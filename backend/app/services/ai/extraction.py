@@ -22,6 +22,8 @@ from app.config import AnthropicEffort
 from app.config_files.journal_fields import JournalFieldsConfig
 from app.domain.extraction import (
     Dropped,
+    InvalidAnswer,
+    answer_entries,
     apply_guards,
     build_extraction_schema,
     extraction_missing,
@@ -41,13 +43,17 @@ logger = logging.getLogger(__name__)
 
 PURPOSE = "extract"
 MAX_TOKENS = 4000
-# Time budget (PRD 6.5: under 30 s). Primary: one try (no SDK retries) of at most
-# PRIMARY_TIMEOUT_S; the fallback gets min(FALLBACK_TIMEOUT_MAX_S, what is left of the
-# budget) and is skipped when less than MIN_FALLBACK_S remain. Worst case 12 + 15 = 27 s.
+# Time budget (PRD 6.5: under 30 s), from live measurements (DECISIONS 2026-11-04 latency):
+# a call takes 2-3 s once the API has compiled the schema, ~24-26 s the first time it sees
+# the schema (after a YAML change). Primary: one try (no SDK retries), wall-clock bound
+# PRIMARY_TIMEOUT_S, long enough for the first call. The fallback gets
+# min(FALLBACK_TIMEOUT_MAX_S, what is left of the budget) and is skipped when less than
+# MIN_FALLBACK_S remain, so in practice it runs only after a fast failure (529, 5xx,
+# connection refused), never after a primary timeout.
 TOTAL_BUDGET_S = 30.0
-PRIMARY_TIMEOUT_S = 12.0
+PRIMARY_TIMEOUT_S = 28.0
 PRIMARY_MAX_RETRIES = 0
-FALLBACK_TIMEOUT_MAX_S = 15.0
+FALLBACK_TIMEOUT_MAX_S = 25.0
 FALLBACK_MAX_RETRIES = 0
 MIN_FALLBACK_S = 5.0
 
@@ -108,6 +114,7 @@ class _Run:
 
     client: ModelClient
     log: UsageLog
+    config: JournalFieldsConfig
     trade_id: int
     system: str
     schema: dict[str, Any]
@@ -128,7 +135,7 @@ class _Run:
         reply: ModelReply | None = None
         try:
             reply = self.client.create(request)
-            output = parse_reply(reply)
+            output = _entries(self.config, parse_reply(reply))
         except AiCallError as exc:
             self._record(model, reply, started, fallback, exc.kind)
             raise
@@ -171,6 +178,13 @@ class _Run:
         if any(c is None for c in self.costs):
             return None
         return sum((c for c in self.costs if c is not None), Decimal("0.0000"))
+
+
+def _entries(config: JournalFieldsConfig, answer: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return answer_entries(config, answer)
+    except InvalidAnswer as exc:
+        raise AiCallError("invalid_output", f"reply does not match the schema: {exc}") from None
 
 
 def _failed(trade_id: int, exc: AiCallError) -> ExtractionFailed:
@@ -230,6 +244,7 @@ def extract_trade_fields(
     run = _Run(
         client=client,
         log=usage_log,
+        config=config,
         trade_id=trade_id,
         system=extract_trade_system_prompt(config),
         schema=build_extraction_schema(config),

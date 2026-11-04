@@ -12,3 +12,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-11-01 | Netting accounts: support `inout` position reversals in the trade builder (currently skipped with a visible reason) | code-reviewer (M1) | FundedNext accounts are hedging; only needed for a netting broker |
 | 2026-11-04 | Show rule-violation specifics (e.g. by how much a limit was exceeded) in Ukrainian, built from structured `details` instead of the English text the rules engine stores | code-reviewer (M2-08) | M2 shows only the rule label |
 | 2026-11-04 | Extraction int guard: a spaced range "4 - 5" still passes as either number | code-reviewer (M2-07) | Rare; joined ranges "4-5" are already rejected |
+| 2026-11-04 | Extraction: ignore a repeated identical multi_enum option instead of dropping the field; tests for unknown multi_enum option, bool "false", conflicting unknown key; log late usage of abandoned AI calls | code-reviewer (M2 latency fix) | Small, optional |
+| 2026-11-04 | Warm-up AI call at API start (~0.01 USD) to hide the ~25 s first call after a schema change | backend-dev (M2 latency fix) | PM decision |
