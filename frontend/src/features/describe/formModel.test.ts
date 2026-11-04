@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { JournalField } from '@/features/trades/types'
 import { newLinkRow } from './chartLinks'
-import { aiFilledForSave, buildFields, initialValues, missingKeys, renderedKeys, type FormValues } from './formModel'
+import {
+  aiFilledForSave,
+  buildFields,
+  fieldsForTrade,
+  initialValues,
+  missingKeys,
+  renderedKeys,
+  type FormValues,
+} from './formModel'
 import { FIXTURE_FIELDS } from './journalFields.fixture'
 
 const BEFORE = newLinkRow('https://www.tradingview.com/x/AbCd1234/', 'before')
@@ -150,5 +158,27 @@ describe('initialValues and aiFilledForSave', () => {
   it('keeps only AI keys that are still sent with a value', () => {
     const payload = buildFields(FIXTURE_FIELDS, { ...COMPLETE, poi_type_other: 'x' })
     expect(aiFilledForSave(new Set(['setup_context', 'poi_type_other', 'unknown']), payload)).toEqual(['setup_context'])
+  })
+})
+
+describe('fieldsForTrade', () => {
+  it('returns the same list when the trade has no new required fields', () => {
+    expect(fieldsForTrade(FIXTURE_FIELDS, [])).toBe(FIXTURE_FIELDS)
+  })
+
+  it('makes fields required after the trade closed optional, without touching the input', () => {
+    const scoped = fieldsForTrade(FIXTURE_FIELDS, ['quality_rating', 'chart_links'])
+    const required = (key: string) => scoped.find((field) => field.key === key)?.required
+    expect(required('quality_rating')).toBe(false)
+    expect(required('chart_links')).toBe(false)
+    expect(required('setup_context')).toBe(true)
+    expect(FIXTURE_FIELDS.find((field) => field.key === 'quality_rating')?.required).toBe(true)
+  })
+
+  it('leaves new fields out of the keys that block complete', () => {
+    const values: FormValues = { ...COMPLETE, quality_rating: null }
+    const scoped = fieldsForTrade(FIXTURE_FIELDS, ['quality_rating', 'chart_links'])
+    expect(missingKeys(FIXTURE_FIELDS, values, [])).toEqual(['quality_rating', 'chart_links'])
+    expect(missingKeys(scoped, values, [])).toEqual([])
   })
 })

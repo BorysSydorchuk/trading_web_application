@@ -8,6 +8,7 @@ import { useTradeSymbols } from '@/features/trades/api'
 import { statusLabel } from '@/features/trades/format'
 import { TRADE_STATUSES } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
+import { cn } from '@/lib/utils'
 import { PERIOD_PRESETS, clearedFilters, hasActiveFilters, type JournalFilters, type PeriodPreset } from './filters'
 
 const j = uk.journal
@@ -96,6 +97,22 @@ export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps)
           />
         </>
       )}
+      <label
+        htmlFor={`${id}-missing-new`}
+        className={cn(
+          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
+          filters.missingNewFields ? 'border-ring' : 'text-muted-foreground',
+        )}
+      >
+        <input
+          id={`${id}-missing-new`}
+          type="checkbox"
+          className="size-3.5 accent-primary"
+          checked={filters.missingNewFields}
+          onChange={(e) => update({ missingNewFields: e.target.checked })}
+        />
+        {j.filters.missingNewFields}
+      </label>
       {hasActiveFilters(filters) && (
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onChange(clearedFilters(filters))}>
           {j.resetFilters}
