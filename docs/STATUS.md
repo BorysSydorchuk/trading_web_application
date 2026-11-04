@@ -9,7 +9,8 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 
 ## Where we stopped / how to resume (updated continuously)
 Last update: 2026-11-04. M2 accepted (decisions in DECISIONS.md 2026-11-04 PM). M3 planned: contract in docs/api.md "## M3", tasks below. Never push (Borys pushes).
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; continue with the first unchecked task.
+In progress (wave 1, parallel worktrees under .claude/worktrees/): M3-02 m3/number-words (test DB _b), M3-03 m3/ai-warmup (_c), M3-04 m3/transcription (_a), M3-05 m3/component-tests. Next wave: M3-06 voice UI, M3-07 required-since (after M3-04 merges, so migrations don't fork).
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; `git branch` to see which m3/* branches exist; review + merge finished ones, restart unfinished ones.
 
 ## M3 tasks
 
