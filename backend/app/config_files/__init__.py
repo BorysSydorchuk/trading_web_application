@@ -42,15 +42,10 @@ def reload_config() -> None:
     clear_ai_pricing_cache()
 
 
-def check_config_files(*, include_ai: bool = True) -> list[ConfigError]:
-    """Load every config file once; log each problem loudly. Used at process startup.
-
-    `include_ai=False` skips ai_pricing.yaml (the worker makes no AI calls).
-    """
+def check_config_files() -> list[ConfigError]:
+    """Load every config file once; log each problem loudly. Used at API and worker start."""
     errors: list[ConfigError] = []
-    loaders: list[Callable[[], object]] = [get_rules, get_journal_fields]
-    if include_ai:
-        loaders.append(get_ai_pricing)
+    loaders: list[Callable[[], object]] = [get_rules, get_journal_fields, get_ai_pricing]
     for load in loaders:
         try:
             load()

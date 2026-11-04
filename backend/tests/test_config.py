@@ -13,6 +13,7 @@ _SETTINGS_ENV_VARS = (
     "DATABASE_URL",
     "TEST_DATABASE_URL",
     "LOG_DIR",
+    "DATA_DIR",
     "LOG_LEVEL",
     "API_PORT",
     "ANTHROPIC_API_KEY",
@@ -133,6 +134,16 @@ def test_relative_log_dir_resolves_against_repo_root(
     env = _write_env(tmp_path / ".env", "DATABASE_URL=postgresql+psycopg://a@h/x\nLOG_DIR=logs\n")
     settings = Settings(_env_file=env)
     assert settings.log_dir_path == REPO_ROOT / "logs"
+
+
+def test_data_dir_defaults_to_repo_data_and_is_absolute(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _write_env(tmp_path / ".env", "DATABASE_URL=postgresql+psycopg://a@h/x\n")
+    assert Settings(_env_file=env).data_dir == (REPO_ROOT / "data").resolve()
+
+    clean_env.setenv("DATA_DIR", str(tmp_path / "d"))
+    assert Settings(_env_file=env).data_dir == (tmp_path / "d").resolve()
 
 
 def test_setup_logging_writes_file_in_utc(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:

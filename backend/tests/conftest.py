@@ -21,7 +21,7 @@ from app.config import Settings, get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
-# Point the app at the test DB and a throwaway log dir *before* app.main is imported
+# Point the app at the test DB and throwaway log/data dirs *before* app.main is imported
 # anywhere (it builds the app and configures logging at import time).
 _base_settings = get_settings()
 if not _base_settings.test_database_url:
@@ -29,6 +29,7 @@ if not _base_settings.test_database_url:
 TEST_DATABASE_URL: str = _base_settings.test_database_url
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["LOG_DIR"] = tempfile.mkdtemp(prefix="tj-test-logs-")
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="tj-test-data-")
 # Tests never call the real Anthropic API: no key unless a test sets one (with a fake client).
 os.environ["ANTHROPIC_API_KEY"] = ""
 get_settings.cache_clear()
