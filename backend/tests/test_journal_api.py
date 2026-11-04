@@ -566,7 +566,7 @@ NEW_FIELD = """
 
 @pytest.fixture
 def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml"):
+    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml", "extraction.yaml"):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
     reload_config()

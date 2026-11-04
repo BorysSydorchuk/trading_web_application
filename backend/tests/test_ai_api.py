@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,7 +16,9 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.ai import get_model_client, get_usage_log
-from app.config import get_settings
+from app.config import REPO_ROOT, get_settings
+from app.config_files import reload_config
+from app.config_files.loader import CONFIG_DIR_ENV
 from app.db import make_session_factory
 from app.models import Account, Trade
 from app.models.enums import TradeStatus
@@ -181,6 +184,62 @@ def test_extract_without_key_is_ai_not_configured(
     assert not get_settings().ai_configured  # conftest empties ANTHROPIC_API_KEY
     trade = add_trade(session, account)
     error(extract(client, trade.id), 503, "ai_not_configured")
+
+
+@pytest.fixture
+def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """A writable copy of the real config dir, active via CONFIG_DIR."""
+    target = tmp_path / "config"
+    target.mkdir()
+    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml", "extraction.yaml"):
+        shutil.copy(REPO_ROOT / "config" / name, target / name)
+    monkeypatch.setenv(CONFIG_DIR_ENV, str(target))
+    reload_config()
+    yield target
+    reload_config()
+
+
+def test_extract_broken_extraction_yaml_is_config_error(
+    app: FastAPI,
+    client: TestClient,
+    session: Session,
+    account: Account,
+    usage_log: UsageLog,
+    cfg_dir: Path,
+) -> None:
+    (cfg_dir / "extraction.yaml").write_text("number_words:\n  4: []\n", encoding="utf-8")
+    trade = add_trade(session, account)
+    model = use_model(app, FakeClient([reply(OUTPUT)]))
+
+    err = error(extract(client, trade.id), 500, "config_error")
+
+    assert err["details"]["file"] == "extraction.yaml"
+    assert model.requests == []
+    assert not usage_log.path.exists()
+
+
+def test_extract_uses_number_words_from_config(
+    app: FastAPI,
+    client: TestClient,
+    session: Session,
+    account: Account,
+    usage_log: UsageLog,
+    cfg_dir: Path,
+) -> None:
+    path = cfg_dir / "extraction.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("  4: [", "  4: [майже ідеал, "),
+        encoding="utf-8",
+    )
+    trade = add_trade(session, account)
+    text_in = "Сетап майже ідеал, вхід по IFVG M5."
+    output = {"quality_rating": {"value": 4, "evidence": "Сетап майже ідеал"}}
+    use_model(app, FakeClient([reply(output)]))
+
+    response = extract(client, trade.id, {"text": text_in})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["fields"] == {"quality_rating": 4}
 
 
 @pytest.mark.parametrize(

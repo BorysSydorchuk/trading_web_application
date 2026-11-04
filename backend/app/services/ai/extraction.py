@@ -23,6 +23,7 @@ from app.config_files.journal_fields import JournalFieldsConfig
 from app.domain.extraction import (
     Dropped,
     InvalidAnswer,
+    NumberWords,
     answer_entries,
     apply_guards,
     build_extraction_schema,
@@ -239,6 +240,7 @@ def extract_trade_fields(
     *,
     trade_id: int | None,
     config: JournalFieldsConfig,
+    number_words: NumberWords,
     client: ModelClient,
     settings: ExtractionSettings,
     usage_log: UsageLog,
@@ -266,7 +268,7 @@ def extract_trade_fields(
     )
     started = clock()
     reply, output, fallback_used = _call_with_fallback(run, settings, started)
-    guarded = apply_guards(config, output, text)
+    guarded = apply_guards(config, output, text, number_words)
     if guarded.dropped:
         logger.info(
             "AI extraction %s: dropped %s",

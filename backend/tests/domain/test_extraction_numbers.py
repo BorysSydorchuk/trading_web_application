@@ -1,4 +1,5 @@
-"""Extraction guards: int values as standalone numbers / number words, evidence length, ё."""
+"""Extraction guards: int values as standalone numbers / number words (from
+config/extraction.yaml), ambiguity, evidence length, ё."""
 
 # ruff: noqa: RUF001, RUF003 - Ukrainian/Russian sample texts
 
@@ -6,9 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.config_files import JournalFieldsConfig, get_journal_fields
+from app.config_files import JournalFieldsConfig, get_journal_fields, get_number_words
 from app.domain.extraction import (
     Dropped,
+    NumberWords,
     apply_guards,
     evidence_in_text,
     normalise_for_match,
@@ -19,6 +21,11 @@ from app.domain.extraction import (
 @pytest.fixture
 def config() -> JournalFieldsConfig:
     return get_journal_fields()
+
+
+@pytest.fixture
+def words() -> NumberWords:
+    return get_number_words()
 
 
 # --- G1: the number must be a standalone token ---
@@ -58,8 +65,8 @@ def config() -> JournalFieldsConfig:
         (5, "оцінка 4—5"),
     ],
 )
-def test_number_not_standalone_is_rejected(value: int, evidence: str) -> None:
-    assert not number_in_evidence(value, evidence)
+def test_number_not_standalone_is_rejected(value: int, evidence: str, words: NumberWords) -> None:
+    assert not number_in_evidence(value, evidence, words)
 
 
 @pytest.mark.parametrize(
@@ -75,8 +82,8 @@ def test_number_not_standalone_is_rejected(value: int, evidence: str) -> None:
         (2, "2 бали"),
     ],
 )
-def test_standalone_number_is_accepted(value: int, evidence: str) -> None:
-    assert number_in_evidence(value, evidence)
+def test_standalone_number_is_accepted(value: int, evidence: str, words: NumberWords) -> None:
+    assert number_in_evidence(value, evidence, words)
 
 
 # --- number words (1-5) ---
@@ -106,8 +113,8 @@ def test_standalone_number_is_accepted(value: int, evidence: str) -> None:
         (4, "оцінка-4"),  # a hyphen after a word is not a range
     ],
 )
-def test_number_words_count_as_the_number(value: int, evidence: str) -> None:
-    assert number_in_evidence(value, evidence)
+def test_number_words_count_as_the_number(value: int, evidence: str, words: NumberWords) -> None:
+    assert number_in_evidence(value, evidence, words)
 
 
 @pytest.mark.parametrize(
@@ -121,23 +128,96 @@ def test_number_words_count_as_the_number(value: int, evidence: str) -> None:
         (6, "шість"),  # outside the closed 1-5 list
     ],
 )
-def test_other_words_do_not_count(value: int, evidence: str) -> None:
-    assert not number_in_evidence(value, evidence)
+def test_other_words_do_not_count(value: int, evidence: str, words: NumberWords) -> None:
+    assert not number_in_evidence(value, evidence, words)
 
 
-def test_rating_from_glued_token_is_dropped(config: JournalFieldsConfig) -> None:
+def test_rating_from_glued_token_is_dropped(
+    config: JournalFieldsConfig, words: NumberWords
+) -> None:
     text = "Вхід по IFVG M5, POI FVG H4."
     for value, evidence in ((5, "IFVG M5"), (4, "FVG H4")):
         result = apply_guards(
-            config, {"quality_rating": {"value": value, "evidence": evidence}}, text
+            config, {"quality_rating": {"value": value, "evidence": evidence}}, text, words
         )
         assert result.dropped == [Dropped("quality_rating", "evidence_not_in_text")]
 
 
-def test_rating_in_words_is_kept(config: JournalFieldsConfig) -> None:
+def test_rating_in_words_is_kept(config: JournalFieldsConfig, words: NumberWords) -> None:
     text = "Сетап ідеальний, чесна четвірка."
     output = {"quality_rating": {"value": 4, "evidence": "чесна четвірка"}}
-    assert apply_guards(config, output, text).fields == {"quality_rating": 4}
+    assert apply_guards(config, output, text, words).fields == {"quality_rating": 4}
+
+
+# --- M3-02: the words come from config/extraction.yaml; ambiguous -> empty ---
+
+
+@pytest.mark.parametrize(
+    ("value", "evidence"),
+    [
+        (4, "4"),
+        (4, "четвірка"),
+        (4, "четвёрка"),  # ё folded to е
+        (4, "four"),
+        (4, "на 4 з 5"),
+        (4, "4 из 5"),
+        (4, "four out of five"),
+        (4, "4, ну чесна четвірка"),  # the same number twice is not ambiguous
+    ],
+)
+def test_rating_said_once_is_accepted(value: int, evidence: str, words: NumberWords) -> None:
+    assert number_in_evidence(value, evidence, words)
+
+
+@pytest.mark.parametrize("evidence", ["на 4 з 5", "4 из 5", "setup 4 of 5", "4/5"])
+def test_denominator_is_never_the_value(evidence: str, words: NumberWords) -> None:
+    assert not number_in_evidence(5, evidence, words)
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        "4 або 5",
+        "4 или 5",
+        "four or five",
+        "чотири або п'ять",
+        "4 або п'ять",
+        "оцінка 4 - 5",  # spaced range
+        "оцінка 4 – 5",
+        "оцінка 4 -5",
+        "на 4, ризик 14 пунктів",  # another number in the quote
+        "три тейки, оцінка 4",
+    ],
+)
+def test_two_different_numbers_are_ambiguous(evidence: str, words: NumberWords) -> None:
+    for value in range(1, 6):
+        assert not number_in_evidence(value, evidence, words), value
+
+
+def test_ambiguous_rating_is_dropped_by_the_guards(
+    config: JournalFieldsConfig, words: NumberWords
+) -> None:
+    text = "Сетап на 4 або 5, сам не знаю."
+    output = {"quality_rating": {"value": 5, "evidence": "Сетап на 4 або 5"}}
+    result = apply_guards(config, output, text, words)
+    assert result.fields == {}
+    assert result.dropped == [Dropped("quality_rating", "evidence_not_in_text")]
+
+
+def test_words_are_passed_in_not_hardcoded() -> None:
+    no_words = NumberWords({})
+    assert not number_in_evidence(4, "чесна четвірка", no_words)
+    assert number_in_evidence(4, "на 4", no_words)
+    custom = NumberWords({"майже ідеал": 4, "четвірочка": 4})
+    assert number_in_evidence(4, "майже ідеал", custom)
+    assert number_in_evidence(4, "Четвірочка", custom)
+    assert not number_in_evidence(4, "майже", custom)
+
+
+def test_longer_phrase_wins_over_a_word_inside_it() -> None:
+    words = NumberWords({"два": 2, "два з половиною": 3})
+    assert number_in_evidence(3, "два з половиною", words)
+    assert not number_in_evidence(2, "два з половиною", words)
 
 
 # --- G2: minimum counts letters and digits only ---

@@ -26,7 +26,7 @@ from typing import Any
 from pydantic import AwareDatetime, BaseModel, ConfigDict, ValidationError
 
 from app.config import Settings
-from app.config_files import ConfigError, get_journal_fields
+from app.config_files import ConfigError, get_journal_fields, get_number_words
 from app.domain.extraction import build_extraction_schema
 from app.services.ai.client import AnthropicModelClient, ModelClient
 from app.services.ai.extraction import ExtractionFailed, ExtractionSettings, extract_trade_fields
@@ -142,9 +142,10 @@ class WarmupJob:
             return False
         try:
             config = get_journal_fields()
-        except ConfigError:
+            number_words = get_number_words()
+        except ConfigError as exc:
             # Already logged loudly by the API and at worker start; retried next cycle.
-            logger.debug("AI warm-up skipped: journal_fields.yaml is invalid")
+            logger.debug("AI warm-up skipped: %s is invalid", exc.path.name)
             return False
         model = self.settings.anthropic_model_extraction
         digest = schema_hash(build_extraction_schema(config), model)
@@ -160,6 +161,7 @@ class WarmupJob:
                 WARMUP_TEXT,
                 trade_id=None,
                 config=config,
+                number_words=number_words,
                 client=self._model_client(),
                 settings=ExtractionSettings(model, None, self.settings.anthropic_effort),
                 usage_log=UsageLog(usage_log_path(self.settings)),

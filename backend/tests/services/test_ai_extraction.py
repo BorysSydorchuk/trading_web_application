@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from app.config_files import JournalFieldsConfig, get_journal_fields
+from app.config_files import JournalFieldsConfig, get_journal_fields, get_number_words
 from app.services.ai.client import AiCallError, ModelReply, TokenUsage
 from app.services.ai.extraction import (
     FALLBACK_TIMEOUT_MAX_S,
@@ -72,6 +72,7 @@ def run(
         text,
         trade_id=10,
         config=config,
+        number_words=get_number_words(),
         client=client,
         settings=SETTINGS,
         usage_log=log,

@@ -29,8 +29,9 @@ from pathlib import Path
 from typing import Any, TextIO, override
 
 from app.config import REPO_ROOT, Settings, get_settings
-from app.config_files import get_journal_fields
+from app.config_files import get_journal_fields, get_number_words
 from app.config_files.journal_fields import JournalFieldsConfig
+from app.domain.extraction import NumberWords
 from app.logging_setup import setup_logging
 from app.services.ai.client import AnthropicModelClient, ModelClient
 from app.services.ai.extraction import (
@@ -161,6 +162,7 @@ def load_fixture(path: Path) -> tuple[str, dict[str, Any]]:
 @dataclass(frozen=True)
 class EvalContext:
     config: JournalFieldsConfig
+    number_words: NumberWords
     client: ModelClient
     settings: ExtractionSettings
     usage_log: EvalUsageLog
@@ -179,6 +181,7 @@ def run_fixture(path: Path, ctx: EvalContext) -> FixtureResult:
             text,
             trade_id=EVAL_TRADE_ID,
             config=ctx.config,
+            number_words=ctx.number_words,
             client=ctx.client,
             settings=ctx.settings,
             usage_log=ctx.usage_log,
@@ -317,6 +320,7 @@ def main(
         return 1
     ctx = EvalContext(
         config=get_journal_fields(),
+        number_words=get_number_words(),
         client=client or AnthropicModelClient(settings.anthropic_api_key),
         settings=ExtractionSettings(args.model, settings.anthropic_model_fallback, args.effort),
         usage_log=EvalUsageLog(usage_log_path(settings)),
