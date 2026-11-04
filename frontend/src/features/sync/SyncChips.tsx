@@ -173,9 +173,7 @@ function SyncDetails({ row }: { row: SyncStatusRow }) {
             {': '}
             {problemText}
           </p>
-          {row.error_message && (
-            <p className="break-words text-muted-foreground">{row.error_message}</p>
-          )}
+          {!isWarning && <p className="text-muted-foreground">{d.logsHint}</p>}
         </div>
       )}
       <p className="text-muted-foreground">{d.timeZoneNote}</p>

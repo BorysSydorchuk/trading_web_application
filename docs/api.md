@@ -233,7 +233,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   - `not_fillable`: a key the model returned that is not in the schema (auto, links, `rule_violations`, unknown) is dropped;
   - the output has no free-form message field, so the model cannot ask questions.
 - **Model:** `ANTHROPIC_MODEL_EXTRACTION` (default `claude-sonnet-5-5`). On overload (529), 5xx, connection error or timeout, after the SDK's own retries, one attempt on `ANTHROPIC_MODEL_FALLBACK` (default `claude-opus-5-5`); the whole call stays within the 30 s target. Never on refusal. `usage.model` is the model that answered.
-- **Errors** (all logged to `logs/api.log` and `logs/ai_usage.jsonl`). The UI shows `uk.ts` `errors.<code>`; for `ai_error` it shows `errors.ai_error_kinds.<kind>`, falling back to `errors.ai_error`:
+- **Errors** (all logged to `logs/api.log`; every AI attempt also to `logs/ai_usage.jsonl` — `ai_not_configured` makes no AI call, so it has no usage line). The UI shows `uk.ts` `errors.<code>`; for `ai_error` it shows `errors.ai_error_kinds.<kind>`, falling back to `errors.ai_error`:
   - `503 ai_not_configured`: `ANTHROPIC_API_KEY` empty. The manual form still works.
   - `502 ai_error` with `details.kind`: `auth` | `rate_limit` | `overloaded` | `timeout` | `connection` | `api` | `refusal` | `invalid_output`. `refusal` is logged at ERROR as a prompt bug.
   - `409 needs_sl` / `409 trade_open`; `404 not_found`; `422 validation_error`.

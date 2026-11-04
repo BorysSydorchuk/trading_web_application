@@ -273,15 +273,14 @@ export function serverFormErrors(error: unknown): ServerFormErrors {
       return result
     }
     const fieldCodes = error.details?.field_codes
-    for (const [path, message] of Object.entries(fields)) {
-      // Paths may look like "login" or "body.login"; the English message goes to the console only.
+    for (const path of Object.keys(fields)) {
+      // Paths may look like "login" or "body.login"; the English message is never shown.
       const field = path.split('.').find(isFormField)
       if (field) {
         result.fields[field] =
           fieldCodeMessage(fieldCodes, path) ?? fieldCodeMessage(fieldCodes, field) ?? v.serverRejected
       }
       else result.general = true
-      console.warn(`Server rejected ${path}: ${String(message)}`)
     }
   }
   return result
