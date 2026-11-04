@@ -250,3 +250,54 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   - Month = current Europe/Brussels calendar month (by `ts`). Lines with `cost_usd: null` are not in `cost_usd` and are counted in `unpriced_calls`; the UI then shows that the total is incomplete.
   - Broken lines in the file are skipped with a WARNING (never a 500).
   - Settings shows the month-to-date cost, the model and whether the key is set.
+
+## M3
+
+### Voice notes (PRD 6.5, ROADMAP M3)
+
+`AudioNote`:
+```json
+{ "id": 5, "trade_id": 10, "bias_entry_id": null,
+  "status": "pending", "progress": null, "duration_seconds": "118.400",
+  "mime_type": "audio/webm", "transcript": null,
+  "error_code": null, "created_at": "2026-11-05T09:10:00Z", "transcribed_at": null,
+  "file_url": "/api/audio/5/file" }
+```
+- `status`: `pending` (queued) → `processing` → `done` | `failed`. `progress`: 0.0–1.0 while `processing` (transcribed audio seconds / duration), `1.0` when `done`, else `null`.
+- `error_code` (only when `failed`; the UI shows `uk.ts` `errors.transcription.<code>`; the English detail is only in `logs/worker.log`):
+  `audio_unreadable` (file can't be decoded) | `audio_missing` (file gone from disk) | `no_speech` (nothing recognised) | `model_unavailable` (model can't be loaded/downloaded) | `timeout` (> 600 s of work) | `transcription_failed` (anything else).
+- `duration_seconds`: from the decoded audio (worker); `null` until known.
+
+Endpoints:
+- `POST /api/trades/{id}/audio`: raw audio bytes as the request body (no multipart). `Content-Type`: `audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`, `audio/wav` (parameters like `;codecs=opus` are ignored) → `201 AudioNote` (`pending`).
+  - Errors: empty body → 422 `validation_error`; other type → 415 `unsupported_media_type`; > 25 MB → 413 `audio_too_large`; unknown trade → 404; open trade → 409 `trade_open`. Any closed status (also `needs_sl`) is allowed.
+  - The file is written to `<DATA_DIR>/audio/YYYY/MM/<uuid>.<ext>` **before** the row is inserted; it is never deleted by the app (also not when transcription fails).
+- `GET /api/audio/{id}` → `AudioNote` (the UI polls it about every second while `pending`/`processing`).
+- `GET /api/audio/{id}/file` → the stored audio bytes with the stored `Content-Type` (replay). 404 `audio_missing` when the file is gone.
+- `POST /api/audio/{id}/retry` → `AudioNote` back to `pending` (progress, error and transcript cleared). Only from `failed`; otherwise 409 `audio_not_failed`.
+- `TradeDetail.audio_notes`: `AudioNote[]`, oldest first.
+- The API never transcribes. The worker job `transcription` (every 2 s, one note at a time, oldest `pending` first, claimed with `FOR UPDATE SKIP LOCKED`) runs faster-whisper; `processing` notes left by a stopped worker go back to `pending` when the worker starts.
+- The transcript is not copied into the trade by the server. The UI appends it to the description text box (editable), and the user runs `POST /api/trades/{id}/extract` on the text as in M2. `trades.raw_text` (saved with the journal) is the final text.
+
+Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (5), `WHISPER_CPU_THREADS` (0 = library default), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
+
+### Number words (M2 follow-up)
+
+The number words accepted for `int` values move from code to `config/extraction.yaml`:
+```yaml
+number_words:
+  1: [один, одна, одиниця, единица, единичка, one]
+  ...
+```
+Same matching rules as M2 (whole words, after normalisation, ё → е). Broken file → `config_error` like the other config files.
+
+### New required fields (M2 follow-up)
+
+- The server remembers when each field became `required: true` (table `journal_field_requirements`: `key`, `required_since` UTC). The first time the table is filled, every field that is required at that moment gets `required_since = 1970-01-01` (applies to all trades). Later: a field that becomes required gets `now()`; a field that stops being required loses its row.
+- A required field counts for a trade only when `trade.close_time >= required_since`. This applies to `missing_required` (read, journal save `complete`, extraction) for every status. Complete trades are never downgraded.
+- `TradeDetail.missing_new_fields`: keys (YAML order) that are required now, empty on this trade, and were made required after it closed. Informational only, never blocks saving.
+- `GET /api/trades?missing_new_fields=true`: only closed trades with a non-empty `missing_new_fields`. The Journal filter is "Неповні за новими полями".
+
+### AI warm-up (M2 follow-up)
+
+The worker keeps `<DATA_DIR>/ai_warmup.json` (`{schema_hash, model, at}`). When the API key is set and the hash of the extraction schema generated from `journal_fields.yaml` (with the model id) differs from the stored one, the worker runs one extraction on a fixed short text in the background. That call is logged in `logs/ai_usage.jsonl` with `"purpose": "warmup"`, `"trade_id": null`. A failed warm-up is logged and retried at most once an hour; it never affects the API. Only the extraction model is warmed, not the fallback model.
