@@ -87,7 +87,7 @@ class ExtractionFailed(Exception):  # noqa: N818 - reads as "raise ExtractionFai
 @dataclass(frozen=True)
 class ExtractionSettings:
     primary_model: str
-    fallback_model: str
+    fallback_model: str | None  # None: no fallback attempt (the warm-up)
     effort: AnthropicEffort
 
 
@@ -115,7 +115,8 @@ class _Run:
     client: ModelClient
     log: UsageLog
     config: JournalFieldsConfig
-    trade_id: int
+    trade_id: int | None  # None for calls without a trade (warm-up)
+    purpose: str
     system: str
     schema: dict[str, Any]
     text: str
@@ -124,6 +125,11 @@ class _Run:
     now: Callable[[], datetime]
     usage: TokenUsage = field(default_factory=TokenUsage)
     costs: list[Decimal | None] = field(default_factory=list)
+
+    @property
+    def subject(self) -> str:
+        """`trade 10` or the purpose (`warmup`), for log lines."""
+        return self.purpose if self.trade_id is None else f"trade {self.trade_id}"
 
     def attempt(
         self, model: str, timeout_s: float, retries: int, *, fallback: bool
@@ -158,7 +164,7 @@ class _Run:
         self.log.append(
             UsageRecord(
                 ts=utc_ts(self.now()),
-                purpose=PURPOSE,
+                purpose=self.purpose,
                 trade_id=self.trade_id,
                 requested_model=requested,
                 model=answered,
@@ -187,11 +193,11 @@ def _entries(config: JournalFieldsConfig, answer: dict[str, Any]) -> dict[str, A
         raise AiCallError("invalid_output", f"reply does not match the schema: {exc}") from None
 
 
-def _failed(trade_id: int, exc: AiCallError) -> ExtractionFailed:
+def _failed(subject: str, exc: AiCallError) -> ExtractionFailed:
     if exc.kind == "refusal":
-        logger.error("AI extraction refused for trade %s: prompt bug, check the prompt", trade_id)
+        logger.error("AI extraction refused for %s: prompt bug, check the prompt", subject)
     else:
-        logger.error("AI extraction failed for trade %s: %s (%s)", trade_id, exc.kind, exc.message)
+        logger.error("AI extraction failed for %s: %s (%s)", subject, exc.kind, exc.message)
     return ExtractionFailed(exc.kind, exc.message)
 
 
@@ -205,23 +211,22 @@ def _call_with_fallback(
         return reply, output, False
     except AiCallError as exc:
         remaining = TOTAL_BUDGET_S - (run.clock() - started)
-        if not exc.fallback_ok or remaining < MIN_FALLBACK_S:
-            raise _failed(run.trade_id, exc) from exc
+        fallback_model = settings.fallback_model
+        if fallback_model is None or not exc.fallback_ok or remaining < MIN_FALLBACK_S:
+            raise _failed(run.subject, exc) from exc
         logger.warning(
-            "AI extraction trade %s: %s on %s (%s), falling back to %s",
-            run.trade_id,
+            "AI extraction %s: %s on %s (%s), falling back to %s",
+            run.subject,
             exc.kind,
             settings.primary_model,
             exc.message,
-            settings.fallback_model,
+            fallback_model,
         )
     try:
         timeout = min(remaining, FALLBACK_TIMEOUT_MAX_S)
-        reply, output = run.attempt(
-            settings.fallback_model, timeout, FALLBACK_MAX_RETRIES, fallback=True
-        )
+        reply, output = run.attempt(fallback_model, timeout, FALLBACK_MAX_RETRIES, fallback=True)
     except AiCallError as exc:
-        raise _failed(run.trade_id, exc) from exc
+        raise _failed(run.subject, exc) from exc
     return reply, output, True
 
 
@@ -232,20 +237,26 @@ def _utc_now() -> datetime:
 def extract_trade_fields(
     text: str,
     *,
-    trade_id: int,
+    trade_id: int | None,
     config: JournalFieldsConfig,
     client: ModelClient,
     settings: ExtractionSettings,
     usage_log: UsageLog,
+    purpose: str = PURPOSE,
     clock: Callable[[], float] = time.monotonic,
     now: Callable[[], datetime] = _utc_now,
 ) -> ExtractionOutcome:
-    """Run the extraction. Raises ExtractionFailed (kind per docs/api.md)."""
+    """Run the extraction. Raises ExtractionFailed (kind per docs/api.md).
+
+    `purpose` / `trade_id` go into the usage log (`warmup` with no trade for the worker's
+    warm-up call). Raises PromptError when the prompt file is missing (a deployment bug).
+    """
     run = _Run(
         client=client,
         log=usage_log,
         config=config,
         trade_id=trade_id,
+        purpose=purpose,
         system=extract_trade_system_prompt(config),
         schema=build_extraction_schema(config),
         text=text,
@@ -258,8 +269,8 @@ def extract_trade_fields(
     guarded = apply_guards(config, output, text)
     if guarded.dropped:
         logger.info(
-            "AI extraction trade %s: dropped %s",
-            trade_id,
+            "AI extraction %s: dropped %s",
+            run.subject,
             ", ".join(f"{d.key}:{d.reason}" for d in guarded.dropped),
         )
     return ExtractionOutcome(

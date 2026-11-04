@@ -1,7 +1,8 @@
 """Worker process: an APScheduler BackgroundScheduler (UTC) running periodic jobs;
 the main thread just waits for a stop signal.
 
-Jobs: `heartbeat` (DB check) and `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`).
+Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`) and
+`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`).
 Every job is wrapped by `_safe` so an exception is logged and the scheduler keeps running.
 """
 
@@ -25,6 +26,7 @@ from app.config_files import check_config_files
 from app.db import dispose_engine, get_engine, get_session_factory
 from app.logging_setup import setup_logging
 from app.mt5.source import Mt5Source
+from app.services.ai.warmup import WARMUP_JOB_ID, WARMUP_JOB_INTERVAL_S, WarmupJob
 from app.worker.sync_job import (
     SYNC_JOB_ID,
     SYNC_JOB_INTERVAL_S,
@@ -94,6 +96,7 @@ def build_scheduler(
     *,
     engine_getter: Callable[[], Engine] = get_engine,
     sync_job: Callable[[], None] | None = None,
+    warmup_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -125,6 +128,15 @@ def build_scheduler(
         next_run_time=datetime.now(UTC),  # due accounts sync right after start
         replace_existing=True,
     )
+    scheduler.add_job(
+        _safe(WARMUP_JOB_ID, warmup_job or WarmupJob(settings)),
+        trigger=IntervalTrigger(seconds=WARMUP_JOB_INTERVAL_S, timezone=UTC),
+        id=WARMUP_JOB_ID,
+        name=WARMUP_JOB_ID,
+        max_instances=1,  # a warm-up call can take ~25 s; never two at once
+        next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
     return scheduler
 
 
@@ -144,8 +156,9 @@ def main() -> int:
     settings = get_settings()
     log_path = setup_logging("worker.log", settings)
     logger.info("Worker starting (env=%s), logging to %s", settings.app_env, log_path)
-    # Broken YAML is logged loudly; the sync job retries every cycle. No AI calls here.
-    check_config_files(include_ai=False)
+    # Broken YAML is logged loudly; the jobs retry every cycle. ai_pricing.yaml is checked
+    # too: the warm-up job makes AI calls and prices them.
+    check_config_files()
     mark_interrupted_runs(get_session_factory())
     stop = threading.Event()
     _install_signal_handlers(stop)

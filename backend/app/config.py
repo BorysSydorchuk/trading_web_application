@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import dotenv_values
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/config.py -> parents[0]=app, [1]=backend, [2]=repo root
@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # App
     app_env: str = "dev"
     log_dir: Path = Path("logs")
+    # Runtime data (audio notes, worker state files). Relative = against the repo root.
+    data_dir: Path = Path("data")
     log_level: LogLevel = "INFO"
     api_host: str = "127.0.0.1"
     api_port: int = 8000
@@ -75,6 +77,13 @@ class Settings(BaseSettings):
         """LOG_DIR resolved against the repo root (not the CWD) when relative."""
         path = self.log_dir.expanduser()
         return path if path.is_absolute() else REPO_ROOT / path
+
+    @field_validator("data_dir")
+    @classmethod
+    def _absolute_data_dir(cls, value: Path) -> Path:
+        """DATA_DIR resolved against the repo root (not the CWD) when relative."""
+        path = value.expanduser()
+        return (path if path.is_absolute() else REPO_ROOT / path).resolve()
 
 
 @lru_cache(maxsize=1)

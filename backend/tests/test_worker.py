@@ -12,6 +12,7 @@ from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 
 from app.config import Settings
+from app.services.ai.warmup import WARMUP_JOB_ID
 from app.worker.main import HEARTBEAT_JOB_ID, build_scheduler, heartbeat
 from app.worker.sync_job import SYNC_JOB_ID
 
@@ -37,11 +38,16 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
     assert isinstance(job.trigger, IntervalTrigger)
     assert job.trigger.interval == timedelta(seconds=60)
     assert str(scheduler.timezone) == str(UTC)
-    assert [j.id for j in scheduler.get_jobs()] == [HEARTBEAT_JOB_ID, SYNC_JOB_ID]
+    assert [j.id for j in scheduler.get_jobs()] == [HEARTBEAT_JOB_ID, SYNC_JOB_ID, WARMUP_JOB_ID]
     sync = scheduler.get_job(SYNC_JOB_ID)
     assert sync is not None
     assert isinstance(sync.trigger, IntervalTrigger)
     assert sync.trigger.interval == timedelta(seconds=60)
+    warmup = scheduler.get_job(WARMUP_JOB_ID)
+    assert warmup is not None
+    assert isinstance(warmup.trigger, IntervalTrigger)
+    assert warmup.trigger.interval == timedelta(seconds=60)
+    assert warmup.max_instances == 1
 
 
 def test_sync_job_errors_are_contained(
@@ -87,3 +93,16 @@ def test_scheduled_job_never_raises(settings: Settings, caplog: pytest.LogCaptur
 
     assert "Job 'heartbeat' failed" in caplog.text
     assert "RuntimeError: boom" in caplog.text
+
+
+def test_warmup_job_errors_are_contained(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    def exploding_warmup() -> None:
+        raise RuntimeError("warm-up boom")
+
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine, warmup_job=exploding_warmup)
+    job = scheduler.get_job(WARMUP_JOB_ID)
+    assert job is not None
+    job.func()  # must not raise
+    assert "Job 'ai_warmup' failed" in caplog.text
