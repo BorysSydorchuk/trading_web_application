@@ -114,6 +114,47 @@ describe('DescribePage', () => {
     expect(fieldLabel('quality_rating')).toHaveClass('text-destructive')
   })
 
+  it('lists fields made required after the trade closed as a neutral hint and still saves complete', async () => {
+    const newKeys = ['quality_rating', 'chart_links']
+    const trade = fixtureTrade({
+      status: 'complete',
+      journal: {
+        ...fixtureTrade().journal,
+        setup_context: 'yes',
+        poi_type: 'fvg_h4',
+        followed_plan: true,
+        emotion_before: 'calm',
+      },
+      missing_required: [],
+      missing_new_fields: newKeys,
+    })
+    const saved = serveTrade(trade)
+    const { user } = renderPage(trade)
+
+    const hint = await screen.findByRole('note')
+    expect(hint).toHaveTextContent(t.form.newFieldsHint)
+    expect(hint).toHaveTextContent(`${labelOf('quality_rating')}, ${labelOf('chart_links')}`)
+    expect(hint).not.toHaveClass('text-destructive')
+    // Not shown as missing even though the trade is complete (missing fields highlighted at once).
+    expect(screen.queryByText(t.save.missing)).not.toBeInTheDocument()
+    expect(screen.queryByText(t.form.missing)).not.toBeInTheDocument()
+    expect(fieldLabel('quality_rating')).not.toHaveClass('text-destructive')
+
+    await user.click(screen.getByRole('button', { name: t.save.complete }))
+
+    expect(await screen.findByTestId('inbox-page')).toBeInTheDocument()
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({ complete: true, fields: { quality_rating: null }, chart_links: [] })
+  })
+
+  it('shows the raw key when a new field has no label', async () => {
+    const trade = fixtureTrade({ missing_new_fields: ['unknown_key'] })
+    serveTrade(trade)
+    renderPage(trade)
+
+    expect(await screen.findByRole('note')).toHaveTextContent('unknown_key')
+  })
+
   it('shows a readable error when the trade cannot be loaded', async () => {
     mockApi(
       http.get('/api/trades/7', () =>

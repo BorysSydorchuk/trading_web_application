@@ -33,6 +33,17 @@ function isSent(field: JournalField): boolean {
   return !NOT_SENT_TYPES.has(field.type)
 }
 
+/**
+ * Fields as they apply to this trade: keys in `TradeDetail.missing_new_fields` became required
+ * after the trade closed, so they are not required here (no red mark, no block on `complete`;
+ * the server's missing_required already leaves them out). Returns new objects, input unchanged.
+ */
+export function fieldsForTrade(fields: readonly JournalField[], newFields: readonly string[]): readonly JournalField[] {
+  if (newFields.length === 0) return fields
+  const exempt = new Set(newFields)
+  return fields.map((field) => (exempt.has(field.key) && field.required ? { ...field, required: false } : field))
+}
+
 /** Fields rendered in the form (everything except links, which have their own editor). */
 export function formFields(fields: readonly JournalField[]): JournalField[] {
   return fields.filter((field) => field.type !== 'links')

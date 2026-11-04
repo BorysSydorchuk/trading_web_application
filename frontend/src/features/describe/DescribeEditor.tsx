@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Info, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
 import type { AudioNote } from '@/features/voice/types'
@@ -8,7 +8,7 @@ import { ChartLinksEditor } from './ChartLinksEditor'
 import { DescribeVoice } from './DescribeVoice'
 import { DescriptionInput } from './DescriptionInput'
 import { AiBadge } from './FieldControls'
-import { keyLabels, linksField } from './formModel'
+import { fieldsForTrade, keyLabels, linksField } from './formModel'
 import { JournalForm } from './JournalForm'
 import { TradeSummary } from './TradeSummary'
 import { UnsavedChangesGuard } from './UnsavedChangesGuard'
@@ -25,7 +25,9 @@ interface DescribeEditorProps {
 }
 
 /** Describe screen body (PRD 6.5): auto data left, text + links + generated form right. */
-export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
+export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps) {
+  // Fields made required after this trade closed are optional for it (docs/api.md M3).
+  const fields = useMemo(() => fieldsForTrade(allFields, trade.missing_new_fields), [allFields, trade.missing_new_fields])
   const form = useDescribeForm(trade, fields)
   const [unsentRecording, setUnsentRecordingState] = useState(false)
   // Read when a save lands (after this render), so a ref next to the state.
@@ -96,6 +98,7 @@ function FormSection({ trade, fields, form }: DescribeEditorProps & { form: Desc
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label={t.form.title}>
       <FormLegend />
+      <NewFieldsHint fields={fields} keys={trade.missing_new_fields} />
       <JournalForm
         fields={fields}
         values={form.values}
@@ -112,6 +115,24 @@ function FormSection({ trade, fields, form }: DescribeEditorProps & { form: Desc
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set()
+
+/** Neutral note (not an error): fields that became required after the trade closed and are still empty. */
+function NewFieldsHint({ fields, keys }: { fields: readonly JournalField[]; keys: readonly string[] }) {
+  const labels = useMemo(() => keyLabels(fields), [fields])
+  if (keys.length === 0) return null
+  return (
+    <div role="note" className="flex gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <div className="flex flex-col gap-0.5">
+        <p>
+          <span className="text-foreground">{t.form.newFieldsHint}</span>{' '}
+          {keys.map((key) => labels.get(key) ?? key).join(', ')}
+        </p>
+        <p>{t.form.newFieldsNote}</p>
+      </div>
+    </div>
+  )
+}
 
 function FormLegend() {
   return (
