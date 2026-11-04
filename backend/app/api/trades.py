@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -25,6 +25,7 @@ from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
+from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
 
@@ -41,6 +42,7 @@ _DETAIL_EXTRA = _ROW_EXTRA | {
     "journal",
     "chart_links",
     "missing_required",
+    "missing_new_fields",
     "audio_notes",
 }
 ROW_COLUMNS = [f for f in schemas.TradeRow.model_fields if f not in _ROW_EXTRA]
@@ -122,10 +124,15 @@ def to_row(trade: Trade, account_name: str, violations: list[str]) -> schemas.Tr
     )
 
 
-def to_detail(trade: Trade, account_name: str, config: JournalFieldsConfig) -> schemas.TradeDetail:
+def to_detail(
+    trade: Trade,
+    account_name: str,
+    config: JournalFieldsConfig,
+    required_since: Mapping[str, datetime],
+) -> schemas.TradeDetail:
     data: dict[str, Any] = {f: getattr(trade, f) for f in DETAIL_COLUMNS}
     violations = sorted(trade.rule_violations, key=lambda v: v.rule_key)
-    view = journal_view(trade, config)
+    view = journal_view(trade, config, required_since)
     return schemas.TradeDetail.model_validate(
         data
         | {
@@ -133,6 +140,7 @@ def to_detail(trade: Trade, account_name: str, config: JournalFieldsConfig) -> s
             "journal": view.journal,
             "chart_links": view.chart_links,
             "missing_required": view.missing_required,
+            "missing_new_fields": view.missing_new_fields,
             "audio_notes": [
                 to_audio_out(n)
                 for n in sorted(trade.audio_notes, key=lambda n: (n.created_at, n.id))
@@ -166,6 +174,14 @@ def journal_config() -> JournalFieldsConfig:
         raise config_error(exc) from None
 
 
+def journal_context(db: Session) -> tuple[JournalFieldsConfig, dict[str, datetime]]:
+    """Journal config plus the synced required-since map (docs/api.md "New required
+    fields"). Call first in a request: a sync write commits. Broken YAML → config_error
+    before the table is touched."""
+    config = journal_config()
+    return config, sync_requirements(db, config)
+
+
 def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
     row = db.execute(
         select(Trade, Account.name)
@@ -194,9 +210,12 @@ def list_trades(
     order: schemas.SortOrder = Query(default="desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    missing_new_fields: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
+    if missing_new_fields:
+        conditions.append(missing_new_fields_condition(*journal_context(db)))
     total = db.scalar(select(func.count()).select_from(Trade).where(*conditions)) or 0
 
     column = getattr(Trade, sort)
@@ -225,8 +244,8 @@ def trade_symbols(db: Session = Depends(get_db)) -> schemas.SymbolList:
 
 @router.get("/trades/{trade_id}", response_model=schemas.TradeDetail)
 def get_trade(trade_id: int, db: Session = Depends(get_db)) -> schemas.TradeDetail:
-    config = journal_config()
-    return to_detail(*_load_detail(db, trade_id), config)
+    config, required_since = journal_context(db)
+    return to_detail(*_load_detail(db, trade_id), config, required_since)
 
 
 def _check_stop_side(trade: Trade, sl: Decimal) -> None:
@@ -271,7 +290,7 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
 def update_trade(
     trade_id: int, body: schemas.TradePatch, db: Session = Depends(get_db)
 ) -> schemas.TradeDetail:
-    config = journal_config()
+    config, required_since = journal_context(db)
     trade, account_name = _load_detail(db, trade_id)
     if trade.status == TradeStatus.OPEN.value or trade.close_time is None:
         raise ApiError(
@@ -286,7 +305,7 @@ def update_trade(
     )
     db.expire(trade)  # reload as stored (NUMERIC scale), not the in-memory input values
     trade, account_name = _load_detail(db, trade_id)
-    return to_detail(trade, account_name, config)
+    return to_detail(trade, account_name, config, required_since)
 
 
 @router.put("/trades/{trade_id}/journal", response_model=schemas.TradeDetail)
@@ -294,12 +313,12 @@ def put_journal(
     trade_id: int, body: schemas.JournalInput, db: Session = Depends(get_db)
 ) -> schemas.TradeDetail:
     """Save the journal (docs/api.md M2 "Journal save"): draft or complete."""
-    config = journal_config()
+    config, required_since = journal_context(db)
     trade, _ = _load_detail(db, trade_id)
-    save_journal(db, trade, body, config, now=datetime.now(UTC))
+    save_journal(db, trade, body, config, now=datetime.now(UTC), required_since=required_since)
     db.commit()
     db.expire_all()
-    return to_detail(*_load_detail(db, trade_id), config)
+    return to_detail(*_load_detail(db, trade_id), config, required_since)
 
 
 @router.get("/inbox/counts", response_model=schemas.InboxCounts)

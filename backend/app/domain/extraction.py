@@ -25,6 +25,7 @@ from app.domain.journal import (
     InvalidJournalValue,
     IssueCode,
     JournalKey,
+    RequirementScope,
     ai_fillable_keys,
     missing_required,
     normalise_value,
@@ -347,7 +348,12 @@ def apply_guards(
 # --- completeness ---
 
 
-def extraction_missing(config: JournalFieldsConfig, fields: Mapping[str, Any]) -> list[str]:
-    """`missing_required` of an extraction result: same rule as the journal save. The
-    extraction never returns chart links, so `chart_links` is listed when it is required."""
-    return missing_required(config, fields, has_before_link=False)
+def extraction_missing(
+    config: JournalFieldsConfig,
+    fields: Mapping[str, Any],
+    scope: RequirementScope | None = None,
+) -> list[str]:
+    """`missing_required` of an extraction result: same rule as the journal save (incl. the
+    trade's required-since `scope`). The extraction never returns chart links, so
+    `chart_links` is listed when it is required (and applies to the trade)."""
+    return missing_required(config, fields, has_before_link=False, scope=scope)

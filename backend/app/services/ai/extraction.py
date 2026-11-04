@@ -29,6 +29,7 @@ from app.domain.extraction import (
     build_extraction_schema,
     extraction_missing,
 )
+from app.domain.journal import RequirementScope
 from app.services.ai.client import (
     AiCallError,
     AiErrorKind,
@@ -245,13 +246,15 @@ def extract_trade_fields(
     settings: ExtractionSettings,
     usage_log: UsageLog,
     purpose: str = PURPOSE,
+    scope: RequirementScope | None = None,
     clock: Callable[[], float] = time.monotonic,
     now: Callable[[], datetime] = _utc_now,
 ) -> ExtractionOutcome:
     """Run the extraction. Raises ExtractionFailed (kind per docs/api.md).
 
     `purpose` / `trade_id` go into the usage log (`warmup` with no trade for the worker's
-    warm-up call). Raises PromptError when the prompt file is missing (a deployment bug).
+    warm-up call). `scope` = the trade's required-since rule for `missing_required` (None:
+    every required field counts). Raises PromptError when the prompt file is missing.
     """
     run = _Run(
         client=client,
@@ -278,7 +281,7 @@ def extract_trade_fields(
     return ExtractionOutcome(
         fields=guarded.fields,
         ai_filled_fields=guarded.ai_filled_fields,
-        missing_required=extraction_missing(config, guarded.fields),
+        missing_required=extraction_missing(config, guarded.fields, scope),
         dropped=guarded.dropped,
         usage=UsageSummary(
             model=reply.model,

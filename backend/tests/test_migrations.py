@@ -9,7 +9,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import CheckConstraint, Engine, Table, inspect
+from sqlalchemy import CheckConstraint, Engine, Table, inspect, text
 
 from app.models import Base
 from tests.conftest import alembic_config
@@ -25,6 +25,8 @@ EXPECTED_TABLES = {
     "digests",
     "rule_violations",
     "sync_log",
+    "journal_field_requirements",
+    "journal_requirements_state",
 }
 
 
@@ -112,3 +114,18 @@ def check_constraint_diff(engine: Engine) -> list[str]:
 def test_check_constraints_match_migrations(db_engine: Engine) -> None:
     """compare_metadata ignores CHECKs, so enum drift (e.g. a new status) is caught here."""
     assert check_constraint_diff(db_engine) == []
+
+
+def test_required_since_migration_seeds_marker_and_downgrades(db_engine: Engine) -> None:
+    """M3-07: one marker row (initial fill not done), empty requirements; down drops both."""
+    cfg = alembic_config()
+    command.downgrade(cfg, "3c9a1e5d7f20")
+    assert {"journal_field_requirements", "journal_requirements_state"}.isdisjoint(
+        _tables(db_engine)
+    )
+    command.upgrade(cfg, "head")
+    with db_engine.connect() as conn:
+        state = conn.execute(text("SELECT id, initial_fill_at FROM journal_requirements_state"))
+        assert state.all() == [(1, None)]
+        count = conn.execute(text("SELECT count(*) FROM journal_field_requirements"))
+        assert count.scalar_one() == 0

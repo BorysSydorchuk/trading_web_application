@@ -8,7 +8,7 @@ the Trade row: columns vs `trades.extra`, user rule violations and chart links.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -21,9 +21,11 @@ from app.domain.chart_links import duplicate_link_indexes, preview_url
 from app.domain.journal import (
     RULE_VIOLATIONS_KEY,
     JournalKey,
+    RequirementScope,
     filter_ai_filled,
     journal_keys,
     merge_extra,
+    missing_new_fields,
     missing_required,
     split_storage,
     validate_fields,
@@ -47,6 +49,7 @@ class JournalView:
     journal: dict[str, Any]
     chart_links: list[dict[str, Any]]
     missing_required: list[str]
+    missing_new_fields: list[str]
 
 
 def _stored_value(trade: Trade, spec: JournalKey) -> Any:
@@ -72,18 +75,28 @@ def _has_before_link(kinds: Sequence[str]) -> bool:
     return ChartLinkKind.BEFORE.value in kinds
 
 
-def journal_view(trade: Trade, config: JournalFieldsConfig) -> JournalView:
-    """journal, chart_links and missing_required of TradeDetail (needs relations loaded)."""
+def requirement_scope(trade: Trade, required_since: Mapping[str, datetime]) -> RequirementScope:
+    return RequirementScope(required_since=required_since, close_time=trade.close_time)
+
+
+def journal_view(
+    trade: Trade, config: JournalFieldsConfig, required_since: Mapping[str, datetime]
+) -> JournalView:
+    """journal, chart_links, missing_required and missing_new_fields of TradeDetail (needs
+    relations loaded). `required_since` = synced `journal_field_requirements`."""
     stored = stored_journal(trade, config)
     links = sorted(trade.chart_links, key=lambda link: link.id)
+    has_before = _has_before_link([c.kind for c in links])
+    scope = requirement_scope(trade, required_since)
     return JournalView(
         journal=visible_journal(config, stored),
         chart_links=[
             {"id": c.id, "url": c.url, "kind": c.kind, "preview_url": preview_url(c.url)}
             for c in links
         ],
-        missing_required=missing_required(
-            config, stored, has_before_link=_has_before_link([c.kind for c in links])
+        missing_required=missing_required(config, stored, has_before_link=has_before, scope=scope),
+        missing_new_fields=missing_new_fields(
+            config, stored, has_before_link=has_before, scope=scope
         ),
     )
 
@@ -149,9 +162,17 @@ def _save_violations(
 
 
 def save_journal(
-    db: Session, trade: Trade, data: JournalInput, config: JournalFieldsConfig, now: datetime
+    db: Session,
+    trade: Trade,
+    data: JournalInput,
+    config: JournalFieldsConfig,
+    now: datetime,
+    required_since: Mapping[str, datetime],
 ) -> None:
     """Apply a JournalInput (full replacement). Flushes, never commits.
+
+    `complete: true` needs only the required fields that apply to the trade (closed at or
+    after their `required_since`); a field made required later never blocks it.
 
     Raises ApiError: 409 trade_open / needs_sl, 422 validation_error, 422
     journal_incomplete (the session is rolled back: nothing is saved).
@@ -171,7 +192,10 @@ def save_journal(
     if data.complete:
         has_before = _has_before_link([link.kind for link in data.chart_links])
         missing = missing_required(
-            config, stored_journal(trade, config), has_before_link=has_before
+            config,
+            stored_journal(trade, config),
+            has_before_link=has_before,
+            scope=requirement_scope(trade, required_since),
         )
         if missing:
             trade_id = trade.id

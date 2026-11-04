@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -10,12 +11,15 @@ from app.config_files.journal_fields import JournalFieldsConfig, load_journal_fi
 from app.domain.journal import (
     TEXT_MAX_LENGTH,
     InvalidJournalValue,
+    RequirementScope,
     ai_fillable_keys,
     filter_ai_filled,
     journal_keys,
     merge_extra,
+    missing_new_fields,
     missing_required,
     normalise_value,
+    required_field_keys,
     split_storage,
     validate_fields,
     visible_journal,
@@ -370,3 +374,87 @@ def test_new_extra_field_is_picked_up_everywhere(cfg: JournalFieldsConfig) -> No
     assert "newbie" in {k.key for k in writable_keys(extended)}
     assert "newbie" in {k.key for k in ai_fillable_keys(extended)}
     assert "newbie" in visible_journal(extended, {})
+
+
+# --- required since (M3 "New required fields") ---
+
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+CHANGE = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+ALL_REQUIRED = (
+    "setup_context",
+    "poi_type",
+    "fvg_kind",
+    "entry_model",
+    "exit_reason",
+    "followed_plan",
+    "emotion_before",
+    "emotion_after",
+    "quality_rating",
+    "chart_links",
+)
+
+
+def since_map(**new: datetime) -> dict[str, datetime]:
+    """Every required field since 1970, except the given ones."""
+    return dict.fromkeys(ALL_REQUIRED, EPOCH) | new
+
+
+def test_required_field_keys_yaml_order(real: JournalFieldsConfig) -> None:
+    assert required_field_keys(real) == ALL_REQUIRED
+
+
+@pytest.mark.parametrize(
+    ("close_time", "counts"),
+    [
+        (CHANGE - timedelta(microseconds=1), False),
+        (CHANGE, True),  # boundary: close_time == required_since counts
+        (CHANGE + timedelta(seconds=1), True),
+    ],
+)
+def test_missing_required_respects_required_since(
+    real: JournalFieldsConfig, close_time: datetime, counts: bool
+) -> None:
+    scope = RequirementScope(since_map(quality_rating=CHANGE), close_time)
+    missing = missing_required(real, {}, has_before_link=False, scope=scope)
+    assert ("quality_rating" in missing) is counts
+    assert "setup_context" in missing  # required since 1970 always counts
+    new = missing_new_fields(real, {}, has_before_link=False, scope=scope)
+    assert new == ([] if counts else ["quality_rating"])
+
+
+def test_links_field_follows_required_since(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(since_map(chart_links=CHANGE), CHANGE - timedelta(days=1))
+    assert "chart_links" not in missing_required(real, {}, has_before_link=False, scope=scope)
+    assert missing_new_fields(real, {}, has_before_link=False, scope=scope) == ["chart_links"]
+    assert missing_new_fields(real, {}, has_before_link=True, scope=scope) == []
+
+
+def test_missing_new_fields_yaml_order_and_only_empty(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(
+        since_map(quality_rating=CHANGE, setup_context=CHANGE, poi_type=CHANGE),
+        CHANGE - timedelta(hours=1),
+    )
+    values = {"poi_type": "fvg_h4"}
+    assert missing_new_fields(real, values, has_before_link=True, scope=scope) == [
+        "setup_context",
+        "quality_rating",
+    ]
+
+
+def test_other_text_rule_not_affected_by_required_since(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(since_map(poi_type=CHANGE), CHANGE - timedelta(days=1))
+    missing = missing_required(real, {"poi_type": "other"}, has_before_link=True, scope=scope)
+    assert "poi_type_other" in missing
+    assert "poi_type" not in missing
+
+
+def test_open_trade_scope_counts_everything(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(since_map(quality_rating=CHANGE), None)
+    assert "quality_rating" in missing_required(real, {}, has_before_link=False, scope=scope)
+    assert missing_new_fields(real, {}, has_before_link=False, scope=scope) == []
+
+
+def test_field_without_known_date_counts(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope({}, CHANGE)
+    assert missing_required(real, {}, has_before_link=False, scope=scope) == list(ALL_REQUIRED)
+    assert missing_new_fields(real, {}, has_before_link=False, scope=scope) == []

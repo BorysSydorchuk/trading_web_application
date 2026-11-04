@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 from app.config_files.journal_fields import (
@@ -229,24 +230,84 @@ def validate_fields(
 # --- completeness ---
 
 
+def required_field_keys(config: JournalFieldsConfig) -> tuple[str, ...]:
+    """Keys of the fields with `required: true`, YAML order (text_keys are never listed)."""
+    return tuple(field.key for field in config.fields if field.required)
+
+
+@dataclass(frozen=True)
+class RequirementScope:
+    """When each required field became required (`journal_field_requirements`) and when
+    the trade closed. A required field counts for the trade only when
+    `close_time >= required_since` (docs/api.md "New required fields"). A field without a
+    known date, or a trade without close_time, counts (the M2 rule)."""
+
+    required_since: Mapping[str, datetime]
+    close_time: datetime | None
+
+    def applies(self, key: str) -> bool:
+        since = self.required_since.get(key)
+        return since is None or self.close_time is None or self.close_time >= since
+
+    def is_new_for_trade(self, key: str) -> bool:
+        """Made required after this (closed) trade closed."""
+        since = self.required_since.get(key)
+        return since is not None and self.close_time is not None and since > self.close_time
+
+
+def _required_blank(spec: JournalKey, values: Mapping[str, Any], has_before_link: bool) -> bool:
+    if spec.type == "links":
+        return not has_before_link
+    return _is_empty(values.get(spec.key))
+
+
 def missing_required(
-    config: JournalFieldsConfig, values: Mapping[str, Any], *, has_before_link: bool
+    config: JournalFieldsConfig,
+    values: Mapping[str, Any],
+    *,
+    has_before_link: bool,
+    scope: RequirementScope | None = None,
 ) -> list[str]:
     """What blocks `complete` (YAML order): required fields without a value, an
-    `other_only` text when its field is `other`, `links` without a `before` link."""
+    `other_only` text when its field is `other`, `links` without a `before` link.
+
+    With a `scope`, a required field is skipped for a trade that closed before the field
+    became required (old complete trades stay complete). Without one, every field counts.
+    """
     missing: list[str] = []
     for spec in journal_keys(config):
         if spec.other_only:
             blocked = values.get(spec.field.key) == OTHER_OPTION and values.get(spec.key) is None
-        elif spec.is_text_key or not spec.field.required:
+        elif (
+            spec.is_text_key
+            or not spec.field.required
+            or (scope is not None and not scope.applies(spec.key))
+        ):
             blocked = False
-        elif spec.type == "links":
-            blocked = not has_before_link
         else:
-            blocked = _is_empty(values.get(spec.key))
+            blocked = _required_blank(spec, values, has_before_link)
         if blocked:
             missing.append(spec.key)
     return missing
+
+
+def missing_new_fields(
+    config: JournalFieldsConfig,
+    values: Mapping[str, Any],
+    *,
+    has_before_link: bool,
+    scope: RequirementScope,
+) -> list[str]:
+    """TradeDetail.missing_new_fields (YAML order): required now, empty on the trade and
+    made required after it closed. Informational, never blocks saving; [] for open trades."""
+    return [
+        spec.key
+        for spec in journal_keys(config)
+        if not spec.is_text_key
+        and spec.field.required
+        and scope.is_new_for_trade(spec.key)
+        and _required_blank(spec, values, has_before_link)
+    ]
 
 
 def _is_empty(value: Any) -> bool:
