@@ -205,3 +205,12 @@ def test_real_decoder_rejects_garbage(tmp_path: Path) -> None:
     with pytest.raises(av.error.FFmpegError) as info:
         av.open(str(path))
     assert classify_error(info.value).code is TranscriptionErrorCode.AUDIO_UNREADABLE
+
+
+def test_faster_whisper_decodes_with_the_locked_pyav(tmp_path: Path) -> None:
+    """Default run, no model: catches a PyAV bump that breaks faster-whisper's decoder
+    (PyAV 19 removed `metadata_errors`, see DECISIONS.md)."""
+    from faster_whisper.audio import decode_audio
+
+    audio = decode_audio(str(_tone_wav(tmp_path / "tone.wav", seconds=1.0)))
+    assert len(audio) == pytest.approx(16000, abs=160)

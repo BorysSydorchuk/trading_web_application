@@ -481,3 +481,63 @@ def test_reset_interrupted_notes(
     assert stored.progress is None
     assert stored.started_at is None
     assert reload(session, done.id).transcription_status == "done"
+
+
+# --- lost final write / stale sweep ------------------------------------------------------------
+
+
+def test_db_error_on_final_write_never_raises(
+    factory: sessionmaker[Session],
+    session: Session,
+    trade: Trade,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    note = add_note(session, trade, tmp_path)
+    real_write = job._write
+
+    def flaky(f: sessionmaker[Session], note_id: int, values: dict[str, Any]) -> bool:
+        if "transcription_status" in values:  # the final done/failed write
+            raise OperationalError("UPDATE audio_notes", {}, ConnectionRefusedError("down"))
+        return real_write(f, note_id, values)
+
+    monkeypatch.setattr(job, "_write", flaky)
+    assert run(factory, FakeTranscriber(segments=[seg(1, "ok")]), tmp_path) == note.id
+    assert run(factory, FakeTranscriber(transcribe_error=RuntimeError("x")), tmp_path) is None
+    assert reload(session, note.id).transcription_status == "processing"
+    assert f"Audio note {note.id}: result not saved (ConnectionRefusedError)" in caplog.text
+
+
+def test_stale_processing_note_fails_with_timeout(
+    factory: sessionmaker[Session],
+    session: Session,
+    trade: Trade,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stale_start = NOW - timedelta(seconds=job.STALE_AFTER_S + 1)
+    stale = add_note(
+        session,
+        trade,
+        tmp_path,
+        transcription_status="processing",
+        progress=Decimal("0.4"),
+        started_at=stale_start,
+    )
+    recent = add_note(
+        session,
+        trade,
+        tmp_path,
+        transcription_status="processing",
+        progress=Decimal("0.4"),
+        started_at=NOW - timedelta(minutes=5),
+    )
+
+    assert run(factory, FakeTranscriber(), tmp_path) is None  # queue empty, sweep ran
+
+    _assert_failed(session, stale.id, "timeout", "stale")
+    assert reload(session, recent.id).transcription_status == "processing"
+    assert f"Audio note {stale.id} failed (timeout)" in caplog.text

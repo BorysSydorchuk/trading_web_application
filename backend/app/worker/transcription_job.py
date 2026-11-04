@@ -12,7 +12,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from pathlib import Path
 from typing import Any
@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 TRANSCRIPTION_JOB_ID = "transcription"
 TRANSCRIPTION_JOB_INTERVAL_S = 2
 TIMEOUT_S = 600.0  # > 600 s of work -> `timeout`
+# A note still `processing` this long after its claim lost its final write -> `timeout`.
+STALE_AFTER_S = TIMEOUT_S + 15 * 60
 PROGRESS_INTERVAL_S = 1.0  # at most one progress write per second
 MAX_ERROR_DETAIL = 2000
 _PROGRESS_STEP = Decimal("0.001")
@@ -243,6 +245,64 @@ def _fail(session_factory: sessionmaker[Session], note_id: int, error: Transcrip
     _store_failed(session_factory, note_id, error)
 
 
+def _finish(
+    session_factory: sessionmaker[Session],
+    note_id: int,
+    outcome: TranscriptResult | TranscriptionError,
+    now: Now,
+    wall_s: float,
+) -> None:
+    """Store the result or the failure. A DB error is logged, never raised: the note then
+    stays `processing` until the stale sweep (or a worker restart) picks it up."""
+    try:
+        if isinstance(outcome, TranscriptionError):
+            _fail(session_factory, note_id, outcome)
+        else:
+            _store_done(session_factory, note_id, outcome, now)
+            _log_done(note_id, outcome, wall_s)
+    except SQLAlchemyError as exc:
+        logger.error(
+            "Audio note %s: result not saved (%s); it stays processing until the stale "
+            "sweep or a worker restart",
+            note_id,
+            type(getattr(exc, "orig", None) or exc).__name__,
+        )
+
+
+def fail_stale_notes(session_factory: sessionmaker[Session], now: Now) -> int:
+    """`processing` notes claimed more than STALE_AFTER_S ago -> `failed` (`timeout`).
+
+    Covers a note whose final write was lost (DB outage) while this worker kept running.
+    Safe because the worker is single-instance and the job never overlaps itself
+    (max_instances=1), so the note being transcribed right now is never swept.
+    """
+    cutoff = now() - timedelta(seconds=STALE_AFTER_S)
+    with session_factory() as session:
+        ids = list(
+            session.scalars(
+                update(AudioNote)
+                .where(
+                    AudioNote.transcription_status == TranscriptionStatus.PROCESSING.value,
+                    AudioNote.started_at < cutoff,
+                )
+                .values(
+                    transcription_status=TranscriptionStatus.FAILED.value,
+                    error_code=TranscriptionErrorCode.TIMEOUT.value,
+                    transcription_error=f"stale: still processing after {STALE_AFTER_S:.0f} s",
+                    progress=None,
+                    transcript=None,
+                )
+                .returning(AudioNote.id)
+            )
+        )
+        session.commit()
+    for note_id in ids:
+        logger.error(
+            "Audio note %s failed (timeout): stale, processing for > %.0f s", note_id, STALE_AFTER_S
+        )
+    return len(ids)
+
+
 def run_transcription_cycle(
     session_factory: sessionmaker[Session],
     transcriber: Transcriber,
@@ -252,8 +312,12 @@ def run_transcription_cycle(
     now: Now = _utc_now,
     clock: Clock = time.monotonic,
 ) -> int | None:
-    """Transcribe the oldest pending note, if any. Returns its id (None: queue empty)."""
+    """Transcribe the oldest pending note, if any. Returns its id (None: queue empty).
+
+    Never raises: every failure is logged and, when the DB allows it, stored on the note.
+    """
     try:
+        fail_stale_notes(session_factory, now)
         note = claim_next_note(session_factory, now)
     except SQLAlchemyError as exc:
         logger.error("Transcription: cannot read the queue (%s)", type(exc).__name__)
@@ -261,27 +325,27 @@ def run_transcription_cycle(
     if note is None:
         return None
     started = clock()
+    outcome: TranscriptResult | TranscriptionError
     try:
-        result = transcribe_note(
+        outcome = transcribe_note(
             session_factory, note, transcriber, data_dir, prompt_getter(), clock
         )
-        _store_done(session_factory, note.id, result, now)
-        _log_done(note.id, result, clock() - started)
     except TranscriptionError as exc:
-        _fail(session_factory, note.id, exc)
+        outcome = exc
     except Exception as exc:
         logger.exception("Audio note %s: unexpected transcription error", note.id)
         detail = f"{type(exc).__name__}: {exc}"
-        _fail(
-            session_factory,
-            note.id,
-            TranscriptionError(TranscriptionErrorCode.TRANSCRIPTION_FAILED, detail),
-        )
+        outcome = TranscriptionError(TranscriptionErrorCode.TRANSCRIPTION_FAILED, detail)
+    _finish(session_factory, note.id, outcome, now, clock() - started)
     return note.id
 
 
 def reset_interrupted_notes(session_factory: sessionmaker[Session]) -> int:
-    """At worker start: `processing` notes belong to a stopped worker -> back to `pending`."""
+    """At worker start: `processing` notes belong to a stopped worker -> back to `pending`.
+
+    Assumes ONE worker process (start.bat / `make dev` start exactly one): a second worker
+    starting would re-queue the note the first one is transcribing.
+    """
     try:
         with session_factory() as session:
             result = session.execute(

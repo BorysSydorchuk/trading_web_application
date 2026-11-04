@@ -118,8 +118,7 @@ class _SkipNoiseFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         return not (
-            "maximum number of running instances" in message
-            and f"{TRANSCRIPTION_JOB_ID}" in message
+            "maximum number of running instances" in message and TRANSCRIPTION_JOB_ID in message
         )
 
 
@@ -203,6 +202,7 @@ def main() -> int:
     # too: the warm-up job makes AI calls and prices them.
     check_config_files()
     mark_interrupted_runs(get_session_factory())
+    # Single worker process assumed: every `processing` note is re-queued here.
     reset_interrupted_notes(get_session_factory())
     logging.getLogger("apscheduler.scheduler").addFilter(_SkipNoiseFilter())
     stop = threading.Event()
