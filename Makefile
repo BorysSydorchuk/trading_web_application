@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend trade-check ai-eval
+.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend trade-check ai-eval
 
 install:
 	cd backend && uv sync
@@ -42,8 +42,13 @@ typecheck-backend:
 typecheck-frontend:
 	cd frontend && npm run typecheck
 
-test: db-ensure
+test: test-backend test-frontend
+
+test-backend: db-ensure
 	cd backend && uv run pytest
+
+test-frontend:
+	cd frontend && npm test
 
 # Compare the last N closed trades with MT5 (read-only): make trade-check ACCOUNT="FN P1" N=5
 # Optional: OUT=docs/reports/M1_trade_check.md, SOURCE=fixture:<path> (default: MT5_SOURCE / real).

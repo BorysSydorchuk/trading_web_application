@@ -14,3 +14,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-11-04 | Extraction int guard: a spaced range "4 - 5" still passes as either number | code-reviewer (M2-07) | Rare; joined ranges "4-5" are already rejected |
 | 2026-11-04 | Extraction: ignore a repeated identical multi_enum option instead of dropping the field; tests for unknown multi_enum option, bool "false", conflicting unknown key; log late usage of abandoned AI calls | code-reviewer (M2 latency fix) | Small, optional |
 | 2026-11-04 | Warm-up AI call at API start (~0.01 USD) to hide the ~25 s first call after a schema change | backend-dev (M2 latency fix) | PM decision |
+| 2026-11-04 | Client `isInProgramFiles` (frontend/src/features/accounts/form.ts) does not normalise `..` or trailing dots like the server (blocks `C:\Program Files\..\MT5\…`, allows `C:\Program Files.\…`); server stays authoritative | code-reviewer (M2-09) | Rare inputs, no safety impact |
+| 2026-11-04 | Component/hook tests (useDescribeForm, ChartLinksEditor, UnsavedChangesGuard) need jsdom + @testing-library/react | frontend-dev (M2-09) | New dev deps, needs Borys OK |

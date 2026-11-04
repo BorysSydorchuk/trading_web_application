@@ -33,6 +33,7 @@ Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M2-06 (done inside M2-05) Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
 - [x] M2-07 (live eval done 2026-11-04: Sonnet 90.7% p95 3.8 s 0.0102 USD; Opus 90.8% p95 4.9 s 0.0214 USD) Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
 - [x] (QA done; live eval + Borys check pending) M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
+- [x] M2-09 Vitest + 147 frontend logic tests in make check (frontend-dev)
 
 ## M1 tasks
 
