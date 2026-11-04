@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
+import type { AudioNote } from '@/features/voice/types'
 import { uk } from '@/i18n/uk'
 import { ChartLinksEditor } from './ChartLinksEditor'
+import { DescribeVoice } from './DescribeVoice'
 import { DescriptionInput } from './DescriptionInput'
 import { AiBadge } from './FieldControls'
 import { keyLabels, linksField } from './formModel'
@@ -14,6 +16,8 @@ import { useDescribeActions } from './useDescribeActions'
 import { useDescribeForm, type DescribeForm } from './useDescribeForm'
 
 const t = uk.describe
+/** A backend from before M3 sends no `audio_notes`. */
+const NO_NOTES: readonly AudioNote[] = []
 
 interface DescribeEditorProps {
   trade: TradeDetail
@@ -23,9 +27,17 @@ interface DescribeEditorProps {
 /** Describe screen body (PRD 6.5): auto data left, text + links + generated form right. */
 export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
   const form = useDescribeForm(trade, fields)
-  const actions = useDescribeActions(trade.id, form)
+  const [unsentRecording, setUnsentRecordingState] = useState(false)
+  // Read when a save lands (after this render), so a ref next to the state.
+  const unsentRecordingRef = useRef(false)
+  const actions = useDescribeActions(trade.id, form, unsentRecordingRef)
   const { save, extract } = actions
   const links = linksField(fields)
+
+  function setUnsentRecording(unsent: boolean) {
+    unsentRecordingRef.current = unsent
+    setUnsentRecordingState(unsent)
+  }
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
@@ -43,6 +55,14 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
             startedAt={actions.extractStartedAt}
             extractError={extract.isError ? extract.error : null}
             lastApplied={form.lastApplied}
+            voice={
+              <DescribeVoice
+                tradeId={trade.id}
+                tradeNotes={trade.audio_notes ?? NO_NOTES}
+                onTranscript={form.appendTranscript}
+                onUnsentChange={setUnsentRecording}
+              />
+            }
           />
           <ChartLinksEditor
             field={links}
@@ -62,7 +82,8 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
           onSave={actions.submit}
         />
       </div>
-      <UnsavedChangesGuard dirty={form.dirty} allowLeaveRef={actions.allowLeaveRef} />
+      {/* A recording that only exists in the browser is lost on leaving, like unsaved edits. */}
+      <UnsavedChangesGuard dirty={form.dirty || unsentRecording} allowLeaveRef={actions.allowLeaveRef} />
     </div>
   )
 }

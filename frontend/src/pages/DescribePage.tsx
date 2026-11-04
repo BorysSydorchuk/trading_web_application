@@ -48,10 +48,11 @@ function DescribeContent({ tradeId }: { tradeId: number }) {
       </div>
     )
   }
-  if (trade.isError) {
+  // A failed background refetch (e.g. after a voice upload) keeps the loaded page; only no data is an error.
+  if (trade.data === undefined) {
     return <LoadError text={p.loadError} error={trade.error} onRetry={() => void trade.refetch()} busy={trade.isFetching} />
   }
-  if (fields.isError) {
+  if (fields.data === undefined) {
     return (
       <LoadError text={p.fieldsError} error={fields.error} onRetry={() => void fields.refetch()} busy={fields.isFetching} />
     )

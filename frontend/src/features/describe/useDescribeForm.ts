@@ -1,6 +1,7 @@
 /** State of the Describe form: values, AI markers, chart links, raw text and save errors. */
 import { useMemo, useState } from 'react'
 import type { JournalField, JournalValue, TradeDetail } from '@/features/trades/types'
+import { appendTranscript } from '@/features/voice/notesModel'
 import { mergeExtraction } from './aiMerge'
 import { filledLinks, isLinkKind, linkErrors, newLinkRow, type LinkDraft } from './chartLinks'
 import {
@@ -122,6 +123,11 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
     },
     setRawText: (text: string) => {
       setRawTextState(text)
+      errors.clearRawText()
+    },
+    /** A voice transcript goes after the current text (blank line between); updater, so two at once both land. */
+    appendTranscript: (transcript: string) => {
+      setRawTextState((prev) => appendTranscript(prev, transcript))
       errors.clearRawText()
     },
     applyExtraction: (result: ExtractResult) => {

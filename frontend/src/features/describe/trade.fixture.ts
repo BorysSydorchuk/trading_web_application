@@ -48,6 +48,7 @@ export function fixtureTrade(overrides: Partial<TradeDetail> = {}): TradeDetail 
     chart_links: [],
     raw_text: null,
     transcript: null,
+    audio_notes: [],
     ai_filled_fields: [],
     described_at: null,
     missing_required: [],

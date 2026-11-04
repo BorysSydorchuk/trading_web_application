@@ -1,4 +1,5 @@
 /** Trades API types (docs/api.md M1 "Trades"). Decimal values are strings. */
+import type { AudioNote } from '@/features/voice/types'
 
 export const TRADE_STATUSES = ['open', 'needs_sl', 'needs_description', 'draft', 'complete'] as const
 export type TradeStatus = (typeof TRADE_STATUSES)[number]
@@ -97,6 +98,8 @@ export interface TradeDetail extends TradeRow {
   chart_links: ChartLink[]
   raw_text: string | null
   transcript: string | null
+  /** M3: voice notes of this trade, oldest first. */
+  audio_notes: AudioNote[]
   ai_filled_fields: string[]
   described_at: string | null
   missing_required: string[]

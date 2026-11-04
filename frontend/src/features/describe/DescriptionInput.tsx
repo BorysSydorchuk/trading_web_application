@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from 'react'
-import { AlertCircle, Info, Loader2, Mic, Sparkles } from 'lucide-react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
+import { AlertCircle, Info, Loader2, Sparkles } from 'lucide-react'
 import { isApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,11 +21,13 @@ interface DescriptionInputProps {
   extractError: unknown
   /** Keys filled by the last successful extraction (null before the first one). */
   lastApplied: number | null
+  /** Voice recorder and notes, shown under the text box. */
+  voice?: ReactNode
 }
 
-/** Left column of the input area: free text, voice placeholder (M3), "Заповнити з тексту". */
+/** Input area: free text, voice notes (M3), "Заповнити з тексту". */
 export function DescriptionInput(props: DescriptionInputProps) {
-  const { rawText, onRawText, rawTextError, onExtract, extracting } = props
+  const { rawText, onRawText, rawTextError, onExtract, extracting, voice } = props
   const id = useId()
   const canExtract = rawText.trim() !== '' && !extracting
   return (
@@ -47,6 +49,7 @@ export function DescriptionInput(props: DescriptionInputProps) {
           {rawTextError}
         </p>
       )}
+      {voice}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" size="sm" onClick={onExtract} disabled={!canExtract}>
           {extracting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
@@ -54,7 +57,6 @@ export function DescriptionInput(props: DescriptionInputProps) {
         </Button>
         <ExtractStatus {...props} />
       </div>
-      <VoicePlaceholder />
     </div>
   )
 }
@@ -100,15 +102,5 @@ function ExtractErrorNote({ error }: { error: unknown }) {
         {errorText(error)} {t.manualStillWorks}
       </span>
     </p>
-  )
-}
-
-/** Voice input arrives in M3; this keeps its place in the layout. */
-function VoicePlaceholder() {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-      <Mic className="size-3.5" aria-hidden />
-      {t.voiceLater}
-    </div>
   )
 }

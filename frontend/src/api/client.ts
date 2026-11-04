@@ -67,7 +67,10 @@ async function readJson(response: Response): Promise<unknown> {
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+  /** Sent as JSON. */
   body?: unknown
+  /** Sent as is (e.g. an audio upload), `Content-Type` = the blob's type. Wins over `body`. */
+  rawBody?: Blob
   /** Arrays become repeated parameters (`status=a&status=b`). */
   query?: Record<
     string,
@@ -92,20 +95,26 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
   return qs ? `${url}?${qs}` : url
 }
 
+function buildBody({ body, rawBody }: RequestOptions): { headers: Record<string, string>; payload?: BodyInit } {
+  if (rawBody !== undefined) {
+    return { headers: { 'Content-Type': rawBody.type || 'application/octet-stream' }, payload: rawBody }
+  }
+  if (body !== undefined) return { headers: { 'Content-Type': 'application/json' }, payload: JSON.stringify(body) }
+  return { headers: {} }
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, query, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options
+  const { method = 'GET', query, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   const timeoutSignal = AbortSignal.timeout(timeoutMs)
   const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+  const { headers, payload: requestBody } = buildBody(options)
 
   let response: Response
   try {
     response = await fetch(buildUrl(path, query), {
       method,
-      headers: {
-        Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: { Accept: 'application/json', ...headers },
+      body: requestBody,
       signal: combined,
     })
   } catch (cause) {
@@ -138,6 +147,6 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T
 }
 
-export function apiGet<T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+export function apiGet<T>(path: string, options: Omit<RequestOptions, 'method' | 'body' | 'rawBody'> = {}) {
   return apiRequest<T>(path, { ...options, method: 'GET' })
 }

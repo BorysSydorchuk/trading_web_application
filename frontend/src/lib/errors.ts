@@ -3,7 +3,7 @@ import { isApiError, type ApiError } from '@/api/client'
 import { uk, type KnownErrorCode } from '@/i18n/uk'
 
 /** Keys of `uk.errors` that are not plain error codes. */
-const NON_CODE_KEYS = new Set(['unknown', 'ai_error_kinds'])
+const NON_CODE_KEYS = new Set(['unknown', 'ai_error_kinds', 'transcription'])
 
 function isKnownCode(code: string): code is KnownErrorCode {
   return !NON_CODE_KEYS.has(code) && Object.hasOwn(uk.errors, code)

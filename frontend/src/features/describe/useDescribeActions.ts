@@ -1,5 +1,5 @@
 /** "Заповнити з тексту" and the two save buttons of the Describe screen. */
-import { useRef, useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { uk } from '@/i18n/uk'
@@ -20,7 +20,11 @@ function focusField(key: string | undefined) {
   focusable?.focus({ preventScroll: true })
 }
 
-export function useDescribeActions(tradeId: number, form: DescribeForm) {
+/**
+ * `unsentRecordingRef`: true while a voice recording exists only in the browser (uploading or a
+ * failed upload kept). A save then stays on the page so the recording is not lost.
+ */
+export function useDescribeActions(tradeId: number, form: DescribeForm, unsentRecordingRef: RefObject<boolean>) {
   const save = useSaveJournal(tradeId)
   const extract = useExtract(tradeId)
   const navigate = useNavigate()
@@ -52,6 +56,11 @@ export function useDescribeActions(tradeId: number, form: DescribeForm) {
     const { input, context } = form.buildInput(complete)
     save.mutate(input, {
       onSuccess: () => {
+        // Checked when the save lands: the upload may have finished or failed meanwhile.
+        if (unsentRecordingRef.current) {
+          toast(t.save.savedRecordingUnsent, { id: 'describe-saved-recording-unsent' })
+          return
+        }
         allowLeaveRef.current = true
         toast(complete ? t.save.saved : t.save.draftSaved)
         void navigate(AFTER_SAVE_PATH)
