@@ -2,8 +2,10 @@ import { useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
+import type { AudioNote } from '@/features/voice/types'
 import { uk } from '@/i18n/uk'
 import { ChartLinksEditor } from './ChartLinksEditor'
+import { DescribeVoice } from './DescribeVoice'
 import { DescriptionInput } from './DescriptionInput'
 import { AiBadge } from './FieldControls'
 import { keyLabels, linksField } from './formModel'
@@ -14,6 +16,8 @@ import { useDescribeActions } from './useDescribeActions'
 import { useDescribeForm, type DescribeForm } from './useDescribeForm'
 
 const t = uk.describe
+/** A backend from before M3 sends no `audio_notes`. */
+const NO_NOTES: readonly AudioNote[] = []
 
 interface DescribeEditorProps {
   trade: TradeDetail
@@ -43,6 +47,13 @@ export function DescribeEditor({ trade, fields }: DescribeEditorProps) {
             startedAt={actions.extractStartedAt}
             extractError={extract.isError ? extract.error : null}
             lastApplied={form.lastApplied}
+            voice={
+              <DescribeVoice
+                tradeId={trade.id}
+                tradeNotes={trade.audio_notes ?? NO_NOTES}
+                onTranscript={form.appendTranscript}
+              />
+            }
           />
           <ChartLinksEditor
             field={links}
