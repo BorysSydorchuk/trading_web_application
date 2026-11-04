@@ -8,9 +8,16 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04. M2 accepted (decisions in DECISIONS.md 2026-11-04 PM). M3 planned: contract in docs/api.md "## M3", tasks below. Never push (Borys pushes).
-In progress: M3-04 m3/transcription (backend, test DB _a), M3-06 m3/voice-ui (frontend, against the contract with MSW). Done and merged: M3-01, M3-02, M3-03, M3-05. Next: M3-07 required-since after M3-04 merges (migrations), M3-08 UI, M3-09 QA. PM question for the report: the grammar cache expires 24 h after last use, so the first call after a quiet day is ~25 s even without a YAML change (hash-only warm-up doesn't cover it).
-To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; `git branch` to see which m3/* branches exist; review + merge finished ones, restart unfinished ones.
+Last update: 2026-11-04 (stopped on Borys's request; all agents stopped). Never push (Borys pushes).
+Merged into local main: M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-05 component tests. make check green on main (1079 backend, 159 frontend).
+
+Not merged yet (branches exist, worktrees under .claude/worktrees/, gitignored):
+- **M3-04 m3/transcription** (worktree agent-ac4660f1efec4d461, test DB _a), based on main b66d941. Commits 92dd83c (transcription backend: upload, audio API, worker queue, faster-whisper) + a0a9a7d (PyAV < 19 pin). The agent was stopped right after that, before its final report, so the work is NOT verified by me and NOT reviewed. Resume: in that worktree run backend lint/typecheck/pytest (TEST_DATABASE_URL=postgresql+psycopg://journal:journal@127.0.0.1:5432/trading_journal_test_a), check against docs/api.md "## M3 / Voice notes" and the M3-04 brief (STATUS line), then code-reviewer + database-reviewer (migration), fix, merge --no-ff.
+- **M3-06 m3/voice-ui** (worktree agent-a332ab852e1bd7211), commits 8a0cf2b + 502a9c1, 203 frontend tests green. Code review: CHANGES REQUESTED. To fix: (1 HIGH) DescribeVoice.tsx: recording a new note while a failed upload is held drops the failed blob — disable the recorder while an upload failed (hint: re-send first) + test; (2 MED) unsent failed recording should make the UnsavedChangesGuard dirty; (3 MED) VoiceRecorder.tsx: onLostPointerCapture / onPointerLeave fallback to stop; (4 MED) tests: 10-min auto-stop, unmount during recording/starting, pointercancel/blur, MediaRecorder onerror, retry failing twice, poll error recovery; (5 LOW) useRecorder.ts: keep chunks ≥ 1 s on mid-recording error; (6 LOW) DescribePage.tsx: show LoadError only when isError && !data; (7 LOW) a11y: duplicate label on ul, role=status re-announcing every poll; (8 LOW) unused uk.ts voice.notes.failed.
+Next after those: M3-07 required-since (after M3-04 merges, migration chain), M3-08 UI, M3-09 QA (timing 30 s/1 min/2 min; 3 fixtures of Borys's voice), M3-10 live check + report.
+For Borys: new .env keys to add to .env.example (WHISPER_MODEL=small, WHISPER_COMPUTE_TYPE=int8, WHISPER_LANGUAGE=uk, WHISPER_BEAM_SIZE=5, WHISPER_CPU_THREADS=0, DATA_DIR=data) — confirm the final list from the M3-04 branch.
+PM question for the M3 report: the grammar cache expires 24 h after last use, so the first call after a quiet day is ~25 s even without a YAML change (hash-only warm-up doesn't cover it).
+To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; `git branch`; continue with the two branches above.
 
 ## M3 tasks
 
@@ -93,3 +100,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-03: M2-01, M2-02, M2-03, M2-05/06 merged. M2-04 started, stopped on request (WIP commit on m2/ai-extraction).
 - 2026-11-04: M2 done: live eval (Sonnet 90.7 %, p95 3.8 s), Borys check OK, M2 report written. Stopped for PM review.
 - 2026-11-04: M2 accepted by PM. M3 planned (contract, 10 tasks).
+- 2026-11-04: M3-02, M3-03, M3-05 merged. M3-04 and M3-06 on branches (not merged). Stopped on request.
