@@ -28,7 +28,7 @@ Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M3-03 AI warm-up in the worker on schema-hash change (`data/ai_warmup.json`, purpose `warmup`); find out what causes the ~25 s first call and write it in DECISIONS (backend-dev) — branch m3/ai-warmup
 - [ ] M3-04 Transcription backend: `faster-whisper` dep, settings, `config/transcription.yaml` glossary, audio upload/get/file/retry, worker queue job with progress, migration for progress/error_code (backend-dev, database-reviewer) — branch m3/transcription
 - [x] M3-05 Frontend test setup: jsdom + Testing Library + MSW (dev only), first component tests (frontend-dev) — branch m3/component-tests
-- [ ] M3-06 Reusable hold-to-record component + Describe screen integration: upload, progress, transcript into the editable text box, failed → message + retry + replay, mic denied / no mic message (frontend-dev) — branch m3/voice-ui
+- [x] M3-06 Reusable hold-to-record component + Describe screen integration: upload, progress, transcript into the editable text box, failed → message + retry + replay, mic denied / no mic message (frontend-dev) — branch m3/voice-ui
 - [ ] M3-07 Required-since: table + migration, `missing_required` by close time, `missing_new_fields`, `GET /api/trades?missing_new_fields=true` (backend-dev, database-reviewer) — branch m3/required-since
 - [ ] M3-08 Journal filter "Неповні за новими полями" + new-field hint on Describe (frontend-dev) — branch m3/new-fields-ui
 - [ ] M3-09 QA: real timing for 30 s / 1 min / 2 min notes on this laptop (small int8; base too if 2 min > 30 s), failure + retry, mic denied, end-to-end; 3 fixtures of Borys's voice (qa-tester)
