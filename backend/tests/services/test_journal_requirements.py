@@ -269,7 +269,7 @@ def test_sql_filter_nothing_new_is_empty(session: Session) -> None:
     account = add_account(session, "Alpha", 1)
     add_trade(session, account)
     real = load_journal_fields()
-    since = load_requirements(session) or sync_requirements(session, real, at(LATER))
+    since = sync_requirements(session, real, at(LATER))
     assert _sql_ids(session, real, since) == set()
     assert _sql_ids(session, real, {}) == set()
 
@@ -295,3 +295,60 @@ def test_worker_job_syncs_and_skips_broken_yaml(
         reload_config()
     session.expire_all()
     assert load_requirements(session) == rows
+
+
+def _all_required(config: JournalFieldsConfig) -> JournalFieldsConfig:
+    return JournalFieldsConfig(
+        fields=tuple(f.model_copy(update={"required": True}) for f in config.fields)
+    )
+
+
+def test_sql_filter_runs_for_every_real_field(session: Session) -> None:
+    """Every field of the real journal_fields.yaml, made required, compiles and agrees
+    with Python (catches a column type without an SQL empty check)."""
+    account = add_account(session, "Alpha", 1)
+    add_trade(session, account)
+    add_trade(session, account, setup_context="", mistakes="", quality_rating=3)
+    cfg = _all_required(load_journal_fields())
+    since = {f.key: LATER for f in cfg.fields}
+    assert _sql_ids(session, cfg, since) == _python_ids(session, cfg, since)
+    for field in cfg.fields:
+        one = {field.key: LATER}
+        assert _sql_ids(session, cfg, one) == _python_ids(session, cfg, one), field.key
+
+
+def test_sql_filter_auto_override(session: Session) -> None:
+    """Auto field: effective value = override ?? value (a DB CHECK keeps '' out of the
+    bias columns; the SQL check still treats '' as empty for string columns)."""
+    account = add_account(session, "Alpha", 1)
+    overridden = add_trade(session, account, bias_alignment_override="aligned")
+    computed = add_trade(session, account, bias_alignment="counter")
+    neither = add_trade(session, account)
+    cfg = _all_required(load_journal_fields())
+    since = {"bias_alignment": LATER}
+    ids = _sql_ids(session, cfg, since)
+    assert ids == _python_ids(session, cfg, since)
+    assert ids == {neither.id}
+    assert {overridden.id, computed.id}.isdisjoint(ids)
+
+
+def test_sql_filter_key_without_column_is_empty(session: Session) -> None:
+    """Hand-built config with a column key that is not a trades column: empty, as in Python."""
+    account = add_account(session, "Alpha", 1)
+    trade = add_trade(session, account)
+    cfg = JournalFieldsConfig.model_validate(
+        {
+            "fields": [
+                {
+                    "key": "no_such_column",
+                    "label": "x",
+                    "type": "bool",
+                    "required": True,
+                    "analytics": False,
+                    "storage": "column",
+                }
+            ]
+        }
+    )
+    since = {"no_such_column": LATER}
+    assert _sql_ids(session, cfg, since) == _python_ids(session, cfg, since) == {trade.id}

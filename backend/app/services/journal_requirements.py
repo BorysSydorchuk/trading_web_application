@@ -17,11 +17,15 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     ColumnElement,
+    DateTime,
+    Integer,
+    Numeric,
     String,
-    Text,
     and_,
     delete,
     exists,
@@ -30,10 +34,12 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
+from sqlalchemy.types import TypeEngine
 
 from app.config_files.journal_fields import JournalFieldsConfig
 from app.domain.journal import RULE_VIOLATIONS_KEY, JournalKey, journal_keys, required_field_keys
@@ -67,6 +73,7 @@ def _lock_state(db: Session, now: datetime) -> JournalRequirementsState:
         select(JournalRequirementsState)
         .where(JournalRequirementsState.id == STATE_ROW_ID)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     state = db.scalars(query).one_or_none()
     if state is None:
@@ -151,16 +158,27 @@ def _empty_sql(spec: JournalKey) -> ColumnElement[bool]:
         return ~exists(select(RuleViolation.id).where(RuleViolation.trade_id == Trade.id))
     if spec.storage == "extra":
         return _empty_json(Trade.extra[spec.key])
-    column = Trade.__table__.c[spec.key]
+    column = Trade.__table__.c.get(spec.key)
+    if column is None:
+        # Python reads getattr(trade, key, None) -> None: always empty (the YAML loader
+        # already rejects such keys; only hand-built configs can get here).
+        return true()
+    value: ColumnElement[Any] = column
     if spec.type == "auto":
         override = Trade.__table__.c.get(spec.key + OVERRIDE_SUFFIX)
         if override is not None:
-            return func.coalesce(override, column).is_(None)
-    if isinstance(column.type, JSONB):
-        return _empty_json(column)
-    if isinstance(column.type, String | Text):
-        return or_(column.is_(None), column == "")
-    return column.is_(None)
+            value = func.coalesce(override, column)
+    return _empty_value(value, column.type)
+
+
+def _empty_value(value: ColumnElement[Any], column_type: TypeEngine[Any]) -> ColumnElement[bool]:
+    if isinstance(column_type, JSONB):
+        return _empty_json(value)
+    if isinstance(column_type, String):  # Text is a String
+        return or_(value.is_(None), value == "")
+    if isinstance(column_type, Integer | Boolean | Numeric | DateTime):
+        return value.is_(None)
+    raise TypeError(f"no SQL empty check for column type {column_type!r}")
 
 
 def missing_new_fields_condition(
