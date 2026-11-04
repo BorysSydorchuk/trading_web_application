@@ -1,0 +1,88 @@
+{
+  "description": "bad model answer on a RU text: wrong option (ifvg_m15), 2-char evidence 'TP', 3-char evidence 'лан' inside 'плану' (word edge), rating 8 'из 10' (out of range), poi_type_other without other, invented emotion, paraphrased advice as lesson; only poi_type survives",
+  "text": "Дакс, Лондон. Зашел по IFVG на M15, не по моему плану. Закрыл в TP. POI FVG H4. Если по шкале из 10, то поставил бы 8. Нормально так.",
+  "model_output": {
+    "poi_type": {
+      "value": "fvg_h4",
+      "evidence": "POI FVG H4"
+    },
+    "poi_type_other": {
+      "value": "FVG H4",
+      "evidence": "POI FVG H4"
+    },
+    "entry_model": {
+      "value": "ifvg_m15",
+      "evidence": "Зашел по IFVG на M15"
+    },
+    "exit_reason": {
+      "value": "tp",
+      "evidence": "TP"
+    },
+    "followed_plan": {
+      "value": false,
+      "evidence": "лан"
+    },
+    "emotion_before": {
+      "value": "revenge",
+      "evidence": "хотел отыграться"
+    },
+    "lesson": {
+      "value": "Следует торговать только по плану",
+      "evidence": "не по моему плану"
+    },
+    "quality_rating": {
+      "value": 8,
+      "evidence": "поставил бы 8"
+    }
+  },
+  "expected_fields": {
+    "poi_type": "fvg_h4"
+  },
+  "eval_expected_fields": {
+    "poi_type": "fvg_h4",
+    "entry_model": "other",
+    "exit_reason": "tp",
+    "followed_plan": false
+  },
+  "expected_dropped": [
+    {
+      "key": "poi_type_other",
+      "reason": "parent_not_other"
+    },
+    {
+      "key": "entry_model",
+      "reason": "invalid_option"
+    },
+    {
+      "key": "exit_reason",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "key": "followed_plan",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "key": "emotion_before",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "key": "lesson",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "key": "quality_rating",
+      "reason": "out_of_range"
+    }
+  ],
+  "expected_missing_required": [
+    "setup_context",
+    "fvg_kind",
+    "entry_model",
+    "exit_reason",
+    "followed_plan",
+    "emotion_before",
+    "emotion_after",
+    "quality_rating",
+    "chart_links"
+  ]
+}

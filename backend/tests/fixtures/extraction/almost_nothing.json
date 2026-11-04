@@ -1,0 +1,19 @@
+{
+  "description": "almost nothing said ('мінус'): a good model fills nothing (no exit_reason sl inferred from the loss); every required field is missing",
+  "text": "GER40 мінус. Ну таке.",
+  "model_output": {},
+  "expected_fields": {},
+  "expected_dropped": [],
+  "expected_missing_required": [
+    "setup_context",
+    "poi_type",
+    "fvg_kind",
+    "entry_model",
+    "exit_reason",
+    "followed_plan",
+    "emotion_before",
+    "emotion_after",
+    "quality_rating",
+    "chart_links"
+  ]
+}

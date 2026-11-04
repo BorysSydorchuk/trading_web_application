@@ -11,7 +11,8 @@ with a fake model that replays `model_output`. It never calls the real API.
   "model_output": { "<key>": { "value": "...", "evidence": "verbatim quote" } },
   "expected_fields": { "<key>": "<value after the guards>" },
   "expected_dropped": [ { "key": "<key>", "reason": "<guard reason>" } ],
-  "expected_missing_required": ["..."]
+  "expected_missing_required": ["..."],
+  "eval_expected_fields": { "<key>": "<right answer for the text>" }
 }
 ```
 
@@ -20,12 +21,26 @@ with a fake model that replays `model_output`. It never calls the real API.
 - `expected_fields`: exactly the `fields` of the result (keys and values), after guards.
 - `expected_dropped` (optional, default `[]`): the `dropped` list, in YAML key order.
 - `expected_missing_required` (optional): if present, compared exactly.
+- `eval_expected_fields` (optional, live eval only): the right answer for `text`, when it
+  differs from `expected_fields` (a deliberately bad `model_output` loses values a correct
+  model should keep). Default: `expected_fields`. Not used by the offline test.
 
 Invariants checked for every fixture, whatever `expected_*` says:
-- every kept value has evidence (>= 3 chars, whole words) that appears in `text`;
+- every kept value has evidence (>= 3 letters/digits, whole words) that appears in `text`;
 - every kept free-text value is itself a whole-word piece of `text` (his own words);
 - no kept text value contains `?` unless its evidence does (no questions);
 - no key outside the schema (`rule_violations`, `bias_alignment`, `chart_links`, …) is kept.
 
 Reasons: `evidence_not_in_text`, `invalid_option`, `out_of_range`, `parent_not_other`,
 `question`, `not_fillable`.
+
+## Live eval (real API, costs money)
+
+`make ai-eval` (or `make ai-eval AI_MODEL=claude-opus-5-5 AI_EFFORT=medium`) sends every
+`text` here through the real extraction service (`app/tools/ai_eval.py`) and compares the
+result with `eval_expected_fields` (else `expected_fields`); `model_output` is ignored.
+Prints duration, tokens, cost, filled and dropped fields per fixture, then totals: mean/p95
+duration for all calls (failed ones included) and for successful calls, the cost of all
+attempts (failed ones included) and field accuracy of the successful calls. Needs
+`ANTHROPIC_API_KEY` (exit 1 without it); usage lines go to `logs/ai_usage.jsonl` with
+purpose `eval`.

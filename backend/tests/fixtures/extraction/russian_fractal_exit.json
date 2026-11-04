@@ -1,0 +1,84 @@
+{
+  "description": "mostly RU, GER40 NY: counter-flow, self-correction 'Кюэм... нет, IFVG', BE ('БУ') then exit on fractal update, revenge/fatigue; bad part: lesson translated to Ukrainian (evidence is right, value is not his words: dropped)",
+  "text": "Германия, Нью-Йорк. Флоу H1 против H4, контекст не совпадает, но всё равно полез. POI FVG H1, фвг после манипуляции, свип лоу. Кюэм... нет, IFVG на пятиминутке. Перенёс в БУ, потом фрактал обновился — вышел. Нарушил план. До входа хотел отыграться, после устал. Ошибка: полез против H4. Урок: против H4 не торгую. Оценка 2.",
+  "model_output": {
+    "setup_context": {
+      "value": "no",
+      "evidence": "контекст не совпадает"
+    },
+    "poi_type": {
+      "value": "fvg_h1",
+      "evidence": "POI FVG H1"
+    },
+    "fvg_kind": {
+      "value": "post_manipulation",
+      "evidence": "фвг после манипуляции"
+    },
+    "entry_model": {
+      "value": "ifvg_m5",
+      "evidence": "IFVG на пятиминутке"
+    },
+    "exit_reason": {
+      "value": "fractal_update",
+      "evidence": "фрактал обновился — вышел"
+    },
+    "followed_plan": {
+      "value": false,
+      "evidence": "Нарушил план"
+    },
+    "emotion_before": {
+      "value": "revenge",
+      "evidence": "До входа хотел отыграться"
+    },
+    "emotion_after": {
+      "value": "fatigue",
+      "evidence": "после устал"
+    },
+    "mistakes": {
+      "value": "полез против H4",
+      "evidence": "Ошибка: полез против H4"
+    },
+    "lesson": {
+      "value": "проти H4 не торгую",
+      "evidence": "Урок: против H4 не торгую"
+    },
+    "quality_rating": {
+      "value": 2,
+      "evidence": "Оценка 2"
+    }
+  },
+  "expected_fields": {
+    "setup_context": "no",
+    "poi_type": "fvg_h1",
+    "fvg_kind": "post_manipulation",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "fractal_update",
+    "followed_plan": false,
+    "emotion_before": "revenge",
+    "emotion_after": "fatigue",
+    "mistakes": "полез против H4",
+    "quality_rating": 2
+  },
+  "eval_expected_fields": {
+    "setup_context": "no",
+    "poi_type": "fvg_h1",
+    "fvg_kind": "post_manipulation",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "fractal_update",
+    "followed_plan": false,
+    "emotion_before": "revenge",
+    "emotion_after": "fatigue",
+    "mistakes": "полез против H4",
+    "lesson": "против H4 не торгую",
+    "quality_rating": 2
+  },
+  "expected_dropped": [
+    {
+      "key": "lesson",
+      "reason": "evidence_not_in_text"
+    }
+  ],
+  "expected_missing_required": [
+    "chart_links"
+  ]
+}

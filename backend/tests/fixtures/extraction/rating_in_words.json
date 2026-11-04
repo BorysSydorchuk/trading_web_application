@@ -1,0 +1,45 @@
+{
+  "description": "XAUUSD NY, rating only in words ('чесна четвірка' -> 4, closed number-word list 1-5); Ukrainian apostrophe U+02BC in the text vs ASCII ' in the evidence; QM in NY is a rule, not filled",
+  "text": "Золото, НЙ. Флов H1 і H4 разом, ПОИ FVG H4 на оновленні фракталу. Квазімодо на пʼятихвилинці, вышел руками раньше точки Б, бо стало страшно. Сетап ідеальний, чесна четвірка.",
+  "model_output": {
+    "setup_context": {
+      "value": "yes",
+      "evidence": "Флов H1 і H4 разом"
+    },
+    "poi_type": {
+      "value": "fvg_h4",
+      "evidence": "ПОИ FVG H4"
+    },
+    "fvg_kind": {
+      "value": "fractal_updating",
+      "evidence": "FVG H4 на оновленні фракталу"
+    },
+    "entry_model": {
+      "value": "qm_m5",
+      "evidence": "Квазімодо на п'ятихвилинці"
+    },
+    "exit_reason": {
+      "value": "manual",
+      "evidence": "вышел руками раньше точки Б"
+    },
+    "quality_rating": {
+      "value": 4,
+      "evidence": "чесна четвірка"
+    }
+  },
+  "expected_fields": {
+    "setup_context": "yes",
+    "poi_type": "fvg_h4",
+    "fvg_kind": "fractal_updating",
+    "entry_model": "qm_m5",
+    "exit_reason": "manual",
+    "quality_rating": 4
+  },
+  "expected_dropped": [],
+  "expected_missing_required": [
+    "followed_plan",
+    "emotion_before",
+    "emotion_after",
+    "chart_links"
+  ]
+}

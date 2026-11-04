@@ -1,0 +1,30 @@
+{
+  "description": "GER40 London, POI is an order block: poi_type other + poi_type_other 'OB H4' (his words); 'ФВГ н/з' = fvg_kind na; complete except links",
+  "text": "GER40, Лондон. Flow синхронно, H1 і H4 вгору. POI тут не FVG, а OB H4, від нього і брав. ФВГ н/з. Вхід QM M5, тейк забрав повністю. Все по плану, впевнено. Після угоди спокій. Оцінка 3.",
+  "model_output": {
+    "setup_context": { "value": "yes", "evidence": "Flow синхронно, H1 і H4 вгору" },
+    "poi_type": { "value": "other", "evidence": "POI тут не FVG, а OB H4" },
+    "poi_type_other": { "value": "OB H4", "evidence": "а OB H4" },
+    "fvg_kind": { "value": "na", "evidence": "ФВГ н/з" },
+    "entry_model": { "value": "qm_m5", "evidence": "Вхід QM M5" },
+    "exit_reason": { "value": "tp", "evidence": "тейк забрав повністю" },
+    "followed_plan": { "value": true, "evidence": "Все по плану" },
+    "emotion_before": { "value": "confidence", "evidence": "Все по плану, впевнено" },
+    "emotion_after": { "value": "calm", "evidence": "Після угоди спокій" },
+    "quality_rating": { "value": 3, "evidence": "Оцінка 3" }
+  },
+  "expected_fields": {
+    "setup_context": "yes",
+    "poi_type": "other",
+    "poi_type_other": "OB H4",
+    "fvg_kind": "na",
+    "entry_model": "qm_m5",
+    "exit_reason": "tp",
+    "followed_plan": true,
+    "emotion_before": "confidence",
+    "emotion_after": "calm",
+    "quality_rating": 3
+  },
+  "expected_dropped": [],
+  "expected_missing_required": ["chart_links"]
+}
