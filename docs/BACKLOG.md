@@ -10,3 +10,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-10-31 | README note: two checkouts running at once need different `POSTGRES_PORT` in `.env` | code-reviewer (M0) | One line in README |
 | 2026-11-01 | Avoid cmd "Terminate batch job (Y/N)?" prompt after Ctrl+C in start.bat | PM (M0 review) | Moved out of M1 by PM |
 | 2026-11-01 | Netting accounts: support `inout` position reversals in the trade builder (currently skipped with a visible reason) | code-reviewer (M1) | FundedNext accounts are hedging; only needed for a netting broker |
+| 2026-11-04 | Show rule-violation specifics (e.g. by how much a limit was exceeded) in Ukrainian, built from structured `details` instead of the English text the rules engine stores | code-reviewer (M2-08) | M2 shows only the rule label |
+| 2026-11-04 | Extraction int guard: a spaced range "4 - 5" still passes as either number | code-reviewer (M2-07) | Rare; joined ranges "4-5" are already rejected |

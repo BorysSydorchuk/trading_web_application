@@ -51,8 +51,8 @@ export function rememberPromptDismissed(): void {
 export async function requestNotificationPermission(): Promise<void> {
   try {
     await Notification.requestPermission()
-  } catch (error) {
-    console.error(error)
+  } catch {
+    // Permission request failed (old browser API); the prompt state is refreshed below.
   } finally {
     emitPromptChange()
   }
@@ -86,9 +86,8 @@ export function useNewTradeNotifications(count: number | undefined, onOpen: () =
         onOpenRef.current()
         notification.close()
       }
-    } catch (error) {
+    } catch {
       // Some browsers only allow notifications from a service worker; the badge still updates.
-      console.error(error)
     }
   }, [count])
 }

@@ -36,7 +36,6 @@ export function ViolationList({ trade }: { trade: TradeDetail }) {
             {label(v.rule_key)}
           </span>
           <span className="text-xs text-muted-foreground">{violationSourceLabel(v.source)}</span>
-          {v.details && <span className="text-xs text-muted-foreground">{v.details}</span>}
         </li>
       ))}
     </ul>

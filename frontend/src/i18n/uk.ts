@@ -237,6 +237,7 @@ export const uk = {
       error: 'Помилка',
       warning: 'Увага',
       timeZoneNote: 'Час указано за Брюсселем.',
+      logsHint: 'Подробиці в logs\\worker.log',
     },
     utcOffset: (hours: number) => `UTC${hours >= 0 ? '+' : '−'}${Math.abs(hours)}`,
     errors: {

@@ -29,5 +29,4 @@ export function errorText(error: unknown): string {
 export function showErrorToast(error: unknown): void {
   const id = isApiError(error) ? `api-error:${error.code}` : 'error:unknown'
   toast.error(errorText(error), { id })
-  console.error(error)
 }
