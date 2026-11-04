@@ -263,7 +263,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   "error_code": null, "created_at": "2026-11-05T09:10:00Z", "transcribed_at": null,
   "file_url": "/api/audio/5/file" }
 ```
-- `status`: `pending` (queued) → `processing` → `done` | `failed`. `progress`: 0.0–1.0 while `processing` (transcribed audio seconds / duration), `1.0` when `done`, else `null`.
+- `status`: `pending` (queued) → `processing` → `done` | `failed`. `progress`: JSON number (not a decimal string), 0.0–1.0 while `processing` (transcribed audio seconds / duration), `1.0` when `done`, else `null`.
 - `error_code` (only when `failed`; the UI shows `uk.ts` `errors.transcription.<code>`; the English detail is only in `logs/worker.log`):
   `audio_unreadable` (file can't be decoded) | `audio_missing` (file gone from disk) | `no_speech` (nothing recognised) | `model_unavailable` (model can't be loaded/downloaded) | `timeout` (> 600 s of work) | `transcription_failed` (anything else).
 - `duration_seconds`: from the decoded audio (worker); `null` until known.

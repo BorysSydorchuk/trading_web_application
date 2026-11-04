@@ -24,11 +24,19 @@ _HTTP_CODES: dict[int, str] = {
     404: "not_found",
     405: "method_not_allowed",
     409: "conflict",
+    413: "payload_too_large",
+    415: "unsupported_media_type",
     422: "validation_error",
     503: "service_unavailable",
 }
 
 _LOCATION_PREFIXES = {"body", "query", "path", "header", "cookie"}
+
+# Voice-note error codes (docs/api.md M3).
+UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"  # 415
+AUDIO_TOO_LARGE = "audio_too_large"  # 413
+AUDIO_MISSING = "audio_missing"  # 404: stored file gone
+AUDIO_NOT_FAILED = "audio_not_failed"  # 409: retry of a note that did not fail
 
 # Validation error types the UI may map to its own text (422 `details.field_codes`).
 # Other (pydantic) types are not part of the contract and are not exposed.

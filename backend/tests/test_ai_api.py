@@ -191,7 +191,13 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """A writable copy of the real config dir, active via CONFIG_DIR."""
     target = tmp_path / "config"
     target.mkdir()
-    for name in ("rules.yaml", "journal_fields.yaml", "ai_pricing.yaml", "extraction.yaml"):
+    for name in (
+        "rules.yaml",
+        "journal_fields.yaml",
+        "ai_pricing.yaml",
+        "extraction.yaml",
+        "transcription.yaml",
+    ):
         shutil.copy(REPO_ROOT / "config" / name, target / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(target))
     reload_config()

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.chart_links import MAX_LINKS, MAX_URL_LENGTH, is_valid_chart_url
 from app.models.enums import InitialSlSource
+from app.schemas.audio import AudioNoteOut
 from app.schemas.common import DecimalIn, UtcDatetime
 
 # Columns of `trades` callers may sort by (docs/api.md); anything else is a 422.
@@ -109,6 +110,7 @@ class TradeDetail(TradeRow):
     ai_filled_fields: list[str]
     described_at: UtcDatetime | None
     missing_required: list[str]  # what blocks `complete` now, YAML order
+    audio_notes: list[AudioNoteOut]  # oldest first (M3)
 
 
 class ChartLinkIn(BaseModel):

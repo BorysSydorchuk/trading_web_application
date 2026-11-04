@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=2.4.0",
     "apscheduler>=3,<4",
     "fastapi>=0.162.0",
+    "faster-whisper>=1.2.1",
     "metatrader5>=5.0.45 ; sys_platform == 'win32'",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2",
@@ -34,6 +35,11 @@ dev = [
     "ruff>=0.17.3",
     "types-pyyaml>=6.0.12.20261030",
 ]
+
+[tool.uv]
+# faster-whisper 1.2.1 calls av.open(..., metadata_errors=...), which PyAV 19 removed
+# (every transcription failed with a TypeError). Drop when faster-whisper supports av 19.
+constraint-dependencies = ["av<19"]
 
 [tool.ruff]
 line-length = 100
@@ -77,6 +83,11 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 # APScheduler 3.x ships no type information.
 module = ["apscheduler", "apscheduler.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# faster-whisper ships no type information (imported lazily in app.services.transcriber).
+module = ["faster_whisper", "faster_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

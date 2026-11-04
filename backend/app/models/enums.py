@@ -90,6 +90,17 @@ class TranscriptionStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class TranscriptionErrorCode(enum.StrEnum):
+    """Why a voice note failed (docs/api.md M3); the UI maps it to Ukrainian text."""
+
+    AUDIO_UNREADABLE = "audio_unreadable"  # file can't be decoded
+    AUDIO_MISSING = "audio_missing"  # file gone from disk
+    NO_SPEECH = "no_speech"  # nothing recognised
+    MODEL_UNAVAILABLE = "model_unavailable"  # model can't be loaded/downloaded
+    TIMEOUT = "timeout"  # > 600 s of work
+    TRANSCRIPTION_FAILED = "transcription_failed"  # anything else
+
+
 class DigestKind(enum.StrEnum):
     WEEKLY = "weekly"
     MONTHLY = "monthly"

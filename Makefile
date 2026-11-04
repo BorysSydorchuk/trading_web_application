@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend trade-check ai-eval
+.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend trade-check ai-eval whisper-bench
 
 install:
 	cd backend && uv sync
@@ -63,3 +63,10 @@ AI_MODEL ?=
 AI_EFFORT ?=
 ai-eval:
 	uv run --project backend python -m app.tools.ai_eval $(if $(AI_MODEL),--model "$(AI_MODEL)") $(if $(AI_EFFORT),--effort "$(AI_EFFORT)")
+
+# Time local faster-whisper on audio files (QA for M3; downloads the model on first use):
+# make whisper-bench FILES="note30s.webm note2min.webm" [WHISPER_MODEL=base]
+FILES ?=
+WHISPER_MODEL ?=
+whisper-bench:
+	uv run --project backend python -m app.tools.transcribe_bench $(FILES) $(if $(WHISPER_MODEL),--model "$(WHISPER_MODEL)")

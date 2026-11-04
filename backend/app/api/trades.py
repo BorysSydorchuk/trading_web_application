@@ -24,6 +24,7 @@ from app.errors import ApiError
 from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
+from app.schemas.audio import to_audio_out
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
 
@@ -40,6 +41,7 @@ _DETAIL_EXTRA = _ROW_EXTRA | {
     "journal",
     "chart_links",
     "missing_required",
+    "audio_notes",
 }
 ROW_COLUMNS = [f for f in schemas.TradeRow.model_fields if f not in _ROW_EXTRA]
 DETAIL_COLUMNS = [f for f in schemas.TradeDetail.model_fields if f not in _DETAIL_EXTRA]
@@ -131,6 +133,10 @@ def to_detail(trade: Trade, account_name: str, config: JournalFieldsConfig) -> s
             "journal": view.journal,
             "chart_links": view.chart_links,
             "missing_required": view.missing_required,
+            "audio_notes": [
+                to_audio_out(n)
+                for n in sorted(trade.audio_notes, key=lambda n: (n.created_at, n.id))
+            ],
             "violations": [v.rule_key for v in violations],
             "rule_violations": [
                 {"rule_key": v.rule_key, "source": v.source, "details": v.details}
@@ -169,6 +175,7 @@ def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
             selectinload(Trade.exit_deals),
             selectinload(Trade.rule_violations),
             selectinload(Trade.chart_links),
+            selectinload(Trade.audio_notes),
         )
     ).one_or_none()
     if row is None:
