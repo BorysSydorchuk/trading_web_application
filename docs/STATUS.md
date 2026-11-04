@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 accepted by PM 2026-11-03 (open item: 2-minute live check, Borys reports the time; >2 min → first M2 bug). M0 accepted 2026-11-01.
+Current milestone: **M2 Describe a trade (text + links)**: done, report in docs/reports/M2.md, waiting for PM review. M1 accepted 2026-11-03, M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -8,7 +8,7 @@ Current milestone: **M2 Describe a trade (text + links)** (in progress). M1 acce
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04. All M2 tasks merged into LOCAL main (not pushed). Live eval done (see DECISIONS). AI timeout fixed (flat schema). Remaining: Borys describes 3 real trades (< 2 min each) incl. one real TradingView snapshot link; then write docs/reports/M2.md (commit range from 6686f93; known issues: first call after schema change ~25 s, spaced range "4 - 5", abandoned calls may be billed without a usage line, complete trades not downgraded when a new required field is added; PM questions: warm-up call at start, Vitest) and stop for PM. Open for Borys: Vitest OK? security-reviewer line (Telegram bot gone): M7 or delete?
+Last update: 2026-11-04. M2 finished (all tasks merged into LOCAL main, not pushed — Borys pushes). Report docs/reports/M2.md written; stopped for PM review. Uncommitted: .env.example (Borys's AI block edit, left for him). Next: PM review of M2, then M3 on branch m3/<topic>.
 
 M2 status: M2-01 (Program Files guard), M2-02 (contract), M2-03 (journal save API), M2-05 + M2-06 (Describe screen, AI usage in Settings) are reviewed, merged into main and pushed. make check green on main (772 backend tests; frontend lint/typecheck).
 
@@ -32,7 +32,7 @@ Git: one branch per topic `m2/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M2-05 Describe screen: auto data left; text box + links; "Заповнити з тексту" with progress; form generated from /api/journal-fields with AI markers, red missing fields, "Не вистачає: …"; save draft / complete; inbox → describe (frontend-dev) — branch m2/describe-ui
 - [x] M2-06 (done inside M2-05) Settings: AI month-to-date cost + model + "key not set" state (frontend-dev) — branch m2/ai-usage-ui
 - [x] M2-07 (live eval done 2026-11-04: Sonnet 90.7% p95 3.8 s 0.0102 USD; Opus 90.8% p95 4.9 s 0.0214 USD) Extraction fixtures: 10 sample texts (UA/RU/EN mix, glossary terms) with expected fields; tests that fail on a question or a field not mentioned in the text; optional live eval `make ai-eval` (qa-tester) — branch m2/extraction-fixtures
-- [x] (QA done; live eval + Borys check pending) M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
+- [x] M2-08 QA end-to-end + M2 report (qa-tester + orchestrator)
 - [x] M2-09 Vitest + 147 frontend logic tests in make check (frontend-dev)
 
 ## M1 tasks
@@ -85,3 +85,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-03: M1-14 live check by Borys passed (2-min test pending on next real trade). MT5_SETUP.md fixes applied. docs/reports/M1.md written. Stopped for PM review.
 - 2026-11-03: M1 accepted by PM. PM decisions + git workflow recorded, main pushed. M2 planned; M2-01 started.
 - 2026-11-03: M2-01, M2-02, M2-03, M2-05/06 merged. M2-04 started, stopped on request (WIP commit on m2/ai-extraction).
+- 2026-11-04: M2 done: live eval (Sonnet 90.7 %, p95 3.8 s), Borys check OK, M2 report written. Stopped for PM review.
