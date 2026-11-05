@@ -80,7 +80,8 @@ class Settings(BaseSettings):
     whisper_cpu_threads: CpuThreadsSetting = "auto"
     # Silero VAD (bundled with faster-whisper) skips silence.
     whisper_vad_filter: bool = True
-    whisper_condition_on_previous_text: bool = False
+    # On (PM 2026-11-05): keeps the glossary's Latin spellings through long notes.
+    whisper_condition_on_previous_text: bool = True
     # Temperature fallback, comma-separated, ascending, each 0..1; `0` = no fallback.
     whisper_temperatures: Annotated[tuple[float, ...], NoDecode] = (0.0, 0.4)
 

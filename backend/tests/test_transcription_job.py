@@ -16,6 +16,7 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import make_session_factory
+from app.domain.transcript_glossary import TranscriptGlossary
 from app.models import Account, AudioNote, Trade
 from app.models.enums import TranscriptionErrorCode
 from app.services.transcriber import TranscribedSegment, TranscriptionError, TranscriptionRun
@@ -566,3 +567,95 @@ def test_stale_processing_note_fails_with_timeout(
     _assert_failed(session, stale.id, "timeout", "stale")
     assert reload(session, recent.id).transcription_status == "processing"
     assert f"Audio note {stale.id} failed (timeout)" in caplog.text
+
+
+# --- term normalization (config/transcript_glossary.yaml) --------------------------------------
+
+
+def _glossary() -> TranscriptGlossary:
+    return TranscriptGlossary.from_pairs([("FVG", ["ФВГ"]), ("H4", ["Н4"])])  # noqa: RUF001 - Cyrillic EN
+
+
+def test_done_transcript_is_normalized(
+    factory: sessionmaker[Session],
+    session: Session,
+    trade: Trade,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    note = add_note(session, trade, tmp_path)
+    fake = FakeTranscriber(segments=[seg(1, "Вхід по фвг"), seg(2, "на Н4.")])  # noqa: RUF001
+    run_transcription_cycle(
+        factory,
+        fake,
+        tmp_path,
+        prompt_getter=lambda: None,
+        glossary_getter=_glossary,
+        now=lambda: NOW,
+        clock=FakeClock(),
+    )
+    stored = reload(session, note.id)
+    assert stored.transcription_status == "done"
+    assert stored.transcript == "Вхід по FVG на H4."
+    assert f"Audio note {note.id}: 2 term replacement(s)" in caplog.text
+    assert "Вхід" not in caplog.text  # no transcript text in logs
+
+
+def test_real_glossary_is_applied_by_default(
+    factory: sessionmaker[Session], session: Session, trade: Trade, tmp_path: Path
+) -> None:
+    note = add_note(session, trade, tmp_path)
+    run(factory, FakeTranscriber(segments=[seg(1, "іфввг на м5")]), tmp_path)
+    assert reload(session, note.id).transcript == "IFVG на M5"
+
+
+def test_broken_term_glossary_keeps_transcript_and_note_done(
+    factory: sessionmaker[Session],
+    session: Session,
+    trade: Trade,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.config_files import ConfigError
+
+    def broken() -> TranscriptGlossary:
+        raise ConfigError(Path("transcript_glossary.yaml"), ["replacements: bad"])
+
+    note = add_note(session, trade, tmp_path)
+    fake = FakeTranscriber(segments=[seg(1, "Вхід по фвг")])
+    run_transcription_cycle(
+        factory,
+        fake,
+        tmp_path,
+        prompt_getter=lambda: None,
+        glossary_getter=broken,
+        now=lambda: NOW,
+        clock=FakeClock(),
+    )
+    stored = reload(session, note.id)
+    assert stored.transcription_status == "done"
+    assert stored.transcript == "Вхід по фвг"
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("without term normalization" in r.getMessage() for r in errors)
+    assert "фвг" not in caplog.text
+
+
+def test_unexpected_normalization_error_keeps_note_done(
+    factory: sessionmaker[Session], session: Session, trade: Trade, tmp_path: Path
+) -> None:
+    def boom() -> TranscriptGlossary:
+        raise RuntimeError("bug")
+
+    note = add_note(session, trade, tmp_path)
+    run_transcription_cycle(
+        factory,
+        FakeTranscriber(segments=[seg(1, "фвг")]),
+        tmp_path,
+        prompt_getter=lambda: None,
+        glossary_getter=boom,
+        now=lambda: NOW,
+        clock=FakeClock(),
+    )
+    stored = reload(session, note.id)
+    assert (stored.transcription_status, stored.transcript) == ("done", "фвг")

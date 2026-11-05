@@ -107,7 +107,7 @@ def test_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         language="uk",
         beam_size=1,
         vad_filter=True,
-        condition_on_previous_text=False,
+        condition_on_previous_text=True,
         temperatures=(0.0, 0.4),
     )
 
@@ -122,7 +122,7 @@ def test_cpu_threads_zero_is_library_default(monkeypatch: pytest.MonkeyPatch) ->
 def test_describe_lists_decoding_settings() -> None:
     text = OPTIONS.describe()
     assert text == (
-        "model small int8, language uk, beam 1, vad on, condition_on_previous_text off, "
+        "model small int8, language uk, beam 1, vad on, condition_on_previous_text on, "
         "temperatures 0,0.4, cpu threads library default"
     )
 
@@ -141,7 +141,7 @@ def test_transcribe_passes_options(fake_whisper: type[FakeWhisperModel], tmp_pat
             "language": "uk",
             "beam_size": 1,
             "vad_filter": True,
-            "condition_on_previous_text": False,
+            "condition_on_previous_text": True,
             "temperature": [0.0, 0.4],
             "initial_prompt": "Торговий журнал. Терміни: FVG.",
         }

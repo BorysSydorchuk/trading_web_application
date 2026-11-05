@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from pathlib import Path
@@ -21,8 +21,9 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config_files import ConfigError, get_transcription
+from app.config_files import ConfigError, get_transcript_glossary, get_transcription
 from app.domain.audio import resolve_audio_path
+from app.domain.transcript_glossary import TranscriptGlossary
 from app.models import AudioNote
 from app.models.enums import TranscriptionErrorCode, TranscriptionStatus
 from app.services.transcriber import Transcriber, TranscriptionError, TranscriptionRun
@@ -231,6 +232,25 @@ def current_initial_prompt() -> str | None:
         return None
 
 
+def normalize_result(
+    note_id: int, result: TranscriptResult, glossary_getter: Callable[[], TranscriptGlossary]
+) -> TranscriptResult:
+    """Apply config/transcript_glossary.yaml to the transcript. A broken file (or any
+    unexpected error) keeps the transcript unnormalized: ERROR log, the note is still done."""
+    try:
+        text, count = glossary_getter().apply(result.text)
+    except ConfigError as exc:
+        logger.error(
+            "Audio note %s: transcript stored without term normalization: %s", note_id, exc
+        )
+        return result
+    except Exception:
+        logger.exception("Audio note %s: term normalization failed; stored as transcribed", note_id)
+        return result
+    logger.info("Audio note %s: %s term replacement(s)", note_id, count)
+    return replace(result, text=text)
+
+
 def _log_done(note_id: int, result: TranscriptResult, wall_s: float) -> None:
     rtf = result.transcribe_s / result.duration if result.duration > 0 else 0.0
     logger.info(
@@ -313,6 +333,7 @@ def run_transcription_cycle(
     data_dir: Path,
     *,
     prompt_getter: Callable[[], str | None] = current_initial_prompt,
+    glossary_getter: Callable[[], TranscriptGlossary] = get_transcript_glossary,
     now: Now = _utc_now,
     clock: Clock = time.monotonic,
 ) -> int | None:
@@ -334,6 +355,7 @@ def run_transcription_cycle(
         outcome = transcribe_note(
             session_factory, note, transcriber, data_dir, prompt_getter(), clock
         )
+        outcome = normalize_result(note.id, outcome, glossary_getter)
     except TranscriptionError as exc:
         outcome = exc
     except Exception as exc:

@@ -24,6 +24,7 @@ CONFIG_FILES = (
     "ai_pricing.yaml",
     "extraction.yaml",
     "transcription.yaml",
+    "transcript_glossary.yaml",
 )
 
 # The list that was hardcoded as NUMBER_WORDS in app/domain/extraction.py before M3-02.

@@ -279,7 +279,7 @@ Endpoints:
 - The API never transcribes. The worker job `transcription` (every 2 s, one note at a time, oldest `pending` first, claimed with `FOR UPDATE SKIP LOCKED`) runs faster-whisper; `processing` notes left by a stopped worker go back to `pending` when the worker starts.
 - The transcript is not copied into the trade by the server. The UI appends it to the description text box (editable), and the user runs `POST /api/trades/{id}/extract` on the text as in M2. `trades.raw_text` (saved with the journal) is the final text.
 
-Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (1), `WHISPER_CPU_THREADS` (`auto` = physical core count, detected once; 0 = library default; or a number 1–256), `WHISPER_VAD_FILTER` (`true`: bundled Silero VAD skips silence), `WHISPER_CONDITION_ON_PREVIOUS_TEXT` (`false`), `WHISPER_TEMPERATURES` (`0.0,0.4`: comma-separated, ascending, each 0–1; `0` = no temperature fallback), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
+Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (1), `WHISPER_CPU_THREADS` (`auto` = physical core count, detected once; 0 = library default; or a number 1–256), `WHISPER_VAD_FILTER` (`true`: bundled Silero VAD skips silence), `WHISPER_CONDITION_ON_PREVIOUS_TEXT` (`true`: the previous window's text primes the next one, keeps Latin terms through long notes), `WHISPER_TEMPERATURES` (`0.0,0.4`: comma-separated, ascending, each 0–1; `0` = no temperature fallback), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
 
 ### Transcript normalization (M3, PM 2026-11-05)
 
@@ -295,9 +295,9 @@ replacements:
   - to: H4
     from: [Н4]        # Cyrillic Н
 ```
-- Matching is case-insensitive and on word boundaries (no letter/digit right before/after); longest `from` first; one pass. `to` is inserted as written.
+- Matching is case-insensitive and on word boundaries (no letter/digit/underscore, Cyrillic or Latin, right before/after: "ФВГшка" stays); longest `from` first; one pass. `to` is inserted as written. The worker logs the number of replacements per note at INFO (never the text).
 - Applied by the worker to the transcript when a note becomes `done`; `AudioNote.transcript` is the normalized text (the UI shows it in the editable text box as before).
-- Validation: `replacements` list (≤ 200), each `to` non-empty, `from` non-empty list of unique non-empty strings; the same `from` (case-insensitive) under two `to` is an error; mojibake is refused like every config file. Broken file → transcript stored unnormalized + ERROR in worker.log (the note is still `done`). Checked at API and worker start.
+- Validation: `replacements` list (≤ 200), each `to` non-empty, `from` non-empty list of unique non-empty strings with at least one letter or digit (values are stripped; case variants of one `from` under the same `to` are allowed); the same `from` (case-insensitive) under two `to` is an error; mojibake is refused like every config file. Broken file → transcript stored unnormalized + ERROR in worker.log (the note is still `done`). Checked at API and worker start.
 
 ### AI key status (M3, PM 2026-11-05)
 
