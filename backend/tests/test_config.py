@@ -22,6 +22,12 @@ _SETTINGS_ENV_VARS = (
     "ANTHROPIC_MODEL_FALLBACK",
     "ANTHROPIC_EFFORT",
     "POSTGRES_PASSWORD",
+    "WHISPER_MODEL",
+    "WHISPER_BEAM_SIZE",
+    "WHISPER_CPU_THREADS",
+    "WHISPER_VAD_FILTER",
+    "WHISPER_CONDITION_ON_PREVIOUS_TEXT",
+    "WHISPER_TEMPERATURES",
 )
 
 
@@ -203,3 +209,94 @@ def test_http_and_sdk_loggers_never_log_debug(
         root.setLevel(saved[1])
     expected = max(logging.INFO, logging.getLevelName(level))
     assert set(levels.values()) == {expected}
+
+
+_DB_LINE = "DATABASE_URL=postgresql+psycopg://a@h/x\n"
+
+
+def test_whisper_defaults(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    settings = Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE))
+    assert settings.whisper_model == "small"
+    assert settings.whisper_beam_size == 1
+    assert settings.whisper_cpu_threads == "auto"
+    assert settings.whisper_vad_filter is True
+    assert settings.whisper_condition_on_previous_text is False
+    assert settings.whisper_temperatures == (0.0, 0.4)
+
+
+def test_whisper_settings_from_env_file(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = _write_env(
+        tmp_path / ".env",
+        _DB_LINE + "WHISPER_BEAM_SIZE=5\n"
+        "WHISPER_CPU_THREADS=0\n"
+        "WHISPER_VAD_FILTER=false\n"
+        "WHISPER_CONDITION_ON_PREVIOUS_TEXT=true\n"
+        "WHISPER_TEMPERATURES= 0.0, 0.2 ,0.4,0.6,0.8,1.0\n",
+    )
+    settings = Settings(_env_file=env)
+    assert settings.whisper_beam_size == 5
+    assert settings.whisper_cpu_threads == 0
+    assert settings.whisper_vad_filter is False
+    assert settings.whisper_condition_on_previous_text is True
+    assert settings.whisper_temperatures == (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("0", (0.0,)), ("0.0,0.4", (0.0, 0.4)), ("0.2", (0.2,)), ("1", (1.0,))],
+)
+def test_whisper_temperatures_parsed(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, raw: str, expected: tuple[float, ...]
+) -> None:
+    clean_env.setenv("WHISPER_TEMPERATURES", raw)
+    assert Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE)).whisper_temperatures == (
+        expected
+    )
+
+
+@pytest.mark.parametrize(
+    "raw", ["", " ", "0,", "0,,0.4", "abc", "0.4,0.2", "0,0", "-0.1", "1.5", "nan", "[0, 0.4]"]
+)
+def test_invalid_whisper_temperatures_rejected(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, raw: str
+) -> None:
+    clean_env.setenv("WHISPER_TEMPERATURES", raw)
+    with pytest.raises(ValidationError, match="whisper_temperatures"):
+        Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE))
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("auto", "auto"), (" AUTO ", "auto"), ("0", 0), ("8", 8), ("256", 256)]
+)
+def test_whisper_cpu_threads_parsed(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, raw: str, expected: int | str
+) -> None:
+    clean_env.setenv("WHISPER_CPU_THREADS", raw)
+    assert Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE)).whisper_cpu_threads == (
+        expected
+    )
+
+
+@pytest.mark.parametrize("raw", ["-1", "257", "four", "1.5"])
+def test_invalid_whisper_cpu_threads_rejected(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, raw: str
+) -> None:
+    clean_env.setenv("WHISPER_CPU_THREADS", raw)
+    with pytest.raises(ValidationError, match="whisper_cpu_threads"):
+        Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE))
+
+
+@pytest.mark.parametrize("name", ["WHISPER_VAD_FILTER", "WHISPER_CONDITION_ON_PREVIOUS_TEXT"])
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), ("0", False), ("off", False)])
+def test_whisper_bools_parsed(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, name: str, raw: str, expected: bool
+) -> None:
+    clean_env.setenv(name, raw)
+    settings = Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE))
+    assert getattr(settings, name.lower()) is expected
+
+
+def test_invalid_whisper_bool_rejected(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    clean_env.setenv("WHISPER_VAD_FILTER", "maybe")
+    with pytest.raises(ValidationError, match="whisper_vad_filter"):
+        Settings(_env_file=_write_env(tmp_path / ".env", _DB_LINE))

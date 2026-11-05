@@ -12,6 +12,7 @@ import sys
 import types
 import wave
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,7 @@ from app.services.transcriber import (
 )
 
 OPTIONS = WhisperOptions(
-    model="small", compute_type="int8", cpu_threads=0, language="uk", beam_size=5
+    model="small", compute_type="int8", cpu_threads=0, language="uk", beam_size=1
 )
 
 
@@ -85,9 +86,45 @@ def test_options_from_settings(settings: Settings) -> None:
     assert options.cpu_threads == 4
 
 
-def test_default_settings(settings: Settings) -> None:
-    options = WhisperOptions.from_settings(settings)
-    assert options == OPTIONS
+def test_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "WHISPER_MODEL",
+        "WHISPER_COMPUTE_TYPE",
+        "WHISPER_LANGUAGE",
+        "WHISPER_BEAM_SIZE",
+        "WHISPER_CPU_THREADS",
+        "WHISPER_VAD_FILTER",
+        "WHISPER_CONDITION_ON_PREVIOUS_TEXT",
+        "WHISPER_TEMPERATURES",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(mod, "physical_cores", lambda: 12)
+    options = WhisperOptions.from_settings(Settings(_env_file=None))  # code defaults, no .env
+    assert options == WhisperOptions(
+        model="small",
+        compute_type="int8",
+        cpu_threads=12,  # auto = physical cores
+        language="uk",
+        beam_size=1,
+        vad_filter=True,
+        condition_on_previous_text=False,
+        temperatures=(0.0, 0.4),
+    )
+
+
+def test_cpu_threads_zero_is_library_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mod, "physical_cores", lambda: 12)
+    assert mod.resolve_cpu_threads(0) == 0
+    assert mod.resolve_cpu_threads(6) == 6
+    assert mod.resolve_cpu_threads("auto") == 12
+
+
+def test_describe_lists_decoding_settings() -> None:
+    text = OPTIONS.describe()
+    assert text == (
+        "model small int8, language uk, beam 1, vad on, condition_on_previous_text off, "
+        "temperatures 0,0.4, cpu threads library default"
+    )
 
 
 def test_transcribe_passes_options(fake_whisper: type[FakeWhisperModel], tmp_path: Path) -> None:
@@ -102,20 +139,55 @@ def test_transcribe_passes_options(fake_whisper: type[FakeWhisperModel], tmp_pat
         {
             "audio": str(tmp_path / "a.webm"),
             "language": "uk",
-            "beam_size": 5,
+            "beam_size": 1,
             "vad_filter": True,
+            "condition_on_previous_text": False,
+            "temperature": [0.0, 0.4],
             "initial_prompt": "Торговий журнал. Терміни: FVG.",
         }
     ]
+    assert run.settings == OPTIONS.describe()
+
+
+def test_transcribe_passes_custom_decoding(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    options = WhisperOptions(
+        model="small",
+        compute_type="int8",
+        cpu_threads=12,
+        language=None,
+        beam_size=5,
+        vad_filter=False,
+        condition_on_previous_text=True,
+        temperatures=(0.0,),
+    )
+    WhisperTranscriber(options).transcribe(tmp_path / "a.webm", None)
+    (model,) = fake_whisper.instances
+    assert model.kwargs["cpu_threads"] == 12
+    call = model.calls[0]
+    assert call["language"] is None
+    assert call["beam_size"] == 5
+    assert call["vad_filter"] is False
+    assert call["condition_on_previous_text"] is True
+    assert call["temperature"] == [0.0]  # single 0 = no fallback
+    assert call["initial_prompt"] is None
+
+
+def test_model_cache_key_includes_threads(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    WhisperTranscriber(OPTIONS).load()
+    WhisperTranscriber(replace(OPTIONS, cpu_threads=12)).load()
+    WhisperTranscriber(replace(OPTIONS, beam_size=5, vad_filter=False)).load()  # same model
+    assert [m.kwargs["cpu_threads"] for m in fake_whisper.instances] == [0, 12]
 
 
 def test_model_loaded_once_per_key(fake_whisper: type[FakeWhisperModel], tmp_path: Path) -> None:
     WhisperTranscriber(OPTIONS).load()
     WhisperTranscriber(OPTIONS).transcribe(tmp_path / "a.wav", None)
     assert len(fake_whisper.instances) == 1
-    other = WhisperOptions(
-        model="base", compute_type="int8", cpu_threads=0, language=None, beam_size=5
-    )
+    other = replace(OPTIONS, model="base", language=None)
     WhisperTranscriber(other).load()
     assert len(fake_whisper.instances) == 2
 

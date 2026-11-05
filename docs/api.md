@@ -279,7 +279,7 @@ Endpoints:
 - The API never transcribes. The worker job `transcription` (every 2 s, one note at a time, oldest `pending` first, claimed with `FOR UPDATE SKIP LOCKED`) runs faster-whisper; `processing` notes left by a stopped worker go back to `pending` when the worker starts.
 - The transcript is not copied into the trade by the server. The UI appends it to the description text box (editable), and the user runs `POST /api/trades/{id}/extract` on the text as in M2. `trades.raw_text` (saved with the journal) is the final text.
 
-Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (5), `WHISPER_CPU_THREADS` (0 = library default), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
+Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (1), `WHISPER_CPU_THREADS` (`auto` = physical core count, detected once; 0 = library default; or a number 1–256), `WHISPER_VAD_FILTER` (`true`: bundled Silero VAD skips silence), `WHISPER_CONDITION_ON_PREVIOUS_TEXT` (`false`), `WHISPER_TEMPERATURES` (`0.0,0.4`: comma-separated, ascending, each 0–1; `0` = no temperature fallback), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
 
 ### Number words (M2 follow-up)
 

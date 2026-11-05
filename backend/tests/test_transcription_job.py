@@ -83,6 +83,7 @@ class FakeTranscriber:
     segment_error: Exception | None = None
     on_segment: Any = None  # called with the segment before it is yielded
     calls: list[tuple[Path, str | None]] = field(default_factory=list)
+    settings: str = "model small int8, beam 1, vad on"
 
     def load(self) -> None:
         if self.load_error is not None:
@@ -100,7 +101,9 @@ class FakeTranscriber:
         self.calls.append((path, initial_prompt))
         if self.transcribe_error is not None:
             raise self.transcribe_error
-        return TranscriptionRun(duration=self.duration, segments=self._iter())
+        return TranscriptionRun(
+            duration=self.duration, segments=self._iter(), settings=self.settings
+        )
 
 
 def add_note(session: Session, trade: Trade, data_dir: Path | None, **kw: Any) -> AudioNote:
@@ -185,6 +188,7 @@ def test_logs_timing_line(
     line = next(r.getMessage() for r in caplog.records if "transcribed" in r.getMessage())
     assert f"Audio note {note.id} transcribed: audio 20.0 s" in line
     assert "RTF" in line
+    assert line.endswith("(model small int8, beam 1, vad on)")  # decoding settings
 
 
 def test_oldest_pending_first(
@@ -248,6 +252,27 @@ def test_progress_written_while_processing(
     assert [s[0] for s in seen] == ["processing"] * 4
     assert seen[0][2] == Decimal("100.000")  # duration written once decoded
     assert [s[1] for s in seen[1:]] == [Decimal("0.250"), Decimal("0.500"), Decimal("0.750")]
+    assert reload(session, note.id).progress == Decimal("1.000")
+
+
+def test_progress_with_vad_gaps_stays_below_one(
+    factory: sessionmaker[Session], session: Session, trade: Trade, tmp_path: Path
+) -> None:
+    """VAD skips silence: segment ends jump (and trailing silence has no segment), yet
+    progress follows segment end / full duration, never reaches 1 while processing."""
+    note = add_note(session, trade, tmp_path)
+    seen: list[Decimal | None] = []
+
+    def observe(_: TranscribedSegment) -> None:
+        seen.append(reload(session, note.id).progress)
+
+    segments = [seg(4, "a"), seg(9, "b"), seg(70, "c"), seg(119.995, "d"), seg(121, "e")]
+    fake = FakeTranscriber(duration=120.0, segments=segments, on_segment=observe)
+    run(factory, fake, tmp_path, clock=FakeClock(step=1.0))
+
+    progress = [p for p in seen[1:] if p is not None]
+    assert progress == [Decimal("0.033"), Decimal("0.075"), Decimal("0.583"), Decimal("0.999")]
+    assert all(p <= Decimal("0.999") for p in progress)
     assert reload(session, note.id).progress == Decimal("1.000")
 
 
