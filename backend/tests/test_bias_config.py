@@ -83,6 +83,27 @@ def test_values_are_stripped_and_empty_aliases_allowed(tmp_path: Path) -> None:
     assert config.symbols[0].aliases == ("золото",)
 
 
+def test_unquoted_time_with_leading_zero_accepted(tmp_path: Path) -> None:
+    """YAML reads 07:45 as a string (a leading zero is not base-60), so it parses."""
+    text = SYMBOLS + (
+        "reminders:\n  pre_london: { from: 07:45, until: '11:00' }\n"
+        "  pre_ny: { from: '12:30', until: '16:00' }\n"
+    )
+    window = load_bias(_write(tmp_path / "bias.yaml", text)).reminders.pre_london
+    assert window.to_api() == {"from": "07:45", "until": "11:00"}
+
+
+def test_unquoted_time_without_leading_zero_rejected(tmp_path: Path) -> None:
+    """YAML reads 12:30 as the base-60 number 750: the error says to quote it."""
+    text = SYMBOLS + (
+        "reminders:\n  pre_london: { from: '07:45', until: '11:00' }\n"
+        "  pre_ny: { from: 12:30, until: '16:00' }\n"
+    )
+    assert _problems(tmp_path, text) == [
+        'reminders.pre_ny.from: expected a quoted "HH:MM" string, got the number 750'
+    ]
+
+
 def test_alias_equal_to_own_symbol_allowed(tmp_path: Path) -> None:
     text = "symbols:\n  - { symbol: GER40, aliases: [ger40, дакс] }\n" + REMINDERS
     assert load_bias(_write(tmp_path / "bias.yaml", text)).symbols[0].aliases == ("ger40", "дакс")
@@ -196,7 +217,7 @@ def test_alias_used_by_two_symbols(tmp_path: Path) -> None:
         "symbols:\n  - { symbol: EURUSD, aliases: [Євро] }\n"
         "  - { symbol: GBPUSD, aliases: [євро] }\n" + REMINDERS
     )
-    assert _problems(tmp_path, text) == ["symbols[1].aliases[0]: 'євро' is listed twice"]
+    assert _problems(tmp_path, text) == ["symbols[1].aliases[0]: 'євро' already means 'EURUSD'"]
 
 
 def test_alias_equal_to_other_symbol_name(tmp_path: Path) -> None:

@@ -135,19 +135,21 @@ def test_required_since_migration_seeds_marker_and_downgrades(db_engine: Engine)
 
 _BEFORE_BIAS_NOTES = "7916fe645fdc"
 _BIAS_NOTES = "b6d41a9e2c57"
-# Entry 1 raw_text + transcript, then entry 2 transcript, joined into the note text.
+# Entry 1 raw_text + transcript, then entry 2 transcript (entry 2's raw_text repeats entry 1's
+# and is kept once), joined into the note text.
 _JOINED_BIAS_TEXT = "\n\n".join(["gold up", "золото вгору", "дакс вниз"])
 
 
 def _old_bias_rows(engine: Engine, weekly_day: str = "2026-11-02") -> None:
-    """Old-schema rows (before bias_notes): two entries of one pre_ny period, one weekly, audio."""
+    """Old-schema rows (before bias_notes): two pre_ny entries sharing one raw_text, a weekly
+    entry and an audio note."""
     with engine.begin() as conn:
         conn.execute(
             text(
                 "INSERT INTO bias_entries (id, kind, period_date, symbol, direction, raw_text, "
                 "transcript) VALUES "
                 "(1, 'pre_ny', '2026-11-03', 'XAUUSD', 'bullish', :raw, :t1), "
-                "(2, 'pre_ny', '2026-11-03', 'GER40', 'bearish', NULL, :t2), "
+                "(2, 'pre_ny', '2026-11-03', 'GER40', 'bearish', :raw, :t2), "
                 "(3, 'weekly', CAST(:weekly AS date), 'EURUSD', 'neutral', NULL, NULL)"
             ),
             {"raw": "gold up", "t1": "золото вгору", "t2": "дакс вниз", "weekly": weekly_day},

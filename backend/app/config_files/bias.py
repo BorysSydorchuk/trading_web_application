@@ -120,10 +120,11 @@ def _alias_problems(symbols: tuple[BiasSymbol, ...]) -> list[str]:
         for pos, alias in enumerate(entry.aliases):
             key = alias.casefold()
             loc = f"symbols[{index}].aliases[{pos}]"
-            if key in seen_aliases:
-                problems.append(f"{loc}: {alias!r} is listed twice")
-            elif owner.get(key, entry.symbol) != entry.symbol:
+            # Another symbol's word first, so the message names that symbol.
+            if owner.get(key, entry.symbol) != entry.symbol:
                 problems.append(f"{loc}: {alias!r} already means {owner[key]!r}")
+            elif key in seen_aliases:
+                problems.append(f"{loc}: {alias!r} is listed twice")
             seen_aliases.add(key)
             owner.setdefault(key, entry.symbol)
     return problems

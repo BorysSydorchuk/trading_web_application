@@ -48,7 +48,8 @@ class BiasNote(TimestampMixin, Base):
     kind: Mapped[str] = mapped_column(String(20))
     # Brussels calendar date the bias is for: the trading day (pre_london/pre_ny),
     # the Monday of the week (weekly) or the 1st of the month (monthly).
-    period_date: Mapped[date] = mapped_column(Date)
+    # Indexed for date-range listing across kinds (the unique is kind-first).
+    period_date: Mapped[date] = mapped_column(Date, index=True)
     raw_text: Mapped[str | None] = mapped_column(Text)
 
     entries: Mapped[list[BiasEntry]] = relationship(

@@ -8,7 +8,8 @@ period_date, raw_text) holds one bias entry per symbol and owns the audio notes.
 - chart_links keep bias_entry_id (links are per symbol).
 
 Existing rows are migrated, not dropped: one note per distinct (kind, period_date), its
-raw_text = the entries' raw_text and transcript texts (blank-line separated, by entry id);
+raw_text = the entries' distinct raw_text and transcript texts (blank-line separated, in
+order of first appearance by entry id, raw_text before transcript);
 audio of an entry moves to the entry's note. A weekly row not on a Monday or a monthly row
 not on the 1st stops the upgrade with a clear error (fix the row first) instead of moving it.
 Downgrade maps back (note raw_text onto every entry, audio to the note's first entry) and
@@ -83,20 +84,31 @@ def _create_bias_notes() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_bias_notes")),
         sa.UniqueConstraint("kind", "period_date", name=op.f("uq_bias_notes_kind_period_date")),
     )
+    # Date-range listing across kinds (GET /api/bias/notes); the kind-first unique can't serve it.
+    op.create_index(op.f("ix_bias_notes_period_date"), "bias_notes", ["period_date"], unique=False)
 
 
 def _link_entries_to_notes() -> None:
     op.execute(
         """
+        WITH pieces AS (
+            SELECT kind, period_date, id::bigint * 2 AS pos, raw_text AS piece
+            FROM bias_entries WHERE NULLIF(raw_text, '') IS NOT NULL
+            UNION ALL
+            SELECT kind, period_date, id::bigint * 2 + 1, transcript
+            FROM bias_entries WHERE NULLIF(transcript, '') IS NOT NULL
+        ), first_seen AS (
+            SELECT kind, period_date, piece, min(pos) AS pos
+            FROM pieces GROUP BY kind, period_date, piece
+        ), texts AS (
+            SELECT kind, period_date, string_agg(piece, E'\\n\\n' ORDER BY pos) AS raw_text
+            FROM first_seen GROUP BY kind, period_date
+        )
         INSERT INTO bias_notes (kind, period_date, raw_text, created_at, updated_at)
-        SELECT kind, period_date,
-               string_agg(
-                   NULLIF(concat_ws(E'\\n\\n', NULLIF(raw_text, ''), NULLIF(transcript, '')), ''),
-                   E'\\n\\n' ORDER BY id
-               ),
-               min(created_at), max(updated_at)
-        FROM bias_entries
-        GROUP BY kind, period_date
+        SELECT e.kind, e.period_date, t.raw_text, min(e.created_at), max(e.updated_at)
+        FROM bias_entries e
+        LEFT JOIN texts t ON t.kind = e.kind AND t.period_date = e.period_date
+        GROUP BY e.kind, e.period_date, t.raw_text
         """
     )
     op.add_column("bias_entries", sa.Column("bias_note_id", sa.Integer(), nullable=True))
@@ -252,4 +264,5 @@ def downgrade() -> None:
         op.f("fk_bias_entries_bias_note_id_bias_notes"), "bias_entries", type_="foreignkey"
     )
     op.drop_column("bias_entries", "bias_note_id")
+    op.drop_index(op.f("ix_bias_notes_period_date"), table_name="bias_notes")
     op.drop_table("bias_notes")
