@@ -8,7 +8,7 @@ Current milestone: **M4 Bias** (started 2026-11-05). M3 accepted 2026-11-05, M2 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-05 (M3 accepted; M4 planned: contract in docs/api.md "## M4", tasks below; M4-02 started).
+Last update: 2026-11-05 (M3 accepted; M4 planned: contract in docs/api.md "## M4", tasks below; M4-02 merged; M4-03 bias schema started).
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
 **M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
@@ -25,7 +25,7 @@ To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; start M3-07.
 Git: one branch per topic `m4/<topic>` from main, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Migrations → database-reviewer. Whisper: no repeated runs without asking Borys.
 
 - [x] M4-01 Plan, API contract (docs/api.md "## M4"), decisions (orchestrator)
-- [ ] M4-02 M3 follow-ups: AI warm-up by time (start if last successful AI call > 20 h, Mon–Fri 07:30 Brussels) + prompt rule "Сетап H4, H1 Flow" → setup_context yes, with fixture (backend-dev) — branch m4/m3-followups
+- [x] M4-02 (code-reviewer APPROVE; live eval of "Сетап H4, H1 Flow" and "…, але H1 проти H4" to add to the M4 live check) M3 follow-ups: AI warm-up by time (start if last successful AI call > 20 h, Mon–Fri 07:30 Brussels) + prompt rule "Сетап H4, H1 Flow" → setup_context yes, with fixture (backend-dev) — branch m4/m3-followups
 - [ ] M4-03 Bias DB + config: `bias_notes` table, bias_entries.bias_note_id, audio_notes.bias_entry_id → bias_note_id, `config/bias.yaml` loader, `GET /api/bias/config` (backend-dev, database-reviewer) — branch m4/bias-schema
 - [ ] M4-04 Bias alignment domain (pure) + recompute service for trades on note create/edit/delete and on sync (backend-dev) — branch m4/bias-alignment
 - [ ] M4-05 Bias API: notes CRUD, by-period, result marking, bias audio upload, status/reminders (backend-dev) — branch m4/bias-api
