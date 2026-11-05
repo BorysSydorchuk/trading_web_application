@@ -4,13 +4,15 @@
                  make whisper-bench FILES=note.webm BENCH_ARGS="--preset old --show-text"
                  make whisper-bench FILES=note.webm WHISPER_BEAM_SIZE=5 WHISPER_VAD_FILTER=false
 
-Uses the same transcriber, options (WHISPER_* from .env / the environment) and glossary hint
-(config/transcription.yaml) as the worker; no DB. CLI flags override the settings;
-`--preset old` is the pre-M3-11 decoding (beam 5, no VAD, condition_on_previous_text on,
-faster-whisper's default temperatures, library-default threads); explicit flags override
-the preset. Prints per file: audio duration, transcription time (decode + transcribe),
-wall time (incl. the model load on the first file, like the worker's first note),
-RTF (= transcription / audio) and the settings; the transcript with `--show-text`.
+Uses the same transcriber, options and glossary hint (config/transcription.yaml) as the
+worker; no DB. Precedence, lowest first: WHISPER_* from .env, then the environment (incl.
+WHISPER_*=... on the make command line), then `--preset old`, then explicit flags.
+`--preset old` is the pre-M3-11 decoding (beam 5, VAD on, condition_on_previous_text on,
+faster-whisper's default temperatures 0,0.2,...,1.0, library-default threads); the model,
+compute type and language are not part of the preset. Prints per file: audio duration,
+transcription time (decode + transcribe), wall time (incl. the model load on the first
+file, like the worker's first note), RTF (= transcription / audio) and the settings; the
+transcript with `--show-text`.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, TextIO
 
-from app.config import Settings, get_settings, parse_temperatures
+from app.config import MAX_WHISPER_CPU_THREADS, Settings, get_settings, parse_temperatures
 from app.logging_setup import setup_logging
 from app.services.transcriber import (
     Transcriber,
@@ -37,9 +39,11 @@ from app.worker.transcription_job import current_initial_prompt
 
 LOG_FILE = "whisper_bench.log"
 FASTER_WHISPER_DEFAULT_TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+# What the worker ran before M3-11: config default beam 5 and threads 0, `vad_filter=True`
+# hard-coded, condition_on_previous_text and temperature not passed (library defaults).
 OLD_PRESET: dict[str, Any] = {
     "beam_size": 5,
-    "vad_filter": False,
+    "vad_filter": True,
     "condition_on_previous_text": True,
     "temperatures": FASTER_WHISPER_DEFAULT_TEMPERATURES,
     "cpu_threads": 0,
@@ -57,8 +61,10 @@ def _cpu_threads(text: str) -> int:
     value = text.strip().lower()
     if value == "auto":
         return resolve_cpu_threads("auto")
-    if not value.isdigit() or int(value) > 256:
-        raise argparse.ArgumentTypeError("`auto`, 0 (library default) or a count up to 256")
+    if not value.isdigit() or int(value) > MAX_WHISPER_CPU_THREADS:
+        raise argparse.ArgumentTypeError(
+            f"`auto`, 0 (library default) or a count up to {MAX_WHISPER_CPU_THREADS}"
+        )
     return int(value)
 
 

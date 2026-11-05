@@ -60,6 +60,16 @@ def test_windows_failure_falls_back_to_half_logical(caplog: pytest.LogCaptureFix
     assert "error 5" in caplog.text
 
 
+def test_unexpected_error_falls_back(caplog: pytest.LogCaptureFixture) -> None:
+    def broken() -> bytes:
+        raise TypeError("wrong argtypes")
+
+    with caplog.at_level(logging.WARNING, logger="app.services.cpu_cores"):
+        cores = detect_physical_cores(platform="win32", windows_info=broken, cpu_count=lambda: 16)
+    assert cores == 8
+    assert "TypeError" in caplog.text
+
+
 def test_zero_core_records_fall_back() -> None:
     assert (
         detect_physical_cores(platform="win32", windows_info=lambda: b"", cpu_count=lambda: 4) == 2

@@ -76,7 +76,7 @@ def detect_physical_cores(
     if platform == "win32":
         try:
             cores = count_core_records(windows_info())
-        except (OSError, ValueError, AttributeError) as exc:
+        except Exception as exc:  # any ctypes surprise falls back; never blocks start
             reason = f"{type(exc).__name__}: {exc}"
         else:
             if cores > 0:

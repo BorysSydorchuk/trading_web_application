@@ -74,7 +74,7 @@ def test_options_default_to_settings(settings: Settings) -> None:
 def test_old_preset(settings: Settings) -> None:
     options = _options(settings, ["--preset", "old"])
     assert options.beam_size == 5
-    assert options.vad_filter is False
+    assert options.vad_filter is True  # production passed vad_filter=True before M3-11
     assert options.condition_on_previous_text is True
     assert options.temperatures == (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
     assert options.cpu_threads == 0
@@ -89,7 +89,7 @@ def test_flags_override_preset_and_settings(settings: Settings) -> None:
             "old",
             "--beam-size",
             "1",
-            "--vad",
+            "--no-vad",
             "--no-condition-on-previous-text",
             "--temperatures",
             "0",
@@ -101,13 +101,29 @@ def test_flags_override_preset_and_settings(settings: Settings) -> None:
     )
     assert (options.beam_size, options.vad_filter, options.condition_on_previous_text) == (
         1,
-        True,
+        False,
         False,
     )
     assert options.temperatures == (0.0,)
     assert options.cpu_threads == 12
     assert options.model == "base"
     assert _options(settings, ["--no-vad", "--cpu-threads", "4"]).vad_filter is False
+
+
+def test_environment_overrides_settings_then_preset_then_flags(settings: Settings) -> None:
+    beam5 = _bench_settings(settings).model_copy(update={"whisper_beam_size": 3})
+    args = transcribe_bench._parser().parse_args(["a.webm"])
+    assert transcribe_bench._options(beam5, args).beam_size == 3  # settings (env/.env)
+    args = transcribe_bench._parser().parse_args(["a.webm", "--preset", "old"])
+    assert transcribe_bench._options(beam5, args).beam_size == 5  # preset beats settings
+    args = transcribe_bench._parser().parse_args(["a.webm", "--preset", "old", "--beam-size", "2"])
+    assert transcribe_bench._options(beam5, args).beam_size == 2  # flag beats preset
+
+
+def test_cpu_threads_flag_limit(settings: Settings) -> None:
+    assert _options(settings, ["--cpu-threads", "256"]).cpu_threads == 256
+    with pytest.raises(SystemExit):
+        _options(settings, ["--cpu-threads", "257"])
 
 
 @pytest.mark.parametrize(
