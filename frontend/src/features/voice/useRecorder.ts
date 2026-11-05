@@ -194,5 +194,10 @@ export function useRecorder(onRecorded: (blob: Blob, seconds: number) => void) {
     }
   }
 
-  return { ...state, start, stop: () => stop() }
+  /** Drop a stale error/notice (e.g. an audio file was picked instead). Only while idle. */
+  function clearMessages(): void {
+    setState((prev) => (prev.phase === 'idle' && (prev.error || prev.notice) ? IDLE : prev))
+  }
+
+  return { ...state, start, stop: () => stop(), clearMessages }
 }

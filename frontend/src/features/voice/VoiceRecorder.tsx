@@ -41,6 +41,8 @@ export function VoiceRecorder({ onRecorded, disabled = false }: VoiceRecorderPro
 
   function onFile(file: File) {
     if (disabled || active) return
+    // A picked file replaces any earlier mic message, so only one message is shown.
+    recorder.clearMessages()
     const check = checkAudioFile(file)
     if (!check.ok) {
       setFileError(check.error)

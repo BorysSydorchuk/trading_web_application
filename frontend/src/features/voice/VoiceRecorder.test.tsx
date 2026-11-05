@@ -304,6 +304,40 @@ describe('VoiceRecorder audio file', () => {
     expect(onRecorded).toHaveBeenCalledTimes(2)
   })
 
+  it('clears an earlier mic error when a file is picked', async () => {
+    installMic({ reject: denied() })
+    const { user, onRecorded, button } = setup()
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await user.pointer({ keys: '[/MouseLeft]', target: button })
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.errors.denied)
+
+    await user.upload(fileInput(), new File(['o'], 'voice.ogg', { type: 'audio/ogg' }))
+
+    expect(onRecorded).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows only the file error after a mic error and clears a "too short" notice', async () => {
+    installMic({ reject: denied() })
+    const { user, button } = setup()
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await user.pointer({ keys: '[/MouseLeft]', target: button })
+    await screen.findByRole('alert')
+
+    await user.upload(fileInput(), new File(['f'], 'voice.flac', { type: 'audio/flac' }))
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0]).toHaveTextContent(t.fileErrors.format)
+
+    restoreMic()
+    installMic()
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await user.pointer({ keys: '[/MouseLeft]', target: button })
+    expect(await screen.findByText(t.notices.tooShort)).toBeInTheDocument()
+    await user.upload(fileInput(), new File(['o'], 'voice.ogg', { type: 'audio/ogg' }))
+    expect(screen.queryByText(t.notices.tooShort)).not.toBeInTheDocument()
+  })
+
   it('rejects a wrong format with a clear message', async () => {
     const { user, onRecorded } = setup()
 
