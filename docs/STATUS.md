@@ -8,7 +8,7 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-04 (M3-09 QA done; waiting for Borys: 3 voice recordings + decision on beam size). Never push (Borys pushes).
+Last update: 2026-11-05 (PM review of M3 QA applied: M3-11 Whisper tuning + M3-12 audio file button merged; M3-13 QA timing matrix next). Never push (Borys pushes).
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
 **M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
@@ -33,7 +33,11 @@ Git: one branch per topic `m3/<topic>`, merge `--no-ff` after code-reviewer APPR
 - [x] M3-07 Required-since: table + migration, `missing_required` by close time, `missing_new_fields`, `GET /api/trades?missing_new_fields=true` (backend-dev, database-reviewer) — branch m3/required-since
 - [x] M3-08 Journal filter "Неповні за новими полями" + new-field hint on Describe (frontend-dev) — branch m3/new-fields-ui
 - [x] M3-09 QA (2-min AC fails with defaults, see M3-qa.md): real timing for 30 s / 1 min / 2 min notes on this laptop (small int8; base too if 2 min > 30 s), failure + retry, mic denied, end-to-end; 3 fixtures of Borys's voice (qa-tester)
-- [ ] M3-10 Live check by Borys + M3 report (orchestrator)
+- [x] M3-11 Whisper tuning: beam 1, VAD, condition_on_previous_text off, temperatures 0,0.4, physical-core threads, all via .env; bench `--preset old`, `--show-text` (backend-dev; review fix: old preset VAD on) — merged be96db5
+- [x] M3-12 "Завантажити аудіо" button in the recorder (.ogg/.opus/.m4a/.mp3/.wav/.webm, 25 MiB, by extension) (frontend-dev) — merged 187a084
+- [ ] M3-13 QA timing matrix on Borys's recordings (data/qa-voice, never commit): 3 files × beam 1/5 × old/new (+ new with condition_on_previous_text on, which kept terms correct in a 1-file run), median of 3, total = upload + transcription + AI fill, terms FVG/IFVG/QM/POI/BOS/SMT + symbols; add to docs/reports/M3-qa.md. If 2-min > 30 s: stop, report to PM (qa-tester)
+- [ ] M3-14 docs/reports/M3-live-check.md, ≤ 12 items, mic items marked (orchestrator)
+- [ ] M3-10 Live check by Borys (non-mic items now) + docs/reports/M3.md (orchestrator)
 
 ## M2 tasks
 
@@ -106,3 +110,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-04: M3-07 required-since done (table + marker, sync in API and worker, missing_new_fields, list filter), reviewed, merged.
 - 2026-11-04: M3-08 Journal filter + Describe new-fields note done, reviewed, merged. Screens not yet seen in a browser (check in M3-09).
 - 2026-11-04: M3-09 QA report: 2-min note 47–72 s with small beam 5 (FAIL), failure/retry pass; waiting for Borys's recordings.
+- 2026-11-05: PM review applied. M3-11 + M3-12 merged (make check 1310 + 262). 1-file bench: new defaults 10.9 s vs old 22.1 s, but condition_on_previous_text off loses IFVG/H4/H1/FTA; on keeps them at 12.1 s (PM decision). Borys's .env has WHISPER_BEAM_SIZE=5 and WHISPER_CPU_THREADS=0 (override new defaults).
