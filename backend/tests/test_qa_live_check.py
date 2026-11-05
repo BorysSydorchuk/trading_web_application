@@ -15,6 +15,7 @@ from app.config_files.loader import CONFIG_DIR_ENV
 
 SCRIPT = REPO_ROOT / "scripts" / "qa_live_check.py"
 REAL_CONFIG = REPO_ROOT / "config"
+IN_REPO = "лежить у репозиторії"  # noqa: RUF001 - Ukrainian message
 
 
 def _load() -> ModuleType:
@@ -75,6 +76,7 @@ def test_prepared_config_loads_with_lesson_required(
 def test_prepare_config_replaces_an_old_copy(tmp_path: Path) -> None:
     dest = tmp_path / "config"
     dest.mkdir()
+    (dest / qa.COPY_MARKER).write_text("x\n", encoding="utf-8")
     (dest / "stale.yaml").write_text("x: 1\n", encoding="utf-8")
     (dest / "journal_fields.yaml").write_bytes(b"\xef\xbb\xbfgarbage")
 
@@ -188,3 +190,66 @@ def test_main_runs_dev_with_qa_env(
     out = capsys.readouterr().out
     assert "QA-база trading_journal_qa_m3" in out
     assert "поле «lesson» тепер обовʼязкове" in out
+
+
+def test_prepare_config_replaces_a_copy_from_before_the_marker(tmp_path: Path) -> None:
+    dest = tmp_path / "config"
+    dest.mkdir()
+    (dest / "journal_fields.yaml").write_bytes(b"\xef\xbb\xbfgarbage")
+    (dest / "rules.yaml").write_text("x: 1\n", encoding="utf-8")
+
+    qa.prepare_config(REAL_CONFIG, dest)
+
+    assert (dest / qa.COPY_MARKER).is_file()
+    assert (dest / "rules.yaml").read_bytes() == (REAL_CONFIG / "rules.yaml").read_bytes()
+
+
+@pytest.mark.parametrize("extra", ["notes.txt", "sub"])
+def test_prepare_config_never_deletes_a_foreign_folder(tmp_path: Path, extra: str) -> None:
+    dest = tmp_path / "config"
+    dest.mkdir()
+    (dest / "journal_fields.yaml").write_text("mine\n", encoding="utf-8")
+    if extra == "sub":
+        (dest / extra).mkdir()
+    else:
+        (dest / extra).write_text("keep\n", encoding="utf-8")
+
+    with pytest.raises(qa.QaError, match="Відмовляюся видаляти"):
+        qa.prepare_config(REAL_CONFIG, dest)
+
+    assert (dest / "journal_fields.yaml").read_text(encoding="utf-8") == "mine\n"
+    assert (dest / extra).exists()
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        REPO_ROOT,
+        REPO_ROOT / "config",
+        REPO_ROOT / "data",
+        REPO_ROOT / "backend" / "tmp",
+        REPO_ROOT.parent,
+        Path(REPO_ROOT.anchor),
+    ],
+)
+def test_check_base_dir_refuses_repo_and_its_parents(base: Path) -> None:
+    with pytest.raises(qa.QaError, match=IN_REPO):
+        qa.check_base_dir(base)
+
+
+def test_check_base_dir_accepts_a_temp_dir(tmp_path: Path) -> None:
+    qa.check_base_dir(tmp_path / "tj-qa")
+
+
+@pytest.mark.parametrize("base", [".", "config", "backend"])
+def test_main_refuses_base_dir_in_repo_before_touching_files(
+    base: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setattr(qa, "prepare_config", _fail)
+    monkeypatch.setattr(qa, "validate_config", _fail)
+    monkeypatch.setattr(qa, "run_dev", _fail)
+
+    assert qa.main(["--base-dir", base]) == 1
+
+    assert IN_REPO in capsys.readouterr().out

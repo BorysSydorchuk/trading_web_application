@@ -1,28 +1,50 @@
 """Text file I/O must name its encoding: Windows' default here is cp1251, not UTF-8 (M3-15).
 
-ruff's PLW1514 (enabled in pyproject.toml) only sees `Path` objects whose type it can infer,
-so `CONFIG / "x.yaml"` module constants slip through; this AST scan covers every receiver.
-A line may opt out with `# noqa: PLW1514` or `# allow-default-encoding` (tests only).
+AST scan of our Python code (ruff's PLW1514 needs preview mode and only sees Path objects
+whose type it can infer). A line may opt out with `# allow-default-encoding` (tests only).
 """
 
 from __future__ import annotations
 
 import ast
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED_DIRS = ("backend/app", "backend/tests", "backend/alembic", "scripts")
 SKIPPED_DIRS = {"__pycache__", ".venv", "node_modules"}
-OPT_OUT_MARKERS = ("noqa: PLW1514", "allow-default-encoding")
+OPT_OUT_MARKERS = ("allow-default-encoding",)
 # Modules whose `.open()` is not a text file open (wave/av/webbrowser/tarfile...).
-NON_FILE_OPENERS = {"wave", "av", "webbrowser", "tarfile", "zipfile", "gzip", "urllib"}
-# Calls → index of the positional `encoding` argument and of the positional `mode` argument.
-_ENCODING_POS = {"open": 3, "fdopen": 3, "read_text": 0, "write_text": 1}
-_MODE_POS = {"open": 1, "fdopen": 1}
-_PATH_OPEN_ENCODING_POS = 2  # Path.open(mode, buffering, encoding)
+NON_FILE_OPENERS = {"wave", "av", "webbrowser", "tarfile", "zipfile", "gzip", "urllib", "os"}
 _TEXT_MODE_KWARGS = ("text", "universal_newlines")
 _SUBPROCESS_CALLS = {"run", "Popen", "check_output", "check_call", "call"}
+
+
+@dataclass(frozen=True)
+class _Opener:
+    mode_pos: int | None  # positional index of `mode` (None: no mode argument)
+    encoding_pos: int  # positional index of `encoding`
+    text_by_default: bool  # False: binary unless a text mode is passed
+
+
+_BUILTIN_OPEN = _Opener(1, 3, True)  # open(file, mode, buffering, encoding)
+_PATH_OPEN = _Opener(0, 2, True)  # Path.open(mode, buffering, encoding)
+_TEMPFILE = _Opener(0, 2, False)  # NamedTemporaryFile/TemporaryFile(mode, buffering, encoding)
+# (receiver, name) → opener; receiver None = a bare name (`open(...)`, from-imports).
+_OPENERS: dict[tuple[str | None, str], _Opener] = {
+    (None, "open"): _BUILTIN_OPEN,
+    ("io", "open"): _BUILTIN_OPEN,
+    ("builtins", "open"): _BUILTIN_OPEN,
+    ("os", "fdopen"): _BUILTIN_OPEN,
+    ("codecs", "open"): _Opener(1, 2, True),  # codecs.open(file, mode, encoding)
+    **{
+        (receiver, name): _TEMPFILE
+        for receiver in (None, "tempfile")
+        for name in ("NamedTemporaryFile", "TemporaryFile")
+    },
+    **{(receiver, "SpooledTemporaryFile"): _Opener(1, 3, False) for receiver in (None, "tempfile")},
+}
 
 
 def _const_str(node: ast.expr | None) -> str | None:
@@ -37,17 +59,29 @@ def _has_kw(call: ast.Call, name: str) -> bool:
     )
 
 
-def _is_binary(call: ast.Call, mode_pos: int) -> bool:
+def _mode(call: ast.Call, mode_pos: int | None) -> ast.expr | None:
     mode = next((kw.value for kw in call.keywords if kw.arg == "mode"), None)
-    if mode is None and len(call.args) > mode_pos:
+    if mode is None and mode_pos is not None and len(call.args) > mode_pos:
         mode = call.args[mode_pos]
+    return mode
+
+
+def _is_text_mode(call: ast.Call, opener: _Opener) -> bool:
+    mode = _mode(call, opener.mode_pos)
+    if mode is None:
+        return opener.text_by_default
     text = _const_str(mode)
-    return text is not None and "b" in text
+    return text is None or "b" not in text  # a non-literal mode counts as text
 
 
 def _subprocess_text_without_encoding(call: ast.Call) -> bool:
-    name, receiver = _call_name(call)
-    if receiver != "subprocess" or name not in _SUBPROCESS_CALLS:
+    func = call.func
+    if not (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "subprocess"
+        and func.attr in _SUBPROCESS_CALLS
+    ):
         return False
     text_mode = any(
         kw.arg in _TEXT_MODE_KWARGS and isinstance(kw.value, ast.Constant) and kw.value.value
@@ -56,29 +90,31 @@ def _subprocess_text_without_encoding(call: ast.Call) -> bool:
     return text_mode and not _has_kw(call, "encoding")
 
 
-def _call_name(call: ast.Call) -> tuple[str | None, str | None]:
-    """(function name, receiver name if it is a plain name) for `f()` / `x.f()`."""
+def _opener(call: ast.Call) -> _Opener | None:
     func = call.func
     if isinstance(func, ast.Name):
-        return func.id, None
-    if isinstance(func, ast.Attribute):
-        receiver = func.value.id if isinstance(func.value, ast.Name) else None
-        return func.attr, receiver
-    return None, None
+        return _OPENERS.get((None, func.id))
+    if not isinstance(func, ast.Attribute):
+        return None
+    receiver = func.value.id if isinstance(func.value, ast.Name) else None
+    if receiver is not None and (receiver, func.attr) in _OPENERS:
+        return _OPENERS[(receiver, func.attr)]
+    if func.attr == "read_text":
+        return _Opener(None, 0, True)
+    if func.attr == "write_text":
+        return _Opener(None, 1, True)
+    if func.attr == "open" and receiver not in NON_FILE_OPENERS:
+        return _PATH_OPEN  # any other `<expr>.open(...)`: pathlib.Path.open
+    return None
 
 
 def _lacks_encoding(call: ast.Call) -> bool:
     if _subprocess_text_without_encoding(call):
         return True
-    name, receiver = _call_name(call)
-    if name not in _ENCODING_POS or receiver in NON_FILE_OPENERS or _has_kw(call, "encoding"):
+    opener = _opener(call)
+    if opener is None or _has_kw(call, "encoding") or not _is_text_mode(call, opener):
         return False
-    builtin_style = name == "fdopen" or (name == "open" and receiver in (None, "io", "builtins"))
-    if name == "open" and not builtin_style:  # Path.open(mode, buffering, encoding, ...)
-        return not _is_binary(call, 0) and len(call.args) <= _PATH_OPEN_ENCODING_POS
-    if name in _MODE_POS and _is_binary(call, _MODE_POS[name]):
-        return False
-    return len(call.args) <= _ENCODING_POS[name]
+    return len(call.args) <= opener.encoding_pos
 
 
 def unspecified_encodings(source: str, label: str) -> list[str]:
@@ -126,6 +162,16 @@ def test_scan_flags_missing_encodings() -> None:
             "os.fdopen(fd, 'w')",
             "subprocess.run(cmd, text=True)",
             "subprocess.run(cmd, universal_newlines=True)",
+            "(ROOT / 'x').open('w')",
+            "self.path.open()",
+            "tempfile.NamedTemporaryFile('w')",
+            "tempfile.NamedTemporaryFile(mode='w+')",
+            "NamedTemporaryFile('w')",
+            "tempfile.TemporaryFile(mode='w')",
+            "tempfile.SpooledTemporaryFile(100, 'w')",
+            "tempfile.SpooledTemporaryFile(mode='w+')",
+            "codecs.open(p)",
+            "codecs.open(p, 'w')",
         ]
     )
     assert len(unspecified_encodings(source, "f")) == source.count("\n") + 1
@@ -155,7 +201,18 @@ def test_scan_accepts_explicit_encodings_and_binary() -> None:
             "reply(text='nope')",
             "open(p, **kwargs)",
             "path.read_text()  # allow-default-encoding: test",
-            "open(p)  # noqa: PLW1514",
+            "(ROOT / 'x').open('rb')",
+            "self.path.open('rb')",
+            "x.y.open(mode='rb')",
+            "tempfile.NamedTemporaryFile()",
+            "tempfile.NamedTemporaryFile('wb')",
+            "tempfile.NamedTemporaryFile('w', encoding='utf-8')",
+            "tempfile.TemporaryFile()",
+            "tempfile.SpooledTemporaryFile(100)",
+            "tempfile.SpooledTemporaryFile(mode='w', encoding='utf-8')",
+            "codecs.open(p, 'r', 'utf-8')",
+            "codecs.open(p, encoding='utf-8')",
+            "os.open(p, os.O_RDONLY)",
         ]
     )
     assert unspecified_encodings(source, "f") == []

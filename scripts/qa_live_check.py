@@ -39,6 +39,9 @@ BACKEND = ROOT / "backend"
 CONFIG_SRC = ROOT / "config"
 DEV_SCRIPT = ROOT / "scripts" / "dev.py"
 JOURNAL_FIELDS = "journal_fields.yaml"
+# Written into every copy; only a folder with it (or a pre-marker copy, see `_is_our_copy`) is
+# ever deleted, so a wrong --base-dir cannot wipe a real folder.
+COPY_MARKER = ".tj-qa-copy"
 REQUIRED_KEY = "lesson"
 
 QA_DB_NAME = "trading_journal_qa_m3"
@@ -80,6 +83,15 @@ MSG: dict[str, str] = {
     "db_not_postgres": "Відмовляюся запускати: DATABASE_URL має бути PostgreSQL-адресою.",
     "config_missing": "Не знайдено папку налаштувань {path}.",
     "copy_failed": "Не вдалося скопіювати config/ у {path}: {error}",
+    "base_in_repo": (
+        "Відмовляюся запускати: тимчасова папка {path} лежить у репозиторії або містить його; "
+        "копія замінила б справжні config/ чи data/. Вкажіть папку поза репозиторієм "
+        "(типово %TEMP%\\tj-qa)."
+    ),
+    "dest_not_copy": (
+        "Відмовляюся видаляти {path}: це не копія налаштувань, створена цим скриптом. "
+        "Видаліть папку вручну або вкажіть іншу --base-dir."
+    ),
     "not_utf8": "Файл {path} не в кодуванні UTF-8 ({error}). Відновіть його з git.",
     "key_missing": "У {file} немає поля `key: {key}` з рядком `required:`.",
     "uv_missing": "Не знайдено uv у PATH. Див. README (Prerequisites).",
@@ -94,6 +106,7 @@ MSG: dict[str, str] = {
     "lesson_required": "У копії {file} поле «{key}» тепер обовʼязкове (змінено лише один рядок).",
     "lesson_already": "У копії {file} поле «{key}» вже обовʼязкове, нічого не змінено.",
     "checking": "Перевіряю скопійовані налаштування (кодування UTF-8, спотворений текст)...",
+    "check_output": "Нижче вивід перевірки налаштувань (uv run, завантажувач застосунку):",
     "config_ok": "Налаштування в порядку.",
     "env": "Середовище: {env}",
     "starting": "Запускаю застосунок через scripts/dev.py. Зупинка: Ctrl+C або stop.bat.",
@@ -144,14 +157,32 @@ def make_field_required(text: str, key: str = REQUIRED_KEY) -> tuple[str, bool]:
     raise QaError(MSG["key_missing"].format(file=JOURNAL_FIELDS, key=key))
 
 
+def check_base_dir(base: Path, root: Path = ROOT) -> None:
+    """Refuse a base dir inside the repo (or one that contains it): real config/data live there."""
+    base, root = base.resolve(), root.resolve()
+    if base.is_relative_to(root) or root.is_relative_to(base):
+        raise QaError(MSG["base_in_repo"].format(path=base))
+
+
+def _is_our_copy(dest: Path, src: Path) -> bool:
+    """A copy made by this script: has the marker, or (older runs) only files named as in src."""
+    if (dest / COPY_MARKER).is_file():
+        return True
+    entries = list(dest.iterdir())
+    return all(e.is_file() and (src / e.name).is_file() for e in entries)
+
+
 def prepare_config(src: Path, dest: Path) -> bool:
     """Fresh copy of `src` in `dest` with `lesson` required; True if the line was changed."""
     if not src.is_dir():
         raise QaError(MSG["config_missing"].format(path=src))
     try:
         if dest.exists():
+            if not dest.is_dir() or not _is_our_copy(dest, src):
+                raise QaError(MSG["dest_not_copy"].format(path=dest))
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
+        (dest / COPY_MARKER).write_text("scripts/qa_live_check.py\n", encoding="utf-8")
     except OSError as exc:
         raise QaError(MSG["copy_failed"].format(path=dest, error=exc)) from exc
     path = dest / JOURNAL_FIELDS
@@ -201,6 +232,7 @@ def validate_config(env: Mapping[str, str]) -> None:
     uv = shutil.which("uv")
     if not uv:
         raise QaError(MSG["uv_missing"])
+    say(MSG["check_output"])
     try:
         result = subprocess.run(
             [uv, "run", "--project", str(BACKEND), "python", "-c", CONFIG_CHECK],
@@ -257,6 +289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = base / "config"
     try:
         env = qa_env(base, config, args.database_url, args.whisper_condition_on_previous_text)
+        check_base_dir(base)
         say(MSG["db_ok"])
         changed = prepare_config(CONFIG_SRC, config)
         say(MSG["config_copied"].format(path=config))

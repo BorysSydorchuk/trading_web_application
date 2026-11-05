@@ -1,7 +1,7 @@
 """Config files: UTF-8 on a cp1251 Windows locale, UTF-8 BOM, mojibake refused (M3-15)."""
 
 # Mojibake samples are look-alike characters on purpose.
-# ruff: noqa: RUF001
+# ruff: noqa: RUF001, RUF003
 
 from __future__ import annotations
 
@@ -104,6 +104,9 @@ def _all_real_strings() -> list[str]:
         ),
         (_decode_ansi("Изменение ИИ".encode(), "cp1251"), "Изменение ИИ"),  # 0x98 byte
         (_decode_ansi("Тип".encode(), "latin-1"), "Тип"),
+        ("РїКјСЏС‚СЊ", "пʼять"),
+        (_decode_ansi("Ні".encode(), "cp1251"), "Ні"),
+        (_decode_ansi("café".encode(), "cp1252"), "café"),
         (_decode_ansi("четвёрка".encode(), "cp1252"), "четвёрка"),
     ],
 )
@@ -130,11 +133,55 @@ def test_repair_mojibake_detects_garbled_text(garbled: str, original: str) -> No
         "FVG IFVG QM POI BOS SMT EURUSD",
         "café naïve",
         "✓ 100 %",
+        "Ні",
+        "НІ",
+        "Ці",
+        "Ві",
+        "Ні, BOS",
+        "Так / Ні",
+        "В H4",
+        "≥ 2R",
+        "1–2",
+        "П’ять",
+        "é",
+        "Ü",
+        "Über",
+        "🚀 FVG",
+        "😀",
         "",
     ],
 )
 def test_repair_mojibake_leaves_real_text_alone(text: str) -> None:
     assert repair_mojibake(text) is None
+
+
+# cp1251 "Р" (UTF-8 lead 0xD0) + a cp1251 continuation-byte letter decodes to a basic Cyrillic
+# letter: the only short real-looking strings still flagged (documented in DECISIONS).
+KNOWN_RESIDUAL = {"Р" + c for c in "ЁЄІЇҐёєіїґ"}
+
+
+def _letter_combos() -> list[str]:
+    upper = [chr(c) for c in range(0x0410, 0x0430)] + list("ЁЄІЇҐ")
+    lower = [c.lower() for c in upper]
+    letters = upper + lower
+    return [
+        *letters,
+        *(a + b for a in letters for b in letters),
+        *(a + b + c for a in upper for b in lower for c in lower),
+        *(a + b + c for a in upper for b in upper for c in upper),
+    ]
+
+
+def test_no_false_positive_on_short_ukrainian_russian_combos() -> None:
+    flagged = {
+        variant
+        for combo in _letter_combos()
+        for variant in (combo, f"{combo}, BOS", f"Так / {combo}")
+        if repair_mojibake(variant) is not None
+    }
+    expected = {v for c in KNOWN_RESIDUAL for v in (c, f"{c}, BOS", f"Так / {c}")}
+    assert flagged <= expected  # "Так / Рі" is not flagged: "Так" fails the decode
+    assert {c for c in flagged if len(c) == 2} == KNOWN_RESIDUAL
 
 
 def test_no_false_positive_on_any_real_config_string() -> None:
@@ -247,7 +294,7 @@ def cp1251_locale(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_simulated_locale_really_breaks_reads_without_encoding() -> None:
     path = REAL_CONFIG / "journal_fields.yaml"
     assert "РЈСЂРѕРє" in path.read_text()  # allow-default-encoding: the point of this test
-    with open(path) as handle:  # noqa: PLW1514 - the point of this test (ruff + guard)
+    with open(path) as handle:  # allow-default-encoding: the point of this test
         assert "РЈСЂРѕРє" in handle.read()
 
 
