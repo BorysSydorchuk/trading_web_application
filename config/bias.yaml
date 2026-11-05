@@ -11,9 +11,9 @@
 # Changes are picked up on the next page load, no restart needed.
 
 symbols:
-  - { symbol: EURUSD, aliases: [євро, евро, фібер, fiber, euro] }
-  - { symbol: GBPUSD, aliases: [фунт, кабель, cable, pound] }
-  - { symbol: XAUUSD, aliases: [золото, gold, голд] }
+  - { symbol: EURUSD, aliases: [євро, евро, фібер, фибер, fiber, euro, EUR/USD] }
+  - { symbol: GBPUSD, aliases: [фунт, кабель, cable, pound, GBP/USD, GBP] }
+  - { symbol: XAUUSD, aliases: [золото, gold, голд, XAU/USD, XAU] }
   - { symbol: GER40, aliases: [дакс, DAX, GER] }
 
 reminders:

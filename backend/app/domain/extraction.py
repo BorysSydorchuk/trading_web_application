@@ -131,19 +131,30 @@ def _typed(spec: JournalKey | None, raw: str) -> Any:
     return raw
 
 
-def _items(answer: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    items = answer.get(FIELDS_KEY)
+def string_items(
+    answer: Mapping[str, Any], array_key: str, keys: tuple[str, ...]
+) -> list[tuple[str, ...]]:
+    """The items of a flat schema answer `{array_key: [{<keys>: string}, ...]}` as tuples in
+    `keys` order (shared with the bias extraction). Raises InvalidAnswer on a wrong shape."""
+    items = answer.get(array_key)
     if not isinstance(items, list):
-        raise InvalidAnswer(f"`{FIELDS_KEY}` is not an array")
-    out: list[tuple[str, str, str]] = []
+        raise InvalidAnswer(f"`{array_key}` is not an array")
+    out: list[tuple[str, ...]] = []
     for item in items:
         if not isinstance(item, Mapping):
             raise InvalidAnswer("an item is not an object")
-        key, value, evidence = (item.get(k) for k in (KEY_KEY, VALUE_KEY, EVIDENCE_KEY))
-        if not (isinstance(key, str) and isinstance(value, str) and isinstance(evidence, str)):
-            raise InvalidAnswer("an item needs string key, value and evidence")
-        out.append((key, value, evidence))
+        values: list[str] = []
+        for key in keys:
+            value = item.get(key)
+            if not isinstance(value, str):
+                raise InvalidAnswer(f"an item needs string {', '.join(keys)}")
+            values.append(value)
+        out.append(tuple(values))
     return out
+
+
+def _items(answer: Mapping[str, Any]) -> list[tuple[str, ...]]:
+    return string_items(answer, FIELDS_KEY, (KEY_KEY, VALUE_KEY, EVIDENCE_KEY))
 
 
 def answer_entries(config: JournalFieldsConfig, answer: Mapping[str, Any]) -> dict[str, Any]:
@@ -301,10 +312,17 @@ def _value_issue(
     if spec.type == "int" and not number_in_evidence(value, evidence, number_words):
         return "evidence_not_in_text"
     if spec.type == "text":
-        if "?" in value and "?" not in evidence:
-            return "question"
-        if not contains_phrase(normalise_for_match(value), text):
-            return "evidence_not_in_text"
+        return text_value_issue(value, evidence, text)
+    return None
+
+
+def text_value_issue(value: str, evidence: str, normalised_text: str) -> DropReason | None:
+    """A free-text value must not be a question the text does not ask (`question`) and must
+    be his own words: a word-boundary piece of the text (`evidence_not_in_text`)."""
+    if "?" in value and "?" not in evidence:
+        return "question"
+    if not contains_phrase(normalise_for_match(value), normalised_text):
+        return "evidence_not_in_text"
     return None
 
 

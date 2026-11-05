@@ -116,7 +116,7 @@ class _Run:
 
     client: ModelClient
     log: UsageLog
-    config: JournalFieldsConfig
+    convert: Callable[[dict[str, Any]], Any]  # parsed answer -> guard input (InvalidAnswer)
     trade_id: int | None  # None for calls without a trade (warm-up)
     purpose: str
     system: str
@@ -135,7 +135,7 @@ class _Run:
 
     def attempt(
         self, model: str, timeout_s: float, retries: int, *, fallback: bool
-    ) -> tuple[ModelReply, dict[str, Any]]:
+    ) -> tuple[ModelReply, Any]:
         request = ModelRequest(
             model, self.system, self.text, self.schema, self.effort, MAX_TOKENS, timeout_s, retries
         )
@@ -143,7 +143,7 @@ class _Run:
         reply: ModelReply | None = None
         try:
             reply = self.client.create(request)
-            output = _entries(self.config, parse_reply(reply))
+            output = _converted(self.convert, parse_reply(reply))
         except AiCallError as exc:
             self._record(model, reply, started, fallback, exc.kind)
             raise
@@ -188,9 +188,9 @@ class _Run:
         return sum((c for c in self.costs if c is not None), Decimal("0.0000"))
 
 
-def _entries(config: JournalFieldsConfig, answer: dict[str, Any]) -> dict[str, Any]:
+def _converted(convert: Callable[[dict[str, Any]], Any], answer: dict[str, Any]) -> Any:
     try:
-        return answer_entries(config, answer)
+        return convert(answer)
     except InvalidAnswer as exc:
         raise AiCallError("invalid_output", f"reply does not match the schema: {exc}") from None
 
@@ -205,7 +205,7 @@ def _failed(subject: str, exc: AiCallError) -> ExtractionFailed:
 
 def _call_with_fallback(
     run: _Run, settings: ExtractionSettings, started: float
-) -> tuple[ModelReply, dict[str, Any], bool]:
+) -> tuple[ModelReply, Any, bool]:
     try:
         reply, output = run.attempt(
             settings.primary_model, PRIMARY_TIMEOUT_S, PRIMARY_MAX_RETRIES, fallback=False
@@ -236,6 +236,70 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+@dataclass(frozen=True)
+class ModelCall:
+    """What one extraction call (primary + optional fallback attempt) returned."""
+
+    output: Any  # `convert` of the parsed answer
+    reply: ModelReply
+    fallback_used: bool
+    usage: TokenUsage  # summed over the attempts
+    cost_usd: Decimal | None  # None if any attempt is unpriced
+    started: float  # clock() at the start
+
+
+@dataclass(frozen=True)
+class CallSpec:
+    """One structured-output call: prompt, schema, input text and how to read the answer."""
+
+    system: str
+    schema: dict[str, Any]
+    text: str
+    convert: Callable[[dict[str, Any]], Any]
+    purpose: str
+    trade_id: int | None = None
+
+
+def call_model(
+    spec: CallSpec,
+    *,
+    client: ModelClient,
+    settings: ExtractionSettings,
+    usage_log: UsageLog,
+    clock: Callable[[], float] = time.monotonic,
+    now: Callable[[], datetime] = _utc_now,
+) -> ModelCall:
+    """Primary attempt, fallback per the budget rules, one usage line per attempt (shared by
+    the trade and the bias extraction). Raises ExtractionFailed."""
+    run = _Run(
+        client=client,
+        log=usage_log,
+        convert=spec.convert,
+        trade_id=spec.trade_id,
+        purpose=spec.purpose,
+        system=spec.system,
+        schema=spec.schema,
+        text=spec.text,
+        effort=settings.effort,
+        clock=clock,
+        now=now,
+    )
+    started = clock()
+    reply, output, fallback_used = _call_with_fallback(run, settings, started)
+    return ModelCall(output, reply, fallback_used, run.usage, run.total_cost(), started)
+
+
+def usage_summary(call: ModelCall, clock: Callable[[], float]) -> UsageSummary:
+    return UsageSummary(
+        model=call.reply.model,
+        fallback_used=call.fallback_used,
+        input_tokens=call.usage.input_tokens,
+        output_tokens=call.usage.output_tokens,
+        cost_usd=call.cost_usd,
+        duration_ms=round((clock() - call.started) * 1000),
+    )
+
+
 def extract_trade_fields(
     text: str,
     *,
@@ -256,26 +320,27 @@ def extract_trade_fields(
     warm-up call). `scope` = the trade's required-since rule for `missing_required` (None:
     every required field counts). Raises PromptError when the prompt file is missing.
     """
-    run = _Run(
+    call = call_model(
+        CallSpec(
+            system=extract_trade_system_prompt(config),
+            schema=build_extraction_schema(config),
+            text=text,
+            convert=lambda answer: answer_entries(config, answer),
+            purpose=purpose,
+            trade_id=trade_id,
+        ),
         client=client,
-        log=usage_log,
-        config=config,
-        trade_id=trade_id,
-        purpose=purpose,
-        system=extract_trade_system_prompt(config),
-        schema=build_extraction_schema(config),
-        text=text,
-        effort=settings.effort,
+        settings=settings,
+        usage_log=usage_log,
         clock=clock,
         now=now,
     )
-    started = clock()
-    reply, output, fallback_used = _call_with_fallback(run, settings, started)
-    guarded = apply_guards(config, output, text, number_words)
+    guarded = apply_guards(config, call.output, text, number_words)
     if guarded.dropped:
+        subject = purpose if trade_id is None else f"trade {trade_id}"
         logger.info(
             "AI extraction %s: dropped %s",
-            run.subject,
+            subject,
             ", ".join(f"{d.key}:{d.reason}" for d in guarded.dropped),
         )
     return ExtractionOutcome(
@@ -283,12 +348,5 @@ def extract_trade_fields(
         ai_filled_fields=guarded.ai_filled_fields,
         missing_required=extraction_missing(config, guarded.fields, scope),
         dropped=guarded.dropped,
-        usage=UsageSummary(
-            model=reply.model,
-            fallback_used=fallback_used,
-            input_tokens=run.usage.input_tokens,
-            output_tokens=run.usage.output_tokens,
-            cost_usd=run.total_cost(),
-            duration_ms=round((clock() - started) * 1000),
-        ),
+        usage=usage_summary(call, clock),
     )

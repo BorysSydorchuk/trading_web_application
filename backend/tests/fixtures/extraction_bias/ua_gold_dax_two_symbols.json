@@ -1,0 +1,60 @@
+{
+  "description": "UA, two symbols in one note via inflected aliases (по золоту, Дакс), level, confidence digit, narrative",
+  "kind": "pre_london",
+  "text": "Сьогодні по золоту шукаю покупки від FVG H1 2648, впевненість 2. Дакс ведмежий, чекаю зняття хаю Азії, потім вниз до 18900.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "по золоту шукаю покупки"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "key_levels",
+      "value": "FVG H1 2648",
+      "evidence": "від FVG H1 2648"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "confidence",
+      "value": "2",
+      "evidence": "впевненість 2"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "Дакс ведмежий"
+    },
+    {
+      "symbol": "GER40",
+      "key": "narrative",
+      "value": "чекаю зняття хаю Азії, потім вниз до 18900",
+      "evidence": "чекаю зняття хаю Азії, потім вниз до 18900"
+    }
+  ],
+  "expected_entries": {
+    "XAUUSD": {
+      "direction": "bullish",
+      "key_levels": "FVG H1 2648",
+      "confidence": 2
+    },
+    "GER40": {
+      "direction": "bearish",
+      "narrative": "чекаю зняття хаю Азії, потім вниз до 18900"
+    }
+  },
+  "eval_expected_entries": {
+    "XAUUSD": {
+      "direction": "bullish",
+      "key_levels": "FVG H1 2648",
+      "confidence": 2
+    },
+    "GER40": {
+      "direction": "bearish",
+      "key_levels": "хаю Азії",
+      "narrative": "чекаю зняття хаю Азії, потім вниз до 18900"
+    }
+  }
+}

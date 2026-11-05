@@ -1,0 +1,27 @@
+{
+  "description": "News day: one sentence says no trade for two named symbols (one item per symbol, same quote)",
+  "kind": "pre_ny",
+  "text": "Сьогодні NFP, по даксу і золоту не торгую, без угод до виходу новин.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "no_trade",
+      "evidence": "по даксу і золоту не торгую"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "no_trade",
+      "evidence": "по даксу і золоту не торгую"
+    }
+  ],
+  "expected_entries": {
+    "XAUUSD": {
+      "direction": "no_trade"
+    },
+    "GER40": {
+      "direction": "no_trade"
+    }
+  }
+}

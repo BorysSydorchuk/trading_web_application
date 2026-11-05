@@ -6,12 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from app.config_files import get_journal_fields
+from app.config_files import get_bias_config, get_journal_fields
+from app.models.enums import BiasKind
 from app.services.ai.prompt import (
+    EXTRACT_BIAS_PROMPT,
     EXTRACT_TRADE_PROMPT,
     FIELDS_PLACEHOLDER,
+    KIND_PLACEHOLDER,
     PROMPTS_DIR,
+    SYMBOLS_PLACEHOLDER,
     PromptError,
+    extract_bias_system_prompt,
     extract_trade_system_prompt,
 )
 
@@ -42,3 +47,32 @@ def test_missing_prompt_or_placeholder_is_a_prompt_error(tmp_path: Path) -> None
     (tmp_path / EXTRACT_TRADE_PROMPT).write_text("no placeholder", encoding="utf-8")
     with pytest.raises(PromptError, match="placeholder"):
         extract_trade_system_prompt(config, tmp_path)
+
+
+# --- bias prompt (M4-06) ---
+
+
+def test_bias_prompt_has_rules_kind_and_aliases() -> None:
+    prompt = extract_bias_system_prompt(get_bias_config(), BiasKind.PRE_NY)
+    assert KIND_PLACEHOLDER not in prompt
+    assert SYMBOLS_PLACEHOLDER not in prompt
+    for phrase in ("Never invent", "verbatim", "Never ask questions", "no_trade", "POI"):
+        assert phrase in prompt
+    assert "This note is `pre_ny`: the daily bias" in prompt
+    assert "- `XAUUSD`: also called золото, gold, голд, XAU/USD, XAU" in prompt
+
+
+def test_bias_prompt_is_byte_stable_per_kind() -> None:
+    config = get_bias_config()
+    weekly = extract_bias_system_prompt(config, BiasKind.WEEKLY)
+    assert weekly == extract_bias_system_prompt(config, BiasKind.WEEKLY)
+    assert weekly != extract_bias_system_prompt(config, BiasKind.MONTHLY)
+
+
+def test_bias_prompt_missing_file_or_placeholder(tmp_path: Path) -> None:
+    config = get_bias_config()
+    with pytest.raises(PromptError, match="Cannot read prompt"):
+        extract_bias_system_prompt(config, BiasKind.PRE_LONDON, tmp_path)
+    (tmp_path / EXTRACT_BIAS_PROMPT).write_text("only {{KIND}}", encoding="utf-8")
+    with pytest.raises(PromptError, match="SYMBOLS"):
+        extract_bias_system_prompt(config, BiasKind.PRE_LONDON, tmp_path)

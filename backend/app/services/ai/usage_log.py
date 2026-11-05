@@ -199,17 +199,24 @@ def summarise_month(path: Path, now: datetime, tz: str = DEFAULT_TZ) -> MonthUsa
 # --- last success ---
 
 
+# Purposes of calls with another schema (M4-06 bias extraction): their success does not
+# keep the trade extraction grammar compiled, so they never count as a warm-up.
+OTHER_SCHEMA_PURPOSE_PREFIX = "bias_"
+
+
 class _OutcomeLine(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     ts: AwareDatetime
     ok: StrictBool
     error_kind: str | None = None
+    purpose: str | None = None
 
 
 def last_success_at(path: Path) -> datetime | None:
-    """Latest `ts` of a successful attempt (ok, no error_kind), any purpose; None when
-    there is none. Broken lines are skipped (summarise_month reports them)."""
+    """Latest `ts` of a successful attempt (ok, no error_kind) with the trade extraction
+    schema (any purpose except `bias_*`); None when there is none. Broken lines are skipped
+    (summarise_month reports them)."""
     latest: datetime | None = None
     for raw in _read_lines(path):
         if not raw.strip():
@@ -217,6 +224,8 @@ def last_success_at(path: Path) -> datetime | None:
         try:
             line = _OutcomeLine.model_validate(json.loads(raw))
         except (ValueError, ValidationError, RecursionError):
+            continue
+        if (line.purpose or "").startswith(OTHER_SCHEMA_PURPOSE_PREFIX):
             continue
         if line.ok and line.error_kind is None and (latest is None or line.ts > latest):
             latest = line.ts

@@ -1,0 +1,41 @@
+{
+  "description": "RU, кабель/евро aliases, POI level, confidence as a number word (единица)",
+  "kind": "pre_ny",
+  "text": "Кабель в шорт от POI H4 1.2710. Евро тоже вниз, уверенность единица.",
+  "model_output": [
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "Кабель в шорт"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "key_levels",
+      "value": "POI H4 1.2710",
+      "evidence": "от POI H4 1.2710"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "Евро тоже вниз"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "confidence",
+      "value": "1",
+      "evidence": "уверенность единица"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bearish",
+      "confidence": 1
+    },
+    "GBPUSD": {
+      "direction": "bearish",
+      "key_levels": "POI H4 1.2710"
+    }
+  }
+}

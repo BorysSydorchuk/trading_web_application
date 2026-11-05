@@ -111,6 +111,11 @@ def test_standalone_number_is_accepted(value: int, evidence: str, words: NumberW
         (5, "'п'ять'"),
         (4, "'чотири'"),
         (4, "оцінка-4"),  # a hyphen after a word is not a range
+        (3, "на трійку"),  # accusative forms (M4-06 review)
+        (3, "на тройку"),
+        (1, "на единицу"),
+        (5, "сетап на п'ятірку"),
+        (4, "на четверку"),
     ],
 )
 def test_number_words_count_as_the_number(value: int, evidence: str, words: NumberWords) -> None:

@@ -330,7 +330,7 @@ Same matching rules as M2 (whole words, after normalisation, ё → е; words in
 
 The worker keeps `<DATA_DIR>/ai_warmup.json` (`{schema_hash, model, at}`). When the API key is set and the hash of the extraction schema generated from `journal_fields.yaml` (with the model id) differs from the stored one, the worker runs one extraction on a fixed short text in the background. That call is logged in `logs/ai_usage.jsonl` with `"purpose": "warmup"`, `"trade_id": null`. A failed warm-up is logged and retried at most once an hour; it never affects the API. Only the extraction model is warmed, not the fallback model.
 
-Time-based warm-up (M4-02, PM 2026-11-05): the server's compiled grammar expires 24 h after last use, so the same warm-up call also runs (a) once at worker start when the last successful AI call is more than 20 h ago or there is none (latest `ts` of a line in `logs/ai_usage.jsonl` with `ok: true` and no `error_kind`, any purpose, or `at` in `ai_warmup.json`, whichever is later), and (b) Mon–Fri at 07:30 Europe/Brussels while the worker runs (cron job `ai_warmup_daily`; if the worker was asleep or stopped then, and it is more than 30 min late, that day is skipped, never fired late). Several reasons at the same moment (schema changed, stale at start, 07:30) make one call. Same call, purpose `warmup`, priced and counted in the month-to-date cost; skipped without an API key, and after a failure the 1 h backoff applies to every reason. A successful warm-up rewrites `ai_warmup.json` (new `at`).
+Time-based warm-up (M4-02, PM 2026-11-05): the server's compiled grammar expires 24 h after last use, so the same warm-up call also runs (a) once at worker start when the last successful AI call is more than 20 h ago or there is none (latest `ts` of a line in `logs/ai_usage.jsonl` with `ok: true` and no `error_kind`, any purpose except `bias_*` (another schema), or `at` in `ai_warmup.json`, whichever is later), and (b) Mon–Fri at 07:30 Europe/Brussels while the worker runs (cron job `ai_warmup_daily`; if the worker was asleep or stopped then, and it is more than 30 min late, that day is skipped, never fired late). Several reasons at the same moment (schema changed, stale at start, 07:30) make one call. Same call, purpose `warmup`, priced and counted in the month-to-date cost; skipped without an API key, and after a failure the 1 h backoff applies to every reason. A successful warm-up rewrites `ai_warmup.json` (new `at`).
 
 ## M4
 
@@ -384,6 +384,20 @@ Endpoints:
 ### Bias extraction
 - `POST /api/bias/notes/extract` body `{ kind, text }` → `{ entries: [{ symbol, fields: { direction?, key_levels?, narrative?, confidence? }, evidence: {...} }], dropped: [...], usage: {...} }`. Saves nothing except the usage log. Same rules as trade extraction (M2): structured output, every value with an evidence quote found in the text, no questions, nothing invented, ambiguous → empty; symbols from bias.yaml aliases (a symbol the text does not mention is not returned); `confidence` only from words/digits 1–3 via the number-word rules. Errors as trade extraction (503 `ai_not_configured`, 502 `ai_error`, 422, config_error). Usage log purpose `bias_extract`.
 - Prompt `backend/prompts/extract_bias.md` (glossary + aliases injected).
+- Details (M4-06):
+  - Body: `kind` one of `pre_london | pre_ny | weekly | monthly` (prompt context only), `text` as trade extraction (1–20000 chars, not blank). Strict JSON, unknown keys → 422. Order: body 422 → 500 `config_error` (`bias.yaml`, then `extraction.yaml`) → 503 `ai_not_configured` → AI call. No DB access.
+  - Response:
+```json
+{ "entries": [ { "symbol": "XAUUSD",
+                 "fields": { "direction": "bullish", "key_levels": "FVG H1 2648", "confidence": 2 },
+                 "evidence": { "direction": "по золоту шукаю покупки", "key_levels": "від FVG H1 2648", "confidence": "впевненість 2" } } ],
+  "dropped": [ { "symbol": "EURUSD", "key": "direction", "reason": "symbol_not_in_text" } ],
+  "usage": { "model": "claude-sonnet-5-5", "fallback_used": false, "input_tokens": 1500, "output_tokens": 120, "cost_usd": "0.0063", "duration_ms": 2400 } }
+```
+  - `entries`: bias.yaml order, only symbols with at least one kept value; `fields` keys in the order direction, key_levels, narrative, confidence, absent when not filled; `evidence` has the same keys (the model's quote). `direction` ∈ bullish/bearish/neutral/no_trade; `confidence` integer 1–3; text fields are his own words (≤ 5000 chars). The UI marks filled fields as `ai_filled_fields` when it saves with `POST/PUT /api/bias/notes`.
+  - `dropped`: `{symbol, key, reason}`, sorted by bias.yaml symbol order then field order (unknown symbols last). Reasons as trade extraction (`evidence_not_in_text`, `invalid_option` incl. two different values for one symbol + field, `out_of_range`, `question`, `not_fillable`) plus `symbol_not_in_text`: the symbol's name or one of its bias.yaml aliases is not in the text (whole words, normalised like the evidence; Cyrillic aliases with a stem of ≥ 4 letters also with a case ending: золото → по золоту, кабель → на кабелі; євро only as a whole word). It is checked anywhere in the text, not in the value's quote.
+  - "Усі пари" / "everything": a value counts only for symbols the text names; the model gives one item per named symbol (same quote allowed).
+  - `usage` = trade extraction `usage`. Usage log line: `purpose: "bias_extract"`, `trade_id: null`. An `auth` error also marks the key `invalid_key` (M3-17). No warm-up for the bias schema: the first bias fill after a bias.yaml symbol change (or after 24 h without a bias call) may take ~25 s. Bias calls do not count as a trade warm-up.
 
 ### Bias status (dashboard reminders)
 - `GET /api/bias/status` → `{ date: "2026-11-06", weekday: true, now: "...Z",

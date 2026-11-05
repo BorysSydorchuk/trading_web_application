@@ -1,0 +1,43 @@
+{
+  "description": "Monthly note with inflected aliases (по фіберу, по кабелю, по даксу) and a level in words",
+  "kind": "monthly",
+  "text": "На місяць: по фіберу лонг, по кабелю лонг, по даксу шорт від хаю минулого місяця.",
+  "model_output": [
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "по фіберу лонг"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "по кабелю лонг"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "по даксу шорт"
+    },
+    {
+      "symbol": "GER40",
+      "key": "key_levels",
+      "value": "від хаю минулого місяця",
+      "evidence": "по даксу шорт від хаю минулого місяця"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bullish"
+    },
+    "GBPUSD": {
+      "direction": "bullish"
+    },
+    "GER40": {
+      "direction": "bearish",
+      "key_levels": "від хаю минулого місяця"
+    }
+  }
+}
