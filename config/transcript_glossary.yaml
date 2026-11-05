@@ -1,0 +1,34 @@
+# Term normalization of voice-note transcripts (docs/api.md "Transcript normalization").
+# Нормалізація термінів у розшифровці голосових нотаток.
+#
+# After Whisper, the worker replaces every `from` with its `to`, then stores the transcript.
+# Matching ignores case (ФВГ = фвг) and works on whole words only: "ФВГшка" stays as is.
+# The longest `from` wins, each piece of text is replaced at most once, `to` is written as is.
+# Only add forms that are never real Ukrainian words (no "аж 4", "аж один").
+# Changes are picked up by the next note, no restart needed. Save as UTF-8.
+
+replacements:
+  - to: FVG
+    from: [ФВГ]
+  - to: FVG H1
+    from: [FVH1]
+  - to: IFVG
+    from: [ІФВГ, ИФВГ, іфввг]
+  - to: FTA
+    from: [ФТА]
+  - to: MT5
+    from: [МТ5, МТ-5]   # Cyrillic М, Т
+  # Timeframes typed with Cyrillic Н / М (they look like Latin H / M).
+  # Таймфрейми, де Whisper написав кириличні Н / М.
+  - to: H1
+    from: [Н1]
+  - to: H4
+    from: [Н4]
+  - to: M1
+    from: [М1]
+  - to: M5
+    from: [М5]
+  - to: M15
+    from: [М15]
+  - to: M30
+    from: [М30]

@@ -29,6 +29,7 @@ CONFIG_NAMES = (
     "ai_pricing.yaml",
     "extraction.yaml",
     "transcription.yaml",
+    "transcript_glossary.yaml",
 )
 
 

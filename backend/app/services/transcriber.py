@@ -70,7 +70,7 @@ class WhisperOptions:
     language: str | None
     beam_size: int
     vad_filter: bool = True
-    condition_on_previous_text: bool = False
+    condition_on_previous_text: bool = True
     temperatures: tuple[float, ...] = (0.0, 0.4)
 
     @classmethod

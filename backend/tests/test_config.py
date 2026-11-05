@@ -220,7 +220,7 @@ def test_whisper_defaults(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None
     assert settings.whisper_beam_size == 1
     assert settings.whisper_cpu_threads == "auto"
     assert settings.whisper_vad_filter is True
-    assert settings.whisper_condition_on_previous_text is False
+    assert settings.whisper_condition_on_previous_text is True
     assert settings.whisper_temperatures == (0.0, 0.4)
 
 
@@ -230,14 +230,14 @@ def test_whisper_settings_from_env_file(clean_env: pytest.MonkeyPatch, tmp_path:
         _DB_LINE + "WHISPER_BEAM_SIZE=5\n"
         "WHISPER_CPU_THREADS=0\n"
         "WHISPER_VAD_FILTER=false\n"
-        "WHISPER_CONDITION_ON_PREVIOUS_TEXT=true\n"
+        "WHISPER_CONDITION_ON_PREVIOUS_TEXT=false\n"
         "WHISPER_TEMPERATURES= 0.0, 0.2 ,0.4,0.6,0.8,1.0\n",
     )
     settings = Settings(_env_file=env)
     assert settings.whisper_beam_size == 5
     assert settings.whisper_cpu_threads == 0
     assert settings.whisper_vad_filter is False
-    assert settings.whisper_condition_on_previous_text is True
+    assert settings.whisper_condition_on_previous_text is False
     assert settings.whisper_temperatures == (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
 
