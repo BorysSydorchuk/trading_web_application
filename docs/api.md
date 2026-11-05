@@ -330,6 +330,8 @@ Same matching rules as M2 (whole words, after normalisation, ё → е; words in
 
 The worker keeps `<DATA_DIR>/ai_warmup.json` (`{schema_hash, model, at}`). When the API key is set and the hash of the extraction schema generated from `journal_fields.yaml` (with the model id) differs from the stored one, the worker runs one extraction on a fixed short text in the background. That call is logged in `logs/ai_usage.jsonl` with `"purpose": "warmup"`, `"trade_id": null`. A failed warm-up is logged and retried at most once an hour; it never affects the API. Only the extraction model is warmed, not the fallback model.
 
+Time-based warm-up (M4-02, PM 2026-11-05): the server's compiled grammar expires 24 h after last use, so the same warm-up call also runs (a) once at worker start when the last successful AI call is more than 20 h ago or there is none (latest `ts` of a line in `logs/ai_usage.jsonl` with `ok: true` and no `error_kind`, any purpose, or `at` in `ai_warmup.json`, whichever is later), and (b) Mon–Fri at 07:30 Europe/Brussels while the worker runs (cron job `ai_warmup_daily`; if the worker was asleep or stopped then, and it is more than 30 min late, that day is skipped, never fired late). Several reasons at the same moment (schema changed, stale at start, 07:30) make one call. Same call, purpose `warmup`, priced and counted in the month-to-date cost; skipped without an API key, and after a failure the 1 h backoff applies to every reason. A successful warm-up rewrites `ai_warmup.json` (new `at`).
+
 ## M4
 
 ### Bias config (`config/bias.yaml`, UTF-8, reloaded on change, checked at API/worker start)

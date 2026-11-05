@@ -149,7 +149,7 @@ def _parse_line(raw: str) -> _Line | None:
     try:
         data: Any = json.loads(raw)
         return _Line.model_validate(data)
-    except (ValueError, ValidationError):
+    except (ValueError, ValidationError, RecursionError):
         return None
 
 
@@ -194,3 +194,30 @@ def summarise_month(path: Path, now: datetime, tz: str = DEFAULT_TZ) -> MonthUsa
     return MonthUsage(
         month, cost.quantize(COST_QUANTUM), calls, failed, unpriced, tokens_in, tokens_out
     )
+
+
+# --- last success ---
+
+
+class _OutcomeLine(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    ts: AwareDatetime
+    ok: StrictBool
+    error_kind: str | None = None
+
+
+def last_success_at(path: Path) -> datetime | None:
+    """Latest `ts` of a successful attempt (ok, no error_kind), any purpose; None when
+    there is none. Broken lines are skipped (summarise_month reports them)."""
+    latest: datetime | None = None
+    for raw in _read_lines(path):
+        if not raw.strip():
+            continue
+        try:
+            line = _OutcomeLine.model_validate(json.loads(raw))
+        except (ValueError, ValidationError, RecursionError):
+            continue
+        if line.ok and line.error_kind is None and (latest is None or line.ts > latest):
+            latest = line.ts
+    return latest

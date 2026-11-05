@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -357,3 +357,221 @@ def test_refusal_is_a_failure(ai_settings: Settings) -> None:
 
     assert job.run_once() is False
     assert not warmup_state_path(ai_settings).exists()
+
+
+# --- time-based warm-up (M4-02): stale at start, Mon-Fri 07:30 Brussels ---
+
+MONDAY_0730 = datetime(2026, 11, 9, 6, 30, tzinfo=UTC)  # 07:30 Europe/Brussels (winter)
+
+
+class Now:
+    def __init__(self, at: datetime) -> None:
+        self.at = at
+
+    def __call__(self) -> datetime:
+        return self.at
+
+
+def timed_job(
+    settings: Settings, client: FakeClient, now: Now, clock: Clock | None = None
+) -> WarmupJob:
+    return WarmupJob(settings, client_factory=lambda _s: client, clock=clock or Clock(), now=now)
+
+
+def store_at(settings: Settings, config: JournalFieldsConfig, at: datetime) -> None:
+    digest = schema_hash(build_extraction_schema(config), MODEL)
+    write_state(warmup_state_path(settings), WarmupState(schema_hash=digest, model=MODEL, at=at))
+
+
+def log_line(settings: Settings, at: datetime, *, error_kind: str | None = None) -> None:
+    path = usage_log_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = {
+        "ts": at.isoformat().replace("+00:00", "Z"),
+        "purpose": "extraction",
+        "ok": error_kind is None,
+        "error_kind": error_kind,
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(line) + "\n")
+
+
+def test_start_with_recent_success_in_usage_log_makes_no_call(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(days=3))
+    log_line(ai_settings, MONDAY_0730 - timedelta(hours=2))  # a user extraction
+    client = FakeClient([])
+    job = timed_job(ai_settings, client, Now(MONDAY_0730))
+
+    assert job.run_once() is False
+    assert client.requests == []
+
+
+def test_start_with_old_success_makes_one_call_and_updates_state(
+    ai_settings: Settings, config: JournalFieldsConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=21))
+    log_line(ai_settings, MONDAY_0730 - timedelta(hours=20, minutes=1))
+    now = Now(MONDAY_0730)
+    client = FakeClient([reply()])
+    job = timed_job(ai_settings, client, now)
+
+    job()
+    job()
+
+    assert len(client.requests) == 1
+    assert "no successful AI call in the last 20 h" in caplog.text
+    state = read_state(warmup_state_path(ai_settings))
+    assert state is not None
+    assert state.at == MONDAY_0730
+    assert usage_lines(ai_settings)[-1]["purpose"] == "warmup"
+
+
+def test_start_with_no_success_at_all_makes_one_call(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=30))
+    log_line(ai_settings, MONDAY_0730 - timedelta(hours=1), error_kind="timeout")  # no success
+    client = FakeClient([reply()])
+    job = timed_job(ai_settings, client, Now(MONDAY_0730))
+
+    assert job.run_once() is True
+    assert len(client.requests) == 1
+
+
+def test_hash_change_and_old_success_make_one_call(
+    ai_settings: Settings, config: JournalFieldsConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    digest = "old-hash"
+    old = MONDAY_0730 - timedelta(days=2)
+    write_state(
+        warmup_state_path(ai_settings), WarmupState(schema_hash=digest, model=MODEL, at=old)
+    )
+    client = FakeClient([reply()])
+    job = timed_job(ai_settings, client, Now(MONDAY_0730))
+
+    job()
+    job()
+
+    assert len(client.requests) == 1
+    assert "extraction schema changed; no successful AI call in the last 20 h" in caplog.text
+
+
+def test_start_check_runs_once_per_worker_start(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=1))
+    now = Now(MONDAY_0730)
+    client = FakeClient([])
+    job = timed_job(ai_settings, client, now)
+
+    job()
+    now.at += timedelta(hours=22)  # a quiet day later, no 07:30 request
+    job()
+
+    assert client.requests == []
+
+
+def test_weekday_0730_request_makes_one_call(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=1))
+    now = Now(MONDAY_0730 - timedelta(minutes=5))
+    client = FakeClient([reply()])
+    job = timed_job(ai_settings, client, now)
+    job()  # start: recent success, no call
+    assert client.requests == []
+
+    now.at = MONDAY_0730
+    job.request_daily()
+    now.at += timedelta(seconds=40)
+    job()
+    job()
+
+    assert len(client.requests) == 1
+
+
+def test_no_daily_request_no_call(ai_settings: Settings, config: JournalFieldsConfig) -> None:
+    # Saturday 07:30 Brussels: the cron does not fire (test_worker), so no request is made.
+    saturday = datetime(2026, 11, 14, 6, 30, tzinfo=UTC)
+    store_at(ai_settings, config, saturday - timedelta(hours=1))
+    client = FakeClient([])
+    job = timed_job(ai_settings, client, Now(saturday))
+
+    job()
+
+    assert client.requests == []
+
+
+def test_daily_request_older_than_grace_is_dropped(
+    ai_settings: Settings, config: JournalFieldsConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=1))
+    now = Now(MONDAY_0730)
+    client = FakeClient([])
+    job = timed_job(ai_settings, client, now)
+    job.request_daily()
+
+    now.at += timedelta(minutes=31)  # e.g. the PC slept right after 07:30
+    job()
+
+    assert client.requests == []
+    assert "07:30 warm-up is skipped" in caplog.text
+
+
+def test_daily_request_without_key_makes_no_call(settings: Settings, tmp_path: Path) -> None:
+    no_key = settings.model_copy(update={"anthropic_api_key": SecretStr(""), "data_dir": tmp_path})
+    client = FakeClient([])
+    job = timed_job(no_key, client, Now(MONDAY_0730))
+    job.request_daily()
+
+    job()
+
+    assert client.requests == []
+
+
+def test_daily_failure_backs_off_and_is_dropped_after_grace(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(hours=1))
+    clock = Clock()
+    now = Now(MONDAY_0730)
+    client = FakeClient([AiCallError("auth", "invalid key")])
+    job = timed_job(ai_settings, client, now, clock)
+    job()  # start: recent success
+    job.request_daily()
+
+    job()  # fails (auth)
+    clock.t += 60
+    now.at += timedelta(minutes=1)
+    job()  # in backoff
+    clock.t += RETRY_AFTER_FAILURE_S
+    now.at += timedelta(hours=1)
+    job()  # backoff over, but the 07:30 request expired
+
+    assert len(client.requests) == 1
+
+
+def test_stale_start_failure_backs_off_then_retries(
+    ai_settings: Settings, config: JournalFieldsConfig
+) -> None:
+    store_at(ai_settings, config, MONDAY_0730 - timedelta(days=3))
+    clock = Clock()
+    now = Now(MONDAY_0730)
+    client = FakeClient([overloaded(), reply()])
+    job = timed_job(ai_settings, client, now, clock)
+
+    job()
+    clock.t += RETRY_AFTER_FAILURE_S - 1
+    job()
+    assert len(client.requests) == 1
+
+    clock.t += 1
+    now.at += timedelta(hours=1)
+    job()
+    job()
+    assert len(client.requests) == 2

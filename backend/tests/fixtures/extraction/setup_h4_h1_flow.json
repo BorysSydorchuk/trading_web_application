@@ -1,0 +1,21 @@
+{
+  "description": "PM rule 2026-11-05: 'Сетап H4, H1 Flow' = Flow H1 in sync with H4, so setup_context yes with that phrase as evidence; POI FVG H4, IFVG M5 entry, closed at point B",
+  "text": "XAUUSD, Нью-Йорк. Сетап H4, H1 Flow. POI FVG H4 після зняття ліквідності. Вхід IFVG M5, закрив по точці B. Все по плану, спокійно.",
+  "model_output": {
+    "setup_context": { "value": "yes", "evidence": "Сетап H4, H1 Flow" },
+    "poi_type": { "value": "fvg_h4", "evidence": "POI FVG H4" },
+    "fvg_kind": { "value": "post_manipulation", "evidence": "FVG H4 після зняття ліквідності" },
+    "entry_model": { "value": "ifvg_m5", "evidence": "Вхід IFVG M5" },
+    "exit_reason": { "value": "point_b", "evidence": "закрив по точці B" },
+    "followed_plan": { "value": true, "evidence": "Все по плану" }
+  },
+  "expected_fields": {
+    "setup_context": "yes",
+    "poi_type": "fvg_h4",
+    "fvg_kind": "post_manipulation",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "point_b",
+    "followed_plan": true
+  },
+  "expected_dropped": []
+}

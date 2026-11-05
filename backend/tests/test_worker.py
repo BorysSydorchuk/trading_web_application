@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 
 from app.config import Settings
-from app.services.ai.warmup import WARMUP_JOB_ID
+from app.services.ai.warmup import WARMUP_DAILY_JOB_ID, WARMUP_JOB_ID, WarmupJob
 from app.worker.main import (
     HEARTBEAT_JOB_ID,
     REQUIREMENTS_JOB_ID,
@@ -48,6 +50,7 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
         HEARTBEAT_JOB_ID,
         SYNC_JOB_ID,
         WARMUP_JOB_ID,
+        WARMUP_DAILY_JOB_ID,
         TRANSCRIPTION_JOB_ID,
         REQUIREMENTS_JOB_ID,
     ]
@@ -184,3 +187,61 @@ def test_default_transcription_job_uses_whisper_lazily(
     assert calls[0][0] is calls[1][0]  # one transcriber per process
     assert calls[0][0].options.model == settings.whisper_model
     assert calls[0][1] == settings.data_dir
+
+
+# --- ai_warmup_daily (Mon-Fri 07:30 Europe/Brussels) ---
+
+BRUSSELS = ZoneInfo("Europe/Brussels")
+
+
+def _bxl(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
+    return datetime(year, month, day, hour, minute, tzinfo=BRUSSELS)
+
+
+def _daily_trigger(settings: Settings) -> CronTrigger:
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine)
+    job = scheduler.get_job(WARMUP_DAILY_JOB_ID)
+    assert job is not None
+    assert job.coalesce is True
+    assert job.misfire_grace_time == 1800  # asleep longer at 07:30: skipped, never late
+    assert isinstance(job.trigger, CronTrigger)
+    return job.trigger
+
+
+@pytest.mark.parametrize(
+    ("after", "expected"),
+    [
+        # Monday 06:00 -> Monday 07:30 Brussels (winter: 06:30 UTC)
+        (_bxl(2026, 11, 9, 6, 0), _bxl(2026, 11, 9, 7, 30)),
+        # Monday 08:00 -> Tuesday 07:30
+        (_bxl(2026, 11, 9, 8, 0), _bxl(2026, 11, 10, 7, 30)),
+        # Friday 08:00 -> Monday (no Saturday / Sunday)
+        (_bxl(2026, 11, 13, 8, 0), _bxl(2026, 11, 16, 7, 30)),
+        # Saturday 06:00 -> Monday
+        (_bxl(2026, 11, 14, 6, 0), _bxl(2026, 11, 16, 7, 30)),
+        # summer time (CEST) still 07:30 local
+        (_bxl(2027, 6, 7, 6, 0), _bxl(2027, 6, 7, 7, 30)),
+    ],
+)
+def test_daily_warmup_fires_weekdays_at_0730_brussels(
+    settings: Settings, after: datetime, expected: datetime
+) -> None:
+    fire = _daily_trigger(settings).get_next_fire_time(None, after)
+
+    assert fire is not None
+    assert fire == expected
+
+
+def test_daily_job_flags_the_default_warmup_job(settings: Settings) -> None:
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine)
+    daily = scheduler.get_job(WARMUP_DAILY_JOB_ID)
+    warmup = scheduler.get_job(WARMUP_JOB_ID)
+    assert daily is not None
+    assert warmup is not None
+    target = warmup.func.__wrapped__
+    assert isinstance(target, WarmupJob)
+    assert target._daily_requested_at is None
+
+    daily.func()
+
+    assert target._daily_requested_at is not None
