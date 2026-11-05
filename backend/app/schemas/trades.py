@@ -65,6 +65,10 @@ class TradeRow(BaseModel):
     hour: int | None
     is_reentry: bool
     violations: list[str]  # rule keys, sorted
+    # M4 (PRD 6.6): daily = effective value (override ?? auto); weekly/monthly are auto only.
+    bias_alignment: str | None
+    bias_alignment_weekly: str | None
+    bias_alignment_monthly: str | None
 
 
 class TradeList(BaseModel):
@@ -96,6 +100,14 @@ class ChartLinkOut(BaseModel):
     preview_url: str | None  # snapshot image; None for /chart links
 
 
+class BiasNoteIds(BaseModel):
+    """Bias notes whose entry decided each alignment (null = no_bias / config broken)."""
+
+    daily: int | None
+    weekly: int | None
+    monthly: int | None
+
+
 class TradeDetail(TradeRow):
     """M2 shape (docs/api.md "TradeDetail in M2"): journal values live in `journal`."""
 
@@ -113,6 +125,16 @@ class TradeDetail(TradeRow):
     # Required now, empty, made required after this trade closed (M3, informational).
     missing_new_fields: list[str]
     audio_notes: list[AudioNoteOut]  # oldest first (M3)
+    bias_note_ids: BiasNoteIds  # M4: links from Describe to the bias notes
+
+
+def check_chart_url(value: str) -> str:
+    """TradingView link rule of docs/api.md M2 (trade and bias links)."""
+    if len(value) > MAX_URL_LENGTH:
+        raise ValueError(f"must be at most {MAX_URL_LENGTH} characters")
+    if not is_valid_chart_url(value):
+        raise ValueError("must be a TradingView snapshot (/x/<id>) or chart (/chart) link")
+    return value
 
 
 class ChartLinkIn(BaseModel):
@@ -121,14 +143,7 @@ class ChartLinkIn(BaseModel):
     url: str
     kind: Literal["before", "after"]
 
-    @field_validator("url")
-    @classmethod
-    def _tradingview(cls, value: str) -> str:
-        if len(value) > MAX_URL_LENGTH:
-            raise ValueError(f"must be at most {MAX_URL_LENGTH} characters")
-        if not is_valid_chart_url(value):
-            raise ValueError("must be a TradingView snapshot (/x/<id>) or chart (/chart) link")
-        return value
+    _tradingview = field_validator("url")(check_chart_url)
 
 
 class JournalInput(BaseModel):

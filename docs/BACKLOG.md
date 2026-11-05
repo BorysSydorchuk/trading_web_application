@@ -19,3 +19,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-11-04 | Turning on `allow_other_text` later for a field whose old complete trades already store `other` puts `<field>_other` into their `missing_required` (M2 rule, not covered by required_since) | code-reviewer (M3-07) | Rare, only on a YAML change |
 | 2026-11-04 | Describe: a field made required after the trade closed but already filled at load is treated as required by the client if the user clears it (blocks "complete" though the server accepts); a full fix needs the server to send the per-trade exempt fields | code-reviewer (M3-08) | Rare; client only knows `missing_new_fields` (empty fields) |
 | 2026-11-05 | Chunked transcription during recording (transcribe pieces while Borys still talks, so long notes finish sooner) | PM (M3 decision) | Only if notes > ~80 s become common; PM decides |
+
+| 2026-11-05 | "Re-align all trades" action (button or endpoint) after editing bias.yaml symbols: today old trades are re-aligned only when a matching bias note is written or the trade is synced again | code-reviewer (M4-04/05) | Only on a bias.yaml symbol change |
