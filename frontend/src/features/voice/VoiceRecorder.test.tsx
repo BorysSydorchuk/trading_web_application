@@ -12,6 +12,7 @@ import {
   removeMic,
   restoreMic,
 } from '@/test/media'
+import { MAX_AUDIO_FILE_BYTES } from './audioFile'
 import { MAX_RECORDING_MS } from './recorderModel'
 import { VoiceRecorder } from './VoiceRecorder'
 
@@ -249,5 +250,104 @@ describe('VoiceRecorder', () => {
     expect(button).toBeDisabled()
     await user.pointer({ keys: '[MouseLeft>]', target: button })
     expect(mic.getUserMedia).not.toHaveBeenCalled()
+  })
+})
+
+/** A picked file of `size` bytes without allocating them (jsdom reads `size` for the check only). */
+function sizedFile(name: string, size: number, type = ''): File {
+  const file = new File(['x'], name, { type })
+  Object.defineProperty(file, 'size', { value: size })
+  return file
+}
+
+function fileInput(): HTMLInputElement {
+  return screen.getByTestId('audio-file-input') as HTMLInputElement
+}
+
+describe('VoiceRecorder audio file', () => {
+  it('hands over a Telegram .ogg as audio/ogg without a duration', async () => {
+    const { user, onRecorded } = setup()
+
+    await user.upload(fileInput(), new File(['OggS-voice'], 'audio_2026-11-04_23-24-49.ogg', { type: '' }))
+
+    expect(onRecorded).toHaveBeenCalledTimes(1)
+    const [blob, seconds] = onRecorded.mock.calls[0] as [Blob, number | null]
+    expect(blob.type).toBe('audio/ogg')
+    expect(await blob.text()).toBe('OggS-voice')
+    expect(seconds).toBeNull()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('maps odd browser types by extension (.opus, .m4a)', async () => {
+    const { user, onRecorded } = setup()
+
+    await user.upload(fileInput(), new File(['a'], 'Voice.OPUS', { type: 'audio/opus' }))
+    await user.upload(fileInput(), new File(['b'], 'memo.m4a', { type: 'audio/x-m4a' }))
+
+    const types = onRecorded.mock.calls.map(([blob]) => (blob as Blob).type)
+    expect(types).toEqual(['audio/ogg', 'audio/mp4'])
+  })
+
+  it('opens the file picker from the button and accepts the same file twice', async () => {
+    const { user, onRecorded } = setup()
+    const input = fileInput()
+    const click = vi.spyOn(input, 'click')
+
+    await user.click(screen.getByRole('button', { name: t.pickFile }))
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(input).toHaveAttribute('accept', '.ogg,.opus,.m4a,.mp3,.wav,.webm,audio/*')
+
+    const file = new File(['w'], 'note.wav', { type: 'audio/wav' })
+    await user.upload(input, file)
+    expect(input.value).toBe('')
+    await user.upload(input, file)
+    expect(onRecorded).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a wrong format with a clear message', async () => {
+    const { user, onRecorded } = setup()
+
+    await user.upload(fileInput(), new File(['f'], 'voice.flac', { type: 'audio/flac' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(t.fileErrors.format)
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('accepts exactly 25 MB and rejects one byte more', async () => {
+    const { user, onRecorded } = setup()
+
+    await user.upload(fileInput(), sizedFile('big.mp3', MAX_AUDIO_FILE_BYTES + 1, 'audio/mpeg'))
+    expect(screen.getByRole('alert')).toHaveTextContent(t.fileErrors.too_large)
+    expect(onRecorded).not.toHaveBeenCalled()
+
+    await user.upload(fileInput(), sizedFile('limit.mp3', MAX_AUDIO_FILE_BYTES, 'audio/mpeg'))
+    expect(onRecorded).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('rejects an empty file', async () => {
+    const { user, onRecorded } = setup()
+
+    await user.upload(fileInput(), sizedFile('empty.ogg', 0))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(t.fileErrors.empty)
+    expect(onRecorded).not.toHaveBeenCalled()
+  })
+
+  it('is disabled together with the recorder', () => {
+    render(<VoiceRecorder onRecorded={vi.fn()} disabled />)
+
+    expect(screen.getByRole('button', { name: t.pickFile })).toBeDisabled()
+    expect(fileInput()).toBeDisabled()
+  })
+
+  it('is disabled while recording', async () => {
+    installMic()
+    const { user, button } = setup()
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button })
+    await screen.findByText(t.recording)
+    expect(screen.getByRole('button', { name: t.pickFile })).toBeDisabled()
+    await user.pointer({ keys: '[/MouseLeft]', target: button })
   })
 })
