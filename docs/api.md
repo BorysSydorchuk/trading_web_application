@@ -329,3 +329,64 @@ Same matching rules as M2 (whole words, after normalisation, ё → е; words in
 ### AI warm-up (M2 follow-up)
 
 The worker keeps `<DATA_DIR>/ai_warmup.json` (`{schema_hash, model, at}`). When the API key is set and the hash of the extraction schema generated from `journal_fields.yaml` (with the model id) differs from the stored one, the worker runs one extraction on a fixed short text in the background. That call is logged in `logs/ai_usage.jsonl` with `"purpose": "warmup"`, `"trade_id": null`. A failed warm-up is logged and retried at most once an hour; it never affects the API. Only the extraction model is warmed, not the fallback model.
+
+## M4
+
+### Bias config (`config/bias.yaml`, UTF-8, reloaded on change, checked at API/worker start)
+```yaml
+symbols:                      # order = UI order
+  - { symbol: EURUSD, aliases: [євро, евро, фібер, fiber, euro] }
+  - { symbol: GBPUSD, aliases: [фунт, кабель, cable, pound] }
+  - { symbol: XAUUSD, aliases: [золото, gold, голд] }
+  - { symbol: GER40,  aliases: [дакс, DAX, GER] }
+reminders:                    # Europe/Brussels, weekdays only
+  pre_london: { from: "07:45", until: "11:00" }
+  pre_ny:     { from: "12:30", until: "16:00" }
+```
+`GET /api/bias/config` → `{ symbols: [{symbol, aliases}], reminders: {...}, kinds: ["pre_london","pre_ny","weekly","monthly"] }`. Broken file → 500 `config_error` like the other configs.
+
+### Bias notes and entries (PRD 6.6)
+A **bias note** is one input (text and/or voice) for one `kind` + `period_date`; it holds one **entry per symbol**.
+- `period_date` (Brussels date): the trading day for `pre_london` / `pre_ny`; the Monday of the week for `weekly`; the 1st of the month for `monthly`. The API normalizes any date inside the week/month to that day.
+- Unique: one note per `kind` + `period_date`; one entry per note + symbol.
+
+`BiasNote`:
+```json
+{ "id": 3, "kind": "pre_ny", "period_date": "2026-11-06", "raw_text": "...",
+  "entries": [ BiasEntry, ... ],            // config symbol order
+  "audio_notes": [ AudioNote, ... ],        // oldest first, same AudioNote as M3 (trade_id null, bias_note_id set)
+  "created_at": "...Z", "updated_at": "...Z" }
+```
+`BiasEntry`:
+```json
+{ "id": 7, "symbol": "XAUUSD", "direction": "bullish",   // bullish | bearish | neutral | no_trade
+  "key_levels": "2650 POI FVG H1", "narrative": "...", "confidence": 2,   // 1..3 or null
+  "chart_links": [ { "id": 1, "url": "...", "kind": "bias", "preview_url": "..." } ],
+  "was_correct": null, "was_correct_source": null,   // true/false + "manual" after Borys marks it
+  "ai_filled_fields": ["direction", "key_levels"] }
+```
+
+Endpoints:
+- `GET /api/bias/notes?from=YYYY-MM-DD&to=YYYY-MM-DD&kind=...` → `{ items: BiasNote[] }` newest period first (default: last 30 days).
+- `GET /api/bias/notes/{id}` → `BiasNote`. `GET /api/bias/notes/by-period?kind=pre_ny&date=2026-11-06` → `BiasNote` or 404 (date normalized for weekly/monthly).
+- `POST /api/bias/notes` body `{ kind, period_date, raw_text?, entries: [BiasEntryInput] }` → 201 `BiasNote`; 409 `bias_note_exists` (with `details.id`) if one exists for kind + period.
+- `PUT /api/bias/notes/{id}` same body (kind/period_date may change, 409 on clash) → `BiasNote`. Entries are replaced by symbol: symbols not in the list are deleted.
+- `DELETE /api/bias/notes/{id}` → 204 (entries, links and audio rows cascade; audio files stay on disk like M3).
+- `BiasEntryInput`: `{ symbol (must be in bias.yaml), direction (required), key_levels?, narrative?, confidence? (1..3), chart_links?: [{url}] (TradingView rule from M2, kind "bias"), ai_filled_fields?: [...] }`. Errors 422 with `details.fields["entries.<i>.<field>"]`; duplicate symbol → `entries.<i>.symbol`.
+- `PATCH /api/bias/entries/{id}/result` body `{ was_correct: true | false | null }` → `BiasEntry` (source `manual`; null clears).
+- Voice: `POST /api/bias/notes/{id}/audio` (same rules as `POST /api/trades/{id}/audio`, same queue, same normalization); `GET/POST /api/audio/{id}…` unchanged. The UI appends the transcript to the note's text box as on Describe.
+- Every create / update / delete of a note recomputes `bias_alignment`, `bias_alignment_weekly`, `bias_alignment_monthly` of the affected closed and open trades (symbol by prefix, see DECISIONS) in the same transaction. `bias_alignment_override` is never changed.
+
+### Bias extraction
+- `POST /api/bias/notes/extract` body `{ kind, text }` → `{ entries: [{ symbol, fields: { direction?, key_levels?, narrative?, confidence? }, evidence: {...} }], dropped: [...], usage: {...} }`. Saves nothing except the usage log. Same rules as trade extraction (M2): structured output, every value with an evidence quote found in the text, no questions, nothing invented, ambiguous → empty; symbols from bias.yaml aliases (a symbol the text does not mention is not returned); `confidence` only from words/digits 1–3 via the number-word rules. Errors as trade extraction (503 `ai_not_configured`, 502 `ai_error`, 422, config_error). Usage log purpose `bias_extract`.
+- Prompt `backend/prompts/extract_bias.md` (glossary + aliases injected).
+
+### Bias status (dashboard reminders)
+- `GET /api/bias/status` → `{ date: "2026-11-06", weekday: true, now: "...Z",
+  sessions: { pre_london: { note_id: 3 | null, missing: true, remind: true, from: "07:45", until: "11:00" },
+              pre_ny: { ... } },
+  weekly: { note_id | null }, monthly: { note_id | null } }`.
+  `remind` = weekday and Brussels now in [from, until) and no note. Used by Головна (cards + "Записати біас") and the sidebar Біас badge (count of `remind: true`), polled every 60 s.
+
+### Trades
+- `TradeDetail` and journal list items get `bias_alignment_weekly` and `bias_alignment_monthly` (the effective daily value `bias_alignment` already exists, override wins). Journal gets optional columns for weekly/monthly; Describe shows all three next to the auto data with a link to the bias note.
