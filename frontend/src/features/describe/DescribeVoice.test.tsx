@@ -313,3 +313,82 @@ describe('Describe screen voice notes', () => {
     expect(within(group).queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+function sizedFile(name: string, size: number, type = ''): File {
+  const file = new File(['x'], name, { type })
+  Object.defineProperty(file, 'size', { value: size })
+  return file
+}
+
+describe('Describe screen audio file', () => {
+  it('uploads a picked .ogg as audio/ogg and appends its transcript like a recording', async () => {
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    const uploads: { type: string | null; body: string }[] = []
+    mockApi(
+      http.post(`/api/trades/${trade.id}/audio`, async ({ request }) => {
+        uploads.push({ type: request.headers.get('content-type'), body: await request.text() })
+        return HttpResponse.json(fixtureNote({ id: 21, mime_type: 'audio/ogg' }), { status: 201 })
+      }),
+    )
+    serveNoteStates(21, [fixtureNote({ id: 21, status: 'done', progress: 1, transcript: TRANSCRIPT })])
+    const { user } = renderPage(trade)
+
+    const box = await textBox()
+    await user.upload(
+      screen.getByTestId('audio-file-input'),
+      new File(['OggS-telegram'], 'audio_2026-11-04_23-24-49.ogg', { type: '' }),
+    )
+
+    const row = await screen.findByRole('listitem', { name: v.notes.label(1) })
+    expect(uploads).toEqual([{ type: 'audio/ogg', body: 'OggS-telegram' }])
+    expect(await within(row).findByText(v.notes.done, {}, POLL_WAIT)).toBeInTheDocument()
+    await waitFor(() => expect(box).toHaveValue(TRANSCRIPT))
+  })
+
+  it.each([
+    ['voice.flac', 1_000, v.recorder.fileErrors.format],
+    ['long.mp3', 26_214_401, v.recorder.fileErrors.too_large],
+  ])('rejects %s in the browser without a request', async (name, size, text) => {
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    let uploads = 0
+    mockApi(
+      http.post(`/api/trades/${trade.id}/audio`, () => {
+        uploads += 1
+        return HttpResponse.json(fixtureNote({ id: 22 }), { status: 201 })
+      }),
+    )
+    const { user } = renderPage(trade)
+
+    await textBox()
+    await user.upload(screen.getByTestId('audio-file-input'), sizedFile(name, size, 'audio/mpeg'))
+
+    const group = screen.getByRole('group', { name: t.voice.title })
+    expect(within(group).getByRole('alert')).toHaveTextContent(text)
+    expect(uploads).toBe(0)
+    expect(within(group).queryByText(t.voice.uploading)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [415, 'unsupported_media_type', v.recorder.fileErrors.format],
+    [413, 'audio_too_large', v.recorder.fileErrors.too_large],
+  ])('shows the same text for a server %i and keeps the file for retry', async (status, code, text) => {
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    mockApi(
+      http.post(`/api/trades/${trade.id}/audio`, () =>
+        HttpResponse.json({ error: { code, message: 'no' } }, { status }),
+      ),
+    )
+    const { user } = renderPage(trade)
+
+    await textBox()
+    await user.upload(screen.getByTestId('audio-file-input'), new File(['a'], 'note.wav', { type: 'audio/wav' }))
+
+    const group = screen.getByRole('group', { name: t.voice.title })
+    expect(await within(group).findByRole('alert')).toHaveTextContent(text)
+    expect(within(group).getByRole('button', { name: t.voice.retryUpload })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: v.recorder.pickFile })).toBeDisabled()
+  })
+})
