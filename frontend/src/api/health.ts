@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import type { AiKeyStatus } from '@/features/ai/keyState'
 import { apiGet } from './client'
 
 export interface HealthResponse {
@@ -6,6 +7,8 @@ export interface HealthResponse {
   version: string
   time_utc: string
   db: { ok: boolean; latency_ms: number | null; error: string | null }
+  /** AI key state (M3). Missing on an older backend: the UI shows nothing for it. */
+  ai?: AiKeyStatus | null
 }
 
 export const HEALTH_POLL_MS = 15_000

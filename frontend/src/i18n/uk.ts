@@ -641,6 +641,42 @@ export const uk = {
     calls: 'Запитів',
     failed: (n: number) => `з них невдалих: ${n}`,
     incomplete: (n: number) => `Сума неповна: для ${n} запитів немає ціни моделі в config/ai_pricing.yaml.`,
+    checkedAt: 'Перевірено',
+    checkKey: 'Перевірити ключ',
+    checkingKey: 'Перевіряю ключ…',
+    restartNote: 'Новий ключ у .env починає діяти лише після перезапуску застосунку.',
+  },
+  /** AI key state (docs/api.md "AI key status (M3)"): status bar chip and Settings → ШІ. */
+  aiKey: {
+    chip: {
+      invalid_key: 'AI: ключ недійсний',
+      invalid_keyHint: 'Вкажіть правильний ANTHROPIC_API_KEY у .env і перезапустіть застосунок',
+      not_configured: 'AI: ключ не задано',
+      not_configuredHint: 'Вкажіть ANTHROPIC_API_KEY у .env і перезапустіть застосунок',
+      unreachable: 'AI: немає звʼязку',
+      unreachableHint: 'Сервіс ШІ не відповідає. Перевірте інтернет; ключ перевіряється знову кожні 5 хв',
+    },
+    states: {
+      ok: 'працює',
+      invalid_key: 'недійсний',
+      not_configured: 'не задано',
+      unreachable: 'немає звʼязку з сервісом ШІ',
+      checking: 'перевіряється…',
+    },
+    hints: {
+      invalid_key: {
+        title: 'Ключ недійсний.',
+        text: 'Сервіс ШІ відхилив ключ. Вкажіть правильний ANTHROPIC_API_KEY у файлі .env у корені проєкту і перезапустіть застосунок. Без ключа опис заповнюється вручну.',
+      },
+      not_configured: {
+        title: 'Ключ не задано.',
+        text: 'Додайте ANTHROPIC_API_KEY у файл .env у корені проєкту і перезапустіть застосунок. Без ключа опис заповнюється вручну.',
+      },
+      unreachable: {
+        title: 'Немає звʼязку з сервісом ШІ.',
+        text: 'Перевірте інтернет. Ключ перевіряється знову автоматично кожні 5 хв або кнопкою «Перевірити ключ».',
+      },
+    },
   },
   loadingPage: 'Завантаження сторінки…',
   errors: {
