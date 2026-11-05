@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
-from app.api.ai import get_model_client, get_usage_log
+from app.api.ai import get_key_tracker, get_model_client, get_usage_log
 from app.config import REPO_ROOT, get_settings
 from app.config_files import reload_config
 from app.config_files.loader import CONFIG_DIR_ENV
@@ -23,8 +23,10 @@ from app.db import make_session_factory
 from app.models import Account, Trade
 from app.models.enums import TradeStatus
 from app.services.ai.client import AiCallError
+from app.services.ai.key_status import KeyStatusTracker
 from app.services.ai.usage_log import UsageLog
 from tests.services.ai_fakes import FakeClient, overloaded, reply
+from tests.services.test_ai_key_status import FakeLookup, http_error, settings_with, wait_for
 from tests.test_trades_api import add_account, add_trade
 
 TEXT = "Вхід по IFVG M5, закрив по тейку."
@@ -322,6 +324,7 @@ def test_ai_usage_month_to_date(
         "output_tokens": 211,
         "configured": False,
         "extraction_model": "claude-sonnet-5-5",
+        "key_state": "not_configured",
     }
 
 
@@ -348,3 +351,87 @@ def test_app_starts_without_key_and_health_works(client: TestClient) -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+# --- AI key status (M3) -------------------------------------------------------------------------
+
+
+def use_key_tracker(app: FastAPI, lookup: FakeLookup) -> KeyStatusTracker:
+    tracker = KeyStatusTracker(settings_with, lambda _: lookup)
+    app.dependency_overrides[get_key_tracker] = lambda: tracker
+    return tracker
+
+
+def test_health_and_usage_report_not_configured_by_default(
+    client: TestClient, usage_log: UsageLog
+) -> None:
+    health = client.get("/api/health").json()
+    assert health["status"] == "ok"
+    assert health["ai"] == {"state": "not_configured", "checked_at": None}
+    assert client.get("/api/ai/usage").json()["key_state"] == "not_configured"
+    assert client.post("/api/ai/check").json() == {"state": "not_configured", "checked_at": None}
+
+
+def test_post_check_returns_state_and_health_shows_it(app: FastAPI, client: TestClient) -> None:
+    lookup = FakeLookup([None])
+    use_key_tracker(app, lookup)
+    assert client.get("/api/health").json()["ai"] == {"state": "checking", "checked_at": None}
+
+    response = client.post("/api/ai/check")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "ok"
+    assert body["checked_at"].endswith("Z")
+    assert client.get("/api/health").json()["ai"] == body
+    assert len(lookup.calls) == 1
+
+
+def test_invalid_key_does_not_degrade_health(
+    app: FastAPI, client: TestClient, usage_log: UsageLog
+) -> None:
+    use_key_tracker(app, FakeLookup([http_error(401)]))
+    assert client.post("/api/ai/check").json()["state"] == "invalid_key"
+    health = client.get("/api/health").json()
+    assert (health["status"], health["ai"]["state"]) == ("ok", "invalid_key")
+    assert client.get("/api/ai/usage").json()["key_state"] == "invalid_key"
+
+
+def test_unreachable_on_check(app: FastAPI, client: TestClient) -> None:
+    use_key_tracker(app, FakeLookup([AiCallError("timeout", "slow", fallback_ok=True)]))
+    assert client.post("/api/ai/check").json()["state"] == "unreachable"
+
+
+def test_extraction_auth_error_marks_key_invalid(
+    app: FastAPI, client: TestClient, session: Session, account: Account, usage_log: UsageLog
+) -> None:
+    trade = add_trade(session, account)
+    tracker = use_key_tracker(app, FakeLookup([None]))
+    client.post("/api/ai/check")
+    use_model(app, FakeClient([AiCallError("auth", "AuthenticationError HTTP 401")]))
+
+    error(extract(client, trade.id), 502, "ai_error")
+
+    assert tracker.status().state == "invalid_key"
+    assert client.get("/api/health").json()["ai"]["state"] == "invalid_key"
+
+
+def test_other_extraction_errors_keep_key_state(
+    app: FastAPI, client: TestClient, session: Session, account: Account, usage_log: UsageLog
+) -> None:
+    trade = add_trade(session, account)
+    tracker = use_key_tracker(app, FakeLookup([None]))
+    client.post("/api/ai/check")
+    use_model(app, FakeClient([overloaded(), overloaded()]))
+    error(extract(client, trade.id), 502, "ai_error")
+    assert tracker.status().state == "ok"
+
+
+def test_api_start_checks_the_key_in_background(app: FastAPI) -> None:
+    lookup = FakeLookup([None])
+    tracker = KeyStatusTracker(settings_with, lambda _: lookup)
+    app.state.ai_key = tracker
+    with TestClient(app, raise_server_exceptions=False) as api:
+        assert wait_for(lambda: tracker.status().state == "ok")
+        assert api.get("/api/health").json()["ai"]["state"] == "ok"
+    assert len(lookup.calls) == 1

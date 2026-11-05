@@ -1,4 +1,5 @@
-"""GET /api/health: always 200 while the process is up; reports DB reachability."""
+"""GET /api/health: always 200 while the process is up; reports DB reachability and the AI
+key state (informational: `status` depends on the DB only)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.ai import get_key_tracker, key_out
 from app.db import get_db
+from app.schemas.ai import AiKeyOut
+from app.services.ai.key_status import KeyStatusTracker
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,7 @@ class HealthResponse(BaseModel):
     version: str
     time_utc: str
     db: DbHealth
+    ai: AiKeyOut
 
 
 def app_version() -> str:
@@ -87,11 +92,15 @@ def check_db(db: Session) -> DbHealth:
 
 
 @router.get("/health", response_model=HealthResponse)
-def health(db: Session = Depends(get_db)) -> HealthResponse:
+def health(
+    db: Session = Depends(get_db),
+    key_tracker: KeyStatusTracker = Depends(get_key_tracker),
+) -> HealthResponse:
     db_health = check_db(db)
     return HealthResponse(
         status="ok" if db_health.ok else "degraded",
         version=app_version(),
         time_utc=utc_now_iso(),
         db=db_health,
+        ai=key_out(key_tracker.status()),
     )
