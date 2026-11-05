@@ -1,4 +1,7 @@
-"""Voice notes in the API (docs/api.md M3): store uploads, read, retry. Never transcribes."""
+"""Voice notes in the API (docs/api.md M3, M4 bias notes): store uploads, read, retry.
+
+Never transcribes.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.errors import AUDIO_MISSING, AUDIO_NOT_FAILED, AUDIO_TOO_LARGE, ApiError
-from app.models import AudioNote, Trade
+from app.models import AudioNote, BiasNote, Trade
 from app.models.enums import TradeStatus, TranscriptionStatus
 
 logger = logging.getLogger(__name__)
@@ -85,6 +88,14 @@ async def save_upload(chunks: AsyncIterator[bytes], target: Path, max_bytes: int
     return size
 
 
+def _store_note(db: Session, note: AudioNote, owner: str) -> AudioNote:
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    logger.info("Audio note %s stored for %s (%s)", note.id, owner, note.file_path)
+    return note
+
+
 def create_trade_note(db: Session, trade_id: int, file_path: str, mime_type: str) -> AudioNote:
     """Insert a `pending` note for a trade (the file is already on disk)."""
     if db.get(Trade, trade_id) is None:  # deleted during the upload
@@ -93,11 +104,32 @@ def create_trade_note(db: Session, trade_id: int, file_path: str, mime_type: str
         )
         raise _trade_not_found(trade_id)
     note = AudioNote(trade_id=trade_id, file_path=file_path, mime_type=mime_type)
-    db.add(note)
-    db.commit()
-    db.refresh(note)
-    logger.info("Audio note %s stored for trade %s (%s)", note.id, trade_id, file_path)
-    return note
+    return _store_note(db, note, f"trade {trade_id}")
+
+
+def _bias_note_not_found(bias_note_id: int) -> ApiError:
+    return ApiError(404, "not_found", "Bias note not found", {"id": bias_note_id})
+
+
+def check_bias_note_accepts_audio(db: Session, bias_note_id: int) -> None:
+    """404 for an unknown bias note (any note accepts voice)."""
+    found = db.scalar(select(BiasNote.id).where(BiasNote.id == bias_note_id))
+    db.rollback()  # end the read transaction before the (slow) upload
+    if found is None:
+        raise _bias_note_not_found(bias_note_id)
+
+
+def create_bias_note_audio(
+    db: Session, bias_note_id: int, file_path: str, mime_type: str
+) -> AudioNote:
+    """Insert a `pending` note owned by a bias note (the file is already on disk)."""
+    if db.get(BiasNote, bias_note_id) is None:  # deleted during the upload
+        logger.warning(
+            "Bias note %s vanished during an audio upload; file %s kept", bias_note_id, file_path
+        )
+        raise _bias_note_not_found(bias_note_id)
+    note = AudioNote(bias_note_id=bias_note_id, file_path=file_path, mime_type=mime_type)
+    return _store_note(db, note, f"bias note {bias_note_id}")
 
 
 def get_note(db: Session, note_id: int, *, for_update: bool = False) -> AudioNote:

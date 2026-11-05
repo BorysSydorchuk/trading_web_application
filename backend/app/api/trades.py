@@ -25,6 +25,7 @@ from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
+from app.services.bias_alignment import alignment_settings, lookup_for, trade_bias
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
@@ -35,7 +36,7 @@ router = APIRouter(tags=["trades"])
 
 INBOX_STATUSES = (TradeStatus.NEEDS_SL, TradeStatus.NEEDS_DESCRIPTION, TradeStatus.DRAFT)
 
-_ROW_EXTRA = {"account_name", "violations"}
+_ROW_EXTRA = {"account_name", "violations", "bias_alignment"}
 _DETAIL_EXTRA = _ROW_EXTRA | {
     "exit_deals",
     "rule_violations",
@@ -44,6 +45,7 @@ _DETAIL_EXTRA = _ROW_EXTRA | {
     "missing_required",
     "missing_new_fields",
     "audio_notes",
+    "bias_note_ids",
 }
 ROW_COLUMNS = [f for f in schemas.TradeRow.model_fields if f not in _ROW_EXTRA]
 DETAIL_COLUMNS = [f for f in schemas.TradeDetail.model_fields if f not in _DETAIL_EXTRA]
@@ -117,10 +119,35 @@ def _violation_keys(db: Session, trade_ids: Sequence[int]) -> dict[int, list[str
     return keys
 
 
+def effective_bias_alignment(trade: Trade) -> str | None:
+    """The user's override wins over the auto value (docs/api.md M2 journal)."""
+    return trade.bias_alignment_override or trade.bias_alignment
+
+
 def to_row(trade: Trade, account_name: str, violations: list[str]) -> schemas.TradeRow:
     data: dict[str, Any] = {f: getattr(trade, f) for f in ROW_COLUMNS}
     return schemas.TradeRow.model_validate(
-        data | {"account_name": account_name, "violations": violations}
+        data
+        | {
+            "account_name": account_name,
+            "violations": violations,
+            "bias_alignment": effective_bias_alignment(trade),
+        }
+    )
+
+
+def bias_note_ids(db: Session, trade: Trade) -> schemas.BiasNoteIds:
+    """Which notes decided the alignment, for links; all null when a config is broken."""
+    try:
+        settings = alignment_settings()
+    except ConfigError as exc:
+        logger.warning(
+            "Trade %s: bias note links unavailable, config is invalid: %s", trade.id, exc
+        )
+        return schemas.BiasNoteIds(daily=None, weekly=None, monthly=None)
+    result = trade_bias(trade, settings, lookup_for(db, [trade], settings))
+    return schemas.BiasNoteIds(
+        daily=result.daily_note_id, weekly=result.weekly_note_id, monthly=result.monthly_note_id
     )
 
 
@@ -129,6 +156,7 @@ def to_detail(
     account_name: str,
     config: JournalFieldsConfig,
     required_since: Mapping[str, datetime],
+    note_ids: schemas.BiasNoteIds,
 ) -> schemas.TradeDetail:
     data: dict[str, Any] = {f: getattr(trade, f) for f in DETAIL_COLUMNS}
     violations = sorted(trade.rule_violations, key=lambda v: v.rule_key)
@@ -137,6 +165,8 @@ def to_detail(
         data
         | {
             "account_name": account_name,
+            "bias_alignment": effective_bias_alignment(trade),
+            "bias_note_ids": note_ids,
             "journal": view.journal,
             "chart_links": view.chart_links,
             "missing_required": view.missing_required,
@@ -180,6 +210,16 @@ def journal_context(db: Session) -> tuple[JournalFieldsConfig, dict[str, datetim
     before the table is touched."""
     config = journal_config()
     return config, sync_requirements(db, config)
+
+
+def detail(
+    db: Session,
+    trade_id: int,
+    config: JournalFieldsConfig,
+    required_since: Mapping[str, datetime],
+) -> schemas.TradeDetail:
+    trade, account_name = _load_detail(db, trade_id)
+    return to_detail(trade, account_name, config, required_since, bias_note_ids(db, trade))
 
 
 def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
@@ -245,7 +285,7 @@ def trade_symbols(db: Session = Depends(get_db)) -> schemas.SymbolList:
 @router.get("/trades/{trade_id}", response_model=schemas.TradeDetail)
 def get_trade(trade_id: int, db: Session = Depends(get_db)) -> schemas.TradeDetail:
     config, required_since = journal_context(db)
-    return to_detail(*_load_detail(db, trade_id), config, required_since)
+    return detail(db, trade_id, config, required_since)
 
 
 def _check_stop_side(trade: Trade, sl: Decimal) -> None:
@@ -291,7 +331,7 @@ def update_trade(
     trade_id: int, body: schemas.TradePatch, db: Session = Depends(get_db)
 ) -> schemas.TradeDetail:
     config, required_since = journal_context(db)
-    trade, account_name = _load_detail(db, trade_id)
+    trade, _ = _load_detail(db, trade_id)
     if trade.status == TradeStatus.OPEN.value or trade.close_time is None:
         raise ApiError(
             409, "trade_open", "Initial SL can only be set on a closed trade", {"id": trade_id}
@@ -304,8 +344,7 @@ def update_trade(
         "Trade %s: user initial SL set, status %s -> %s", trade.id, old_status, trade.status
     )
     db.expire(trade)  # reload as stored (NUMERIC scale), not the in-memory input values
-    trade, account_name = _load_detail(db, trade_id)
-    return to_detail(trade, account_name, config, required_since)
+    return detail(db, trade_id, config, required_since)
 
 
 @router.put("/trades/{trade_id}/journal", response_model=schemas.TradeDetail)
@@ -318,7 +357,7 @@ def put_journal(
     save_journal(db, trade, body, config, now=datetime.now(UTC), required_since=required_since)
     db.commit()
     db.expire_all()
-    return to_detail(*_load_detail(db, trade_id), config, required_since)
+    return detail(db, trade_id, config, required_since)
 
 
 @router.get("/inbox/counts", response_model=schemas.InboxCounts)

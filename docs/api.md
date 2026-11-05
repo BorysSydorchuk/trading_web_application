@@ -370,13 +370,15 @@ A **bias note** is one input (text and/or voice) for one `kind` + `period_date`;
 
 Endpoints:
 - `GET /api/bias/notes?from=YYYY-MM-DD&to=YYYY-MM-DD&kind=...` → `{ items: BiasNote[] }` newest period first (default: last 30 days).
+  - Filters `period_date` inclusive (a weekly note is listed by its Monday, a monthly one by the 1st). Default `to` = today (Brussels), `from` = `to` − 29 days; only `from` given → `to` = `from` + 29. `from` after `to` → 422 `details.fields.from`. `kind` may repeat (`kind=pre_ny&kind=weekly`). Same date: pre_ny, pre_london, weekly, monthly.
 - `GET /api/bias/notes/{id}` → `BiasNote`. `GET /api/bias/notes/by-period?kind=pre_ny&date=2026-11-06` → `BiasNote` or 404 (date normalized for weekly/monthly).
 - `POST /api/bias/notes` body `{ kind, period_date, raw_text?, entries: [BiasEntryInput] }` → 201 `BiasNote`; 409 `bias_note_exists` (with `details.id`) if one exists for kind + period.
-- `PUT /api/bias/notes/{id}` same body (kind/period_date may change, 409 on clash) → `BiasNote`. Entries are replaced by symbol: symbols not in the list are deleted.
+  - `entries` is required but may be `[]` (create the note first, then upload its voice and fill entries with PUT). `period_date` must be a `"YYYY-MM-DD"` string. Strict JSON like the journal (`"2"` is not a confidence, unknown keys → 422).
+- `PUT /api/bias/notes/{id}` same body (kind/period_date may change, 409 on clash) → `BiasNote`. Entries are replaced by symbol: symbols not in the list are deleted. A kept symbol keeps its entry `id` and `was_correct`; its fields and chart links are replaced (link ids change).
 - `DELETE /api/bias/notes/{id}` → 204 (entries, links and audio rows cascade; audio files stay on disk like M3).
-- `BiasEntryInput`: `{ symbol (must be in bias.yaml), direction (required), key_levels?, narrative?, confidence? (1..3), chart_links?: [{url}] (TradingView rule from M2, kind "bias"), ai_filled_fields?: [...] }`. Errors 422 with `details.fields["entries.<i>.<field>"]`; duplicate symbol → `entries.<i>.symbol`.
+- `BiasEntryInput`: `{ symbol (must be in bias.yaml), direction (required), key_levels?, narrative?, confidence? (1..3), chart_links?: [{url}] (TradingView rule from M2, kind "bias"), ai_filled_fields?: [...] }`. Errors 422 with `details.fields["entries.<i>.<field>"]`; duplicate symbol → `entries.<i>.symbol` (the later one); symbol not in bias.yaml (exact name) → `entries.<i>.symbol`; duplicate link (M2 rule) → `entries.<i>.chart_links.<j>.url`. Text fields trimmed, empty → null, ≤ 5000 chars. `ai_filled_fields` ⊆ direction / key_levels / narrative / confidence; fields without a value and repeats are dropped. A broken bias.yaml or rules.yaml → 500 `config_error` on every write, nothing saved.
 - `PATCH /api/bias/entries/{id}/result` body `{ was_correct: true | false | null }` → `BiasEntry` (source `manual`; null clears).
-- Voice: `POST /api/bias/notes/{id}/audio` (same rules as `POST /api/trades/{id}/audio`, same queue, same normalization); `GET/POST /api/audio/{id}…` unchanged. The UI appends the transcript to the note's text box as on Describe.
+- Voice: `POST /api/bias/notes/{id}/audio` → 201 `AudioNote` (same rules as `POST /api/trades/{id}/audio`, same queue, same normalization; unknown note → 404); `GET/POST /api/audio/{id}…` unchanged. The UI appends the transcript to the note's text box as on Describe.
 - Every create / update / delete of a note recomputes `bias_alignment`, `bias_alignment_weekly`, `bias_alignment_monthly` of the affected closed and open trades (symbol by prefix, see DECISIONS) in the same transaction. `bias_alignment_override` is never changed.
 
 ### Bias extraction
@@ -391,4 +393,6 @@ Endpoints:
   `remind` = weekday and Brussels now in [from, until) and no note. Used by Головна (cards + "Записати біас") and the sidebar Біас badge (count of `remind: true`), polled every 60 s.
 
 ### Trades
-- `TradeDetail` and journal list items get `bias_alignment_weekly` and `bias_alignment_monthly` (the effective daily value `bias_alignment` already exists, override wins). Journal gets optional columns for weekly/monthly; Describe shows all three next to the auto data with a link to the bias note.
+- `TradeDetail` and journal list items get `bias_alignment_weekly` and `bias_alignment_monthly` (the effective daily value `bias_alignment` already exists, override wins).
+  - Precisely: `TradeRow` (so `GET /api/trades` items and `TradeDetail`) has top-level `bias_alignment` (effective: override ?? auto, same as `journal.bias_alignment`), `bias_alignment_weekly`, `bias_alignment_monthly` (auto only, no override). Values `aligned | counter | neutral_bias | no_bias`, `null` until the trade was first aligned (next sync).
+  - `TradeDetail.bias_note_ids: { daily, weekly, monthly }`: id of the note whose entry decided each value (daily: pre_ny or the pre_london fallback), `null` for no_bias (or while bias.yaml / rules.yaml is broken). Use it for the link to the bias note. Journal gets optional columns for weekly/monthly; Describe shows all three next to the auto data with a link to the bias note.
