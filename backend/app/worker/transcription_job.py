@@ -58,6 +58,7 @@ class TranscriptResult:
     text: str
     duration: float
     transcribe_s: float  # wall time of decode + transcription (model load excluded)
+    settings: str = ""  # decoding settings used (TranscriptionRun.settings)
 
 
 def claim_next_note(session_factory: sessionmaker[Session], now: Now) -> ClaimedNote | None:
@@ -180,7 +181,9 @@ def transcribe_note(
         raise TranscriptionError(
             TranscriptionErrorCode.NO_SPEECH, f"no speech recognised in {run.duration:.1f} s"
         )
-    return TranscriptResult(text=text, duration=run.duration, transcribe_s=clock() - start)
+    return TranscriptResult(
+        text=text, duration=run.duration, transcribe_s=clock() - start, settings=run.settings
+    )
 
 
 def _store_done(
@@ -231,12 +234,13 @@ def current_initial_prompt() -> str | None:
 def _log_done(note_id: int, result: TranscriptResult, wall_s: float) -> None:
     rtf = result.transcribe_s / result.duration if result.duration > 0 else 0.0
     logger.info(
-        "Audio note %s transcribed: audio %.1f s, transcription %.1f s, wall %.1f s, RTF %.2f",
+        "Audio note %s transcribed: audio %.1f s, transcription %.1f s, wall %.1f s, RTF %.2f (%s)",
         note_id,
         result.duration,
         result.transcribe_s,
         wall_s,
         rtf,
+        result.settings or "settings unknown",
     )
 
 

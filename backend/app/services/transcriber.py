@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from app.config import Settings
+from app.config import CpuThreadsSetting, Settings
 from app.models.enums import TranscriptionErrorCode
+from app.services.cpu_cores import physical_cores
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class TranscriptionRun:
 
     duration: float
     segments: Iterator[TranscribedSegment]
+    settings: str = ""  # decoding settings used, for the timing log line
 
 
 class Transcriber(Protocol):
@@ -55,23 +57,56 @@ class Transcriber(Protocol):
         ...
 
 
+def resolve_cpu_threads(setting: CpuThreadsSetting) -> int:
+    """`auto` -> physical core count (detected once); an int is used as is (0 = library)."""
+    return physical_cores() if setting == "auto" else setting
+
+
 @dataclass(frozen=True)
 class WhisperOptions:
     model: str
     compute_type: str
-    cpu_threads: int
+    cpu_threads: int  # resolved; 0 = library default
     language: str | None
     beam_size: int
+    vad_filter: bool = True
+    condition_on_previous_text: bool = False
+    temperatures: tuple[float, ...] = (0.0, 0.4)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> WhisperOptions:
         return cls(
             model=settings.whisper_model.strip(),
             compute_type=settings.whisper_compute_type.strip(),
-            cpu_threads=settings.whisper_cpu_threads,
+            cpu_threads=resolve_cpu_threads(settings.whisper_cpu_threads),
             language=settings.whisper_language_code,
             beam_size=settings.whisper_beam_size,
+            vad_filter=settings.whisper_vad_filter,
+            condition_on_previous_text=settings.whisper_condition_on_previous_text,
+            temperatures=settings.whisper_temperatures,
         )
+
+    def describe(self) -> str:
+        """One-line summary for logs and the bench, e.g. `small int8, beam 1, vad on, ...`."""
+        threads = str(self.cpu_threads) if self.cpu_threads else "library default"
+        temps = ",".join(f"{t:g}" for t in self.temperatures)
+        return (
+            f"model {self.model} {self.compute_type}, language {self.language or 'auto'}, "
+            f"beam {self.beam_size}, vad {'on' if self.vad_filter else 'off'}, "
+            f"condition_on_previous_text {'on' if self.condition_on_previous_text else 'off'}, "
+            f"temperatures {temps}, cpu threads {threads}"
+        )
+
+    def transcribe_kwargs(self, initial_prompt: str | None) -> dict[str, Any]:
+        """Keyword arguments for faster-whisper's `WhisperModel.transcribe`."""
+        return {
+            "language": self.language,
+            "beam_size": self.beam_size,
+            "vad_filter": self.vad_filter,
+            "condition_on_previous_text": self.condition_on_previous_text,
+            "temperature": list(self.temperatures),
+            "initial_prompt": initial_prompt,
+        }
 
 
 _models: dict[tuple[str, str, int], Any] = {}
@@ -99,7 +134,7 @@ def _load_model(options: WhisperOptions) -> Any:
                 f"({options.compute_type}): {type(exc).__name__}: {exc}",
             ) from exc
         _models[key] = model
-        logger.info("Whisper model %r loaded (%s, cpu)", options.model, options.compute_type)
+        logger.info("Whisper model loaded (cpu): %s", options.describe())
         return model
 
 
@@ -130,7 +165,7 @@ def _segments(raw: Iterable[Any]) -> Iterator[TranscribedSegment]:
 
 
 class WhisperTranscriber:
-    """faster-whisper on the CPU with VAD (silence skipped) and the glossary prompt."""
+    """faster-whisper on the CPU with the configured decoding options and glossary prompt."""
 
     def __init__(self, options: WhisperOptions) -> None:
         self.options = options
@@ -142,12 +177,13 @@ class WhisperTranscriber:
         model = _load_model(self.options)
         try:
             raw, info = model.transcribe(
-                str(path),
-                language=self.options.language,
-                beam_size=self.options.beam_size,
-                vad_filter=True,
-                initial_prompt=initial_prompt,
+                str(path), **self.options.transcribe_kwargs(initial_prompt)
             )
         except Exception as exc:
             raise classify_error(exc) from exc
-        return TranscriptionRun(duration=float(info.duration), segments=_segments(raw))
+        # info.duration is the full audio (before VAD); segment ends are on that timeline.
+        return TranscriptionRun(
+            duration=float(info.duration),
+            segments=_segments(raw),
+            settings=self.options.describe(),
+        )
