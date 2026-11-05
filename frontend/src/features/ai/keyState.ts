@@ -4,12 +4,7 @@ import { uk } from '@/i18n/uk'
 export const AI_KEY_STATES = ['ok', 'invalid_key', 'not_configured', 'unreachable', 'checking'] as const
 export type AiKeyState = (typeof AI_KEY_STATES)[number]
 
-/** `ai` object of GET /api/health and the answer of POST /api/ai/check. */
-export interface AiKeyStatus {
-  /** An AiKeyState; typed as string so a state added later does not break rendering. */
-  state: string
-  checked_at: string | null
-}
+export type { AiKeyStatus } from '@/api/health'
 
 /** Known state, or null when missing (older backend) or unknown: the UI then shows nothing. */
 export function knownAiKeyState(state: unknown): AiKeyState | null {
@@ -18,13 +13,13 @@ export function knownAiKeyState(state: unknown): AiKeyState | null {
     : null
 }
 
-export interface AiKeyChip {
+export interface AiKeyChipView {
   text: string
   hint: string
 }
 
 /** Status bar chip: only for a problem (not for ok / checking / unknown). */
-export function aiKeyChip(state: unknown): AiKeyChip | null {
+export function aiKeyChip(state: unknown): AiKeyChipView | null {
   const chip = uk.aiKey.chip
   switch (knownAiKeyState(state)) {
     case 'invalid_key':

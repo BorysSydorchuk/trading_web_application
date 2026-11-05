@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { uk } from '@/i18n/uk'
@@ -32,12 +32,16 @@ describe('StatusBar: AI key chip', () => {
     ['invalid_key', chip.invalid_key, chip.invalid_keyHint],
     ['not_configured', chip.not_configured, chip.not_configuredHint],
     ['unreachable', chip.unreachable, chip.unreachableHint],
-  ])('shows the chip with a hint for %s', async (state, text, hint) => {
+  ])('shows the chip for %s; the button opens the hint', async (state, text, hint) => {
     serve(health({ state, checked_at: '2026-11-05T09:59:00Z' }))
-    renderWithProviders(<StatusBar />)
+    const { user } = renderWithProviders(<StatusBar />)
 
-    const label = await screen.findByText(text)
-    expect(label.closest('[title]')).toHaveAttribute('title', hint)
+    const button = await screen.findByRole('button', { name: `${text}. ${hint}` })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(button)
+    const popover = await screen.findByRole('dialog')
+    expect(within(popover).getByText(hint)).toBeInTheDocument()
+    expect(within(popover).getByRole('link', { name: chip.openSettings })).toHaveAttribute('href', '/settings')
     // The server/DB state stays green: an AI problem does not degrade it.
     expect(screen.getByText(uk.statusBar.ok)).toBeInTheDocument()
   })

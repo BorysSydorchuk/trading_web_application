@@ -105,6 +105,18 @@ describe('AiUsageSection: key state', () => {
     expect(screen.queryByText(t.notConfiguredShort)).not.toBeInTheDocument()
   })
 
+  it('uses the usage key state when the health poll fails', async () => {
+    mockApi(
+      http.get('/api/health', () => HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 })),
+      http.get('/api/ai/usage', () => HttpResponse.json(usage({ key_state: 'unreachable' }))),
+    )
+    renderWithProviders(<AiUsageSection />)
+
+    expect(await screen.findByText(k.states.unreachable)).toBeInTheDocument()
+    expect(screen.getByText(k.hints.unreachable.title)).toBeInTheDocument()
+    expect(screen.queryByText(t.checkedAt)).not.toBeInTheDocument()
+  })
+
   it('falls back to the "configured" line and hides the check for an older backend', async () => {
     mockApi(
       http.get('/api/health', () => HttpResponse.json(health())),

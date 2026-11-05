@@ -655,6 +655,7 @@ export const uk = {
       not_configuredHint: 'Вкажіть ANTHROPIC_API_KEY у .env і перезапустіть застосунок',
       unreachable: 'AI: немає звʼязку',
       unreachableHint: 'Сервіс ШІ не відповідає. Перевірте інтернет; ключ перевіряється знову кожні 5 хв',
+      openSettings: 'Налаштування → ШІ',
     },
     states: {
       ok: 'працює',

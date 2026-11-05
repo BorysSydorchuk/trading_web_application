@@ -51,8 +51,9 @@ export function AiUsageSection() {
  * Neither known (older backend) → null: the old "configured" line is shown instead.
  */
 function useKeyStatus(usage: AiUsage): AiKeyStatus | null {
-  const { data: health } = useHealth()
-  const ai = health?.ai
+  const health = useHealth()
+  // A failed poll may still hold old data: then the usage answer is the fresher source.
+  const ai = health.isError ? null : health.data?.ai
   if (ai && knownAiKeyState(ai.state)) return ai
   const usageState = knownAiKeyState(usage.key_state)
   return usageState ? { state: usageState, checked_at: null } : null

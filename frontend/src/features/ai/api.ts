@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiRequest } from '@/api/client'
-import { healthKeys, type HealthResponse } from '@/api/health'
-import type { AiKeyStatus } from './keyState'
+import { healthKeys, type AiKeyStatus, type HealthResponse } from '@/api/health'
 
 /** GET /api/ai/usage (docs/api.md "AI usage"): current Europe/Brussels month. */
 export interface AiUsage {

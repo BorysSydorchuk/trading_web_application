@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import type { AiKeyStatus } from '@/features/ai/keyState'
 import { apiGet } from './client'
+
+/** `ai` object of GET /api/health and the answer of POST /api/ai/check (docs/api.md "AI key status"). */
+export interface AiKeyStatus {
+  /** An AiKeyState; typed as string so a state added later does not break rendering. */
+  state: string
+  checked_at: string | null
+}
 
 export interface HealthResponse {
   status: 'ok' | 'degraded'
