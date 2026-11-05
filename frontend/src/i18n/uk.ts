@@ -2,6 +2,11 @@
  * All user-visible UI strings (Ukrainian). Components must not hardcode text.
  * Keys under `errors` match API error codes from docs/api.md.
  */
+
+/** One text for a picked file (checked in the browser) and for the server's 413/415. */
+const AUDIO_TOO_LARGE = 'Аудіо завелике (понад 25 МБ). Оберіть коротший файл або розділіть запис на кілька.'
+const AUDIO_WRONG_FORMAT = 'Непідтримуваний формат аудіо. Підходять файли .ogg, .opus, .m4a, .mp3, .wav або .webm.'
+
 export const uk = {
   app: {
     name: 'Торговий журнал',
@@ -596,6 +601,13 @@ export const uk = {
         other: 'Не вдалося увімкнути мікрофон. Спробуйте ще раз або опишіть угоду текстом.',
         recorder: 'Запис перервався через помилку браузера. Спробуйте ще раз.',
       },
+      pickFile: 'Завантажити аудіо',
+      pickFileHint: 'Аудіофайл .ogg, .opus, .m4a, .mp3, .wav або .webm, до 25 МБ',
+      fileErrors: {
+        format: AUDIO_WRONG_FORMAT,
+        too_large: AUDIO_TOO_LARGE,
+        empty: 'Файл порожній. Оберіть інший аудіофайл.',
+      },
     },
     notes: {
       label: (n: number) => `Голосовий запис ${n}`,
@@ -647,8 +659,8 @@ export const uk = {
       refusal: 'ШІ не зміг обробити цей текст. Заповніть форму вручну; подробиці в logs/.',
       invalid_output: 'ШІ повернув некоректну відповідь. Спробуйте ще раз або заповніть вручну.',
     },
-    audio_too_large: 'Запис завеликий (понад 25 МБ). Запишіть коротший або розділіть на кілька.',
-    unsupported_media_type: 'Сервер не приймає цей формат аудіо (потрібен webm, ogg, mp4, mp3 або wav).',
+    audio_too_large: AUDIO_TOO_LARGE,
+    unsupported_media_type: AUDIO_WRONG_FORMAT,
     audio_not_failed: 'Запис уже в черзі або розпізнаний, оновлюю його стан.',
     audio_missing: 'Аудіофайл не знайдено на диску (data/audio/).',
     transcription: {

@@ -1,9 +1,11 @@
-import { useEffect, useId, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useId, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { AlertCircle, Loader2, Mic } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { uk } from '@/i18n/uk'
+import { AudioFileButton } from './AudioFileButton'
+import { checkAudioFile, withMimeType, type AudioFileError } from './audioFile'
 import { formatElapsed, MAX_RECORDING_MS } from './recorderModel'
 import { useRecorder, type RecorderError, type RecorderState } from './useRecorder'
 
@@ -11,20 +13,44 @@ const t = uk.voice.recorder
 const HOLD_KEYS = new Set([' ', 'Enter'])
 
 export interface VoiceRecorderProps {
-  /** A finished recording (≥ 1 s). `blob.type` is the mime type without parameters. */
-  onRecorded: (blob: Blob, durationSeconds: number) => void
+  /**
+   * A finished recording (≥ 1 s) or a picked audio file (checked: format, ≤ 25 MB, not empty).
+   * `blob.type` is the Content-Type to upload, without parameters. `durationSeconds` is null for
+   * a file (unknown in the browser; the server reads it when decoding).
+   */
+  onRecorded: (blob: Blob, durationSeconds: number | null) => void
   disabled?: boolean
 }
 
-/** Hold-to-record button (pointer or Space/Enter). Knows nothing about trades (reused for bias in M4). */
+/**
+ * Hold-to-record button (pointer or Space/Enter) plus "Завантажити аудіо" for a ready file.
+ * Knows nothing about trades (reused for bias in M4).
+ */
 export function VoiceRecorder({ onRecorded, disabled = false }: VoiceRecorderProps) {
   const recorder = useRecorder(onRecorded)
   const hintId = useId()
   const active = recorder.phase !== 'idle'
+  const [fileError, setFileError] = useState<AudioFileError | null>(null)
   useMicErrorToast(recorder.error)
 
   function press() {
-    if (!disabled) void recorder.start()
+    if (disabled) return
+    setFileError(null)
+    void recorder.start()
+  }
+
+  function onFile(file: File) {
+    if (disabled || active) return
+    // A picked file replaces any earlier mic message, so only one message is shown.
+    recorder.clearMessages()
+    const check = checkAudioFile(file)
+    if (!check.ok) {
+      setFileError(check.error)
+      toast.error(t.fileErrors[check.error], { id: 'voice-file-error' })
+      return
+    }
+    setFileError(null)
+    onRecorded(withMimeType(file, check.mimeType), null)
   }
 
   function onPointerDown(event: PointerEvent<HTMLButtonElement>) {
@@ -84,12 +110,14 @@ export function VoiceRecorder({ onRecorded, disabled = false }: VoiceRecorderPro
           {recorder.phase === 'starting' ? <Loader2 className="animate-spin" aria-hidden /> : <Mic aria-hidden />}
           {t.hold}
         </Button>
+        <AudioFileButton onFile={onFile} disabled={disabled || active} />
         <span id={hintId} className="sr-only">
           {t.label}
         </span>
         <RecorderStatus state={recorder} />
       </div>
-      {recorder.error && <MicError error={recorder.error} />}
+      {recorder.error && <InlineError text={t.errors[recorder.error]} />}
+      {fileError && <InlineError text={t.fileErrors[fileError]} />}
     </div>
   )
 }
@@ -121,11 +149,11 @@ function RecorderStatus({ state }: { state: RecorderState }) {
   return null
 }
 
-function MicError({ error }: { error: RecorderError }) {
+function InlineError({ text }: { text: string }) {
   return (
     <p role="alert" className="flex max-w-prose items-start gap-1.5 text-xs text-destructive">
       <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />
-      <span>{t.errors[error]}</span>
+      <span>{text}</span>
     </p>
   )
 }
