@@ -281,6 +281,32 @@ Endpoints:
 
 Settings (`.env`): `WHISPER_MODEL` (default `small`), `WHISPER_COMPUTE_TYPE` (`int8`), `WHISPER_LANGUAGE` (`uk`; empty = auto-detect), `WHISPER_BEAM_SIZE` (1), `WHISPER_CPU_THREADS` (`auto` = physical core count, detected once; 0 = library default; or a number 1–256), `WHISPER_VAD_FILTER` (`true`: bundled Silero VAD skips silence), `WHISPER_CONDITION_ON_PREVIOUS_TEXT` (`false`), `WHISPER_TEMPERATURES` (`0.0,0.4`: comma-separated, ascending, each 0–1; `0` = no temperature fallback), `DATA_DIR` (default `data` in the repo root). Glossary for `initial_prompt` in `config/transcription.yaml` (`glossary: [...]`), reloaded on change like the other config files.
 
+### Transcript normalization (M3, PM 2026-11-05)
+
+`config/transcript_glossary.yaml` (UTF-8, reloaded on change like the other config files):
+```yaml
+replacements:
+  - to: FVG
+    from: [ФВГ, фвг]
+  - to: FVG H1
+    from: [FVH1]
+  - to: IFVG
+    from: [ІФВГ, ИФВГ, іфввг]
+  - to: H4
+    from: [Н4]        # Cyrillic Н
+```
+- Matching is case-insensitive and on word boundaries (no letter/digit right before/after); longest `from` first; one pass. `to` is inserted as written.
+- Applied by the worker to the transcript when a note becomes `done`; `AudioNote.transcript` is the normalized text (the UI shows it in the editable text box as before).
+- Validation: `replacements` list (≤ 200), each `to` non-empty, `from` non-empty list of unique non-empty strings; the same `from` (case-insensitive) under two `to` is an error; mojibake is refused like every config file. Broken file → transcript stored unnormalized + ERROR in worker.log (the note is still `done`). Checked at API and worker start.
+
+### AI key status (M3, PM 2026-11-05)
+
+- `GET /api/health` gets `"ai": { "state": "ok" | "invalid_key" | "not_configured" | "unreachable" | "checking", "checked_at": "<UTC ISO>" | null }`. `status` stays based on the DB only.
+- `GET /api/ai/usage` gets the same `"key_state"` value (Settings).
+- `POST /api/ai/check` → re-checks now (blocking, ≤ 10 s) and returns the `ai` object.
+- States: `not_configured` = no key in env/.env; `checking` = check running (start); `ok` = `models.retrieve` succeeded; `invalid_key` = 401/403 (also set when an extraction gets an auth error); `unreachable` = timeout / connection / 5xx (re-checked automatically every 5 min while unreachable).
+- UI: status bar shows an AI chip only when the state is not `ok`/`checking`: "AI: ключ недійсний" / "AI: ключ не задано" / "AI: немає зв'язку"; Settings → AI shows the state with a "Перевірити ключ" button (POST /api/ai/check). A new key still needs an app restart (settings are cached).
+
 ### Number words (M2 follow-up)
 
 The number words accepted for `int` values move from code to `config/extraction.yaml`:
