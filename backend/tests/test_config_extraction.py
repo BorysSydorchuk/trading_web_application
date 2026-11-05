@@ -28,13 +28,21 @@ CONFIG_FILES = (
     "bias.yaml",
 )
 
-# The list that was hardcoded as NUMBER_WORDS in app/domain/extraction.py before M3-02.
+# The list that was hardcoded as NUMBER_WORDS in app/domain/extraction.py before M3-02,
+# plus the accusative forms ("на трійку", M4-06 review).
 M2_NUMBER_WORDS = {
     **dict.fromkeys(("один", "одна", "одиниця", "единица", "единичка", "one"), 1),
     **dict.fromkeys(("два", "дві", "двійка", "двойка", "two"), 2),
     **dict.fromkeys(("три", "трійка", "тройка", "three"), 3),
     **dict.fromkeys(("чотири", "четыре", "четвірка", "четверка", "four"), 4),
     **dict.fromkeys(("п'ять", "пять", "п'ятірка", "пятерка", "five"), 5),
+}
+ACCUSATIVE_NUMBER_WORDS = {
+    **dict.fromkeys(("одиницю", "единицу", "единичку"), 1),
+    **dict.fromkeys(("двійку", "двойку"), 2),
+    **dict.fromkeys(("трійку", "тройку"), 3),
+    **dict.fromkeys(("четвірку", "четверку"), 4),
+    **dict.fromkeys(("п'ятірку", "пятерку"), 5),
 }
 
 
@@ -61,8 +69,9 @@ def _error(cfg_dir: Path, content: str) -> str:
     return str(info.value)
 
 
-def test_real_file_is_the_m2_list() -> None:
-    assert dict(load_number_words(REAL_CONFIG / "extraction.yaml").words) == M2_NUMBER_WORDS
+def test_real_file_is_the_m2_list_plus_accusative_forms() -> None:
+    words = dict(load_number_words(REAL_CONFIG / "extraction.yaml").words)
+    assert words == M2_NUMBER_WORDS | ACCUSATIVE_NUMBER_WORDS
 
 
 def test_words_are_normalised_on_load(cfg_dir: Path) -> None:

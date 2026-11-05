@@ -59,7 +59,7 @@ def test_bias_prompt_has_rules_kind_and_aliases() -> None:
     for phrase in ("Never invent", "verbatim", "Never ask questions", "no_trade", "POI"):
         assert phrase in prompt
     assert "This note is `pre_ny`: the daily bias" in prompt
-    assert "- `XAUUSD`: also called золото, gold, голд" in prompt
+    assert "- `XAUUSD`: also called золото, gold, голд, XAU/USD, XAU" in prompt
 
 
 def test_bias_prompt_is_byte_stable_per_kind() -> None:

@@ -54,7 +54,7 @@ def test_schema_is_flat_with_symbol_and_key_enums() -> None:
 
 def test_symbol_catalogue_lists_aliases_in_config_order() -> None:
     lines = render_symbol_catalogue(get_bias_config()).splitlines()
-    assert lines[0] == "- `EURUSD`: also called євро, евро, фібер, фибер, fiber, euro"
+    assert lines[0] == "- `EURUSD`: also called євро, евро, фібер, фибер, fiber, euro, EUR/USD"
     assert lines[3] == "- `GER40`: also called дакс, DAX, GER"
 
 
@@ -82,10 +82,19 @@ def test_symbol_catalogue_without_aliases() -> None:
         ("GER40 bearish", {"GER40"}),
         ("ger bearish", {"GER40"}),
         ("XAUUSD 2650", {"XAUUSD"}),
+        ("EUR/USD вниз, GBP/USD вгору", {"EURUSD", "GBPUSD"}),
+        ("XAU/USD long", {"XAUUSD"}),
+        ("XAU long, GBP short", {"XAUUSD", "GBPUSD"}),
+        ("xauusd і gbpusd", {"XAUUSD", "GBPUSD"}),  # symbol names, any case
+        ("GBPJPY short", set()),  # GBP only as a whole word
         ("усі пари бичачі", set()),
         ("золотий стандарт", {"XAUUSD"}),  # accepted false positive of the ending rule
         ("GERMANY", set()),  # Latin names: whole words only
-        ("евротур", set()),  # stem + more than 3 letters
+        ("евротур", set()),  # евро: whole word only
+        ("Європа відкрилась вниз", set()),  # stem "євр" too short for endings
+        ("Европа вниз", set()),
+        ("євро вгору", {"EURUSD"}),
+        ("по фіберу", {"EURUSD"}),
         ("німецький індекс", set()),
     ],
 )
@@ -189,6 +198,12 @@ def test_guard_reasons(item: tuple[str, str, str, str], reason: str) -> None:
     result = guard(text, item)
     assert result.entries == []
     assert dropped(result) == [(item[0], item[1], reason)]
+
+
+def test_confidence_in_the_accusative() -> None:
+    text = "Золото вгору, впевненість на трійку."
+    result = guard(text, ("XAUUSD", "confidence", "3", "на трійку"))
+    assert result.entries[0].fields == {"confidence": 3}
 
 
 def test_confidence_from_number_word_and_denominator() -> None:

@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from app.config_files.bias import BiasConfig
 from app.domain.extraction import (
+    CONFLICT,
     EVIDENCE_KEY,
     KEY_KEY,
     VALUE_KEY,
@@ -64,11 +65,11 @@ _INT_TEXT = re.compile(r"[+-]?\d+")
 # Cyrillic aliases are matched with Ukrainian/Russian case endings: "золото" also matches
 # "золоту", "золота"; "дакс" also "даксу". The alias's last vowel / soft sign is the
 # ending; the stem (>= MIN_STEM letters) may be followed by up to MAX_ENDING letters.
+# Shorter stems (євро, евро) match the whole word only.
 _CYRILLIC = "Ѐ-ӿ"
 _ENDING_CHARS = frozenset("аеєиіїоуюяьйыэ")
-MIN_STEM = 3
+MIN_STEM = 4  # a 3-letter stem (євр) would also match Європа/Европа
 MAX_ENDING = 3
-_CONFLICT = object()
 
 
 # --- schema and prompt ---
@@ -148,8 +149,8 @@ def answer_values(answer: Mapping[str, Any]) -> dict[tuple[str, str], Any]:
         current = values.get((symbol, key))
         if current is None:
             values[(symbol, key)] = (value, evidence)
-        elif current is not _CONFLICT and current[0] != value:
-            values[(symbol, key)] = _CONFLICT
+        elif current is not CONFLICT and current[0] != value:
+            values[(symbol, key)] = CONFLICT
     return values
 
 
@@ -209,7 +210,7 @@ def _guard_one(
         return None, "not_fillable"
     if symbol not in mentioned:
         return None, "symbol_not_in_text"
-    if item is _CONFLICT:
+    if item is CONFLICT:
         return None, "invalid_option"
     value, evidence = item
     if not evidence_in_text(evidence, text):

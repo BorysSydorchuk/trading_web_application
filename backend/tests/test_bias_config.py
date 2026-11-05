@@ -54,7 +54,8 @@ def _problems(tmp_path: Path, text: str) -> list[str]:
 def test_real_file_matches_contract() -> None:
     config = load_bias(REAL_FILE)
     assert config.symbol_names == ("EURUSD", "GBPUSD", "XAUUSD", "GER40")
-    assert config.symbols[2].aliases == ("золото", "gold", "голд")
+    assert config.symbols[1].aliases == ("фунт", "кабель", "cable", "pound", "GBP/USD", "GBP")
+    assert config.symbols[2].aliases == ("золото", "gold", "голд", "XAU/USD", "XAU")
     assert config.symbols[3].aliases == ("дакс", "DAX", "GER")
     assert config.reminders.pre_london.to_api() == {"from": "07:45", "until": "11:00"}
     assert config.reminders.pre_ny.to_api() == {"from": "12:30", "until": "16:00"}
@@ -280,7 +281,7 @@ def test_get_bias_config(api: TestClient) -> None:
     body = response.json()
     assert body["symbols"][0] == {
         "symbol": "EURUSD",
-        "aliases": ["євро", "евро", "фібер", "фибер", "fiber", "euro"],
+        "aliases": ["євро", "евро", "фібер", "фибер", "fiber", "euro", "EUR/USD"],
     }
     assert [s["symbol"] for s in body["symbols"]] == ["EURUSD", "GBPUSD", "XAUUSD", "GER40"]
     assert body["reminders"] == {

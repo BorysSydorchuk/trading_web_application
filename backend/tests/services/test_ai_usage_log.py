@@ -262,7 +262,7 @@ def _jsonl(path: Path, lines: list[dict[str, Any]], extra: str = "") -> None:
     path.write_text("".join(json.dumps(x) + "\n" for x in lines) + extra, encoding="utf-8")
 
 
-def test_last_success_is_the_latest_ok_line_of_any_purpose(tmp_path: Path) -> None:
+def test_last_success_is_the_latest_ok_line_of_the_trade_schema(tmp_path: Path) -> None:
     path = tmp_path / "ai_usage.jsonl"
     _jsonl(
         path,
@@ -271,6 +271,8 @@ def test_last_success_is_the_latest_ok_line_of_any_purpose(tmp_path: Path) -> No
             {"ts": "2026-11-04T10:00:00.000Z", "purpose": "warmup", "ok": True},
             {"ts": "2026-11-04T09:00:00.000Z", "purpose": "eval", "ok": True},
             {"ts": "2026-11-04T11:00:00.000Z", "ok": False, "error_kind": "timeout"},
+            # Another schema (M4-06): never warms the trade grammar.
+            {"ts": "2026-11-04T12:00:00.000Z", "purpose": "bias_extract", "ok": True},
         ],
         extra="{broken\n\n",
     )

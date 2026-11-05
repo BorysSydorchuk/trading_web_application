@@ -1,0 +1,41 @@
+{
+  "description": "Confidence in the accusative (на трійку, на двійку), EUR/USD and XAU aliases",
+  "kind": "pre_london",
+  "text": "EUR/USD вгору, впевненість на трійку. XAU вниз, на двійку.",
+  "model_output": [
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "EUR/USD вгору"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "confidence",
+      "value": "3",
+      "evidence": "впевненість на трійку"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "XAU вниз"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "confidence",
+      "value": "2",
+      "evidence": "на двійку"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bullish",
+      "confidence": 3
+    },
+    "XAUUSD": {
+      "direction": "bearish",
+      "confidence": 2
+    }
+  }
+}

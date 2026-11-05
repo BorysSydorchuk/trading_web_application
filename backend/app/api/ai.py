@@ -26,6 +26,7 @@ from app.services.ai.extraction import (
     ExtractionFailed,
     ExtractionOutcome,
     ExtractionSettings,
+    UsageSummary,
     extract_trade_fields,
 )
 from app.services.ai.key_status import KeyStatus, KeyStatusTracker
@@ -59,21 +60,24 @@ def get_usage_log() -> UsageLog:
     return UsageLog(usage_log_path(get_settings()))
 
 
+def _usage_out(usage: UsageSummary) -> schemas.ExtractUsageOut:
+    return schemas.ExtractUsageOut(
+        model=usage.model,
+        fallback_used=usage.fallback_used,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cost_usd=usage.cost_usd,
+        duration_ms=usage.duration_ms,
+    )
+
+
 def _to_result(outcome: ExtractionOutcome) -> schemas.ExtractResult:
-    usage = outcome.usage
     return schemas.ExtractResult(
         fields=outcome.fields,
         ai_filled_fields=outcome.ai_filled_fields,
         missing_required=outcome.missing_required,
         dropped=[schemas.DroppedOut(key=d.key, reason=d.reason) for d in outcome.dropped],
-        usage=schemas.ExtractUsageOut(
-            model=usage.model,
-            fallback_used=usage.fallback_used,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cost_usd=usage.cost_usd,
-            duration_ms=usage.duration_ms,
-        ),
+        usage=_usage_out(outcome.usage),
     )
 
 
@@ -138,7 +142,6 @@ def _extraction_settings() -> ExtractionSettings:
 
 
 def _bias_result(outcome: BiasExtractionOutcome) -> schemas.BiasExtractResult:
-    usage = outcome.usage
     return schemas.BiasExtractResult(
         entries=[
             schemas.BiasExtractEntryOut(symbol=e.symbol, fields=e.fields, evidence=e.evidence)
@@ -148,14 +151,7 @@ def _bias_result(outcome: BiasExtractionOutcome) -> schemas.BiasExtractResult:
             schemas.BiasDroppedOut(symbol=d.symbol, key=d.key, reason=d.reason)
             for d in outcome.dropped
         ],
-        usage=schemas.ExtractUsageOut(
-            model=usage.model,
-            fallback_used=usage.fallback_used,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cost_usd=usage.cost_usd,
-            duration_ms=usage.duration_ms,
-        ),
+        usage=_usage_out(outcome.usage),
     )
 
 
