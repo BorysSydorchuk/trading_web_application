@@ -358,3 +358,101 @@ phonetic in Cyrillic (C's terms after ~60 s). With it **on**, the Latin forms ca
    removed) in his `.env`.
 5. QA DB `trading_journal_qa_m3` kept; it now holds 72 more audio notes on trade 6 (+ a few from two aborted first
    attempts on trade 5; their files were in my scratch dir, so they show `audio_missing` on replay).
+
+## M3-18 Final end-to-end check
+
+Date: 2026-11-05, 16:16–16:18 Brussels. Branch `main` at 67019ac (all M3 code merged). Tester: qa-tester agent.
+No product code changed. Acceptance rule: PM M3 decision of 2026-11-05 (docs/DECISIONS.md).
+
+### Method
+
+- Own API (uvicorn, port 8010) + one worker, QA DB `trading_journal_qa_m3`, fixture MT5 source, scratch
+  `DATA_DIR`/`LOG_DIR` (outside the repo). Borys's app on 8000/5173 and his real DB untouched.
+- Whisper: **code defaults**, no `WHISPER_*` variable set (driver removes any from the child env). Worker INFO
+  line of every note: `model small int8, language uk, beam 1, vad on, condition_on_previous_text on,
+  temperatures 0,0.4, cpu threads 12`.
+- Preflight: `GET /api/health` → `ai.state: "ok"`; trade 6 (GER40, closed, `needs_description`, initial SL set).
+- Whisper budget: 1 warm-up note (A, 19 s, discarded, includes the model load: 9.9 s) + 3 rounds × 3 recordings
+  = **10 transcriptions, no repeats**. Recording order shuffled per round (seed 20261105).
+- Per run: `POST /api/trades/6/audio` → poll `GET /api/audio/{id}` every 0.25 s until `done` (normalized
+  transcript) → `POST /api/trades/6/extract` with that transcript. TOTAL = upload→done + extract (both measured).
+- Glossary: count from the worker INFO line "Audio note N: K term replacement(s)". To see *which* terms, the
+  worker ran through a QA wrapper (`docs/reports/M3-qa-audio/qa_worker_wrap.py`) that records raw vs normalized
+  text of each `TranscriptGlossary.apply` call into the scratch dir; the app code itself is unchanged.
+  Driver: `docs/reports/M3-qa-audio/final_e2e.py`.
+- Thermal (typeperf, ACPI zone): 77–95 °C during the run.
+- AI fill: `claude-sonnet-5-5`, no fallback in any run, 0.008–0.012 USD per call.
+
+### Timings (s)
+
+| recording | duration | upload→done (r1/r2/r3) | extract (r1/r2/r3) | TOTAL r1/r2/r3 | TOTAL median | min | max |
+|---|---|---|---|---|---|---|---|
+| A | 19.0 | 6.4 / 5.6 / 5.6 | 1.2 / 0.9 / 1.0 | 7.6 / 6.5 / 6.6 | **6.6** | 6.5 | 7.6 |
+| B | 40.7 | 8.9 / 8.6 / 8.6 | 1.3 / 1.0 / 3.4 | 10.2 / 9.6 / 11.9 | **10.2** | 9.6 | 11.9 |
+| C | 82.4 | 13.4 / 13.5 / 13.2 | 2.0 / 2.3 / 2.5 | 15.3 / 15.8 / 15.7 | **15.7** | 15.3 | 15.8 |
+
+Worker transcription time (decode + transcribe): A 4.3–4.4 s, B 7.5–7.7 s, C 12.7–13.0 s (RTF 0.15–0.23).
+Faster than M3-13's "newcond b1" (C 18.5 s) because no other config ran before and the model was warm.
+The three transcripts of each recording were **identical** in all runs (greedy decode, temperature 0 kept).
+
+### Glossary (per run; same in all 3 runs)
+
+| recording | replacements (worker INFO) | which | correct? |
+|---|---|---|---|
+| A | 1 | `МТ5` (Cyrillic) → `MT5` | ✅ |
+| B | 1 | `ФВГ` → `FVG` | ✅ |
+| C | 1 | `FVH1` → `FVG H1` (after "POI") | ✅ (matches the context; the least certain term since M3-13) |
+
+No wrong replacement. In C, H4, H1, IFVG, M5, FTA and Flow came out of Whisper already in Latin (condition on).
+Remaining raw-transcript oddities that the glossary does not (and should not) touch: "DAL5" in C (unclear what
+was said), misspelled Ukrainian words ("отворилася", "знітя", "Сидап-тайп"); none affected a field.
+
+### Extracted fields (identical in all 3 runs of each recording; `dropped` empty in all 9 runs)
+
+What Borys says (inferred from the normalized transcript, I can't listen to the audio):
+- **A**: pre-market filled, waited for the position; changed TP in MT5 after opening; through FTA, RR lower.
+- **B**: TP in the terminal on a target (liquidity on the chart); FVG valid because it updates a fractal; also a
+  reaction after a liquidity sweep.
+- **C**: entry at NY open via POI FVG H1 formed after the Asian-session liquidity was taken in London; reaction
+  as FVG; holding to the liquidity of the last consolidation; bias long, trade with the bias; "Сетап H4, H1
+  Flow"; entry via IFVG M5; FTA is the target.
+
+| recording | field | extracted (3/3 runs) | spoken? | correct? |
+|---|---|---|---|---|
+| A | poi_type / fvg_kind / entry_model / timeframes | — | not spoken | ✅ (empty is right) |
+| A | everything else | — (fields `{}`) | FTA/RR/TP change spoken, no journal enum value | ✅ plausible; "changed TP after opening" could be a `mistakes` text, left empty (uncertain, not a key field) |
+| B | fvg_kind | `fractal_updating` | "FVG валідний через оновлення фракталу" | ✅ (also mentions a reaction after a liquidity sweep; the stated reason is the fractal) |
+| B | poi_type | — | "FVG" without a timeframe | ✅ (no H1/H4 said) |
+| B | entry_model / timeframes | — | not spoken | ✅ |
+| C | poi_type | `fvg_h1` | "POI FVG H1" | ✅ |
+| C | fvg_kind | `post_manipulation` | FVG formed after the liquidity sweep | ✅ |
+| C | entry_model | `ifvg_m5` | "Заход через IFVG M5" | ✅ |
+| C | timeframes | H1 in poi_type, M5 in entry_model | yes | ✅ |
+| C | setup_context | — (missing_required) | "Сетап H4, H1 Flow" (timeframes named, no yes/no on synchrony) | ⚠ uncertain: empty is defensible, `yes` would also be a reading |
+| C | exit_reason, emotions, followed_plan, quality_rating | — | not spoken | ✅ |
+
+`missing_required`: A = all 9 enum/bool/int fields + chart_links; B = all but fvg_kind; C = setup_context,
+exit_reason, followed_plan, emotion_before, emotion_after, quality_rating, chart_links.
+
+Not spoken in any recording (cannot be checked here): QM M5 entry, FVG H4 POI, `na` FVG kind, symbols, QM/BOS/SMT.
+
+### Acceptance (PM 2026-11-05)
+
+| criterion | result |
+|---|---|
+| 82.4 s note TOTAL (upload + transcription + AI fill) median ≤ 30 s | **pass**: 15.7 s (15.3–15.8) |
+| POI type correct in all 3 recordings (where spoken) | **pass**: C `fvg_h1` 3/3; not spoken with a type in A, B |
+| Entry model correct (where spoken) | **pass**: C `ifvg_m5` 3/3; not spoken in A, B |
+| FVG kind correct (where spoken) | **pass**: B `fractal_updating` 3/3, C `post_manipulation` 3/3; not spoken in A |
+| Timeframes correct (where spoken) | **pass**: C H1 (POI) and M5 (entry) 3/3; none spoken in A, B |
+
+**Overall: PASS.**
+
+### Notes
+
+1. No product bug found in this run.
+2. QA-setup only: the worker logs `ERROR … Account 1 sync failed: password_missing: MT5_PASSWORD_51234567` against
+   the QA DB (the fixture account has no password in `.env`). Visible error as designed; unrelated to voice.
+3. `setup_context` in C is the only judgment call (see table); not one of the PM's key fields.
+4. QA DB `trading_journal_qa_m3` kept; +10 audio notes on trade 6 (ids 88–97; their files are in my scratch dir,
+   so they show `audio_missing` on replay). API and worker stopped.
