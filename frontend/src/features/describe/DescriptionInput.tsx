@@ -23,23 +23,27 @@ interface DescriptionInputProps {
   lastApplied: number | null
   /** Voice recorder and notes, shown under the text box. */
   voice?: ReactNode
+  /** Text box label and placeholder (default: the trade description's). */
+  label?: string
+  placeholder?: string
 }
 
 /** Input area: free text, voice notes (M3), "Заповнити з тексту". */
 export function DescriptionInput(props: DescriptionInputProps) {
   const { rawText, onRawText, rawTextError, onExtract, extracting, voice } = props
+  const { label = t.rawTextLabel, placeholder = t.rawTextPlaceholder } = props
   const id = useId()
   const canExtract = rawText.trim() !== '' && !extracting
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={`${id}-raw`} className="text-xs font-medium text-muted-foreground">
-        {t.rawTextLabel}
+        {label}
       </label>
       <Textarea
         id={`${id}-raw`}
         rows={6}
         maxLength={MAX_RAW_TEXT_LENGTH}
-        placeholder={t.rawTextPlaceholder}
+        placeholder={placeholder}
         value={rawText}
         aria-invalid={rawTextError ? true : undefined}
         onChange={(e) => onRawText(e.target.value)}
