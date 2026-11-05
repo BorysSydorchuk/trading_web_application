@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
+Current milestone: **M4 Bias** (started 2026-11-05). M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -8,7 +8,7 @@ Current milestone: **M3 Voice input** (started 2026-11-04). M2 accepted 2026-11-
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-05 (M3-18 PASS; docs/reports/M3.md written; waiting for Borys's live check items 1–8, then PM acceptance; M4 not started).
+Last update: 2026-11-05 (M3 accepted; M4 planned: contract in docs/api.md "## M4", tasks below; M4-02 started).
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
 **M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
@@ -19,6 +19,21 @@ Notes for the next session:
 - PM question for the M3 report: the structured-output grammar cache expires 24 h after last use (Anthropic docs), so the first AI fill after a quiet day is ~25 s even without a YAML change; hash-only warm-up doesn't cover it (option: also warm up when the last warm-up is > 24 h old, ~0.30 USD/month).
 - Leftover worktree folders under .claude/worktrees/ (gitignored) may remain if Windows locked them; delete by hand.
 To resume: read CLAUDE.md, this file, DECISIONS.md; `git status`; start M3-07.
+
+## M4 tasks
+
+Git: one branch per topic `m4/<topic>` from main, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Migrations → database-reviewer. Whisper: no repeated runs without asking Borys.
+
+- [x] M4-01 Plan, API contract (docs/api.md "## M4"), decisions (orchestrator)
+- [ ] M4-02 M3 follow-ups: AI warm-up by time (start if last successful AI call > 20 h, Mon–Fri 07:30 Brussels) + prompt rule "Сетап H4, H1 Flow" → setup_context yes, with fixture (backend-dev) — branch m4/m3-followups
+- [ ] M4-03 Bias DB + config: `bias_notes` table, bias_entries.bias_note_id, audio_notes.bias_entry_id → bias_note_id, `config/bias.yaml` loader, `GET /api/bias/config` (backend-dev, database-reviewer) — branch m4/bias-schema
+- [ ] M4-04 Bias alignment domain (pure) + recompute service for trades on note create/edit/delete and on sync (backend-dev) — branch m4/bias-alignment
+- [ ] M4-05 Bias API: notes CRUD, by-period, result marking, bias audio upload, status/reminders (backend-dev) — branch m4/bias-api
+- [ ] M4-06 Bias extraction: prompt, per-symbol schema, guards, fixtures (UA/RU/EN, aliases) (backend-dev) — branch m4/bias-extraction
+- [ ] M4-07 Bias page: list, note form (kind, date, recorder + audio file, text, "Заповнити з тексту", per-symbol cards, links), "біас був правильний" marking (frontend-dev) — branch m4/bias-ui
+- [ ] M4-08 Головна bias status + reminders, sidebar badge; alignment daily/weekly/monthly in Journal + Describe (frontend-dev) — branch m4/bias-dashboard
+- [ ] M4-09 QA (fixtures, AC: daily + weekly entries, trade alignment, pre_ny reminder after 12:30; ≤ 3 Whisper runs) + docs/reports/M4-live-check.md + scripts/qa_live_check_m4.py (qa-tester, orchestrator)
+- [ ] M4-10 Live check by Borys + docs/reports/M4.md (orchestrator)
 
 ## M3 tasks
 
@@ -119,3 +134,4 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-05: M3-15 mojibake bug (live-check PowerShell step) fixed, reviewed, merged; real config unchanged. make check 1394 + 273.
 - 2026-11-05: PM M3 decision: Whisper default condition_on_previous_text on, transcript glossary, AI key check; acceptance now by extracted fields. Git history: no real Anthropic key (only fake test strings). M3-16/M3-17 merged, make check 1513 + 293. Waiting for Borys's key.
 - 2026-11-05: Borys: valid key, .env Whisper overrides removed, main pushed (055fb2e), extra glossary rules approved. M3-18 PASS. M3 report written; waiting for live check 1–8.
+- 2026-11-05: M3 accepted by PM (live check 1–8 ✅). PM answers: time-based warm-up, setup_context rule. M4 planned (10 tasks).
