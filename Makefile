@@ -66,7 +66,11 @@ ai-eval:
 
 # Time local faster-whisper on audio files (QA for M3; downloads the model on first use):
 # make whisper-bench FILES="note30s.webm note2min.webm" [WHISPER_MODEL=base]
+#   [BENCH_ARGS="--preset old --beam-size 1 --show-text"]   (see --help for all flags)
+# WHISPER_* variables given on the make command line (e.g. WHISPER_VAD_FILTER=false) reach the
+# tool through the environment and override .env, like in the worker.
 FILES ?=
 WHISPER_MODEL ?=
+BENCH_ARGS ?=
 whisper-bench:
-	uv run --project backend python -m app.tools.transcribe_bench $(FILES) $(if $(WHISPER_MODEL),--model "$(WHISPER_MODEL)")
+	uv run --project backend python -m app.tools.transcribe_bench $(FILES) $(if $(WHISPER_MODEL),--model "$(WHISPER_MODEL)") $(BENCH_ARGS)
