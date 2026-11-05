@@ -1,5 +1,6 @@
-"""POST /api/trades/{id}/extract, GET /api/ai/usage and POST /api/ai/check (docs/api.md M2
-"AI extraction", "AI usage", M3 "AI key status")."""
+"""POST /api/trades/{id}/extract, POST /api/bias/notes/extract, GET /api/ai/usage and
+POST /api/ai/check (docs/api.md M2 "AI extraction", "AI usage", M3 "AI key status", M4 "Bias
+extraction")."""
 
 from __future__ import annotations
 
@@ -12,12 +13,14 @@ from sqlalchemy.orm import Session
 from app.api.config_files import config_error
 from app.api.trades import journal_context
 from app.config import get_settings
-from app.config_files import ConfigError, get_number_words
+from app.config_files import ConfigError, get_bias_config, get_number_words
 from app.db import get_db
 from app.domain.extraction import NumberWords
 from app.errors import ApiError
 from app.models import Trade
+from app.models.enums import BiasKind
 from app.schemas import ai as schemas
+from app.services.ai.bias_extraction import BiasExtractionOutcome, extract_bias_fields
 from app.services.ai.client import ModelClient, shared_client
 from app.services.ai.extraction import (
     ExtractionFailed,
@@ -102,7 +105,6 @@ def extract(
     if client is None:
         logger.warning("AI extraction for trade %s: ANTHROPIC_API_KEY is not set", trade_id)
         raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
-    settings = get_settings()
     try:
         outcome = extract_trade_fields(
             body.text,
@@ -110,21 +112,82 @@ def extract(
             config=config,
             number_words=number_words,
             client=client,
-            settings=ExtractionSettings(
-                primary_model=settings.anthropic_model_extraction,
-                fallback_model=settings.anthropic_model_fallback,
-                effort=settings.anthropic_effort,
-            ),
+            settings=_extraction_settings(),
             usage_log=usage_log,
             scope=scope,
         )
     except ExtractionFailed as exc:
-        if exc.kind == "auth":
-            key_tracker.mark_invalid(exc.message)
-        raise ApiError(
-            502, "ai_error", f"AI call failed: {exc.message}", {"kind": exc.kind}
-        ) from None
+        raise _ai_error(exc, key_tracker) from None
     return _to_result(outcome)
+
+
+def _ai_error(exc: ExtractionFailed, key_tracker: KeyStatusTracker) -> ApiError:
+    """502 ai_error; an auth error also marks the key invalid (M3-17)."""
+    if exc.kind == "auth":
+        key_tracker.mark_invalid(exc.message)
+    return ApiError(502, "ai_error", f"AI call failed: {exc.message}", {"kind": exc.kind})
+
+
+def _extraction_settings() -> ExtractionSettings:
+    settings = get_settings()
+    return ExtractionSettings(
+        primary_model=settings.anthropic_model_extraction,
+        fallback_model=settings.anthropic_model_fallback,
+        effort=settings.anthropic_effort,
+    )
+
+
+def _bias_result(outcome: BiasExtractionOutcome) -> schemas.BiasExtractResult:
+    usage = outcome.usage
+    return schemas.BiasExtractResult(
+        entries=[
+            schemas.BiasExtractEntryOut(symbol=e.symbol, fields=e.fields, evidence=e.evidence)
+            for e in outcome.entries
+        ],
+        dropped=[
+            schemas.BiasDroppedOut(symbol=d.symbol, key=d.key, reason=d.reason)
+            for d in outcome.dropped
+        ],
+        usage=schemas.ExtractUsageOut(
+            model=usage.model,
+            fallback_used=usage.fallback_used,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cost_usd=usage.cost_usd,
+            duration_ms=usage.duration_ms,
+        ),
+    )
+
+
+@router.post("/bias/notes/extract", response_model=schemas.BiasExtractResult, tags=["bias"])
+def extract_bias(
+    body: schemas.BiasExtractInput,
+    client: ModelClient | None = Depends(get_model_client),
+    usage_log: UsageLog = Depends(get_usage_log),
+    key_tracker: KeyStatusTracker = Depends(get_key_tracker),
+) -> schemas.BiasExtractResult:
+    """Prefill bias entries from a note text. Saves nothing except the usage log."""
+    try:
+        config = get_bias_config()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+    number_words = _number_words()
+    if client is None:
+        logger.warning("AI bias extraction: ANTHROPIC_API_KEY is not set")
+        raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
+    try:
+        outcome = extract_bias_fields(
+            body.text,
+            BiasKind(body.kind),
+            config=config,
+            number_words=number_words,
+            client=client,
+            settings=_extraction_settings(),
+            usage_log=usage_log,
+        )
+    except ExtractionFailed as exc:
+        raise _ai_error(exc, key_tracker) from None
+    return _bias_result(outcome)
 
 
 @router.get("/ai/usage", response_model=schemas.AiUsageOut)

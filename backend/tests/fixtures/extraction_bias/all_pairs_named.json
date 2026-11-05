@@ -1,0 +1,60 @@
+{
+  "description": "'усі пари вгору' followed by the named symbols: kept per named symbol, the unnamed GER40 dropped",
+  "kind": "pre_ny",
+  "text": "Долар слабкий, усі пари вгору: фібер, кабель, золото.",
+  "model_output": [
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "усі пари вгору: фібер, кабель, золото"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "усі пари вгору: фібер, кабель, золото"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "усі пари вгору: фібер, кабель, золото"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "усі пари вгору"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bullish"
+    },
+    "GBPUSD": {
+      "direction": "bullish"
+    },
+    "XAUUSD": {
+      "direction": "bullish"
+    }
+  },
+  "expected_dropped": [
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "reason": "symbol_not_in_text"
+    }
+  ],
+  "eval_expected_entries": {
+    "EURUSD": {
+      "direction": "bullish"
+    },
+    "GBPUSD": {
+      "direction": "bullish"
+    },
+    "XAUUSD": {
+      "direction": "bullish"
+    }
+  }
+}

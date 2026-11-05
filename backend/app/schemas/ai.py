@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.bias import BiasKindValue
 from app.schemas.common import UtcDatetime
 from app.services.ai.key_status import KeyState
 
@@ -45,6 +46,30 @@ class ExtractResult(BaseModel):
     ai_filled_fields: list[str]
     missing_required: list[str]
     dropped: list[DroppedOut]
+    usage: ExtractUsageOut
+
+
+class BiasExtractInput(ExtractInput):
+    """POST /api/bias/notes/extract body: the note text and its kind (prompt context)."""
+
+    kind: BiasKindValue
+
+
+class BiasDroppedOut(BaseModel):
+    symbol: str
+    key: str
+    reason: str
+
+
+class BiasExtractEntryOut(BaseModel):
+    symbol: str
+    fields: dict[str, str | int]  # kept fields only: direction, key_levels, narrative, confidence
+    evidence: dict[str, str]  # same keys as `fields`: the model's quote from the text
+
+
+class BiasExtractResult(BaseModel):
+    entries: list[BiasExtractEntryOut]  # bias.yaml order; symbols with no kept value omitted
+    dropped: list[BiasDroppedOut]
     usage: ExtractUsageOut
 
 

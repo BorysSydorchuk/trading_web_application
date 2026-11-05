@@ -1,0 +1,49 @@
+{
+  "description": "'Решта пар' names no symbol: values the model gives to EURUSD/GER40 are dropped (symbol_not_in_text)",
+  "kind": "pre_london",
+  "text": "Золото бичаче від 2650. Решта пар без змін.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Золото бичаче"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "key_levels",
+      "value": "2650",
+      "evidence": "Золото бичаче від 2650"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "neutral",
+      "evidence": "Решта пар без змін"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "neutral",
+      "evidence": "Решта пар без змін"
+    }
+  ],
+  "expected_entries": {
+    "XAUUSD": {
+      "direction": "bullish",
+      "key_levels": "2650"
+    }
+  },
+  "expected_dropped": [
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "reason": "symbol_not_in_text"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "reason": "symbol_not_in_text"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "description": "Confidence as a word (трійка) is kept; 'два або три' is ambiguous and dropped",
+  "kind": "pre_london",
+  "text": "Фібер вгору, впевненість трійка. Фунт теж вгору, але впевненість два або три.",
+  "model_output": [
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Фібер вгору"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "confidence",
+      "value": "3",
+      "evidence": "впевненість трійка"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Фунт теж вгору"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "confidence",
+      "value": "2",
+      "evidence": "впевненість два або три"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bullish",
+      "confidence": 3
+    },
+    "GBPUSD": {
+      "direction": "bullish"
+    }
+  },
+  "expected_dropped": [
+    {
+      "symbol": "GBPUSD",
+      "key": "confidence",
+      "reason": "evidence_not_in_text"
+    }
+  ]
+}

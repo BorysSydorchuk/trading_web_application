@@ -1,0 +1,50 @@
+{
+  "description": "EN weekly note: gold/DAX/cable, a range is neutral, cable no trade",
+  "kind": "weekly",
+  "text": "Weekly: gold bullish above 2600, DAX range between 18800 and 19200, cable no trade this week.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "gold bullish"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "key_levels",
+      "value": "above 2600",
+      "evidence": "gold bullish above 2600"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "neutral",
+      "evidence": "DAX range"
+    },
+    {
+      "symbol": "GER40",
+      "key": "key_levels",
+      "value": "between 18800 and 19200",
+      "evidence": "DAX range between 18800 and 19200"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "no_trade",
+      "evidence": "cable no trade this week"
+    }
+  ],
+  "expected_entries": {
+    "GBPUSD": {
+      "direction": "no_trade"
+    },
+    "XAUUSD": {
+      "direction": "bullish",
+      "key_levels": "above 2600"
+    },
+    "GER40": {
+      "direction": "neutral",
+      "key_levels": "between 18800 and 19200"
+    }
+  }
+}

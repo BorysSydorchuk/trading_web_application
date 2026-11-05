@@ -1,0 +1,36 @@
+{
+  "description": "A symbol is mentioned with a level but no direction: only key_levels; an invented direction from a paraphrase is dropped",
+  "kind": "pre_london",
+  "text": "Золото: дивлюсь на рівень 2655, поки без напрямку, чекаю Лондон.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "key_levels",
+      "value": "рівень 2655",
+      "evidence": "дивлюсь на рівень 2655"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "золото вгору"
+    }
+  ],
+  "expected_entries": {
+    "XAUUSD": {
+      "key_levels": "рівень 2655"
+    }
+  },
+  "expected_dropped": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "reason": "evidence_not_in_text"
+    }
+  ],
+  "eval_expected_entries": {
+    "XAUUSD": {
+      "key_levels": "рівень 2655"
+    }
+  }
+}

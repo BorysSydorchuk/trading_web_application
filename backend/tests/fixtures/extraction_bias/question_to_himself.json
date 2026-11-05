@@ -1,0 +1,42 @@
+{
+  "description": "He asks himself about DAX: a question as a value without '?' in its evidence and a paraphrase are dropped; gold kept",
+  "kind": "pre_ny",
+  "text": "Дакс: може піде вниз до 18800? Не впевнений. Золото бичаче.",
+  "model_output": [
+    {
+      "symbol": "GER40",
+      "key": "narrative",
+      "value": "піде вниз до 18800?",
+      "evidence": "Не впевнений"
+    },
+    {
+      "symbol": "GER40",
+      "key": "key_levels",
+      "value": "Дакс піде до 18800",
+      "evidence": "Дакс: може піде вниз до 18800?"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Золото бичаче"
+    }
+  ],
+  "expected_entries": {
+    "XAUUSD": {
+      "direction": "bullish"
+    }
+  },
+  "expected_dropped": [
+    {
+      "symbol": "GER40",
+      "key": "key_levels",
+      "reason": "evidence_not_in_text"
+    },
+    {
+      "symbol": "GER40",
+      "key": "narrative",
+      "reason": "question"
+    }
+  ]
+}
