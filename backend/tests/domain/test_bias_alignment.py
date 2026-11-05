@@ -87,6 +87,20 @@ def test_local_date_not_utc_date() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("moment", "day"),
+    [
+        (utc(2026, 3, 28, 23, 30), date(2026, 3, 29)),  # 00:30 CET, night clocks go forward
+        (utc(2026, 10, 24, 22, 30), date(2026, 10, 25)),  # 00:30 CEST, night clocks go back
+        (utc(2026, 10, 25, 23, 15), date(2026, 10, 26)),  # 00:15 CET, Monday after the switch
+    ],
+)
+def test_after_midnight_on_dst_nights_is_pre_london_of_local_day(
+    moment: datetime, day: date
+) -> None:
+    assert daily_periods(moment, SETTINGS) == (BiasPeriod(BiasKind.PRE_LONDON, day),)
+
+
 def test_week_and_month_across_month_boundary() -> None:
     # Sunday 1 Nov 2026 belongs to the week of Monday 26 Oct, month November.
     periods = trade_periods(utc(2026, 11, 1, 12, 0), SETTINGS)

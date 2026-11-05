@@ -205,8 +205,11 @@ def test_after_sync_backfills_unaligned_trades(session: Session, account: Accoun
         bias_alignment_weekly="no_bias",
         bias_alignment_monthly="no_bias",
     )
+    archived = add_account(session, "Old", 2, status="archived")
+    other = trade(session, archived, open_time=LONDON)  # another account, never synced again
     recompute_after_sync(session, account.id, [])
     assert values(session, old) == ("aligned", "no_bias", "no_bias")
+    assert values(session, other) == ("aligned", "no_bias", "no_bias")
     assert values(session, done)[0] == "counter"  # not pending, not synced: untouched
 
 

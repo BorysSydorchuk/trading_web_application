@@ -270,18 +270,35 @@ def test_put_replaces_entries_by_symbol(client: TestClient, session: Session) ->
         client.put(
             f"/api/bias/notes/{created['id']}",
             json=note_body(
-                entries=[entry("EURUSD", "bearish"), entry("XAUUSD", "neutral", confidence=3)]
+                entries=[entry("EURUSD", "bearish"), entry("XAUUSD", "bullish", confidence=3)]
             ),
         )
     )
     assert [e["symbol"] for e in updated["entries"]] == ["EURUSD", "XAUUSD"]
     xau = updated["entries"][1]
     assert xau["id"] == xau_id  # updated in place
-    assert (xau["direction"], xau["confidence"], xau["chart_links"]) == ("neutral", 3, [])
-    assert (xau["was_correct"], xau["was_correct_source"]) == (True, "manual")
+    assert (xau["direction"], xau["confidence"], xau["chart_links"]) == ("bullish", 3, [])
+    assert (xau["was_correct"], xau["was_correct_source"]) == (True, "manual")  # same direction
     session.expire_all()
     assert session.scalar(select(func.count()).select_from(BiasEntry)) == 2
     assert session.scalar(select(func.count()).select_from(ChartLink)) == 0
+
+
+def test_put_direction_change_clears_result(client: TestClient) -> None:
+    created = create(client, entries=[entry("XAUUSD", "bullish"), entry("GER40", "bearish")])
+    xau_id, ger_id = (e["id"] for e in created["entries"])
+    for entry_id in (xau_id, ger_id):
+        ok(client.patch(f"/api/bias/entries/{entry_id}/result", json={"was_correct": True}))
+    updated = ok(
+        client.put(
+            f"/api/bias/notes/{created['id']}",
+            json=note_body(entries=[entry("XAUUSD", "bearish"), entry("GER40", "bearish")]),
+        )
+    )
+    xau, ger = updated["entries"]
+    assert xau["id"] == xau_id
+    assert (xau["was_correct"], xau["was_correct_source"]) == (None, None)
+    assert (ger["was_correct"], ger["was_correct_source"]) == (True, "manual")
 
 
 def test_put_changes_kind_and_period_and_conflicts(client: TestClient) -> None:

@@ -160,9 +160,10 @@ def recompute_for_scopes(
 
 
 def recompute_after_sync(session: Session, account_id: int, trades: Sequence[Trade]) -> None:
-    """Sync hook: the synced trades plus any of the account's trades never aligned yet
-    (history from before M4, or a sync while bias.yaml was broken). A broken bias.yaml or
-    rules.yaml never fails the sync: ERROR logged, the alignment catches up next sync."""
+    """Sync hook: the synced trades plus every trade (of any account, also archived ones
+    that are never synced again) not aligned yet: history from before M4, or a sync while a
+    config was broken. Cheap once done (no NULLs left). A broken bias.yaml or rules.yaml
+    never fails the sync: ERROR logged, the alignment catches up next sync."""
     try:
         settings = alignment_settings()
     except ConfigError as exc:
@@ -173,7 +174,6 @@ def recompute_after_sync(session: Session, account_id: int, trades: Sequence[Tra
     session.flush()
     pending = session.scalars(
         select(Trade).where(
-            Trade.account_id == account_id,
             or_(
                 Trade.bias_alignment.is_(None),
                 Trade.bias_alignment_weekly.is_(None),

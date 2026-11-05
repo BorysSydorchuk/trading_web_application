@@ -65,3 +65,25 @@ def test_sync_assigns_alignment(session: Session, rules: RulesConfig) -> None:
     t1 = trades_by_pid(session, account.id)[2000101]  # Monday 09:30 Brussels
     assert t1.symbol == "EURUSD"
     assert t1.bias_alignment == "neutral_bias"
+
+
+def test_sync_keeps_override(session: Session, rules: RulesConfig) -> None:
+    account = add_account(session, WEEK_LOGIN)
+    assert run(session, account, source("basic_week.json"), rules, WEEK_NOW).ok is True
+    t1 = trades_by_pid(session, account.id)[2000101]  # EURUSD, Monday 09:30 Brussels
+    assert t1.bias_alignment == "no_bias"
+    t1.bias_alignment = None  # outside the second sync's window: realigned by the backfill
+    t1.bias_alignment_override = "aligned"
+    t1.bias_alignment_override_reason = "свій план"
+    note = BiasNote(kind=BiasKind.PRE_LONDON.value, period_date=MONDAY)
+    note.entries = [BiasEntry(symbol="EURUSD", direction="neutral")]
+    session.add(note)
+    session.commit()
+
+    assert run(session, account, source("basic_week.json"), rules, WEEK_NOW).ok is True
+    t1 = trades_by_pid(session, account.id)[2000101]
+    assert t1.bias_alignment == "neutral_bias"  # auto value recomputed by the sync
+    assert (t1.bias_alignment_override, t1.bias_alignment_override_reason) == (
+        "aligned",
+        "свій план",
+    )

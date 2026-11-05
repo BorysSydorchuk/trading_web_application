@@ -169,6 +169,10 @@ def _ai_filled(entry: BiasEntryInput) -> list[str]:
 
 
 def _apply_entry(row: BiasEntry, data: BiasEntryInput) -> None:
+    if row.direction is not None and row.direction != data.direction:
+        # A mark for the old direction says nothing about the new one.
+        row.was_correct = None
+        row.was_correct_source = None
     row.direction = data.direction
     row.key_levels = data.key_levels
     row.narrative = data.narrative
@@ -181,8 +185,8 @@ def _apply_entry(row: BiasEntry, data: BiasEntryInput) -> None:
 
 
 def _replace_entries(note: BiasNote, entries: Sequence[BiasEntryInput]) -> None:
-    """By symbol: kept symbols are updated in place (id and was_correct stay), new ones
-    added, missing ones deleted."""
+    """By symbol: kept symbols are updated in place (id stays; was_correct stays unless the
+    direction changed), new ones added, missing ones deleted."""
     current = {e.symbol: e for e in note.entries}
     rows: list[BiasEntry] = []
     for data in entries:
