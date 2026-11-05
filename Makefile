@@ -37,7 +37,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck

@@ -673,6 +673,10 @@ export const uk = {
       transcription_failed: 'Помилка розпізнавання. Подробиці в logs/worker.log.',
     },
     config_error: 'Помилка у файлі налаштувань config/*.yaml. Подробиці в logs/.',
+    config_error_reasons: {
+      mojibake: (file: string) =>
+        `Файл налаштувань config/${file} пошкоджено: український текст збережено в неправильному кодуванні. Відновіть файл з git або збережіть його в UTF-8. Подробиці в logs/.`,
+    },
     validation_error: 'Дані заповнено некоректно. Перевірте позначені поля.',
     conflict: 'Такий запис уже існує. Перевірте позначені поля.',
     bad_request: 'Некоректний запит.',
@@ -692,4 +696,7 @@ export const uk = {
 
 export type Uk = typeof uk
 /** API error codes that have a Ukrainian message. */
-export type KnownErrorCode = Exclude<keyof Uk['errors'], 'unknown' | 'ai_error_kinds' | 'transcription'>
+export type KnownErrorCode = Exclude<
+  keyof Uk['errors'],
+  'unknown' | 'ai_error_kinds' | 'transcription' | 'config_error_reasons'
+>

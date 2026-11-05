@@ -1,23 +1,19 @@
 # M3 live check (Borys)
 
 Run items 1–8 now (no microphone needed). Items 9–12 need a live microphone; run them later.
-Mark each item ✅ / ❌ and add a short note if something differs. Wait until QA (M3-13) has finished, because it uses the same QA database and ports.
+Mark each item ✅ / ❌ and add a short note if something differs. Stop your normal app first (`stop.bat`); the script uses the same ports.
 
-**Start against the QA database** (PowerShell in the repo root; your real journal is not touched; the config copy makes `lesson` required only for this check):
+**Start against the QA database** (your real journal is not touched; the script copies `config/` to `%TEMP%\tj-qa\config` as UTF-8, makes `lesson` required only there, then starts the app like `start.bat`):
 ```powershell
-Copy-Item -Recurse config $env:TEMP\tj-qa-config -Force
-(Get-Content $env:TEMP\tj-qa-config\journal_fields.yaml -Raw) -replace '(key: lesson[\s\S]*?required: )false', '${1}true' | Set-Content -Encoding utf8 $env:TEMP\tj-qa-config\journal_fields.yaml
-$env:DATABASE_URL = "postgresql+psycopg://journal:journal@127.0.0.1:5432/trading_journal_qa_m3"
-$env:MT5_SOURCE = "fixture:backend/tests/fixtures/mt5/basic_week.json"; $env:MT5_PASSWORD_51234567 = "qa"
-$env:DATA_DIR = "$env:TEMP\tj-qa-data"; $env:CONFIG_DIR = "$env:TEMP\tj-qa-config"
-$env:WHISPER_BEAM_SIZE = "1"; $env:WHISPER_CPU_THREADS = "auto"
-.\start.bat
+Set-Location "D:\Trading Scripts\WEB_application"
+python scripts\qa_live_check.py
 ```
-Stop with `stop.bat`. Close this PowerShell window afterwards so the variables are gone.
+Optional: `--whisper-condition-on-previous-text`, `--no-browser`. Do not edit the config copy with PowerShell 5.1 `Get-Content`/`Set-Content`: they re-encode UTF-8 and garble the Ukrainian labels (M3-15).
+Stop with Ctrl+C or `stop.bat`.
 
 | # | Mic | Do | Expected |
 |---|---|---|---|
-| 1 | – | Run the start block above | Browser opens, status bar green, Журнал lists the QA fixture trades (not your real ones) |
+| 1 | – | Run the start block above | Browser opens, status bar green, Журнал lists the QA fixture trades (not your real ones); on a Describe screen the field labels are normal Ukrainian (e.g. "Тип FVG", not "РўРёРї FVG") |
 | 2 | – | Open a closed trade → "Описати" → "Завантажити аудіо" → pick an .ogg from `data/qa-voice` | Upload, then a progress bar, then the transcript appears in the text box; the note can be replayed |
 | 3 | – | Edit a word in the transcript → "Заповнити з тексту" → "Зберегти чернетку" | Fields prefilled (AI markers), your edit kept in the text, draft saved |
 | 4 | – | "Завантажити аудіо" with a non-audio file (e.g. a .pdf or .txt) | Ukrainian "Непідтримуваний формат аудіо…" message, nothing uploaded |

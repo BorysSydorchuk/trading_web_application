@@ -17,12 +17,10 @@ router = APIRouter()
 
 def config_error(exc: ConfigError) -> ApiError:
     logger.error("Config error: %s", exc)
-    return ApiError(
-        500,
-        "config_error",
-        str(exc),
-        {"file": exc.path.name, "problems": exc.problems},
-    )
+    details: dict[str, Any] = {"file": exc.path.name, "problems": exc.problems}
+    if exc.reason is not None:
+        details["reason"] = exc.reason
+    return ApiError(500, "config_error", str(exc), details)
 
 
 @router.get("/journal-fields")

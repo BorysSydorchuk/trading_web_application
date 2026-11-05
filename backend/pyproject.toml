@@ -61,6 +61,8 @@ select = [
     "PT",  # flake8-pytest-style
     "S",   # flake8-bandit (security)
 ]
+# Text I/O without `encoding=` is caught by tests/test_encoding_guard.py (AST scan), not by
+# ruff's PLW1514: that rule needs `preview`, which also changes stable rules on upgrades.
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # assert is the point of tests

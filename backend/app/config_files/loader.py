@@ -3,6 +3,9 @@
 YAML is parsed with two safety tweaks for hand-edited files:
 - only `true`/`false` are booleans (YAML 1.2), so `value: no` stays the string "no";
 - a duplicate key in a mapping is an error instead of silently overwriting the first one.
+
+Files are read as UTF-8 (a UTF-8 BOM is accepted). Text garbled by a wrong-encoding re-save
+(mojibake, see `mojibake.py`) is refused with reason `mojibake` instead of reaching the UI.
 """
 
 from __future__ import annotations
@@ -18,16 +21,23 @@ import yaml
 from pydantic import ValidationError
 
 from app.config import REPO_ROOT
+from app.config_files.mojibake import mojibake_problems
 
 CONFIG_DIR_ENV = "CONFIG_DIR"
+# `ConfigError.reason` for text garbled by a wrong encoding (API: `details.reason`).
+REASON_MOJIBAKE = "mojibake"
 
 
 class ConfigError(Exception):
-    """A config file is missing or invalid. `str()` is a readable, multi-line message."""
+    """A config file is missing or invalid. `str()` is a readable, multi-line message.
 
-    def __init__(self, path: Path, problems: list[str]) -> None:
+    `reason` is a stable code for errors the UI shows a specific text for (else None).
+    """
+
+    def __init__(self, path: Path, problems: list[str], reason: str | None = None) -> None:
         self.path = path
         self.problems = problems
+        self.reason = reason
         lines = "\n".join(f"  - {p}" for p in problems)
         super().__init__(f"Invalid config file {path}:\n{lines}")
 
@@ -72,17 +82,22 @@ _StrictLoader.add_implicit_resolver(
 
 
 def read_yaml(path: Path) -> Any:
-    """Parse a YAML file; any I/O or syntax problem becomes a ConfigError."""
+    """Parse a YAML file; any I/O, encoding or syntax problem becomes a ConfigError."""
     try:
-        text = path.read_text(encoding="utf-8")
+        # utf-8-sig: Windows PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM.
+        text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         raise ConfigError(path, ["file not found"]) from None
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError(path, [f"cannot read file: {exc}"]) from None
     try:
-        return yaml.load(text, Loader=_StrictLoader)  # noqa: S506 - SafeLoader subclass
+        data = yaml.load(text, Loader=_StrictLoader)  # noqa: S506 - SafeLoader subclass
     except yaml.YAMLError as exc:
         raise ConfigError(path, [f"YAML syntax error: {exc}"]) from None
+    garbled = mojibake_problems(data)
+    if garbled:
+        raise ConfigError(path, garbled, reason=REASON_MOJIBAKE)
+    return data
 
 
 def _loc(loc: tuple[int | str, ...]) -> str:
