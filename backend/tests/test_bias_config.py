@@ -280,7 +280,7 @@ def test_get_bias_config(api: TestClient) -> None:
     body = response.json()
     assert body["symbols"][0] == {
         "symbol": "EURUSD",
-        "aliases": ["євро", "евро", "фібер", "fiber", "euro"],
+        "aliases": ["євро", "евро", "фібер", "фибер", "fiber", "euro"],
     }
     assert [s["symbol"] for s in body["symbols"]] == ["EURUSD", "GBPUSD", "XAUUSD", "GER40"]
     assert body["reminders"] == {

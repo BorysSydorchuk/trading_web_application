@@ -54,7 +54,7 @@ def test_schema_is_flat_with_symbol_and_key_enums() -> None:
 
 def test_symbol_catalogue_lists_aliases_in_config_order() -> None:
     lines = render_symbol_catalogue(get_bias_config()).splitlines()
-    assert lines[0] == "- `EURUSD`: also called євро, евро, фібер, fiber, euro"
+    assert lines[0] == "- `EURUSD`: also called євро, евро, фібер, фибер, fiber, euro"
     assert lines[3] == "- `GER40`: also called дакс, DAX, GER"
 
 
