@@ -211,3 +211,150 @@ container for these checks: start with `DATABASE_URL=postgresql+psycopg://journa
 `MT5_SOURCE=fixture:backend/tests/fixtures/mt5/basic_week.json`, `MT5_PASSWORD_51234567=qa`, `DATA_DIR=<some scratch dir>`
 as process env vars. Note: the audio files of those 7 notes were in my scratch dir and will be gone, so they show
 `audio_missing` on replay. Drop it with `DROP DATABASE trading_journal_qa_m3` when done.
+
+## M3-13 Timing on Borys's recordings
+
+Date: 2026-11-05, 09:06–09:26 Brussels. Branch `main` at becfb0d (all M3 code incl. M3-11 Whisper settings
+merged). Tester: qa-tester agent. No product code changed.
+
+### Method
+
+- Recordings: `data/qa-voice/` (Borys's Telegram voice notes, .ogg Opus 48 kHz mono, gitignored, not copied).
+  Decoded durations: **A = 19.0 s**, **B = 40.7 s**, **C = 82.4 s** (`audio_2026-11-04_23-24-49`, `…23-25-18`,
+  `…23-25-00`). Silero VAD removed 0 s / 7.6 s / 15.7 s of silence. There is no 2-min recording.
+- Through the running app: API (uvicorn, started once) + a fresh worker per (round, config), QA DB
+  `trading_journal_qa_m3`, fixture MT5 source, scratch `DATA_DIR` and `LOG_DIR`, trade 6 (closed, SL set).
+  Every `WHISPER_*` value (model `small`, `int8`, `uk`, beam, vad, condition_on_previous_text, temperatures,
+  cpu threads) was set in the process environment, so Borys's `.env` (beam 5, threads 0) did not leak in;
+  the worker's INFO line confirms the settings of every note.
+- Per run: `POST /api/trades/6/audio` (audio/ogg) → poll `GET /api/audio/{id}` every 0.25 s until `done` →
+  `POST /api/trades/6/extract` on the transcript. "upload→done" includes the upload (≤ 0.07 s) and the queue
+  wait (2 s job interval). "transcr." = the worker's transcription seconds (decode + transcribe, no model load).
+- **Model kept loaded**: after each worker start one warm-up note (A) was transcribed and discarded
+  (it includes the model load: wall 10–17 s). Times below never include a model load.
+- 3 rounds; in each round the 6 configs ran in a shuffled order (seed 20261105) and the 3 files in a
+  shuffled order inside each worker session (driver: `docs/reports/M3-qa-audio/matrix.py`). Median of 3.
+- Configs: **old** = beam N, vad on, condition_on_previous_text on, temperatures 0,0.2,…,1.0, threads 0
+  (library default). **new** = beam N, vad on, condition off, temperatures 0.0,0.4, threads auto (12
+  physical cores detected). **newcond** = new + condition_on_previous_text on (extra config for the PM).
+- Thermal: `typeperf` every 5 s. ACPI zone temperature 79–96 °C during the whole matrix (≈ 95 °C under load),
+  `% Passive Limit` 100 (no ACPI passive throttling reported), `% Processor Performance` steady 116–123 %
+  (≈ 3.0–3.2 GHz of the 2.6 GHz base) in every run. The laptop was already at its hot steady state at the
+  start (a reference bench ran just before), so this is the **warm-laptop** case from M3-09; the three
+  rounds of a cell differ by ≤ 2.5 s, so there was no drift between early and late cells.
+
+### AI fill could not be measured: the configured key is rejected
+
+All 54 `POST /api/trades/6/extract` calls returned **502 `ai_error` / `auth`** after 0.2 s
+(`AuthenticationError HTTP 401 … invalid x-api-key`, logged as ERROR in api.log: the error is visible, no
+silent failure). The same key worked on 2026-11-04 21:48 UTC (worker AI warm-up in logs/worker.log). It
+comes from `.env`, which I can't read; `ANTHROPIC_API_KEY` is not set in my shell. Repro (app running):
+`curl -s -X POST http://127.0.0.1:8000/api/trades/6/extract -H "Content-Type: application/json" -d '{"text":"Вхід через FVG"}'`
+→ 502 `ai_error`, details.kind `auth`. Suspected cause: the key in `.env` was rotated/revoked or changed
+(`.env.example` is also modified in the working tree, not by me). Not a product bug.
+
+So "TOTAL" below = measured upload→done **+ 2.2 s AI fill (estimate: the median measured in M3-09, 1.7–2.5 s
+on transcripts of similar length, same model `claude-sonnet-5-5`, effort low)**. Re-measure once the key works.
+
+### Timings (median of 3; individual runs in brackets)
+
+| file | config | transcr. s (RTF) | upload→done s | TOTAL s (+2.2 AI est.) |
+|---|---|---|---|---|
+| A 19.0 s | old b1 | 6.6 (0.35) | 7.9 [9.2/7.9/7.9] | 10.1 |
+| A 19.0 s | old b5 | 11.5 (0.61) | 12.9 [12.9/13.7/12.2] | 15.1 |
+| A 19.0 s | **new b1** | 6.4 (0.34) | 7.1 [6.8/7.1/8.5] | **9.3** |
+| A 19.0 s | new b5 | 11.9 (0.63) | 13.7 [12.8/13.7/13.8] | 15.9 |
+| A 19.0 s | newcond b1 | 6.4 (0.34) | 8.2 [7.9/8.2/8.2] | 10.4 |
+| A 19.0 s | newcond b5 | 12.0 (0.63) | 13.3 [13.9/13.3/12.4] | 15.5 |
+| B 40.7 s | old b1 | 10.9 (0.27) | 11.6 [11.6/11.9/11.6] | 13.8 |
+| B 40.7 s | old b5 | 16.2 (0.40) | 17.0 [16.9/17.0/17.1] | 19.2 |
+| B 40.7 s | **new b1** | 9.6 (0.24) | 10.7 [10.7/10.9/10.5] | **12.9** |
+| B 40.7 s | new b5 | 13.9 (0.34) | 14.5 [13.7/15.2/14.5] | 16.7 |
+| B 40.7 s | newcond b1 | 10.5 (0.26) | 11.9 [11.9/12.3/11.3] | 14.1 |
+| B 40.7 s | newcond b5 | 16.8 (0.41) | 18.0 [20.4/17.9/18.0] | 20.2 |
+| C 82.4 s | old b1 | 19.9 (0.24) | 20.4 [20.2/21.3/20.4] | 22.6 |
+| C 82.4 s | old b5 | 34.9 (0.42) | 36.4 [34.9/36.7/36.4] | 38.6 |
+| C 82.4 s | **new b1** | 17.0 (0.21) | 18.4 [18.9/17.7/18.4] | **20.6** |
+| C 82.4 s | new b5 | 28.5 (0.35) | 28.8 [28.5/28.8/31.0] | 31.0 |
+| C 82.4 s | newcond b1 | 18.5 (0.22) | 19.9 [20.2/19.8/19.9] | 22.1 |
+| C 82.4 s | newcond b5 | 34.6 (0.42) | 36.4 [36.8/36.0/36.4] | 38.6 |
+
+`old b5` is what production ran before M3-11.
+
+**ESTIMATE for a 120 s note** (not measured; C's RTF × 120 s + C's measured queue/upload overhead + 2.2 s AI):
+
+| config | RTF (C) | transcr. 120 s | TOTAL 120 s (estimate) | vs 30 s |
+|---|---|---|---|---|
+| new b1 (new defaults) | 0.206 | 24.8 s | **≈ 28.4 s** | pass, 1.6 s margin |
+| newcond b1 | 0.225 | 26.9 s | ≈ 30.5 s | borderline fail |
+| old b1 | 0.242 | 29.0 s | ≈ 31.7 s | fail |
+| new b5 | 0.346 | 41.5 s | ≈ 44.0 s | fail |
+| newcond b5 / old b5 | 0.42 | 50.4 s | ≈ 54.5 s | fail |
+
+Linear scaling of C's RTF is slightly pessimistic (shorter notes have a higher RTF because of a fixed per-note
+cost: a straight line through B and C gives 23.7 s / 25.7 s transcription for new b1 / newcond b1, i.e.
+≈ 27.3 s / 29.3 s TOTAL), but it depends on how much silence the 2-min note has (VAD skipped 19 % of C) and
+on the real AI fill time.
+
+### Terms (all 3 runs per cell; ✅ = correct in 3/3, otherwise the wrong form)
+
+Only terms actually spoken. **No symbol names (EURUSD, GBPUSD, XAUUSD, GER40…) and no QM / BOS / SMT are spoken
+in these three recordings** (none appears in any of the 72 transcripts), so they could not be checked.
+I can't listen to the audio: the expected term is inferred from the agreement of the six configs and the
+context; "FVG H1" in C is the least certain (heard as "POI FVH1").
+
+| file | term | old b1 | old b5 | new b1 | new b5 | newcond b1 | newcond b5 |
+|---|---|---|---|---|---|---|---|
+| A | FTA | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A | RR | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A | MT5 (platform, info) | ❌ МТ5 (Cyrillic) | ❌ МТ-5/МТ5 | ❌ МТ5 | ❌ МТ-5/МТ5 | ❌ МТ5 | ❌ МТ5 |
+| B | FVG | ❌ ФВГ | ✅ | ❌ фвг | ❌ фвг | ❌ ФВГ | ✅ |
+| C | POI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| C | FVG H1 (after POI) | ❌ FVG-1 ×2, FVH1 | ❌ FVH1 | ❌ FVH1 | ❌ FVH1 | ❌ FVH1 | ❌ FVH1 |
+| C | FVG (2nd) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| C | H4 | ❌ "аж 4" ×2 (1 ✅) | ❌ "аж 4" ×1 (2 ✅) | ❌ "аж 4" | ❌ "аж 4" | ✅ | ✅ |
+| C | H1 (setup) | ❌ "аж 1" ×2 (1 ✅) | ❌ "аж 1" ×1 (2 ✅) | ❌ "аж 1" | ❌ "аж 1" / "аж один" | ✅ | ✅ |
+| C | Flow | ✅ | ✅ | ❌ флоу | ❌ флоу | ✅ | ✅ |
+| C | IFVG | ✅ | ✅ | ❌ іфввг | ❌ іФВГ | ✅ | ✅ |
+| C | M5 | ✅ | ✅ | ❌ м5 (Cyrillic) | ❌ М5 (Cyrillic) | ✅ | ✅ |
+| C | FTA (×2) | ✅ | ✅ | ❌ ФТА | ❌ ФТА ×1 (2 ✅) | ✅ | ✅ |
+
+With condition_on_previous_text **off**, every 30 s window after the first is decoded without the previous
+text, so the Latin spellings primed by the glossary prompt are lost and terms later in the note come out
+phonetic in Cyrillic (C's terms after ~60 s). With it **on**, the Latin forms carry through the whole note.
+
+### Acceptance (PM 2026-11-04: 2-min note ≤ 30 s median with the new defaults AND terms correct)
+
+| criterion | result |
+|---|---|
+| Time, new defaults (new b1), longest real note 82.4 s | **pass**: 18.4 s upload→done, ≈ 20.6 s with the estimated AI fill |
+| Time, new defaults, 120 s (ESTIMATE from RTF) | ≈ 28.4 s: **pass by estimate**, thin margin, hot laptop |
+| Terms, new defaults | **FAIL**: in C, IFVG, H4, H1, Flow, M5, FTA are wrong in 3/3 runs; in B, FVG → "фвг" |
+| AI fill measured live | **not done**: AI key rejected (401), estimate used |
+
+**Overall: FAIL** (terms). Per the PM rule I did not tune further.
+
+### Recommendation (facts for the PM)
+
+- **newcond b1** (`WHISPER_CONDITION_ON_PREVIOUS_TEXT=true`, rest of the new defaults) is the best trade-off
+  measured: every term in C correct (except "FVG H1", which no config gets), 19.9 s upload→done on 82.4 s
+  (≈ 22.1 s with AI est.), only 1.5 s slower than new b1. Its 120 s estimate is ≈ 30.5 s (RTF scaling) or
+  ≈ 29.3 s (straight line), i.e. on the limit. Remaining miss: B's single "FVG" → Cyrillic "ФВГ" (only beam 5
+  + condition on gets it, at +60–90 % time).
+- new b1 is the fastest but loses most terms late in a note, so extraction would get "іфввг м5 / аж 4 аж 1".
+- Beam 5 (any config) fails the time even on the 82 s note (29–36 s, + 2.2 s AI) and only adds B's FVG.
+- `old b1` is slower than newcond b1 (RTF 0.24 vs 0.22: full temperature fallback + library-default threads)
+  with the same or worse terms.
+- Before deciding: re-measure the AI fill with a working key, and ideally record one real 2-min note with
+  symbols and QM/BOS/SMT spoken, since none of the three files contains them.
+
+### Odd / notes
+
+1. AI key 401 (above): blocks the live AI part of this AC and the app's "Заповнити з тексту" for Borys.
+2. "FVG H1" right after "POI" is never transcribed correctly ("FVH1" in 16 of the 18 runs of C, "FVG-1" in 2).
+3. The short note A has a high RTF (0.34 at beam 1, 0.6 at beam 5): fixed per-note cost of a few seconds.
+4. Borys's `.env` sets `WHISPER_BEAM_SIZE=5` and `WHISPER_CPU_THREADS=0`, so his running app is in the
+   beam 5 rows (29–36 s on 82 s), not on the new defaults. Whatever the PM picks has to be set (or the lines
+   removed) in his `.env`.
+5. QA DB `trading_journal_qa_m3` kept; it now holds 72 more audio notes on trade 6 (+ a few from two aborted first
+   attempts on trade 5; their files were in my scratch dir, so they show `audio_missing` on replay).
