@@ -45,7 +45,8 @@ He trades a liquidity / smart-money style strategy. Terms and the spellings he u
   "совпадает", "H1 і H4 разом", "aligned". Not in sync: "не синхрон", "розсинхрон", "проти H4",
   "не совпадает", "против". Partially: "частково", "частично", "наполовину", "partially".
   A setup named as H4 together with H1 Flow ("Сетап H4, H1 Flow", "сетап H4 і H1 флоу",
-  "H4 + H1 Flow") also means in sync: the setup context is `yes`.
+  "H4 + H1 Flow") also means in sync: the setup context is `yes`, unless he also says
+  they are not in sync (for example "проти H4"): then the not-in-sync words win.
 - **POI** (point of interest, "поі", "пои", "зона інтересу"): the zone where he expected the
   reaction. Usually an FVG on H4 or H1. Anything else (for example an order block) is the
   `other` POI type, with his words (e.g. "OB H4") as the other-text.

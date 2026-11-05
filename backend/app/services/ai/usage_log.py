@@ -149,7 +149,7 @@ def _parse_line(raw: str) -> _Line | None:
     try:
         data: Any = json.loads(raw)
         return _Line.model_validate(data)
-    except (ValueError, ValidationError):
+    except (ValueError, ValidationError, RecursionError):
         return None
 
 
@@ -216,7 +216,7 @@ def last_success_at(path: Path) -> datetime | None:
             continue
         try:
             line = _OutcomeLine.model_validate(json.loads(raw))
-        except (ValueError, ValidationError):
+        except (ValueError, ValidationError, RecursionError):
             continue
         if line.ok and line.error_kind is None and (latest is None or line.ts > latest):
             latest = line.ts
