@@ -61,6 +61,12 @@ select = [
     "PT",  # flake8-pytest-style
     "S",   # flake8-bandit (security)
 ]
+# PLW1514 (open/read_text/write_text without `encoding=`) is a preview rule in ruff 0.17:
+# preview is on for lint only, and explicit-preview-rules keeps every other preview rule off
+# (only exactly-named preview codes are enabled). Windows' ANSI default here is cp1251.
+preview = true
+explicit-preview-rules = true
+extend-select = ["PLW1514"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # assert is the point of tests

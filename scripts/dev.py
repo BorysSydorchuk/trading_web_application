@@ -945,7 +945,13 @@ def find_npm() -> str:
         raise LauncherError(MSG["node_missing"])
     try:
         out = subprocess.run(
-            [node, "--version"], capture_output=True, text=True, timeout=20, check=True
+            [node, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=True,
         ).stdout
         version = parse_node_version(out)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
