@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Account, BiasEntry, ChartLink, Digest, RuleViolation, Trade, TradeExitDeal
+from app.models import (
+    Account,
+    BiasEntry,
+    BiasNote,
+    ChartLink,
+    Digest,
+    RuleViolation,
+    Trade,
+    TradeExitDeal,
+)
 from app.models.enums import (
     AccountPhase,
     BiasDirection,
@@ -131,13 +140,8 @@ def test_extra_must_be_object(db_session: Session) -> None:
 
 
 def _bias(session: Session) -> BiasEntry:
-    bias = BiasEntry(
-        kind=BiasKind.PRE_LONDON,
-        period_date=date(2026, 10, 30),
-        symbol="GER40",
-        direction=BiasDirection.BULLISH,
-        confidence=2,
-    )
+    note = BiasNote(kind=BiasKind.PRE_LONDON, period_date=date(2026, 10, 30))
+    bias = BiasEntry(note=note, symbol="GER40", direction=BiasDirection.BULLISH, confidence=2)
     session.add(bias)
     session.flush()
     return bias
@@ -173,26 +177,6 @@ def test_chart_link_with_two_owners_rejected(db_session: Session) -> None:
         )
     )
     with pytest.raises(IntegrityError, match="ck_chart_links_one_owner"):
-        db_session.flush()
-
-
-def test_bias_unique_per_kind_date_symbol(db_session: Session) -> None:
-    _bias(db_session)
-    with pytest.raises(IntegrityError, match="uq_bias_entries_kind_period_date_symbol"):
-        _bias(db_session)
-
-
-def test_bias_confidence_range(db_session: Session) -> None:
-    db_session.add(
-        BiasEntry(
-            kind=BiasKind.PRE_NY,
-            period_date=date(2026, 10, 30),
-            symbol="XAUUSD",
-            direction=BiasDirection.NO_TRADE,
-            confidence=4,
-        )
-    )
-    with pytest.raises(IntegrityError, match="ck_bias_entries_confidence_range"):
         db_session.flush()
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
@@ -22,6 +23,7 @@ EXPECTED_TABLES = {
     "chart_links",
     "audio_notes",
     "bias_entries",
+    "bias_notes",
     "digests",
     "rule_violations",
     "sync_log",
@@ -129,3 +131,108 @@ def test_required_since_migration_seeds_marker_and_downgrades(db_engine: Engine)
         assert state.all() == [(1, None)]
         count = conn.execute(text("SELECT count(*) FROM journal_field_requirements"))
         assert count.scalar_one() == 0
+
+
+_BEFORE_BIAS_NOTES = "7916fe645fdc"
+_BIAS_NOTES = "b6d41a9e2c57"
+# Entry 1 raw_text + transcript, then entry 2 transcript, joined into the note text.
+_JOINED_BIAS_TEXT = "\n\n".join(["gold up", "золото вгору", "дакс вниз"])
+
+
+def _old_bias_rows(engine: Engine, weekly_day: str = "2026-11-02") -> None:
+    """Old-schema rows (before bias_notes): two entries of one pre_ny period, one weekly, audio."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO bias_entries (id, kind, period_date, symbol, direction, raw_text, "
+                "transcript) VALUES "
+                "(1, 'pre_ny', '2026-11-03', 'XAUUSD', 'bullish', :raw, :t1), "
+                "(2, 'pre_ny', '2026-11-03', 'GER40', 'bearish', NULL, :t2), "
+                "(3, 'weekly', CAST(:weekly AS date), 'EURUSD', 'neutral', NULL, NULL)"
+            ),
+            {"raw": "gold up", "t1": "золото вгору", "t2": "дакс вниз", "weekly": weekly_day},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO audio_notes (bias_entry_id, file_path, mime_type) "
+                "VALUES (2, 'audio/2026/11/a.webm', 'audio/webm')"
+            )
+        )
+
+
+def _clear_bias_any_revision(engine: Engine) -> None:
+    """Delete bias rows and audio, before or after the bias_notes migration."""
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM audio_notes WHERE trade_id IS NULL"))
+        conn.execute(text("DELETE FROM bias_entries"))
+        if "bias_notes" in _tables(engine):
+            conn.execute(text("DELETE FROM bias_notes"))
+
+
+def test_bias_notes_migration_moves_existing_rows(db_engine: Engine) -> None:
+    cfg = alembic_config()
+    command.downgrade(cfg, _BEFORE_BIAS_NOTES)
+    try:
+        _old_bias_rows(db_engine)
+        command.upgrade(cfg, _BIAS_NOTES)
+        with db_engine.connect() as conn:
+            notes = conn.execute(
+                text("SELECT id, kind, period_date::text, raw_text FROM bias_notes ORDER BY kind")
+            ).all()
+            entries = conn.execute(
+                text("SELECT id, bias_note_id FROM bias_entries ORDER BY id")
+            ).all()
+            audio = conn.execute(
+                text("SELECT bias_note_id FROM audio_notes WHERE trade_id IS NULL")
+            ).scalar_one()
+        pre_ny, weekly = notes
+        assert pre_ny[1:] == ("pre_ny", "2026-11-03", _JOINED_BIAS_TEXT)
+        assert weekly[1:] == ("weekly", "2026-11-02", None)
+        assert entries == [(1, pre_ny[0]), (2, pre_ny[0]), (3, weekly[0])]
+        assert audio == pre_ny[0]
+
+        command.downgrade(cfg, _BEFORE_BIAS_NOTES)
+        with db_engine.connect() as conn:
+            old = conn.execute(
+                text("SELECT id, kind, period_date::text, raw_text FROM bias_entries ORDER BY id")
+            ).all()
+            audio_owner = conn.execute(
+                text("SELECT bias_entry_id FROM audio_notes WHERE trade_id IS NULL")
+            ).scalar_one()
+        assert old == [
+            (1, "pre_ny", "2026-11-03", _JOINED_BIAS_TEXT),
+            (2, "pre_ny", "2026-11-03", _JOINED_BIAS_TEXT),
+            (3, "weekly", "2026-11-02", None),
+        ]
+        assert audio_owner == 1  # the note's first entry
+    finally:
+        _clear_bias_any_revision(db_engine)
+        command.upgrade(cfg, "head")
+
+
+def test_bias_notes_migration_refuses_misaligned_weekly(db_engine: Engine) -> None:
+    cfg = alembic_config()
+    command.downgrade(cfg, _BEFORE_BIAS_NOTES)
+    try:
+        _old_bias_rows(db_engine, weekly_day="2026-11-04")  # a Wednesday
+        with pytest.raises(RuntimeError, match=r"weekly bias rows must be on a Monday.*id=3"):
+            command.upgrade(cfg, _BIAS_NOTES)
+    finally:
+        _clear_bias_any_revision(db_engine)
+        command.upgrade(cfg, "head")
+
+
+def test_bias_notes_downgrade_refuses_note_without_entries(db_engine: Engine) -> None:
+    with db_engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO bias_notes (kind, period_date, raw_text) "
+                "VALUES ('pre_ny', '2026-11-03', 'x')"
+            )
+        )
+    try:
+        with pytest.raises(RuntimeError, match="have no entries"):
+            command.downgrade(alembic_config(), _BEFORE_BIAS_NOTES)
+        assert _current_revision(db_engine) == _BIAS_NOTES
+    finally:
+        _clear_bias_any_revision(db_engine)

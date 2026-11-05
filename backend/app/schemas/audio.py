@@ -13,7 +13,7 @@ from app.schemas.common import UtcDatetime
 class AudioNoteOut(BaseModel):
     id: int
     trade_id: int | None
-    bias_entry_id: int | None
+    bias_note_id: int | None
     status: str
     # A JSON number 0.0..1.0 (a fraction for a progress bar, not money).
     progress: float | None
@@ -34,7 +34,7 @@ def to_audio_out(note: AudioNote) -> AudioNoteOut:
     return AudioNoteOut(
         id=note.id,
         trade_id=note.trade_id,
-        bias_entry_id=note.bias_entry_id,
+        bias_note_id=note.bias_note_id,
         status=note.transcription_status,
         progress=float(note.progress) if note.progress is not None else None,
         duration_seconds=note.duration_seconds,

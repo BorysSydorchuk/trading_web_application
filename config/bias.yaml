@@ -1,0 +1,21 @@
+# Bias (expectations) settings, PRD 6.6 / docs/api.md M4.
+#
+# symbols: the symbols Borys writes a bias for, in the order the UI shows them. `aliases` are
+# the words he says for a symbol in a voice or text note (case does not matter). A symbol or
+# alias may appear only once in the whole file. A trade matches a bias symbol by prefix
+# (GER40.cash -> GER40), so no symbol may be the start of another one.
+#
+# reminders: when the dashboard reminds about a missing pre_london / pre_ny bias
+# (Europe/Brussels time, weekdays only, from inclusive, until exclusive). Write times quoted,
+# "HH:MM".
+# Changes are picked up on the next page load, no restart needed.
+
+symbols:
+  - { symbol: EURUSD, aliases: [євро, евро, фібер, fiber, euro] }
+  - { symbol: GBPUSD, aliases: [фунт, кабель, cable, pound] }
+  - { symbol: XAUUSD, aliases: [золото, gold, голд] }
+  - { symbol: GER40, aliases: [дакс, DAX, GER] }
+
+reminders:
+  pre_london: { from: "07:45", until: "11:00" }
+  pre_ny: { from: "12:30", until: "16:00" }

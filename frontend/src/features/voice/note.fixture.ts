@@ -6,7 +6,7 @@ export function fixtureNote(overrides: Partial<AudioNote> = {}): AudioNote {
   return {
     id,
     trade_id: 7,
-    bias_entry_id: null,
+    bias_note_id: null,
     status: 'pending',
     progress: null,
     duration_seconds: null,

@@ -2,7 +2,7 @@
 
 from app.models.account import Account, SymbolSpec
 from app.models.base import NAMING_CONVENTION, Base
-from app.models.bias import BiasEntry
+from app.models.bias import BiasEntry, BiasNote
 from app.models.digest import Digest
 from app.models.journal_requirement import JournalFieldRequirement, JournalRequirementsState
 from app.models.media import AudioNote, ChartLink
@@ -15,6 +15,7 @@ __all__ = [
     "AudioNote",
     "Base",
     "BiasEntry",
+    "BiasNote",
     "ChartLink",
     "Digest",
     "JournalFieldRequirement",

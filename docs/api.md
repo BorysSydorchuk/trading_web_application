@@ -257,7 +257,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
 
 `AudioNote`:
 ```json
-{ "id": 5, "trade_id": 10, "bias_entry_id": null,
+{ "id": 5, "trade_id": 10, "bias_note_id": null,
   "status": "pending", "progress": null, "duration_seconds": "118.400",
   "mime_type": "audio/webm", "transcript": null,
   "error_code": null, "created_at": "2026-11-05T09:10:00Z", "transcribed_at": null,
