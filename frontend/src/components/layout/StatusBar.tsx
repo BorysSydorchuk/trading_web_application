@@ -1,4 +1,5 @@
 import { useHealth } from '@/api/health'
+import { AiKeyChip } from '@/features/ai/AiKeyChip'
 import { NotificationPrompt } from '@/features/inbox/NotificationPrompt'
 import { SyncChips } from '@/features/sync/SyncChips'
 import { uk } from '@/i18n/uk'
@@ -36,6 +37,8 @@ export function StatusBar() {
 
   const lastCheckedAt = Math.max(dataUpdatedAt, errorUpdatedAt)
   const version = !isError && data ? data.version : null
+  // While the API is unreachable the last AI state is stale: show only the server problem.
+  const aiState = !isError && data ? data.ai?.state : undefined
 
   return (
     <footer
@@ -47,6 +50,7 @@ export function StatusBar() {
         <span className={cn('size-2 rounded-full', dotClass[tone])} aria-hidden />
         <span className={cn(tone === 'down' && 'text-loss')}>{text}</span>
       </span>
+      <AiKeyChip state={aiState} />
       <SyncChips />
       <span className="ml-auto flex shrink-0 items-center gap-4">
         <NotificationPrompt />

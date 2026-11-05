@@ -306,7 +306,7 @@ replacements:
 - `POST /api/ai/check` → re-checks now (blocking, ≤ 10 s) and returns the `ai` object.
 - States: `not_configured` = no key in env/.env; `checking` = check running (start); `ok` = `models.retrieve` succeeded; `invalid_key` = 401/403 (also set when an extraction gets an auth error); `unreachable` = timeout / connection / 5xx (re-checked automatically every 5 min while unreachable).
 - Details (M3-17): `checking` only until the first check ends (a re-check keeps the previous state until it finishes); `checked_at` = end of the last check (or of the extraction auth error), `null` for `not_configured`/first `checking`. Any other API answer (e.g. 404 unknown model id, 429) means the key was accepted → `ok` with a WARNING in api.log. A POST while a check is running waits for that check instead of starting a second call.
-- UI: status bar shows an AI chip only when the state is not `ok`/`checking`: "AI: ключ недійсний" / "AI: ключ не задано" / "AI: немає зв'язку"; Settings → AI shows the state with a "Перевірити ключ" button (POST /api/ai/check). A new key still needs an app restart (settings are cached).
+- UI: status bar shows an AI chip only when the state is not `ok`/`checking`: "AI: ключ недійсний" / "AI: ключ не задано" / "AI: немає звʼязку"; Settings → AI shows the state with a "Перевірити ключ" button (POST /api/ai/check). A new key still needs an app restart (settings are cached).
 
 ### Number words (M2 follow-up)
 

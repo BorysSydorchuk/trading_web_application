@@ -3,8 +3,11 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDecimal, roundDecimal } from '@/lib/decimal'
+import { useHealth } from '@/api/health'
 import { errorText } from '@/lib/errors'
-import { useAiUsage, type AiUsage } from './api'
+import { formatDateTimeBrussels } from '@/lib/time'
+import { useAiUsage, useCheckAiKey, type AiUsage } from './api'
+import { aiKeyStateHint, aiKeyStateText, knownAiKeyState, type AiKeyStatus } from './keyState'
 
 const t = uk.aiSettings
 
@@ -43,17 +46,52 @@ export function AiUsageSection() {
   )
 }
 
+/**
+ * Key state: the health poll (every 15 s, also has checked_at) wins over the usage answer.
+ * Neither known (older backend) → null: the old "configured" line is shown instead.
+ */
+function useKeyStatus(usage: AiUsage): AiKeyStatus | null {
+  const health = useHealth()
+  // A failed poll may still hold old data: then the usage answer is the fresher source.
+  const ai = health.isError ? null : health.data?.ai
+  if (ai && knownAiKeyState(ai.state)) return ai
+  const usageState = knownAiKeyState(usage.key_state)
+  return usageState ? { state: usageState, checked_at: null } : null
+}
+
+function KeyHint({ status, configured }: { status: AiKeyStatus | null; configured: boolean }) {
+  // With a known state only that state speaks, so "configured" never contradicts it.
+  const hint = status
+    ? aiKeyStateHint(status.state)
+    : configured
+      ? null
+      : { title: t.notConfigured, text: t.notConfiguredHint }
+  if (!hint) return null
+  return (
+    <p className="text-xs">
+      <span className="font-medium">{hint.title}</span>{' '}
+      <span className="text-muted-foreground">{hint.text}</span>
+    </p>
+  )
+}
+
 function UsageDetails({ usage }: { usage: AiUsage }) {
+  const status = useKeyStatus(usage)
+  const keyText = status
+    ? aiKeyStateText(status.state)
+    : usage.configured
+      ? t.configured
+      : t.notConfiguredShort
   return (
     <div className="flex flex-col gap-3">
-      {!usage.configured && (
-        <p className="text-xs">
-          <span className="font-medium">{t.notConfigured}</span>{' '}
-          <span className="text-muted-foreground">{t.notConfiguredHint}</span>
-        </p>
-      )}
+      <KeyHint status={status} configured={usage.configured} />
       <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-        <Item label={t.key}>{usage.configured ? t.configured : t.notConfiguredShort}</Item>
+        <Item label={t.key}>{keyText}</Item>
+        {status?.checked_at && (
+          <Item label={t.checkedAt}>
+            <span className="num">{formatDateTimeBrussels(status.checked_at)}</span>
+          </Item>
+        )}
         <Item label={t.model}>
           <span className="num">{usage.extraction_model}</span>
         </Item>
@@ -73,6 +111,22 @@ function UsageDetails({ usage }: { usage: AiUsage }) {
       {usage.unpriced_calls > 0 && (
         <p className="text-xs text-muted-foreground">{t.incomplete(usage.unpriced_calls)}</p>
       )}
+      {/* An older backend without the key state has no POST /api/ai/check either. */}
+      {status && <CheckKeyButton />}
+    </div>
+  )
+}
+
+/** POST /api/ai/check; a failure shows the global error toast (mutation cache). */
+function CheckKeyButton() {
+  const check = useCheckAiKey()
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="outline" size="sm" onClick={() => check.mutate()} disabled={check.isPending}>
+        {check.isPending && <Loader2 className="animate-spin" aria-hidden />}
+        {check.isPending ? t.checkingKey : t.checkKey}
+      </Button>
+      <span className="text-xs text-muted-foreground">{t.restartNote}</span>
     </div>
   )
 }
