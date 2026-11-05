@@ -25,7 +25,9 @@ export function BiasPeriodFields({ form, noteId }: { form: BiasForm; noteId: num
   const id = useId()
   const byPeriod = useBiasNoteByPeriod(form.kind, form.periodDate, form.dateValid)
   const other = byPeriod.data && byPeriod.data.id !== noteId ? byPeriod.data.id : null
-  const existingId = form.serverErrors.existingId ?? other
+  const found = form.serverErrors.existingId ?? other
+  // Never point at the note this editor already edits (e.g. a stale 409 after its own create).
+  const existingId = found !== noteId ? found : null
   const note = periodNote(form.kind, form.periodDate)
   const dateError = form.dateError ? e.dateRequired : form.serverErrors.periodDate
   return (

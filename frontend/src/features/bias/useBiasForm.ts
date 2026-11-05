@@ -84,7 +84,7 @@ export function useBiasForm(start: BiasFormStart) {
   const cards = useDrafts(start)
   const [serverErrors, setServerErrors] = useState<BiasSaveErrors>(NO_BIAS_ERRORS)
   const [attempted, setAttempted] = useState(false)
-  const [initialSnapshot] = useState(() =>
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
     snapshot(start.kind, normalizePeriod(start.kind, start.date), rawText, cards.drafts),
   )
 
@@ -115,7 +115,9 @@ export function useBiasForm(start: BiasFormStart) {
     rawText,
     drafts: cards.drafts,
     lastApplied: cards.lastApplied,
-    dirty: snapshot(kind, periodDate, rawText, cards.drafts) !== initialSnapshot,
+    dirty: snapshot(kind, periodDate, rawText, cards.drafts) !== savedSnapshot,
+    /** After a save that stays on the page: the saved state is the new baseline of the guard. */
+    markSaved: () => setSavedSnapshot(snapshot(kind, periodDate, rawText, cards.drafts)),
     serverErrors,
     cardErrors,
     dateError: attempted && !dateValid,

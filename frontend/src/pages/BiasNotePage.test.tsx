@@ -387,3 +387,167 @@ describe('Bias editor: edit and delete', () => {
     expect(router.state.location.pathname).toBe('/bias/3')
   })
 })
+
+/** Holds a recorded clip on the record button (3 s on the controlled clock). */
+async function recordClip(user: ReturnType<typeof renderPage>['user'], clock: ReturnType<typeof controlClock>) {
+  const record = await screen.findByRole('button', { name: uk.voice.recorder.hold })
+  await user.pointer({ keys: '[MouseLeft>]', target: record })
+  await screen.findByText(uk.voice.recorder.recording)
+  clock.advance(3_000)
+  await user.pointer({ keys: '[/MouseLeft]', target: record })
+}
+
+function voiceGroup(): HTMLElement {
+  return screen.getByRole('group', { name: e.voiceTitle })
+}
+
+describe('Bias editor: review cases', () => {
+  it('retries a failed upload on the note already created (one POST, same id)', async () => {
+    installMic()
+    const clock = controlClock()
+    const { posted } = serveEditor()
+    let attempts = 0
+    mockApi(
+      http.post('/api/bias/notes/12/audio', () => {
+        attempts += 1
+        if (attempts === 1) return HttpResponse.json({ error: { code: 'db_unavailable', message: 'down' } }, { status: 503 })
+        return HttpResponse.json(fixtureNote({ id: 31, trade_id: null, bias_note_id: 12, status: 'done', progress: 1 }), {
+          status: 201,
+        })
+      }),
+    )
+    const { user, router } = renderPage()
+
+    await recordClip(user, clock)
+    expect(await within(voiceGroup()).findByRole('alert')).toHaveTextContent(uk.errors.db_unavailable)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/bias/12'))
+    await user.click(within(voiceGroup()).getByRole('button', { name: uk.voice.upload.retryUpload }))
+
+    expect(await screen.findByRole('listitem', { name: uk.voice.notes.label(1) })).toBeInTheDocument()
+    expect(attempts).toBe(2)
+    expect(posted).toHaveLength(1)
+    expect(router.state.location.pathname).toBe('/bias/12')
+  })
+
+  it('keeps the recording and shows the existing note on a 409 while creating for voice', async () => {
+    installMic()
+    const clock = controlClock()
+    serveEditor()
+    let uploads = 0
+    mockApi(
+      http.post('/api/bias/notes', () =>
+        HttpResponse.json({ error: { code: 'bias_note_exists', message: 'exists', details: { id: 5 } } }, { status: 409 }),
+      ),
+      http.post('/api/bias/notes/:id/audio', () => {
+        uploads += 1
+        return HttpResponse.json(fixtureNote({ id: 31 }), { status: 201 })
+      }),
+    )
+    const { user, router } = renderPage()
+
+    await recordClip(user, clock)
+    expect(await within(voiceGroup()).findByRole('alert')).toHaveTextContent(uk.errors.bias_note_exists)
+    expect(within(voiceGroup()).getByRole('button', { name: uk.voice.upload.retryUpload })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: e.openExisting })).toHaveAttribute('href', '/bias/5')
+    expect(uploads).toBe(0)
+    expect(router.state.location.pathname).toBe('/bias/new')
+  })
+
+  it('saves but stays on the page while a recording is not sent, and the guard still asks', async () => {
+    installMic()
+    const clock = controlClock()
+    const { posted, put } = serveEditor()
+    mockApi(
+      http.post('/api/bias/notes/12/audio', () =>
+        HttpResponse.json({ error: { code: 'audio_too_large', message: 'big' } }, { status: 413 }),
+      ),
+    )
+    const { user, router } = renderPage()
+
+    await recordClip(user, clock)
+    await within(voiceGroup()).findByRole('alert')
+    const xau = await card('XAUUSD')
+    await user.click(within(fieldGroup(xau, e.fields.direction)).getByRole('button', { name: d.bullish }))
+    await user.click(screen.getByRole('button', { name: e.save }))
+
+    expect(await screen.findByText(e.savedRecordingUnsent)).toBeInTheDocument()
+    expect(posted).toHaveLength(1)
+    expect(put).toEqual([expect.objectContaining({ entries: [expect.objectContaining({ symbol: 'XAUUSD' })] })])
+    expect(router.state.location.pathname).toBe('/bias/12')
+    expect(screen.queryByTestId('list-page')).not.toBeInTheDocument()
+
+    // Edits are saved, but the unsent recording still blocks leaving.
+    await act(() => router.navigate('/bias'))
+    expect(await screen.findByText(e.unsaved)).toBeInTheDocument()
+  })
+
+  it('waits for a running create-for-voice and saves with PUT (no second POST)', async () => {
+    installMic()
+    const clock = controlClock()
+    const posted: BiasNoteInput[] = []
+    const put: BiasNoteInput[] = []
+    let releaseCreate: () => void = () => undefined
+    const createHeld = new Promise<void>((resolve) => {
+      releaseCreate = resolve
+    })
+    mockApi(
+      http.get('/api/bias/config', () => HttpResponse.json(FIXTURE_BIAS_CONFIG)),
+      http.get('/api/bias/notes/by-period', () =>
+        HttpResponse.json({ error: { code: 'not_found', message: 'none' } }, { status: 404 }),
+      ),
+      http.post('/api/bias/notes', async ({ request }) => {
+        posted.push((await request.json()) as BiasNoteInput)
+        await createHeld
+        return HttpResponse.json(fixtureBiasNote({ id: 12, period_date: '2026-11-06' }), { status: 201 })
+      }),
+      http.put('/api/bias/notes/12', async ({ request }) => {
+        put.push((await request.json()) as BiasNoteInput)
+        return HttpResponse.json(fixtureBiasNote({ id: 12, period_date: '2026-11-06' }))
+      }),
+      http.post('/api/bias/notes/12/audio', () =>
+        HttpResponse.json(fixtureNote({ id: 31, trade_id: null, bias_note_id: 12, status: 'done', progress: 1 }), {
+          status: 201,
+        }),
+      ),
+    )
+    const { user } = renderPage()
+
+    const eur = await card('EURUSD')
+    await user.click(within(fieldGroup(eur, e.fields.direction)).getByRole('button', { name: d.bearish }))
+    await recordClip(user, clock)
+    await waitFor(() => expect(posted).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: e.save }))
+    releaseCreate()
+
+    await waitFor(() => expect(put).toHaveLength(1))
+    expect(posted).toEqual([expect.objectContaining({ entries: [] })])
+    expect(put[0]?.entries).toEqual([expect.objectContaining({ symbol: 'EURUSD', direction: 'bearish' })])
+  })
+
+  it('omits an entry of a symbol removed from bias.yaml on PUT and says so', async () => {
+    const note = fixtureBiasNote({
+      id: 3,
+      entries: [fixtureEntry({ id: 1, symbol: 'NAS100' }), fixtureEntry({ id: 2, symbol: 'XAUUSD' })],
+    })
+    const { put } = serveEditor({ note, byPeriod: note })
+    const { user } = renderPage('/bias/3')
+
+    const nas = await card('NAS100')
+    expect(within(nas).getByRole('note')).toHaveTextContent(e.unknownSymbol)
+    await user.click(screen.getByRole('button', { name: e.save }))
+
+    await screen.findByTestId('list-page')
+    expect(put[0]?.entries.map((entry) => entry.symbol)).toEqual(['XAUUSD'])
+  })
+
+  it('does not save an empty new note', async () => {
+    const { posted } = serveEditor()
+    const { user } = renderPage()
+
+    await card('EURUSD')
+    await user.click(screen.getByRole('button', { name: e.save }))
+
+    expect(await screen.findByText(e.nothingToSave)).toBeInTheDocument()
+    expect(posted).toEqual([])
+  })
+})

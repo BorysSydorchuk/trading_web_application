@@ -165,6 +165,9 @@ describe('bias periods', () => {
   it('defaults to pre_london before 11:00 Brussels and pre_ny from 11:00', () => {
     expect(defaultKind(new Date('2026-11-05T09:59:00Z'))).toBe('pre_london')
     expect(defaultKind(new Date('2026-11-05T10:00:00Z'))).toBe('pre_ny')
+    // Summer time (UTC+2): 09:00Z is 11:00 in Brussels.
+    expect(defaultKind(new Date('2026-07-15T08:59:00Z'))).toBe('pre_london')
+    expect(defaultKind(new Date('2026-07-15T09:00:00Z'))).toBe('pre_ny')
   })
 
   it('groups notes by date in API order and formats the header', () => {

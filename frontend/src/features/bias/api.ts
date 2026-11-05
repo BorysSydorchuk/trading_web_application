@@ -66,7 +66,7 @@ export function useBiasNoteByPeriod(kind: BiasKind, date: string, enabled: boole
 }
 
 /** A write changes notes, the dashboard status and the trades' bias alignment (docs/api.md M4). */
-function invalidateAfterWrite(queryClient: QueryClient, note?: BiasNote) {
+export function invalidateAfterWrite(queryClient: QueryClient, note?: BiasNote) {
   if (note) queryClient.setQueryData(biasKeys.detail(note.id), note)
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: biasKeys.lists }),

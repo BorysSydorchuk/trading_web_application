@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { ApiError, isApiError } from '@/api/client'
 import { uk } from '@/i18n/uk'
 import { showErrorToast } from '@/lib/errors'
-import { biasKeys, createBiasNote, useBiasExtract, useDeleteBiasNote, useSaveBiasNote } from './api'
+import { biasKeys, createBiasNote, invalidateAfterWrite, useBiasExtract, useDeleteBiasNote, useSaveBiasNote } from './api'
 import type { BiasNote } from './types'
 import type { BiasForm } from './useBiasForm'
 
@@ -48,6 +48,23 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
   /** Set right before an intended navigation, so the unsaved-changes guard lets it through. */
   const allowLeaveRef = useRef(false)
   const [extractStartedAt, setExtractStartedAt] = useState<number | null>(null)
+  /** The running create (voice or save of a new note): a second write waits for it instead of POSTing again (409). */
+  const creatingRef = useRef<Promise<number> | null>(null)
+
+  /** Remembers a running create; the ref is cleared when it settles. */
+  function trackCreate(created: Promise<BiasNote>): Promise<number> {
+    const id = created.then((note) => {
+      noteIdRef.current = note.id
+      setNoteId(note.id)
+      return note.id
+    })
+    creatingRef.current = id
+    // Handled by the caller; this copy only clears the ref (and never reports an unhandled rejection).
+    id.catch(() => undefined).finally(() => {
+      if (creatingRef.current === id) creatingRef.current = null
+    })
+    return id
+  }
 
   /** Switches the editor to the new note and its URL (/bias/new → /bias/<id>), keeping all edits. */
   function adopt(note: BiasNote) {
@@ -64,17 +81,21 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
   /** The note id for a voice upload; a new note is created first with entries [] (DECISIONS M4-05). */
   async function ensureNoteId(): Promise<number> {
     if (noteIdRef.current !== null) return noteIdRef.current
+    if (creatingRef.current) return creatingRef.current
     if (!form.dateValid) {
       form.setAttempted(true)
       throw new ApiError('validation_error', 'period_date', 422, { fields: { period_date: 'invalid' } })
     }
     const { input } = form.buildInput()
+    const created = createBiasNote({ ...input, entries: [] })
     try {
-      const note = await createBiasNote({ ...input, entries: [] })
+      const id = await trackCreate(created)
+      const note = await created
       adopt(note)
-      void queryClient.invalidateQueries({ queryKey: biasKeys.lists })
+      // Notes, dashboard reminder / sidebar badge and trade alignment change at once.
+      void invalidateAfterWrite(queryClient, note)
       toast(e.createdForVoice, { id: 'bias-created-for-voice' })
-      return note.id
+      return id
     } catch (error) {
       form.showExisting(existingIdOf(error))
       throw error
@@ -97,34 +118,52 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
     void navigate(LIST_PATH)
   }
 
-  function submit() {
+  /** Validation in the browser; false when nothing may be sent. */
+  function canSubmit(): boolean {
     form.setAttempted(true)
     if (form.hasClientErrors) {
       toast.error(e.fixErrors, { id: 'bias-client-errors' })
       requestAnimationFrame(focusFirstError)
-      return
+      return false
     }
-    const { input, sent } = form.buildInput()
-    if (noteIdRef.current === null && input.entries.length === 0 && input.raw_text === null) {
+    const { input } = form.buildInput()
+    const isNew = noteIdRef.current === null && creatingRef.current === null
+    if (isNew && input.entries.length === 0 && input.raw_text === null) {
       toast.error(e.nothingToSave, { id: 'bias-nothing-to-save' })
-      return
+      return false
     }
-    const wasNew = noteIdRef.current === null
-    save.mutate(
-      { id: noteIdRef.current, input },
-      {
-        onSuccess: (note) => {
-          // Checked when the save lands: the upload may have finished or failed meanwhile.
-          if (!unsentRecordingRef.current) return leaveToList(e.saved)
-          if (wasNew) adopt(note)
-          toast(e.savedRecordingUnsent, { id: 'bias-saved-recording-unsent' })
-        },
-        onError: (error) => {
-          form.handleSaveError(error, sent)
-          showErrorToast(error)
-        },
-      },
-    )
+    return true
+  }
+
+  async function saveNow() {
+    const { input, sent } = form.buildInput()
+    // A create for voice is still running: wait for its id and PUT, never a second POST (409).
+    const pendingCreate = creatingRef.current
+    if (pendingCreate) {
+      try {
+        await pendingCreate
+      } catch {
+        return // its error is already shown (upload area, 409 notice)
+      }
+    }
+    const id = noteIdRef.current
+    const request = save.mutateAsync({ id, input })
+    if (id === null) void trackCreate(request).catch(() => undefined)
+    try {
+      const note = await request
+      // Checked when the save lands: the upload may have finished or failed meanwhile.
+      if (!unsentRecordingRef.current) return leaveToList(e.saved)
+      if (id === null) adopt(note)
+      form.markSaved()
+      toast(e.savedRecordingUnsent, { id: 'bias-saved-recording-unsent' })
+    } catch (error) {
+      form.handleSaveError(error, sent)
+      showErrorToast(error)
+    }
+  }
+
+  function submit() {
+    if (canSubmit()) void saveNow()
   }
 
   function deleteNote(onDone: () => void) {
