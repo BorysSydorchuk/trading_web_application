@@ -3,17 +3,12 @@
 Run items 1–8 now (no microphone needed). Items 9–12 need a live microphone; run them later.
 Mark each item ✅ / ❌ and add a short note if something differs. Wait until QA (M3-13) has finished, because it uses the same QA database and ports.
 
-**Start against the QA database** (PowerShell in the repo root; your real journal is not touched; the config copy makes `lesson` required only for this check):
+**Start against the QA database** (in the repo root; your real journal is not touched; the script copies `config/` to `%TEMP%\tj-qa\config` and makes `lesson` required only there, then starts the app like `start.bat`):
 ```powershell
-Copy-Item -Recurse config $env:TEMP\tj-qa-config -Force
-(Get-Content $env:TEMP\tj-qa-config\journal_fields.yaml -Raw) -replace '(key: lesson[\s\S]*?required: )false', '${1}true' | Set-Content -Encoding utf8 $env:TEMP\tj-qa-config\journal_fields.yaml
-$env:DATABASE_URL = "postgresql+psycopg://journal:journal@127.0.0.1:5432/trading_journal_qa_m3"
-$env:MT5_SOURCE = "fixture:backend/tests/fixtures/mt5/basic_week.json"; $env:MT5_PASSWORD_51234567 = "qa"
-$env:DATA_DIR = "$env:TEMP\tj-qa-data"; $env:CONFIG_DIR = "$env:TEMP\tj-qa-config"
-$env:WHISPER_BEAM_SIZE = "1"; $env:WHISPER_CPU_THREADS = "auto"
-.\start.bat
+python scripts\qa_live_check.py
 ```
-Stop with `stop.bat`. Close this PowerShell window afterwards so the variables are gone.
+Optional: `--whisper-condition-on-previous-text`, `--no-browser`. Do not edit the config copy with PowerShell 5.1 `Get-Content`/`Set-Content`: they re-encode UTF-8 and garble the Ukrainian labels (M3-15).
+Stop with Ctrl+C or `stop.bat`.
 
 | # | Mic | Do | Expected |
 |---|---|---|---|
