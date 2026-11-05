@@ -1,4 +1,5 @@
-"""Thin, injectable wrapper over the official `anthropic` SDK (read: one messages call).
+"""Thin, injectable wrapper over the official `anthropic` SDK (one messages call, and one
+`models.retrieve` for the key check).
 
 The extraction service depends on the `ModelClient` protocol only, so tests use a fake
 and never reach the real API. `AnthropicModelClient` creates the SDK client lazily (the
@@ -12,6 +13,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Literal, Protocol
 
 import anthropic
@@ -84,19 +86,41 @@ class ModelReply:
 
 
 class AiCallError(Exception):
-    """A failed AI call. `fallback_ok`: overload, 5xx, timeout or connection error."""
+    """A failed AI call. `fallback_ok`: overload, 5xx, timeout or connection error.
+    `status_code`: the HTTP status when the API answered with an error, else None."""
 
-    def __init__(self, kind: AiErrorKind, message: str, *, fallback_ok: bool = False) -> None:
+    def __init__(
+        self,
+        kind: AiErrorKind,
+        message: str,
+        *,
+        fallback_ok: bool = False,
+        status_code: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind: AiErrorKind = kind
         self.message = message
         self.fallback_ok = fallback_ok
+        self.status_code = status_code
 
 
 class ModelClient(Protocol):
     def create(self, request: ModelRequest) -> ModelReply:
         """One messages call within `request.timeout_s` (wall clock). Raises AiCallError."""
         ...
+
+
+class ModelLookup(Protocol):
+    def retrieve_model(self, model: str, timeout_s: float) -> None:
+        """`models.retrieve(model)` within `timeout_s` (wall clock); no tokens billed.
+        Returns when the key is accepted. Raises AiCallError."""
+        ...
+
+
+def _call_error(exc: anthropic.AnthropicError) -> AiCallError:
+    kind, fallback_ok = classify_error(exc)
+    status = exc.status_code if isinstance(exc, anthropic.APIStatusError) else None
+    return AiCallError(kind, describe_error(exc), fallback_ok=fallback_ok, status_code=status)
 
 
 def classify_error(exc: Exception) -> tuple[AiErrorKind, bool]:
@@ -223,8 +247,7 @@ class AnthropicModelClient:
                 "timeout", f"no answer within {request.timeout_s:.1f} s", fallback_ok=True
             ) from None
         except anthropic.AnthropicError as exc:
-            kind, fallback_ok = classify_error(exc)
-            raise AiCallError(kind, describe_error(exc), fallback_ok=fallback_ok) from exc
+            raise _call_error(exc) from exc
         return ModelReply(
             model=message.model,
             stop_reason=message.stop_reason,
@@ -250,3 +273,24 @@ class AnthropicModelClient:
                 "effort": request.effort,
             },
         )
+
+    def retrieve_model(self, model: str, timeout_s: float) -> None:
+        """Key check: one `GET /v1/models/{model}` (no retries), bounded by `timeout_s`."""
+        try:
+            run_with_deadline(lambda: self._retrieve(model, timeout_s), timeout_s)
+        except DeadlineExceeded:
+            raise AiCallError(
+                "timeout", f"no answer within {timeout_s:.1f} s", fallback_ok=True
+            ) from None
+        except anthropic.AnthropicError as exc:
+            raise _call_error(exc) from exc
+
+    def _retrieve(self, model: str, timeout_s: float) -> None:
+        timeout = httpx2.Timeout(timeout_s, connect=min(CONNECT_TIMEOUT_S, timeout_s))
+        self._client().with_options(max_retries=0, timeout=timeout).models.retrieve(model)
+
+
+@lru_cache(maxsize=1)
+def shared_client(api_key: SecretStr) -> AnthropicModelClient:
+    """One client per key for the API process (extraction and key check share it)."""
+    return AnthropicModelClient(api_key)

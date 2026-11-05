@@ -1,14 +1,12 @@
-"""POST /api/trades/{id}/extract and GET /api/ai/usage (docs/api.md M2 "AI extraction",
-"AI usage")."""
+"""POST /api/trades/{id}/extract, GET /api/ai/usage and POST /api/ai/check (docs/api.md M2
+"AI extraction", "AI usage", M3 "AI key status")."""
 
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from functools import lru_cache
 
-from fastapi import APIRouter, Depends
-from pydantic import SecretStr
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.config_files import config_error
@@ -20,13 +18,14 @@ from app.domain.extraction import NumberWords
 from app.errors import ApiError
 from app.models import Trade
 from app.schemas import ai as schemas
-from app.services.ai.client import AnthropicModelClient, ModelClient
+from app.services.ai.client import ModelClient, shared_client
 from app.services.ai.extraction import (
     ExtractionFailed,
     ExtractionOutcome,
     ExtractionSettings,
     extract_trade_fields,
 )
+from app.services.ai.key_status import KeyStatus, KeyStatusTracker
 from app.services.ai.usage_log import UsageLog, summarise_month, usage_log_path
 from app.services.trade_journal import check_describable, requirement_scope
 
@@ -35,17 +34,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ai"])
 
 
-@lru_cache(maxsize=1)
-def _client_for(api_key: SecretStr) -> AnthropicModelClient:
-    return AnthropicModelClient(api_key)
-
-
 def get_model_client() -> ModelClient | None:
     """The AI client, or None when ANTHROPIC_API_KEY is empty (override in tests)."""
     settings = get_settings()
     if not settings.ai_configured:
         return None
-    return _client_for(settings.anthropic_api_key)
+    return shared_client(settings.anthropic_api_key)
+
+
+def get_key_tracker(request: Request) -> KeyStatusTracker:
+    """The process-wide key status (created in `create_app`; override in tests)."""
+    tracker: KeyStatusTracker = request.app.state.ai_key
+    return tracker
+
+
+def key_out(status: KeyStatus) -> schemas.AiKeyOut:
+    return schemas.AiKeyOut(state=status.state, checked_at=status.checked_at)
 
 
 def get_usage_log() -> UsageLog:
@@ -84,6 +88,7 @@ def extract(
     db: Session = Depends(get_db),
     client: ModelClient | None = Depends(get_model_client),
     usage_log: UsageLog = Depends(get_usage_log),
+    key_tracker: KeyStatusTracker = Depends(get_key_tracker),
 ) -> schemas.ExtractResult:
     """Prefill the journal from a description. Saves nothing except the usage log."""
     config, required_since = journal_context(db)
@@ -114,6 +119,8 @@ def extract(
             scope=scope,
         )
     except ExtractionFailed as exc:
+        if exc.kind == "auth":
+            key_tracker.mark_invalid(exc.message)
         raise ApiError(
             502, "ai_error", f"AI call failed: {exc.message}", {"kind": exc.kind}
         ) from None
@@ -121,7 +128,10 @@ def extract(
 
 
 @router.get("/ai/usage", response_model=schemas.AiUsageOut)
-def ai_usage(usage_log: UsageLog = Depends(get_usage_log)) -> schemas.AiUsageOut:
+def ai_usage(
+    usage_log: UsageLog = Depends(get_usage_log),
+    key_tracker: KeyStatusTracker = Depends(get_key_tracker),
+) -> schemas.AiUsageOut:
     """Month-to-date (Europe/Brussels) AI usage from logs/ai_usage.jsonl."""
     settings = get_settings()
     month = summarise_month(usage_log.path, datetime.now(UTC))
@@ -135,4 +145,11 @@ def ai_usage(usage_log: UsageLog = Depends(get_usage_log)) -> schemas.AiUsageOut
         output_tokens=month.output_tokens,
         configured=settings.ai_configured,
         extraction_model=settings.anthropic_model_extraction,
+        key_state=key_tracker.status().state,
     )
+
+
+@router.post("/ai/check", response_model=schemas.AiKeyOut)
+def ai_check(key_tracker: KeyStatusTracker = Depends(get_key_tracker)) -> schemas.AiKeyOut:
+    """Re-check the key now (blocking, at most ~10 s)."""
+    return key_out(key_tracker.check())

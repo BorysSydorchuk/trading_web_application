@@ -212,3 +212,82 @@ def test_run_with_deadline_returns_value_and_reraises() -> None:
     assert run_with_deadline(lambda: 42, 1.0) == 42
     with pytest.raises(ZeroDivisionError):
         run_with_deadline(lambda: 1 // 0, 1.0)
+
+
+# --- key check: models.retrieve -----------------------------------------------------------------
+
+MODEL_INFO = {
+    "id": "claude-sonnet-5-5",
+    "type": "model",
+    "display_name": "Claude Sonnet 5.5",
+    "created_at": "2026-01-01T00:00:00Z",
+}
+
+
+def test_retrieve_model_calls_the_models_endpoint_once() -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(req: httpx2.Request) -> httpx2.Response:
+        seen.append(req)
+        return httpx2.Response(200, json=MODEL_INFO)
+
+    client_with(handler).retrieve_model("claude-sonnet-5-5", 5.0)
+    (req,) = seen
+    assert req.method == "GET"
+    assert req.url.path == "/v1/models/claude-sonnet-5-5"
+
+
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    [
+        (401, "auth"),
+        (403, "auth"),
+        (404, "api"),
+        (429, "rate_limit"),
+        (500, "api"),
+        (529, "overloaded"),
+    ],
+)
+def test_retrieve_model_errors_carry_kind_and_status(status: int, kind: str) -> None:
+    calls: list[int] = []
+
+    def handler(req: httpx2.Request) -> httpx2.Response:
+        calls.append(1)
+        return status_error(status)(req)
+
+    with pytest.raises(AiCallError) as caught:
+        client_with(handler).retrieve_model("claude-sonnet-5-5", 5.0)
+    assert (caught.value.kind, caught.value.status_code) == (kind, status)
+    assert KEY not in caught.value.message
+    assert len(calls) == 1  # no SDK retries
+
+
+def test_retrieve_model_timeout_and_connection_errors() -> None:
+    def timeout(req: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("slow", request=req)
+
+    def refused(req: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused", request=req)
+
+    for handler, kind in ((timeout, "timeout"), (refused, "connection")):
+        with pytest.raises(AiCallError) as caught:
+            client_with(handler).retrieve_model("m", 5.0)
+        assert (caught.value.kind, caught.value.fallback_ok, caught.value.status_code) == (
+            kind,
+            True,
+            None,
+        )
+
+
+def test_retrieve_model_is_bounded_by_wall_clock_time() -> None:
+    import time
+
+    def slow(req: httpx2.Request) -> httpx2.Response:
+        time.sleep(1.5)
+        return httpx2.Response(200, json=MODEL_INFO)
+
+    started = time.monotonic()
+    with pytest.raises(AiCallError) as caught:
+        client_with(slow).retrieve_model("m", 0.3)
+    assert time.monotonic() - started < 1.0
+    assert caught.value.kind == "timeout"

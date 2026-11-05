@@ -7,6 +7,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.common import UtcDatetime
+from app.services.ai.key_status import KeyState
+
 EXTRACT_TEXT_MAX_LENGTH = 20000
 
 
@@ -55,3 +58,11 @@ class AiUsageOut(BaseModel):
     output_tokens: int
     configured: bool
     extraction_model: str
+    key_state: KeyState
+
+
+class AiKeyOut(BaseModel):
+    """`ai` in GET /api/health and the POST /api/ai/check answer (docs/api.md M3)."""
+
+    state: KeyState
+    checked_at: UtcDatetime | None
