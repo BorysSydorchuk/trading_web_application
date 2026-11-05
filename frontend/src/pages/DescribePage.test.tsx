@@ -189,4 +189,29 @@ describe('DescribePage', () => {
     expect(alert).toHaveTextContent(uk.errors.db_unavailable)
     expect(within(alert).getByRole('button', { name: uk.common.retry })).toBeEnabled()
   })
+
+  it('names the broken config file when journal fields are saved in the wrong encoding', async () => {
+    const trade = fixtureTrade()
+    mockApi(
+      http.get(`/api/trades/${trade.id}`, () => HttpResponse.json(trade)),
+      http.get('/api/journal-fields', () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'config_error',
+              message: 'config/journal_fields.yaml looks like mojibake',
+              details: { file: 'journal_fields.yaml', problems: ['label'], reason: 'mojibake' },
+            },
+          },
+          { status: 500 },
+        ),
+      ),
+    )
+    renderPage(trade)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(t.page.fieldsError)
+    expect(alert).toHaveTextContent(uk.errors.config_error_reasons.mojibake('journal_fields.yaml'))
+    expect(within(alert).getByRole('button', { name: uk.common.retry })).toBeEnabled()
+  })
 })
