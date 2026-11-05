@@ -9,7 +9,8 @@
    symbol specs (traded + watch symbols).
 3. Write phase, one transaction: account balance/offset, symbol specs, trades (upsert by
    account + position_id; journal fields never touched), exit deals (upsert by account +
-   ticket), computed metrics, then re-entry flags and auto violations for the affected weeks.
+   ticket), computed metrics, then re-entry flags and auto violations for the affected weeks,
+   then the bias alignment of the synced (and never aligned) trades.
 4. The sync_log row is completed in the same commit. On any error everything of step 3 is
    rolled back and the row is marked failed (own commit) with an `Mt5Error` code or
    ``internal_error`` (traceback in the log). Passwords are never logged.
@@ -66,6 +67,7 @@ from app.mt5.convert import (
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.source import Mt5Source, connected
 from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
+from app.services.bias_alignment import recompute_after_sync
 from app.services.trade_rules import recompute_rules
 
 logger = logging.getLogger(__name__)
@@ -450,6 +452,7 @@ def write(
     if result.trades:
         earliest = min(b.open_time for b in result.trades)
         recompute_rules(session, account.id, earliest, rules)
+    recompute_after_sync(session, account.id, [trade for trade, _ in touched.values()])
     return counters
 
 
