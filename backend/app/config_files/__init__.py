@@ -1,5 +1,5 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
-ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml).
+ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml, bias.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -15,6 +15,13 @@ from app.config_files.ai_pricing import (
     ModelPrice,
     clear_ai_pricing_cache,
     get_ai_pricing,
+)
+from app.config_files.bias import (
+    BiasConfig,
+    BiasSymbol,
+    ReminderWindow,
+    clear_bias_cache,
+    get_bias_config,
 )
 from app.config_files.extraction import clear_extraction_cache, get_number_words
 from app.config_files.journal_fields import (
@@ -53,6 +60,7 @@ def reload_config() -> None:
     clear_extraction_cache()
     clear_transcription_cache()
     clear_transcript_glossary_cache()
+    clear_bias_cache()
 
 
 def check_config_files() -> list[ConfigError]:
@@ -65,6 +73,7 @@ def check_config_files() -> list[ConfigError]:
         get_number_words,
         get_transcription,
         get_transcript_glossary,
+        get_bias_config,
     ]
     for load in loaders:
         try:
@@ -80,17 +89,21 @@ def check_config_files() -> list[ConfigError]:
 __all__ = [
     "RULE_KEYS",
     "AiPricingConfig",
+    "BiasConfig",
+    "BiasSymbol",
     "ConfigError",
     "JournalField",
     "JournalFieldsConfig",
     "JournalOption",
     "ModelPrice",
+    "ReminderWindow",
     "RulesConfig",
     "SessionWindow",
     "TranscriptionConfig",
     "check_config_files",
     "config_dir",
     "get_ai_pricing",
+    "get_bias_config",
     "get_journal_fields",
     "get_number_words",
     "get_rules",

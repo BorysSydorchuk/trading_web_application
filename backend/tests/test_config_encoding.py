@@ -30,6 +30,7 @@ CONFIG_NAMES = (
     "extraction.yaml",
     "transcription.yaml",
     "transcript_glossary.yaml",
+    "bias.yaml",
 )
 
 

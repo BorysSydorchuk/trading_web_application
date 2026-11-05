@@ -12,7 +12,7 @@ export type TranscriptionErrorCode =
 export interface AudioNote {
   id: number
   trade_id: number | null
-  bias_entry_id: number | null
+  bias_note_id: number | null
   status: AudioStatus
   /** 0.0–1.0 while processing, 1.0 when done, else null. */
   progress: number | null

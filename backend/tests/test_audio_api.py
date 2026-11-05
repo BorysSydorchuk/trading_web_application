@@ -96,7 +96,7 @@ def test_upload_writes_file_and_pending_row(
     assert response.status_code == 201
     body = response.json()
     assert body["trade_id"] == trade.id
-    assert body["bias_entry_id"] is None
+    assert body["bias_note_id"] is None
     assert body["status"] == "pending"
     assert body["progress"] is None
     assert body["duration_seconds"] is None

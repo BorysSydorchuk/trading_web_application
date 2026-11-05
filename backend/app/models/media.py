@@ -1,4 +1,4 @@
-"""Chart links and audio notes, each owned by exactly one trade or bias entry."""
+"""Chart links (owned by a trade or a bias entry) and audio notes (a trade or a bias note)."""
 
 from __future__ import annotations
 
@@ -13,17 +13,18 @@ from app.models.base import Base, TimestampMixin, enum_check
 from app.models.enums import ChartLinkKind, TranscriptionErrorCode, TranscriptionStatus
 
 if TYPE_CHECKING:
-    from app.models.bias import BiasEntry
+    from app.models.bias import BiasEntry, BiasNote
     from app.models.trade import Trade
 
-# Exactly one owner: a trade XOR a bias entry.
-_ONE_OWNER = "(trade_id IS NULL) <> (bias_entry_id IS NULL)"
+# Exactly one owner: a trade XOR a bias entry (links are per symbol) / a bias note (audio).
+_LINK_ONE_OWNER = "(trade_id IS NULL) <> (bias_entry_id IS NULL)"
+_AUDIO_ONE_OWNER = "(trade_id IS NULL) <> (bias_note_id IS NULL)"
 
 
 class ChartLink(TimestampMixin, Base):
     __tablename__ = "chart_links"
     __table_args__ = (
-        CheckConstraint(_ONE_OWNER, name="one_owner"),
+        CheckConstraint(_LINK_ONE_OWNER, name="one_owner"),
         enum_check("kind", ChartLinkKind, "kind_valid"),
     )
 
@@ -44,7 +45,7 @@ class ChartLink(TimestampMixin, Base):
 class AudioNote(TimestampMixin, Base):
     __tablename__ = "audio_notes"
     __table_args__ = (
-        CheckConstraint(_ONE_OWNER, name="one_owner"),
+        CheckConstraint(_AUDIO_ONE_OWNER, name="one_owner"),
         enum_check("transcription_status", TranscriptionStatus, "transcription_status_valid"),
         CheckConstraint("duration_seconds >= 0", name="duration_non_negative"),
         CheckConstraint("progress >= 0 AND progress <= 1", name="progress_range"),
@@ -65,8 +66,8 @@ class AudioNote(TimestampMixin, Base):
     trade_id: Mapped[int | None] = mapped_column(
         ForeignKey("trades.id", ondelete="CASCADE"), index=True
     )
-    bias_entry_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bias_entries.id", ondelete="CASCADE"), index=True
+    bias_note_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bias_notes.id", ondelete="CASCADE"), index=True
     )
     # Relative to the data dir (e.g. `audio/2026/10/<uuid>.webm`); file survives failures.
     file_path: Mapped[str] = mapped_column(String(500))
@@ -85,4 +86,4 @@ class AudioNote(TimestampMixin, Base):
     transcribed_at: Mapped[datetime | None]
 
     trade: Mapped[Trade | None] = relationship(back_populates="audio_notes")
-    bias_entry: Mapped[BiasEntry | None] = relationship(back_populates="audio_notes")
+    bias_note: Mapped[BiasNote | None] = relationship(back_populates="audio_notes")

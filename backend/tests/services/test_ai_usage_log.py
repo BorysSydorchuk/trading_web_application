@@ -44,6 +44,7 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "extraction.yaml",
         "transcription.yaml",
         "transcript_glossary.yaml",
+        "bias.yaml",
     ):
         shutil.copy(REAL_CONFIG / name, target / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(target))
