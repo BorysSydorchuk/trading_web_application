@@ -25,6 +25,7 @@ from app.services.ai.usage_log import (
     compute_cost,
     cost_for,
     find_price,
+    last_success_at,
     summarise_month,
     utc_ts,
 )
@@ -251,3 +252,34 @@ def test_broken_lines_are_skipped_with_a_warning(
 def test_missing_file_is_an_empty_month(tmp_path: Path) -> None:
     month = summarise_month(tmp_path / "none.jsonl", datetime(2026, 11, 10, tzinfo=UTC))
     assert (month.calls, month.cost_usd) == (0, Decimal("0.0000"))
+
+
+# --- last_success_at ---
+
+
+def _jsonl(path: Path, lines: list[dict[str, Any]], extra: str = "") -> None:
+    path.write_text("".join(json.dumps(x) + "\n" for x in lines) + extra, encoding="utf-8")
+
+
+def test_last_success_is_the_latest_ok_line_of_any_purpose(tmp_path: Path) -> None:
+    path = tmp_path / "ai_usage.jsonl"
+    _jsonl(
+        path,
+        [
+            {"ts": "2026-11-04T08:00:00.000Z", "purpose": "extraction", "ok": True},
+            {"ts": "2026-11-04T10:00:00.000Z", "purpose": "warmup", "ok": True},
+            {"ts": "2026-11-04T09:00:00.000Z", "purpose": "eval", "ok": True},
+            {"ts": "2026-11-04T11:00:00.000Z", "ok": False, "error_kind": "timeout"},
+        ],
+        extra="{broken\n\n",
+    )
+
+    assert last_success_at(path) == datetime(2026, 11, 4, 10, 0, tzinfo=UTC)
+
+
+def test_last_success_none_without_file_or_success(tmp_path: Path) -> None:
+    path = tmp_path / "ai_usage.jsonl"
+    assert last_success_at(path) is None
+
+    _jsonl(path, [{"ts": "2026-11-04T11:00:00.000Z", "ok": False, "error_kind": "auth"}])
+    assert last_success_at(path) is None

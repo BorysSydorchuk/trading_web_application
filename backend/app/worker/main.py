@@ -2,7 +2,8 @@
 the main thread just waits for a stop signal.
 
 Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`),
-`ai_warmup` (one AI call after an extraction schema change, see `app.services.ai.warmup`),
+`ai_warmup` (one AI call after an extraction schema change or a quiet day, see
+`app.services.ai.warmup`), `ai_warmup_daily` (Mon-Fri 07:30 Brussels cron, flags a warm-up),
 `transcription` (voice notes -> text, see `app.worker.transcription_job`) and
 `journal_requirements` (stamps required_since soon after a journal_fields.yaml change, see
 `app.services.journal_requirements`; the API syncs too, on every journal read).
@@ -18,8 +19,10 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from types import FrameType
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -28,9 +31,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import Settings, get_settings
 from app.config_files import ConfigError, check_config_files, get_journal_fields
 from app.db import dispose_engine, get_engine, get_session_factory
+from app.domain.sessions import DEFAULT_TZ
 from app.logging_setup import setup_logging
 from app.mt5.source import Mt5Source
-from app.services.ai.warmup import WARMUP_JOB_ID, WARMUP_JOB_INTERVAL_S, WarmupJob
+from app.services.ai.warmup import (
+    DAILY_DAYS,
+    DAILY_GRACE_S,
+    DAILY_HOUR,
+    DAILY_MINUTE,
+    WARMUP_DAILY_JOB_ID,
+    WARMUP_JOB_ID,
+    WARMUP_JOB_INTERVAL_S,
+    WarmupJob,
+)
 from app.services.journal_requirements import sync_requirements
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.worker.sync_job import (
@@ -129,6 +142,10 @@ def default_transcription_job(settings: Settings) -> Callable[[], None]:
     return job
 
 
+def _noop() -> None:
+    return None
+
+
 class _SkipNoiseFilter(logging.Filter):
     """Drop APScheduler's "skipped: maximum number of running instances" line for the
     transcription job: it runs every 2 s while one note can take a minute."""
@@ -146,6 +163,7 @@ def build_scheduler(
     engine_getter: Callable[[], Engine] = get_engine,
     sync_job: Callable[[], None] | None = None,
     warmup_job: Callable[[], None] | None = None,
+    warmup_daily_job: Callable[[], None] | None = None,
     transcription_job: Callable[[], None] | None = None,
     requirements_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
@@ -179,13 +197,30 @@ def build_scheduler(
         next_run_time=datetime.now(UTC),  # due accounts sync right after start
         replace_existing=True,
     )
+    default_warmup = WarmupJob(settings) if warmup_job is None else None
     scheduler.add_job(
-        _safe(WARMUP_JOB_ID, warmup_job or WarmupJob(settings)),
+        _safe(WARMUP_JOB_ID, warmup_job or default_warmup or _noop),
         trigger=IntervalTrigger(seconds=WARMUP_JOB_INTERVAL_S, timezone=UTC),
         id=WARMUP_JOB_ID,
         name=WARMUP_JOB_ID,
         max_instances=1,  # a warm-up call can take ~25 s; never two at once
         next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
+    # Only flags the request; the `ai_warmup` job above makes the call (never two at once).
+    daily = warmup_daily_job or (default_warmup.request_daily if default_warmup else _noop)
+    scheduler.add_job(
+        _safe(WARMUP_DAILY_JOB_ID, daily),
+        trigger=CronTrigger(
+            day_of_week=DAILY_DAYS,
+            hour=DAILY_HOUR,
+            minute=DAILY_MINUTE,
+            timezone=ZoneInfo(DEFAULT_TZ),
+        ),
+        id=WARMUP_DAILY_JOB_ID,
+        name=WARMUP_DAILY_JOB_ID,
+        coalesce=True,
+        misfire_grace_time=DAILY_GRACE_S,  # asleep longer at 07:30: skip, never fire late
         replace_existing=True,
     )
     scheduler.add_job(
