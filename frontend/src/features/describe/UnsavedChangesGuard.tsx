@@ -17,13 +17,15 @@ interface UnsavedChangesGuardProps {
   dirty: boolean
   /** Set to true right before navigating away after a successful save. */
   allowLeaveRef: RefObject<boolean>
+  /** What is lost (default: the trade description's edits). */
+  description?: string
 }
 
 /**
  * Warns before leaving with unsaved edits: in-app navigation shows a dialog, closing or
  * reloading the tab shows the browser's own prompt.
  */
-export function UnsavedChangesGuard({ dirty, allowLeaveRef }: UnsavedChangesGuardProps) {
+export function UnsavedChangesGuard({ dirty, allowLeaveRef, description = t.description }: UnsavedChangesGuardProps) {
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       dirty && !allowLeaveRef.current && currentLocation.pathname !== nextLocation.pathname,
@@ -44,7 +46,7 @@ export function UnsavedChangesGuard({ dirty, allowLeaveRef }: UnsavedChangesGuar
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t.title}</DialogTitle>
-          <DialogDescription>{t.description}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => blocker.reset?.()}>

@@ -231,7 +231,7 @@ describe('Describe screen voice notes', () => {
     const group = screen.getByRole('group', { name: t.voice.title })
     expect(await within(group).findByRole('alert')).toHaveTextContent(uk.errors.unsupported_media_type)
     expect(record).toBeDisabled()
-    expect(within(group).getByText(t.voice.resolveFirst)).toBeInTheDocument()
+    expect(within(group).getByText(v.upload.resolveFirst)).toBeInTheDocument()
     await user.pointer({ keys: '[MouseLeft>]', target: record })
     expect(mic.getUserMedia).toHaveBeenCalledTimes(1)
 
@@ -240,7 +240,7 @@ describe('Describe screen voice notes', () => {
     expect(await screen.findByText(t.unsaved.title)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: t.unsaved.stay }))
 
-    await user.click(within(group).getByRole('button', { name: t.voice.discard }))
+    await user.click(within(group).getByRole('button', { name: v.upload.discard }))
     expect(within(group).queryByRole('alert')).not.toBeInTheDocument()
     expect(record).toBeEnabled()
   })
@@ -276,7 +276,7 @@ describe('Describe screen voice notes', () => {
     expect(saves).toBe(1)
     expect(router.state.location.pathname).toBe(`/trades/${trade.id}/describe`)
     expect(screen.queryByTestId('inbox-page')).not.toBeInTheDocument()
-    expect(within(group).getByRole('button', { name: t.voice.retryUpload })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: v.upload.retryUpload })).toBeInTheDocument()
   })
 
   it('keeps a recording whose upload failed and sends it again', async () => {
@@ -306,7 +306,7 @@ describe('Describe screen voice notes', () => {
 
     const group = screen.getByRole('group', { name: t.voice.title })
     expect(await within(group).findByRole('alert')).toHaveTextContent(uk.errors.audio_too_large)
-    await user.click(within(group).getByRole('button', { name: t.voice.retryUpload }))
+    await user.click(within(group).getByRole('button', { name: v.upload.retryUpload }))
 
     expect(await screen.findByRole('listitem', { name: v.notes.label(1) })).toBeInTheDocument()
     expect(attempts).toBe(2)
@@ -367,7 +367,7 @@ describe('Describe screen audio file', () => {
     const group = screen.getByRole('group', { name: t.voice.title })
     expect(within(group).getByRole('alert')).toHaveTextContent(text)
     expect(uploads).toBe(0)
-    expect(within(group).queryByText(t.voice.uploading)).not.toBeInTheDocument()
+    expect(within(group).queryByText(v.upload.uploading)).not.toBeInTheDocument()
   })
 
   it.each([
@@ -388,7 +388,7 @@ describe('Describe screen audio file', () => {
 
     const group = screen.getByRole('group', { name: t.voice.title })
     expect(await within(group).findByRole('alert')).toHaveTextContent(text)
-    expect(within(group).getByRole('button', { name: t.voice.retryUpload })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: v.upload.retryUpload })).toBeInTheDocument()
     expect(within(group).getByRole('button', { name: v.recorder.pickFile })).toBeDisabled()
   })
 })

@@ -37,6 +37,11 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/pages/BiasPage')).BiasPage }),
           },
           {
+            // /bias/new?kind=…&date=… and /bias/<id>: one route, so a note created for a voice upload keeps its editor.
+            path: 'bias/:id',
+            lazy: async () => ({ Component: (await import('@/pages/BiasNotePage')).BiasNotePage }),
+          },
+          {
             path: 'digests',
             lazy: async () => ({ Component: (await import('@/pages/DigestsPage')).DigestsPage }),
           },

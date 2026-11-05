@@ -28,10 +28,17 @@ interface ChartLinksEditorProps {
   errors: Readonly<Record<string, string>>
   missing: boolean
   onChange: (links: LinkDraft[]) => void
+  /** DOM id key (several editors on one page need different ones). */
+  fieldKey?: string
+  /** Label when there is no journal field (default "Посилання на графік (TradingView)"). */
+  label?: string
+  /** Before/after select per row (off for bias links, which have one kind). */
+  showKind?: boolean
 }
 
 /** Chart links: before/after, add/remove, thumbnail for snapshot links (docs/api.md chart_links). */
-export function ChartLinksEditor({ field, links, errors, missing, onChange }: ChartLinksEditorProps) {
+export function ChartLinksEditor(props: ChartLinksEditorProps) {
+  const { field, links, errors, missing, onChange, fieldKey = 'chart_links', label = l.title, showKind = true } = props
   const kindLabel = (kind: string) => field?.options?.find((o) => o.value === kind)?.label ?? l.kinds[kind as LinkKind] ?? kind
   const canAdd = links.length < MAX_CHART_LINKS
 
@@ -58,8 +65,8 @@ export function ChartLinksEditor({ field, links, errors, missing, onChange }: Ch
 
   return (
     <FieldShell
-      fieldKey="chart_links"
-      label={field?.label ?? l.title}
+      fieldKey={fieldKey}
+      label={field?.label ?? label}
       required={field?.required === true}
       aiFilled={false}
       missing={missing}
@@ -67,7 +74,7 @@ export function ChartLinksEditor({ field, links, errors, missing, onChange }: Ch
       hint={field?.required ? l.requiredHint : undefined}
       group
     >
-      <div id={fieldDomId('chart_links')} className="flex flex-col gap-2">
+      <div id={fieldDomId(fieldKey)} className="flex flex-col gap-2">
         {links.length === 0 && <p className="text-xs text-muted-foreground">{l.empty}</p>}
         {links.map((link, index) => (
           <LinkRow
@@ -76,6 +83,7 @@ export function ChartLinksEditor({ field, links, errors, missing, onChange }: Ch
             index={index}
             error={errors[link.rowId] ?? null}
             kindLabel={kindLabel}
+            showKind={showKind}
             onUrl={(url) => update(link.rowId, { url })}
             onKind={(kind) => update(link.rowId, { kind })}
             onRemove={() => onChange(links.filter((other) => other.rowId !== link.rowId))}
@@ -99,13 +107,14 @@ interface LinkRowProps {
   index: number
   error: string | null
   kindLabel: (kind: string) => string
+  showKind: boolean
   onUrl: (url: string) => void
   onKind: (kind: LinkKind) => void
   onRemove: () => void
   onPaste: (event: ClipboardEvent<HTMLInputElement>) => void
 }
 
-function LinkRow({ link, index, error, kindLabel, onUrl, onKind, onRemove, onPaste }: LinkRowProps) {
+function LinkRow({ link, index, error, kindLabel, showKind, onUrl, onKind, onRemove, onPaste }: LinkRowProps) {
   const url = link.url.trim()
   const valid = isValidChartUrl(url)
   const preview = valid ? (link.previewUrl ?? snapshotPreviewUrl(url)) : null
@@ -113,19 +122,21 @@ function LinkRow({ link, index, error, kindLabel, onUrl, onKind, onRemove, onPas
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <NativeSelect
-          aria-label={l.kindLabel(index + 1)}
-          className="h-7 w-36 text-xs"
-          wrapperClassName="w-auto"
-          value={link.kind}
-          onChange={(e) => onKind(e.target.value as LinkKind)}
-        >
-          {LINK_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {kindLabel(kind)}
-            </option>
-          ))}
-        </NativeSelect>
+        {showKind && (
+          <NativeSelect
+            aria-label={l.kindLabel(index + 1)}
+            className="h-7 w-36 text-xs"
+            wrapperClassName="w-auto"
+            value={link.kind}
+            onChange={(e) => onKind(e.target.value as LinkKind)}
+          >
+            {LINK_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {kindLabel(kind)}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
         <Input
           id={inputId}
           aria-label={l.urlLabel(index + 1)}
