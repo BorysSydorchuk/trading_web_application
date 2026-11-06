@@ -5,6 +5,21 @@ import type { AudioNote } from '@/features/voice/types'
 export const BIAS_KINDS = ['pre_london', 'pre_ny', 'weekly', 'monthly'] as const
 export type BiasKind = (typeof BIAS_KINDS)[number]
 
+export interface BiasStatus {
+  date: string
+  weekday: boolean
+  now: string
+  sessions: Record<'pre_london' | 'pre_ny', {
+    note_id: number | null
+    missing: boolean
+    remind: boolean
+    from: string
+    until: string
+  }>
+  weekly: { note_id: number | null }
+  monthly: { note_id: number | null }
+}
+
 export const BIAS_DIRECTIONS = ['bullish', 'bearish', 'neutral', 'no_trade'] as const
 export type BiasDirection = (typeof BIAS_DIRECTIONS)[number]
 

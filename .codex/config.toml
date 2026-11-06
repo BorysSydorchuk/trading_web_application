@@ -1,0 +1,46 @@
+model = "gpt-6-astra"
+
+[agents]
+enabled = true
+default_subagent_model = "gpt-6.1-sol"
+max_concurrent_threads_per_session = 3
+
+[agents.architect]
+description = "Software architecture specialist for system design, scalability, and technical decision-making. Use when planning new features, refactoring large systems, or making architectural decisions."
+config_file = "agents/architect.toml"
+
+[agents.backend-dev]
+description = "Implements Python backend tasks - FastAPI endpoints, SQLAlchemy models, Alembic migrations, MT5 sync worker, Whisper and Claude API integration. Use for any server-side task."
+config_file = "agents/backend-dev.toml"
+
+[agents.code-reviewer]
+description = "Reviews finished tasks for correctness, PRD compliance, error handling, security and simplicity before they are marked done. Read-only."
+config_file = "agents/code-reviewer.toml"
+
+[agents.database-reviewer]
+description = "PostgreSQL database specialist for query optimization, schema design, security, and performance. Use when writing SQL, creating migrations, designing schemas, or troubleshooting database performance. Incorporates Supabase best practices."
+config_file = "agents/database-reviewer.toml"
+
+[agents.frontend-dev]
+description = "Implements React + TypeScript UI tasks - pages, forms, charts, audio recording, API integration. Use for any client-side task."
+config_file = "agents/frontend-dev.toml"
+
+[agents.planner]
+description = "Expert planning specialist for complex features and refactoring. Use when users request feature implementation, architectural changes, or complex refactoring."
+config_file = "agents/planner.toml"
+
+[agents.python-reviewer]
+description = "Expert Python code reviewer specializing in PEP 8 compliance, Pythonic idioms, type hints, security, and performance. Use for all Python code changes."
+config_file = "agents/python-reviewer.toml"
+
+[agents.qa-tester]
+description = "Writes and runs tests, builds fixtures (recorded MT5 deals, sample voice transcripts), reproduces and isolates bugs. Use after each feature and for any bug report."
+config_file = "agents/qa-tester.toml"
+
+[agents.security-reviewer]
+description = "Security vulnerability detection and remediation specialist. Use after writing code that handles user input, authentication, API endpoints, or sensitive data. Flags secrets, SSRF, injection, unsafe crypto, and OWASP Top 10 vulnerabilities."
+config_file = "agents/security-reviewer.toml"
+
+[agents.tdd-guide]
+description = "Test-Driven Development specialist enforcing write-tests-first methodology. Use when writing new features, fixing bugs, or refactoring code. 80% coverage required for risk-limit and position-size code; elsewhere follow the PRD."
+config_file = "agents/tdd-guide.toml"

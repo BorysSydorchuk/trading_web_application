@@ -5,7 +5,7 @@ import { aiKeys } from '@/features/ai/api'
 import { tradeKeys } from '@/features/trades/api'
 import { audioKeys } from '@/features/voice/api'
 import type { AudioNote } from '@/features/voice/types'
-import type { BiasConfig, BiasEntry, BiasExtractResult, BiasKind, BiasNote, BiasNoteInput } from './types'
+import type { BiasConfig, BiasEntry, BiasExtractResult, BiasKind, BiasNote, BiasNoteInput, BiasStatus } from './types'
 
 /** Same budget as the trade extraction (server keeps it within 30 s). */
 const EXTRACT_TIMEOUT_MS = 45_000
@@ -28,6 +28,20 @@ export function useBiasConfig() {
     queryKey: biasKeys.config,
     queryFn: ({ signal }) => apiGet<BiasConfig>('/bias/config', { signal }),
   })
+}
+
+/** Reminder windows and today's date are computed by the server in Brussels time. */
+export function useBiasStatus() {
+  return useQuery({
+    queryKey: biasKeys.status,
+    queryFn: ({ signal }) => apiGet<BiasStatus>('/bias/status', { signal }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+}
+
+export function biasReminderCount(status: BiasStatus): number {
+  return Object.values(status.sessions).filter((session) => session.remind).length
 }
 
 /** Default range: the last 30 days (server side); `kinds` empty = all kinds. */

@@ -22,6 +22,8 @@ export const TRADE_SORT_FIELDS = [
 export type TradeSort = (typeof TRADE_SORT_FIELDS)[number]
 export type SortOrder = 'asc' | 'desc'
 
+export type BiasAlignment = 'aligned' | 'counter' | 'neutral_bias' | 'no_bias'
+
 export interface TradeRow {
   id: number
   account_id: number
@@ -53,6 +55,10 @@ export interface TradeRow {
   weekday: number | null
   hour: number | null
   is_reentry: boolean
+  /** M4: effective daily alignment (manual override wins), and computed period alignments. */
+  bias_alignment: BiasAlignment | null
+  bias_alignment_weekly: BiasAlignment | null
+  bias_alignment_monthly: BiasAlignment | null
   violations: string[]
 }
 
@@ -91,6 +97,7 @@ export type JournalValue = string | number | boolean | string[] | null
 
 /** docs/api.md "TradeDetail in M2". `journal` has every YAML key (fields and text_keys). */
 export interface TradeDetail extends TradeRow {
+  bias_note_ids: { daily: number | null; weekly: number | null; monthly: number | null }
   initial_sl_source: string | null
   exit_deals: ExitDeal[]
   rule_violations: RuleViolation[]

@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { FIXTURE_FIELDS } from '@/features/describe/journalFields.fixture'
 import { fixtureTrade } from '@/features/describe/trade.fixture'
 import { uk } from '@/i18n/uk'
@@ -9,6 +9,8 @@ import { mockApi } from '@/test/server'
 import { JournalPage } from './JournalPage'
 
 const j = uk.journal
+
+afterEach(() => window.localStorage.clear())
 
 /** GET /api/trades records every query string; trades are returned unless the new-fields filter is on. */
 function serveJournal() {
@@ -60,5 +62,42 @@ describe('JournalPage: "Неповні за новими полями"', () => {
     const first = queries[0]
     expect(first?.get('missing_new_fields')).toBe('true')
     expect(first?.getAll('status')).toEqual(['complete'])
+  })
+})
+
+describe('JournalPage: bias alignment columns', () => {
+  it('shows effective daily alignment and enables optional weekly/monthly columns via the chooser', async () => {
+    serveJournal()
+    mockApi(http.get('/api/trades', () => HttpResponse.json({
+      items: [fixtureTrade({ bias_alignment: 'counter', bias_alignment_weekly: 'aligned', bias_alignment_monthly: 'neutral_bias' })],
+      total: 1,
+    })))
+    const { user } = renderWithProviders(<JournalPage />, { path: '/journal' })
+    expect(await screen.findByRole('columnheader', { name: uk.trades.columns.bias_alignment })).toBeInTheDocument()
+    expect(screen.getByText(uk.bias.alignment.counter)).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: uk.trades.columns.bias_alignment_weekly })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: uk.trades.columns.bias_alignment_monthly })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: j.columnsButton }))
+    await user.click(screen.getByRole('checkbox', { name: uk.trades.columns.bias_alignment_weekly }))
+    await user.click(screen.getByRole('checkbox', { name: uk.trades.columns.bias_alignment_monthly }))
+    const row = screen.getByRole('row', { name: j.openRow('EURUSD') })
+    expect(within(row).getByText(uk.bias.alignment.aligned)).toBeInTheDocument()
+    expect(within(row).getByText(uk.bias.alignment.neutral_bias)).toBeInTheDocument()
+    expect(JSON.parse(window.localStorage.getItem('tj.journal.columns') ?? '[]')).toEqual(expect.arrayContaining([
+      'bias_alignment', 'bias_alignment_weekly', 'bias_alignment_monthly',
+    ]))
+  })
+
+  it('distinguishes an alignment not yet computed from no bias and restores stored columns', async () => {
+    window.localStorage.setItem('tj.journal.columns', JSON.stringify(['symbol', 'bias_alignment', 'bias_alignment_weekly']))
+    serveJournal()
+    mockApi(http.get('/api/trades', () => HttpResponse.json({
+      items: [fixtureTrade({ bias_alignment: null, bias_alignment_weekly: 'no_bias' })], total: 1,
+    })))
+    renderWithProviders(<JournalPage />, { path: '/journal' })
+    expect(await screen.findByText(uk.bias.alignment.pending)).toBeInTheDocument()
+    expect(screen.getByText(uk.bias.alignment.no_bias)).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: uk.trades.columns.net_pnl })).not.toBeInTheDocument()
   })
 })

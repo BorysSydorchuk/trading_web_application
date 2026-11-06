@@ -1,0 +1,2 @@
+model = "gpt-6.1-sol"
+developer_instructions = "Read AGENTS.md and .claude/agents/backend-dev.md. Preserve the complete role body and applicable rules/skills. Claude tool and model headers are replaced by Codex tools and gpt-6.1-sol. Follow root-assigned file ownership and test-runner restrictions. Report to the single main orchestrator; do not spawn further agents unless assigned."
