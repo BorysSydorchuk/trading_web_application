@@ -28,6 +28,9 @@ export const COLUMN_KEYS = [
   'r_multiple',
   'planned_rr',
   'is_reentry',
+  'bias_alignment',
+  'bias_alignment_weekly',
+  'bias_alignment_monthly',
   'position_id',
   'status',
   'violations',
@@ -46,6 +49,7 @@ export const DEFAULT_COLUMNS: readonly ColumnKey[] = [
   'net_pnl',
   'r_multiple',
   'risk_pct',
+  'bias_alignment',
   'status',
   'violations',
 ]

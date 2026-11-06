@@ -2,6 +2,7 @@ import type { ColumnKey } from '@/features/journal/columns'
 import { uk } from '@/i18n/uk'
 import { formatShortDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { BiasAlignmentLabel } from './BiasAlignmentLabel'
 import {
   directionLabel,
   formatDuration,
@@ -89,6 +90,10 @@ export function TradeCell({ trade, column }: { trade: TradeRow; column: ColumnKe
       return <span className="num">{formatRatio(trade.planned_rr)}</span>
     case 'is_reentry':
       return trade.is_reentry ? <>{uk.trades.yes}</> : <Muted />
+    case 'bias_alignment':
+    case 'bias_alignment_weekly':
+    case 'bias_alignment_monthly':
+      return <BiasAlignmentLabel value={trade[column]} />
     case 'position_id':
       return <span className="num">{trade.position_id}</span>
     case 'status':

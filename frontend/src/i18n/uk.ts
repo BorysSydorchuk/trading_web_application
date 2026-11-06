@@ -298,6 +298,9 @@ export const uk = {
       position_id: 'Позиція',
       status: 'Статус',
       violations: 'Порушення',
+      bias_alignment: 'Біас: день',
+      bias_alignment_weekly: 'Біас: тиждень',
+      bias_alignment_monthly: 'Біас: місяць',
     },
     direction: {
       buy: 'Buy',
@@ -627,6 +630,28 @@ export const uk = {
   },
   /** Біас page (PRD 6.6, docs/api.md "## M4"). */
   bias: {
+    status: {
+      title: 'Стан біасу',
+      loading: 'Завантаження стану біасу…',
+      loadError: 'Не вдалося оновити стан біасу.',
+      unavailable: '?',
+      date: (date: string) => `${date} · час Брюсселя`,
+      missing: 'Ще не записано',
+      present: 'Записано',
+      record: 'Записати біас',
+      open: 'Відкрити біас',
+      reminder: (kind: string) => `Нагадування: запишіть біас «${kind}».`,
+      badge: (count: number) => `Нагадувань про біас: ${count}`,
+    },
+    alignment: {
+      aligned: 'За біасом',
+      counter: 'Проти біасу',
+      neutral_bias: 'Нейтральний біас',
+      no_bias: 'Біас відсутній',
+      pending: 'Ще не визначено',
+      title: 'Відповідність біасу',
+      openNote: 'Відкрити біас',
+    },
     kinds: {
       pre_london: 'Перед Лондоном',
       pre_ny: 'Перед Нью-Йорком',

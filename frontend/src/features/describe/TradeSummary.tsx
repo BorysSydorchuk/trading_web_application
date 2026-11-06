@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+import { BiasAlignmentLabel } from '@/features/trades/BiasAlignmentLabel'
 import { Row, Section, ViolationList } from '@/features/trades/DetailParts'
 import {
   directionLabel,
@@ -89,6 +91,25 @@ export function TradeSummary({ trade }: { trade: TradeDetail }) {
 
       <Section title={s.violations}>
         <ViolationList trade={trade} />
+      </Section>
+
+      <Section title={uk.bias.alignment.title}>
+        {(['daily', 'weekly', 'monthly'] as const).map((period) => {
+          const key = period === 'daily' ? 'bias_alignment' : `bias_alignment_${period}` as const
+          const noteId = trade.bias_note_ids[period]
+          return (
+            <Row key={period} label={c[key]}>
+              <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2 gap-y-1">
+                <BiasAlignmentLabel value={trade[key]} />
+                {noteId !== null && (
+                  <Link to={`/bias/${noteId}`} className="text-xs underline underline-offset-2 hover:text-primary">
+                    {uk.bias.alignment.openNote}
+                  </Link>
+                )}
+              </span>
+            </Row>
+          )
+        })}
       </Section>
 
       <p className="text-[11px] text-muted-foreground">{uk.tradeDetail.timeZoneNote}</p>

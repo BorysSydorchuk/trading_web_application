@@ -52,6 +52,38 @@ function renderPage(trade: TradeDetail) {
 }
 
 describe('DescribePage', () => {
+  it('shows all three server alignments and links to the notes selected by the server', async () => {
+    const trade = fixtureTrade({
+      bias_alignment: 'counter', bias_alignment_weekly: 'aligned', bias_alignment_monthly: 'neutral_bias',
+      bias_note_ids: { daily: 12, weekly: 15, monthly: 16 },
+      // Effective daily value comes from the API, never inferred from the editable journal.
+      journal: { ...fixtureTrade().journal, bias_alignment: 'aligned' },
+    })
+    serveTrade(trade)
+    renderPage(trade)
+    const summary = await screen.findByRole('complementary', { name: t.summary.label })
+    const rows = ['bias_alignment', 'bias_alignment_weekly', 'bias_alignment_monthly'] as const
+    const values = ['counter', 'aligned', 'neutral_bias'] as const
+    const ids = [12, 15, 16]
+    rows.forEach((key, index) => {
+      const row = within(summary).getByText(uk.trades.columns[key]).closest('div')
+      const value = values[index]
+      if (!row || !value) throw new Error('missing alignment row')
+      expect(row).toHaveTextContent(uk.bias.alignment[value])
+      expect(within(row).getByRole('link', { name: uk.bias.alignment.openNote })).toHaveAttribute('href', `/bias/${ids[index]}`)
+    })
+  })
+
+  it('shows pending versus missing bias without manufacturing note links', async () => {
+    const trade = fixtureTrade({ bias_alignment: null, bias_alignment_weekly: 'no_bias', bias_alignment_monthly: 'no_bias' })
+    serveTrade(trade)
+    renderPage(trade)
+    const summary = await screen.findByRole('complementary', { name: t.summary.label })
+    expect(within(summary).getByText(uk.bias.alignment.pending)).toBeInTheDocument()
+    expect(within(summary).getAllByText(uk.bias.alignment.no_bias)).toHaveLength(2)
+    expect(within(summary).queryByRole('link', { name: uk.bias.alignment.openNote })).not.toBeInTheDocument()
+  })
+
   it('saves a draft with the typed text and chosen value, then goes to the inbox', async () => {
     const trade = fixtureTrade()
     const saved = serveTrade(trade)

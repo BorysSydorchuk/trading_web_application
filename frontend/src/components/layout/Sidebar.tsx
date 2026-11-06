@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { NavLink, useNavigate } from 'react-router'
 import { navItems } from '@/app/nav'
+import { biasReminderCount, useBiasStatus } from '@/features/bias/api'
 import { pendingCount, useInboxCounts, type InboxCounts } from '@/features/inbox/api'
 import { useNewTradeNotifications } from '@/features/inbox/notifications'
 import { useRefreshTradesOnInboxChange } from '@/features/trades/api'
@@ -11,6 +12,8 @@ const INBOX_PATH = '/inbox'
 
 export function Sidebar() {
   const { data: counts } = useInboxCounts()
+  const bias = useBiasStatus()
+  const reminders = !bias.isError && bias.data ? biasReminderCount(bias.data) : 0
   const navigate = useNavigate()
   const openInbox = useCallback(() => void navigate(INBOX_PATH), [navigate])
   useNewTradeNotifications(counts ? pendingCount(counts) : undefined, openInbox)
@@ -44,6 +47,16 @@ export function Sidebar() {
             <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
             <span className="truncate">{label}</span>
             {to === INBOX_PATH && counts && <InboxBadge counts={counts} />}
+            {to === '/bias' && reminders > 0 && (
+              <span aria-label={uk.bias.status.badge(reminders)} title={uk.bias.status.badge(reminders)} className="num ml-auto rounded-full bg-primary px-1.5 py-px text-xs leading-4 font-semibold text-primary-foreground">
+                {reminders}
+              </span>
+            )}
+            {to === '/bias' && bias.isError && (
+              <span role="status" className="ml-auto text-xs" title={uk.bias.status.loadError} aria-label={uk.bias.status.loadError}>
+                {uk.bias.status.unavailable}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
