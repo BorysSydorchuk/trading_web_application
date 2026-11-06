@@ -8,7 +8,7 @@ Current milestone: **M4 Bias** (started 2026-11-05). M3 accepted 2026-11-05, M2 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-06 (M4-08 combined recovery verified: make check 1774 backend + 1 intentional real-Whisper skip, 337 frontend; production build passed; independent code-reviewer APPROVE. Workflow configured and reviewed. Ready for local commit, then M4-09 QA; stop before M4-10 owner acceptance.)
+Last update: 2026-11-06 (M4-09 complete: full verification, actual launcher smoke and independent general/Python APPROVE. M4-08 already committed/merged. Owner allowance reading 55%; M4-10 remains owner-only.)
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
 **M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
@@ -32,7 +32,7 @@ Git: one branch per topic `m4/<topic>` from main, merge `--no-ff` after code-rev
 - [x] M4-06 (code-reviewer APPROVE, fixes afd9fbf; aliases EUR/USD GBP/USD GBP XAU/USD XAU фибер added) Bias extraction: prompt, per-symbol schema, guards, fixtures (UA/RU/EN, aliases) (backend-dev) — branch m4/bias-extraction
 - [x] M4-07 (code-reviewer APPROVE, fixes 7d3404f; not yet seen in a browser) Bias page: list, note form (kind, date, recorder + audio file, text, "Заповнити з тексту", per-symbol cards, links), "біас був правильний" marking (frontend-dev) — branch m4/bias-ui
 - [x] M4-08 (combined recovery: full checks + production build green; independent code-reviewer APPROVE) Головна bias status + reminders, sidebar badge; alignment daily/weekly/monthly in Journal + Describe (frontend-dev) — branch m4/bias-dashboard
-- [ ] M4-09 QA (fixtures, AC: daily + weekly entries, trade alignment, pre_ny reminder after 12:30; ≤ 3 Whisper runs) + docs/reports/M4-live-check.md + scripts/qa_live_check_m4.py (qa-tester, orchestrator)
+- [x] M4-09 QA (offline evidence, full checks and independent general/Python APPROVE; owner live checks reserved for M4-10) (fixtures, AC: daily + weekly entries, trade alignment, pre_ny reminder after 12:30; ≤ 3 Whisper runs) + docs/reports/M4-live-check.md + scripts/qa_live_check_m4.py (qa-tester, orchestrator)
 - [ ] M4-10 Live check by Borys + docs/reports/M4.md (orchestrator)
 
 ## M3 tasks
@@ -158,9 +158,47 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - 2026-11-06 resume: owner explicitly said continue and reported allowance reset expected shortly (not independently confirmed). Root restarted full make check in execution session 50942 after confirming no test runners/other DB connections; both DB URLs pinned to trading_journal_test and AI key cleared. Frontend production build passed. Previous shutdown checkpoint remains historical; update final verification before committing.
 
 
-## RESUME FROM HERE - M4-08 verified, M4-09 next
+## Historical M4-08 verification checkpoint
 
 - Owner confirmed allowance reset / >15%. Full check completed successfully: 1774 backend passed, 1 intentionally skipped real-Whisper test (437.63 s); 337 frontend passed (23 files). All Makefile lint/type checks and separate production build passed. No real AI/Whisper/MT5 calls. Full run session 50942 ended with exit 0.
 - Independent `code-reviewer` (gpt-6.1-sol) APPROVE covers combined M4-08 and ten-role workflow mapping. No actual implementation defect found. Previous interrupted verification notes above are historical.
 - Next: commit reviewed M4-08/workflow locally, preserve original untracked scripts/pyproject.toml and scripts/uv.lock, then M4-09 on its own topic after local merge per conventions. Root remains sole integration/DB runner. M4-09 launcher/guard tests/live-check report plan is in the historical checkpoint above; implement that minimal scope and record automated vs owner-live evidence separately.
 - Required final gate: M4-10 live check/acceptance by Borys. Never push. No QA DB deletion, repeated Whisper runs, or real-account operations.
+
+
+## Safe-shutdown checkpoint - 2026-11-06T17:39:57+00:00
+
+- Active milestone/task: M4 Bias / M4-09 QA. Branch `m4/bias-qa`, HEAD `b58f6c2`. M4-08 commit `24943b7`, independently APPROVED, merged locally with --no-ff as `b58f6c2`. No push. M4-10 owner acceptance not started.
+- M4-08 verified: complete make check 1774 backend passed / 1 intentionally skipped real-Whisper test, 337 frontend passed; all lint/type checks and production build passed. Independent code-reviewer APPROVE covered UI plus workflow recovery. Original two-session contributions preserved. Models: Astra main, all children explicitly Sol; ten native role mappings retained.
+- M4-09 partial work (uncommitted): `scripts/qa_live_check_m4.py`, `backend/tests/test_qa_live_check_m4.py`, `docs/reports/M4-live-check.md` from qa-tester; root added draft `docs/reports/M4.md` and updated STATUS. Root retains STATUS/DECISIONS; QA agent owns the three QA files. All agents finished; no ongoing delegated work.
+- QA launcher: exact local psycopg3 URL for trading_journal_qa_m4, separate TEMP tj-qa-m4 config/data/logs, unchanged marked config copy, fixture MT5, AI forced off, no DB create/reset/delete. Reuses existing M3 process/config validation helpers. Original scripts/pyproject.toml and scripts/uv.lock remain untracked and unchanged; never stage them.
+- Verification: RED 18 expected missing-launcher errors before implementation. GREEN 20 guard tests passed in 0.27 s; strict mypy on new script passed. Root found PT018 and formatter mismatch; qa-tester fixed and formatted. Latest full make check session 15692 stopped by Ctrl+C/exit 1 during frontend lint on owner 15% report: backend ruff check passed, format 188 files passed; frontend lint completion/type/tests not established for M4-09. No final independent M4-09 code/Python review yet; do not commit or mark M4-09 complete.
+- Actual isolated acceptance evidence PASS: NEW trading_journal_qa_m4 created non-destructively, migrated, seeded via real sync with basic_week fixture (7 trades). Real API handlers/TestClient+PostgreSQL created daily/weekly/monthly notes, validated date normalization, journal/detail alignment and note IDs, historical edit recompute and manual result. Injected 2026-10-19 clock: pre_ny reminder false at 12:29 Brussels, true at 12:30, cleared on note creation. This is fixture/API evidence, not browser/live-model evidence.
+- Preserved QA seed: trade 1 / pos2000101 EURUSD buy, trade 2 / pos2000201 GBPUSD sell, date 2026-10-19. Notes 1 pre_london EURUSD bullish, 2 pre_ny GBPUSD bearish, 3 weekly both bearish (2026-10-19), 4 monthly both neutral (2026-10-01). EURUSD aligned/counter/neutral_bias; GBPUSD aligned/aligned/neutral_bias. Entry1 marked correct. Other fixture trades IDs 3-7. Reproduction/evidence in ignored `logs/m4_qa_evidence.py` and `logs/m4-qa-evidence.json`; script refuses existing seed, DO NOT rerun over preserved data.
+- DB safety: full check pinned BOTH DB URLs to idle trading_journal_test, AI key cleared; real trading_journal not modified. QA/test_m4_08_codex/M3/test_a-b-c-d databases retained. No real MT5/AI/Whisper calls; M4 Whisper count 0. No browser tool available; owner visual/mic/live checks pending. Normal app ports 8000/5173 were already occupied (PIDs 26196/30240); root did not stop or launch over that app. Full launcher smoke was therefore not run. No new live server/background app started by recovery.
+- Resources/blockers: sandbox process helper still fails; approved require_escalated commands work. No automatic reliable usage reading; latest owner 15%, shutting down now. Original worktrees and temp test dirs retained; no cleanup authorized. Existing app processes are owner-owned, leave them running.
+
+### Historical resume instructions (superseded below)
+
+1. Resume **M4-09 verification, review, and completion**, not M4-08. Read this latest checkpoint, AGENTS.md, CLAUDE.md, docs/ROADMAP.md, DECISIONS.md/api.md M4, and new M4/M4-live-check reports. Check current allowance with owner if unavailable. Wait for authorized resume after reset.
+2. Inspect Git status (branch m4/bias-qa, HEAD b58f6c2), new files and processes/DB targets. Complete `make check` with BOTH DATABASE_URL and TEST_DATABASE_URL set internally to confirmed idle local trading_journal_test and ANTHROPIC_API_KEY empty; sole runner only. Also run strict mypy for `scripts/qa_live_check_m4.py` explicitly (not in Makefile script list). Frontend application code unchanged since verified M4-08 build.
+3. Review launcher safety/owner instructions. Real launcher smoke remains pending because normal app ports are occupied: do not stop the owner app without authorization. Existing config validation/launch sequencing tests use stubs. Keep offline vs live evidence explicit.
+4. After green full checks, supply full diff/added files, changed-file list and evidence to independent code-reviewer plus Python reviewer for new .py code. Address findings, reverify as needed. Update reports/STATUS with final totals; commit only approved files, excluding scripts/pyproject.toml and uv.lock. Merge locally --no-ff only after APPROVE+green checks. Never push.
+5. Finalize M4-09 offline QA report and M4-10 acceptance checklist in existing prepared reports. Do not claim full milestone/browser/voice/live-AI acceptance. Stop before **Borys's M4-10 acceptance**; provide him the live-check steps and pending M4-02 phrase/M3 mic followups.
+6. Do not rerun seed creation, reset/delete QA databases, run repeated Whisper/live AI/real account operations, or discard any uncommitted work. Preserve normal app, QA data/audio, original untracked files and old worktrees. Cleanup needs owner authorization.
+
+## Recovery verification - 2026-11-06T22:30:00Z
+
+- Branch m4/bias-qa, HEAD b58f6c2; original untracked scripts/pyproject.toml and scripts/uv.lock hashes match the shutdown checkpoint. Existing worktrees preserved.
+- Owner authorized resume and reported 98%, then 55% before independent reviews. No automatic allowance source is exposed. Ten role mappings remain Sol, root configuration Astra; native runtime supports required Sol model.
+- Sole runner: root. Complete make check passed: 1794 backend / 1 intentional real-Whisper skip (99.95 s), 337 frontend (23 files); all lint/type checks and separate strict launcher mypy passed. Both DB URLs pinned to verified idle local trading_journal_test; AI disabled. Initial sandbox cache-denied attempt did not reach tests.
+- Docker Desktop restarted after reboot; existing PostgreSQL container and databases retained. Actual offline QA launcher smoke passed with HTTP 200 health/frontend, expected seeded alignment and AI not_configured; controlled stop succeeded. QA seed not recreated, no queued audio, no live AI/Whisper/MT5 calls. No owner app was running or stopped.
+- Independent Sol code-reviewer and python-reviewer both APPROVE, no substantive findings. Reviewers ran no tests or modifying commands; both finished. M4-09 is complete. M4-10 browser/voice/live-AI owner acceptance remains pending.
+- Git integration: reviewed five-file topic m4/bias-qa, commit subject test(bias): complete M4-09 offline QA and owner checklist; local --no-ff merge to main after green checks/APPROVE. Full M4 implementation range 9a1ebe9..m4/bias-qa. No push. Original scripts manifests remain untracked and unchanged.
+- Resources: smoke launcher exited 0, ports 8000/5173 free, no controlled test/app processes left. Existing Docker/PostgreSQL kept running; no QA databases removed.
+
+### RESUME FROM HERE
+
+1. **Stop before M4-10 owner acceptance.** M4-09 implementation, full verification, launcher smoke and independent reviews are complete. Borys should use docs/reports/M4-live-check.md; do not repeat completed M4-08/M4-09 work.
+2. Preserve QA DB/audio, original untracked scripts manifests and worktrees. Do not rerun seed creation or repeat Whisper/live AI.
+3. Stop before M4-10; Borys executes docs/reports/M4-live-check.md and provides owner/PM acceptance. No push.
