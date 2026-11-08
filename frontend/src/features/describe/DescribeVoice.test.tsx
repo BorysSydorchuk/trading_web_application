@@ -52,6 +52,8 @@ async function textBox(): Promise<HTMLTextAreaElement> {
 afterEach(restoreMic)
 
 describe('Describe screen voice notes', () => {
+  // Two real polling intervals plus the 1.3 s stopped-poll check leave too little
+  // of the default 5 s budget for rendering and user events under full-suite load.
   it('uploads a recording, shows progress and appends the transcript once', async () => {
     installMic()
     const clock = controlClock()
@@ -95,7 +97,7 @@ describe('Describe screen voice notes', () => {
     expect(box).toHaveValue(`Вхід від FVG H4\n\n${TRANSCRIPT}!`)
     // The form is dirty: the extraction button works on the new text.
     expect(screen.getByRole('button', { name: t.input.extract })).toBeEnabled()
-  })
+  }, 10_000)
 
   it('shows a failed note with its error and replay, and retry puts it back in the queue', async () => {
     const failed = fixtureNote({ id: 9, status: 'failed', error_code: 'no_speech' })
