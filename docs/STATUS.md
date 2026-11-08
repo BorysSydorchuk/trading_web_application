@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M4 Bias** (started 2026-11-05). M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
+Current milestone: **M5 Position calculator** (bootstrap 2026-11-07). M4 PM-approved 2026-11-07 with deferred checks. M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -8,7 +8,7 @@ Current milestone: **M4 Bias** (started 2026-11-05). M3 accepted 2026-11-05, M2 
 - No native Postgres; DB runs in Docker (`docker compose up -d db`).
 
 ## Where we stopped / how to resume (updated continuously)
-Last update: 2026-11-06 (M4-09 complete: full verification, actual launcher smoke and independent general/Python APPROVE. M4-08 already committed/merged. Owner allowance reading 55%; M4-10 remains owner-only.)
+Last update: 2026-11-08 (M5-01/02 full checks green and final independent general/Python APPROVE; local commit/merge next, then M5-03 metadata and margin persistence).
 Merged into local main and green (`make check`: 1211 backend + 1 skipped real-model test, 216 frontend): M3-01 contract, M3-02 number words, M3-03 AI warm-up, M3-04 transcription backend (code-reviewer + database-reviewer APPROVE), M3-05 component tests, M3-06 voice recorder UI (code-reviewer APPROVE after fixes), M3-07 required-since (code-reviewer + database-reviewer APPROVE, fixes e63609d, merge 4d4bbd4; make check 1248 backend + 216 frontend), M3-08 new-fields UI (code-reviewer APPROVE, fixes fe171f2, merge e32f109; frontend 229 tests). No open m3/* branches.
 
 **M3-09 QA done (docs/reports/M3-qa.md): 2-min AC FAILS with defaults (small int8 beam 5: 47–72 s on Russian TTS stand-in audio; laptop throttles under sustained load; spikes from Whisper temperature fallback). Recommendation: keep small, re-measure with Borys's voice, then try WHISPER_BEAM_SIZE=1 (.env only); limiting the fallback = code change, PM decision. Failure/retry PASS (API/worker). No browser checks done (left for Borys). QA DB `trading_journal_qa_m3` left in Postgres. Next: get 3 recordings from Borys, re-bench beam 5/1, then M3-10.** Original M3-09 plan: (qa-tester: real timing for 30 s / 1 min / 2 min notes with `make whisper-bench FILES=...` and end to end through the UI; small int8, and base too if 2 min > 30 s total; failure + retry; mic denied; then ask Borys for 3 recordings of his voice as fixtures), M3-10 live check by Borys + docs/reports/M3.md.
@@ -197,8 +197,99 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 - Git integration: reviewed five-file topic m4/bias-qa, commit subject test(bias): complete M4-09 offline QA and owner checklist; local --no-ff merge to main after green checks/APPROVE. Full M4 implementation range 9a1ebe9..m4/bias-qa. No push. Original scripts manifests remain untracked and unchanged.
 - Resources: smoke launcher exited 0, ports 8000/5173 free, no controlled test/app processes left. Existing Docker/PostgreSQL kept running; no QA databases removed.
 
-### RESUME FROM HERE
+### Historical resume instructions (superseded by M5 PM authorization)
 
 1. **Stop before M4-10 owner acceptance.** M4-09 implementation, full verification, launcher smoke and independent reviews are complete. Borys should use docs/reports/M4-live-check.md; do not repeat completed M4-08/M4-09 work.
 2. Preserve QA DB/audio, original untracked scripts manifests and worktrees. Do not rerun seed creation or repeat Whisper/live AI.
 3. Stop before M4-10; Borys executes docs/reports/M4-live-check.md and provides owner/PM acceptance. No push.
+
+## M5 bootstrap safe-shutdown checkpoint - 2026-11-06T23:06:29Z (2026-11-07 Brussels)
+
+- Owner authorized M5 and approved M4. Live rows 1-8 passed; 9-10 deferred to Monday 2026-11-09 12:30-16:00 Brussels; optional mic/Whisper 11 skipped; final review 12 deferred; live-AI requires explicit authorization. Journal detail-card bias added to BACKLOG, nonblocking.
+- Usage: owner 25% at bootstrap, then 12%; stop development, no automatic resume. No reliable automatic usage source.
+- Git: branch m5/calculator-plan, HEAD e5994be (M4-09 merge; task commit 6e18319). New uncommitted documentation only: STATUS, DECISIONS, BACKLOG, reports/M4.md and M4-live-check.md. No M5 code or formula changes. Original untracked scripts/pyproject.toml and scripts/uv.lock preserved; old worktrees untouched. No commit: this documentation increment has not received complete checks/independent review.
+- Workflow: existing root Astra configuration and ten explicit Sol role configs verified unchanged; one explicit Sol architect assigned read-only assessment, asked to finish immediately at 12%. Root remains sole integration/DB runner. No tests, app launches, migrations, resets, live accounts, AI or Whisper performed this bootstrap; process check found no python/make/node processes. QA databases/audio retained, DB state not rechecked this turn.
+- Existing calculator page is a placeholder. Account reference_balance/current balance and timestamp, symbol tick/volume specs and synced_at exist. Architect found no leverage/calc mode/point/margin rates/FX inputs; Mt5Source lacks margin method and legacy allow-list test excludes order_calc_margin despite PRD 6.8 requiring it. Existing fixtures are synthetic FundedNext-like, not verified owner terminal specs. No margin formula chosen or approved.
+- Architect finished safely; all agents idle/completed, no outstanding delegated edits. Proposed (not yet accepted API contract): GET /api/accounts/{id}/symbol-specs and POST /api/calculator/calculate; pure domain position_size.py; shared frontend form; keep MT5 ownership in worker, consider bounded DB-backed margin requests with migration review. Capture actual point rather than assume 10^-digits; assess loss/profit tick-value asymmetry. TDD must cover arbitrary volume steps, below-minimum refusal (never round up), maximum cap, risk <= budget, SL direction, percent/amount equivalence and RR targets. Final M5 requires a defensible offline margin estimate or explicit PM scope decision; unavailable margin alone would not fulfill PRD.
+
+### Historical M5 shutdown instructions
+
+1. Obtain fresh owner allowance and authorized resume. Read this checkpoint and current PM decision; do not re-block M5 on deferred M4 checks. Preserve all five documentation edits and original untracked manifests.
+2. Finish M5-01 architecture/API plan in existing docs/api.md and STATUS before code. Read architect findings and inspect MT5 source/guard, account/spec models and fixture README. Confirm real FundedNext specs provenance with Borys for EURUSD/GBPUSD/XAUUSD/GER40; do not label synthetic tests as real-spec acceptance. Resolve missing offline margin inputs/estimation contract without inventing a trading formula.
+3. Split implementation: mandatory tdd-guide first for Decimal sizing/round-down/risk/TP edge tests (>=80% sizing coverage), backend-dev pure core then API/read-only margin integration, frontend-dev shared calculator form/page and compact Home panel; database-reviewer if migration needed. Root sole test runner. Agree API before parallel edits; exclusive file ownership.
+4. Complete full make check on verified idle local trading_journal_test with BOTH DB URLs pinned and AI disabled; independent review before any commit/merge, no push. Do not rerun M4 seed creation, Whisper or live AI; no QA DB deletion.
+5. M5 acceptance remains Borys comparing four symbol calculations to MT5 within one volume step. M4 rows 9-10 remain scheduled Monday; row 12 and live-AI authorization remain open.
+
+## M5 tasks
+
+PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real FundedNext symbol comparisons against MT5 within one volume step; synthetic cases are not that evidence.
+
+- [x] M5-01 architecture/API contract and recorded M4 approval (root, architect assessment complete)
+- [x] M5-02 pure Decimal sizing core, financial TDD and >=80% coverage (tdd-guide then backend-dev; root runner)
+- [ ] M5-03 broker point/loss tick-value capture and margin persistence, migration review (backend-dev, database-reviewer)
+- [ ] M5-04 offline calculator/specs API and worker-owned read-only margin refresh (backend-dev)
+- [ ] M5-05 reusable calculator page and compact Home panel, Ukrainian UI (frontend-dev)
+- [ ] M5-06 isolated QA, full regression and independent reviews (qa-tester, root runner, reviewers)
+- [ ] M5-07 owner real-spec/MT5 comparisons and PM acceptance report
+
+Root owns docs and all test execution; TDD owns backend/tests/domain/test_position_size.py; backend will own app/domain/position_size.py after observed RED. No overlapping edits or real terminal operations. Architect margin design uses dated broker-derived samples for explicitly labelled offline estimates, no guessed leverage formula. Existing API/schema extended only in later tasks.
+
+### Historical M5 continuation instructions
+
+Continue M5-01/02: finish core tests, root observes RED, backend implements pure core, root runs targeted coverage and complete make check, independent review before local commit/merge. Subsequent API and schema work follows the M5 contract in docs/api.md. Preserve M4 follow-ups and original untracked scripts manifests. No push, no live AI/Whisper/real accounts. Owner real-spec evidence request pending.
+
+
+### M5-01/02 current evidence (2026-11-07)
+
+- Owner explicitly resumed and reported allowance reset 100%; owner subsequently reported 32% before full verification/reviews.
+- Architect assessed official MetaQuotes docs and proposed worker-only live margin plus dated cached estimate. Contract recorded in docs/api.md; no margin/schema/API implementation yet.
+- Financial TDD RED: missing app.domain.position_size, one collection error in 1.45 s. Backend implemented only pure app/domain/position_size.py. GREEN: 97 tests passed in 0.48 s, 97% core statement coverage. Root sole runner; no DB fixture used by these pure tests. Full gate running after owner 32% reading. First attempt stopped at three test-only mypy dynamic-replace errors; root corrected annotations, all lint/type checks passed on rerun.
+- Root formatter applied. Ruff initially found nine PT011 broad ValueError assertions; TDD agent fixed them with category-specific matches. Root rerun: formatting and lint passed, 97 tests passed in 0.50 s, 97% coverage. No financial defect observed yet. No independent M5 review or commit yet.
+- Real FundedNext specs/MT5 four-symbol evidence requested from owner and still pending. Synthetic oracles are labelled. Full M5 acceptance is not claimed.
+
+- All M5 architect/TDD/backend agents completed; no controlled tests or app processes remain. Branch m5/calculator-plan, HEAD e5994be; six documentation files plus new domain module/test remain uncommitted. Current operation: full make check with both URLs pinned to idle local trading_journal_test and AI disabled, then independent general/Python review of complete diff. Do not repeat RED or real-model runs.
+
+- Subsequent full gate: 1891 backend passed / 1 intentional skip, frontend 336 passed / 1 unchanged DescribeVoice 5000ms timeout. Isolated DescribeVoice rerun passed all 15 tests without changes. Owner then reported allowance reset 100%; complete gate retry underway on verified idle test DB. Do not count the timeout run as a green full gate.
+
+- Complete gate retry PASSED: 1891 backend / 1 intentional real-Whisper skip (110.93 s), 337 frontend (23 files, 13.67 s), all Makefile lint/type checks. No frontend code changed; prior voice-test timeout retained as transient evidence after isolated and full reruns passed. Independent general/Python review next; no M5 commit yet.
+
+- Independent general review APPROVE; Python review requested bounds on Decimal representation/working precision (extreme compact exponent could force billions of digits). TDD added safe context-sentinel regression: RED 3 failed/3 boundary passed in0.36s without allocating extreme arithmetic. Backend fix in progress; reverify before final approval/commit.
+
+
+## Safe-shutdown checkpoint - 2026-11-07T16:05:27Z
+
+- Owner reported allowance reset100%, then13% during final verification. Stop development now; no automatic resume. No reliable automatic usage tool. No new assignments or reviews after13%.
+- Active task M5-01 contract/M5-02 pure sizing core. Branch m5/calculator-plan, HEAD e5994be. No M5 commits/merges/pushes. Six modified docs: BACKLOG.md, DECISIONS.md, STATUS.md, api.md, reports/M4-live-check.md, reports/M4.md. Two new files: backend/app/domain/position_size.py and backend/tests/domain/test_position_size.py. Original scripts/pyproject.toml and scripts/uv.lock remain untracked and unchanged; never stage them. Existing worktrees retained.
+- Work: M4 approval/deferred checks recorded; M5 architecture/contract documented. Pure Decimal core implements sizing, effective-balance input, SL price/points, tick/grid validation, volume floor/cap/min refusal, actual risk and directional RR targets. API/schema/margin/worker/frontend are NOT implemented. Existing historical trade metrics unchanged.
+- Agents: Sol architect assessment, Sol TDD tests, Sol backend implementation finished. General code reviewer APPROVE covered pre-fix increment. Python reviewer CHANGES REQUESTED found unbounded input-exponent precision; backend fixed representation limits. Both reviewers completed; neither has finally approved the changed fix. Root sole runner. No active delegated edits.
+- Financial TDD: original RED absent module; GREEN97tests/97%coverage. Full gate initially hit test-only mypy errors (fixed), later one unchanged DescribeVoice5000ms timeout. Isolated15voice tests and subsequent full gate passed unchanged:1891backend+1intentional real-Whisper skip,337frontend (110.93s/13.67s). This full pass predates the resource fix.
+- Review fix: maximum64coefficient digits, Decimal exponent[-64,64], working precision<=8192; reject before context allocation. Safe sentinel regression RED3failed/3boundary passed in0.36s, no huge arithmetic allocation. Post-fix targeted GREEN103tests in0.25s,96%core coverage. One RUF043 regex-string lint issue corrected to raw string afterward. No financial formula changed.
+- Final full make check (session62514): lint, formatting190files, backend/script mypy and frontend tsc passed;1898backend tests collected and progressing without observed failure. Interrupted with Ctrl+C/exit1 at owner13%; NOT a passing final run, frontend final stage not established. Prior output wait cell106 was terminated; controlled test execution then stopped. No commit without final green gate and approval.
+- DB/resources: all full gates set BOTH DATABASE_URL and TEST_DATABASE_URL to verified idle local127.0.0.1:5432/trading_journal_test (server container172.20.0.2), AI key empty. Test schema may be partially exercised; check idle before next rebuild. No QA DB deletion/reset; QA data/audio and existing Docker kept. No app server launched, no real MT5/AI/Whisper calls. One intentional real-model test remains skipped.
+- Owner evidence pending: real FundedNext specs and four MT5 comparisons; repository fixtures remain synthetic. M4 approved:rows1-8 passed,9-10 Monday2026-11-09 12:30-16:00Brussels,11optional mic skipped,12review deferred,liveAI requires explicit authorization. Journal detail-card bias is nonblocking BACKLOG; Describe works.
+
+### Historical shutdown resume instructions
+
+1. Obtain fresh allowance and explicit resume; read this latest checkpoint. Preserve the eight uncommitted task files and two original untracked manifests. Do not restart implementation or repeat completed RED stages.
+2. As sole runner, check no active tests/other test-DB connections; run complete make check with BOTH DB URLs pinned to confirmed local trading_journal_test and AI disabled. Do not reset/delete QA databases or rerun seed scripts. Post-fix103tests/96%coverage already passed; only rerun focused tests if code changes justify it.
+3. After green full gate, regenerate logs/m5-core-review-packet.txt (its current version is PRE-FIX) including all changed/added files and full evidence. Obtain final independent Sol general/Python review of bounded Decimal fix. Reviewer findings must be fixed/reverified. No tests/DB/modifying commands by reviewers.
+4. Update final status, locally commit approved M5-01/02 files with explicit paths excluding scripts/pyproject.toml and uv.lock; merge --no-ff only after green/APPROVE. No push. Then proceed M5-03 broker point/loss-value capture and margin persistence under migration review, followed by API/worker and frontend per docs/api.md. Do not declare M5 complete yet.
+5. Real-spec acceptance requires Borys's EURUSD/GBPUSD/XAUUSD/GER40 comparisons within one volume step; pending evidence does not prohibit synthetic development. Do not perform real-account operations or unauthorized live-AI/Whisper. Keep Monday M4 follow-ups pending, not falsely passed.
+
+- 2026-11-08 owner update:100%; continue means work until instructed otherwise, no repeated usage-confirmation pauses. Full post-fix gate resumed with both URLs pinned to verified idle test DB.
+
+- 2026-11-08 gate:1897backend+1skip passed, repeated unchanged DescribeVoice5000ms timeout (336frontend passed). Sol QA inspected real polling and kept all assertions, adding only documented per-test10000ms budget in frontend/src/features/describe/DescribeVoice.test.tsx. Targeted15voice tests passed; complete gate rerunning. This ninth changed file is part of required verification repair, no app behavior change.
+
+- 2026-11-08 final post-fix full gate PASSED:1897backend+1intentional real-Whisper skip(121.12s),337frontend(23files,15.60s),all lint/type checks. Targeted sizing103tests/96%coverage; QA timeout repair15voice tests passed and full suite passed. Independent final reviews pending before commit.
+
+
+## M5-01/02 completion - 2026-11-08
+
+- Final independent Sol general and Python reviewers both APPROVE post-fix nine-file diff, no remaining substantive findings. Full make check passed1897backend+1intentional real-Whisper skip,337frontend; all lint/types. Sizing103targetedtests,96%coverage. RED and review-fix RED/GREEN evidence retained above.
+- Local topic m5/calculator-plan, commit subject feat(calculator): add verified Decimal sizing core and M5 contract. Merge --no-ff only after this recorded green/APPROVE gate. No push. Original scripts manifests and QA data/worktrees preserved.
+- Added per-test10s budget for recurring pre-existing voice test timeout after QA traced real polling+1.3s wait; assertions/app behavior unchanged. This is verification repair, not M5 product scope expansion.
+- No calculator API/margin/schema/UI yet. Owner real-spec validation remains pending; M4 deferrals unchanged. Root sole runner, all core agents/reviewers completed.
+
+### RESUME FROM HERE
+
+Proceed to M5-03 broker point/loss tick-value capture and margin persistence on a new topic after local M5-01/02 commit/merge. Follow docs/api.md M5, tests first, database review for migrations and independent review after full gate. Then API/worker, reusable UI and isolated QA. Continue authorizes work until owner says otherwise; do not repeatedly ask allowance. Never push or run real trading/AI/Whisper operations.

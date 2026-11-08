@@ -21,3 +21,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-11-05 | Chunked transcription during recording (transcribe pieces while Borys still talks, so long notes finish sooner) | PM (M3 decision) | Only if notes > ~80 s become common; PM decides |
 
 | 2026-11-05 | "Re-align all trades" action (button or endpoint) after editing bias.yaml symbols: today old trades are re-aligned only when a matching bias note is written or the trade is synced again | code-reviewer (M4-04/05) | Only on a bias.yaml symbol change |
+
+| 2026-11-07 | Show bias in Journal trade-detail card | PM M4 approval | Nonblocking UX improvement; Describe bias works. Outside M5 calculator scope. |

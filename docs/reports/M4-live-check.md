@@ -1,7 +1,6 @@
-# M4 live check — Borys (M4-10 pending)
+# M4 live check - PM approved with deferred checks
 
-This is an owner checklist, not a record of browser acceptance. M4-09 offline fixtures
-and API checks are separate evidence below. Only Borys can accept M4-10.
+PM approval received 2026-11-07: M4 approved; M5 authorized. Owner-reported results below do not imply unperformed checks passed. M4-09 offline evidence remains separate.
 
 ## Safe start
 
@@ -41,7 +40,7 @@ do not upload audio until the owner is ready to spend the bounded voice runs.
 ## Owner checklist
 
 Mark each row ✅ / ❌ with actual date/time, brief observation and screenshot if useful.
-All rows are pending owner execution. Preserved fixture trades: EURUSD position 2000101 (trade ID 1); GBPUSD
+Owner/PM update (2026-11-07): rows 1-8 PASSED; rows 9-10 deferred to Monday 2026-11-09, 12:30-16:00 Europe/Brussels; optional row 11 microphone/Whisper SKIPPED; row 12 final review DEFERRED. Separate live-AI evaluation remains pending explicit owner authorization. These follow-ups do not block M5. Preserved fixture trades: EURUSD position 2000101 (trade ID 1); GBPUSD
 position 2000201 (trade ID 2). Seeded note IDs: pre_london 1, pre_ny 2, weekly 3,
 monthly 4. The daily/weekly date is 2026-10-19; monthly is 2026-10-01.
 
@@ -97,9 +96,10 @@ QM/BOS/SMT/symbol recognition remain open unless Borys supplies their results.
 - Runner evidence: `logs/m4-qa-evidence.json`; reproduction:
   `logs/m4_qa_evidence.py` (refuses already seeded data; **do not rerun** against the
   preserved database). The seed script was not repeated during recovery.
-- M4-09 live AI calls: **0**. M4-09 Whisper runs: **0**. Browser/microphone checks:
-  **pending owner**. Do not mark M4-10 accepted from this report.
+- At M4-09 completion, live AI calls and Whisper runs were both **0** and browser checks
+  were pending. The 2026-11-07 owner/PM update above now records rows 1-8 passed,
+  rows 9-10 and 12 deferred, and optional microphone row 11 skipped.
 
 - Actual launcher smoke on 2026-11-06 passed after reboot freed the app ports: preserved DB counts 7 trades / 4 notes, no queued audio; config validation, migration, API/fixture worker/Vite startup succeeded. HTTP health and frontend returned 200; AI state not_configured; trade 1 alignment and note IDs matched the seed. Controlled stop succeeded. No browser rendering or voice/live-model check was performed.
 
-- Independent Sol code-reviewer and python-reviewer both APPROVE, with no substantive findings. M4-09 offline QA is complete; all owner checklist rows remain pending M4-10.
+- Independent Sol code-reviewer and python-reviewer both APPROVE, with no substantive findings. M4-09 offline QA is complete; owner checklist status is superseded by the 2026-11-07 PM update above.

@@ -410,3 +410,45 @@ Endpoints:
 - `TradeDetail` and journal list items get `bias_alignment_weekly` and `bias_alignment_monthly` (the effective daily value `bias_alignment` already exists, override wins).
   - Precisely: `TradeRow` (so `GET /api/trades` items and `TradeDetail`) has top-level `bias_alignment` (effective: override ?? auto, same as `journal.bias_alignment`), `bias_alignment_weekly`, `bias_alignment_monthly` (auto only, no override). Values `aligned | counter | neutral_bias | no_bias`, `null` until the trade was first aligned (next sync).
   - `TradeDetail.bias_note_ids: { daily, weekly, monthly }`: id of the note whose entry decided each value (daily: pre_ny or the pre_london fallback), `null` for no_bias (or while bias.yaml / rules.yaml is broken). Use it for the link to the bias note. Journal gets optional columns for weekly/monthly; Describe shows all three next to the auto data with a link to the bias note.
+
+
+## M5 - Position sizing calculator (implementation contract, 2026-11-07)
+
+PRD 6.8 / ROADMAP M5. This section specifies planned endpoints; M5-02 initially implements only the pure financial core. No trade execution. Financial JSON values are decimal strings; timestamps UTC, displayed with existing Brussels formatting.
+
+### Sizing and validation
+
+- Effective balance = account.reference_balance when configured, otherwise last synced account.balance. Never use starting_balance as an implicit fallback. Return balance source and balance_synced_at (null for reference balance).
+- Inputs: exact account-specific broker symbol, buy/sell direction, entry, exactly one of sl_price/sl_points, and exactly one of risk_percent/risk_amount. With neither risk field supplied, default risk_percent is 1. Both specified is invalid. Null is not a substitute for an explicitly supplied numeric value at the API boundary.
+- Use actual broker point (not inferred from digits); SL distance in points times point gives price distance. Buy SL below entry; sell SL above entry. Entry/SL positive and on the tick-size grid. No silent alteration of entered prices.
+- Loss per lot = abs(entry - SL) / tick_size * tick_value_loss. Loss tick value is in account currency per lot. Require positive finite sizing data. Missing newly captured broker fields requires sync; do not manufacture historic point/loss tick values or change historical trade metrics.
+- Risk budget = balance * risk_percent / 100, or risk_amount in account currency. Preserve full Decimal precision through lot selection; fees/slippage are not included in this price-to-SL estimate. Do not reuse rounded historical trade risk to determine volume.
+- Numeric resource envelope: core inputs allow at most 64 coefficient digits and Decimal exponents from -64 through 64; working precision is capped at 8192. Reject unsupported representations before arithmetic-context allocation. These technical limits exceed the stored NUMERIC(20,8) data envelope and do not impose a business risk-percent cap.
+- Volume = floor(min(budget / loss_per_lot, volume_max) / volume_step) * volume_step. Step is an arbitrary positive Decimal, not a decimal-place count. Require min/max to be positive ordered multiples of step. If rounded volume < minimum, no permissible position: reject rather than increase risk to minimum.
+- Actual risk = volume * loss_per_lot; actual risk percent = actual risk / balance * 100. It must not exceed budget. Core outputs retain Decimal precision; serialization/display rounding never feeds lot selection.
+- TP targets use SL distance at RR 1.5, 2 and 3, rounded away from entry to a valid tick (up for buys, down for sells). Reject nonpositive sell targets. UI identifies these as target RR; grid rounding may produce a higher actual RR. No existing trading formula is modified.
+- Pure core: app.domain.position_size exposes frozen SymbolSpec(point, tick_size, tick_value_loss, volume_min, volume_step, volume_max), PositionSizeRequest(direction, entry, balance, sl_price=None, sl_points=None, risk_percent=Decimal('1'), risk_amount=None), PositionSizeResult(volume, risk_budget, actual_risk, actual_risk_percent, sl_price, sl_distance, tp_1_5, tp_2, tp_3), calculate_position_size(request, spec). Core rejects invalid data with ValueError; API maps errors to readable validation/domain codes. Core money-mode callers explicitly set risk_percent=None.
+
+### Planned endpoints
+
+`GET /api/accounts/{id}/symbol-specs` returns `{items: [...]}` with exact symbol, contract_size, point, tick_size, tick_value_loss, volume_min/step/max, digits, currency_profit/margin and synced_at. Missing account 404; existing account without specs returns empty list.
+
+`POST /api/calculator/calculate` body `{account_id, symbol, direction, entry, sl_price? | sl_points?, risk_percent? | risk_amount?}`. Strict JSON; decimal strings/integers only, no floats/bools/NaN, unknown keys rejected. Account/symbol selection never prefix-matches. Response includes account_id, symbol, direction, entry, effective SL/distance, balance and source/date, risk_budget, volume, actual_risk, actual_risk_percent, tp_1_5/tp_2/tp_3, specs_at and margin metadata. Missing account/spec 404; unusable/missing balance/specs and no permissible minimum volume are visible domain errors. Existing field-error envelope applies.
+
+Margin metadata: `{source: cached_estimate | unavailable, amount: string | null, currency, calculated_at, sample_price, sample_volume, reason}`. A margin failure never erases a valid sizing result. No sample yields unavailable/no_cached_margin, not zero margin.
+
+`POST /api/calculator/margin-requests` reuses validated sizing input and recomputes rounded volume server-side; returns 202 with request id/status. `GET /api/calculator/margin-requests/{id}` returns pending/processing/done/failed/expired. Exact live result includes source=mt5, amount/currency, entry/volume and UTC time. Frontend discards results for a superseded form state. No API process owns or initializes MT5.
+
+### Margin integration design
+
+Only the worker owns terminal access. One dispatcher serializes due sync and bounded margin requests; existing sync cadence remains. Requests have expiry and interrupted requests become visible failures on restart; failed live lookup preserves previous offline estimate. No trade placing/modification calls are permitted. Intentionally permit read-only order_calc_margin in the legacy allow-list guard.
+
+A reviewed migration will add nullable point/tick_value_loss to symbol_specs and margin sample/request persistence. A sample is keyed by account, exact symbol, direction; contains broker-calculated margin, valid sample volume/price, account currency, UTC time and spec identity. Normal connected sync obtains samples for buy/sell at current ask/bid and valid volume_min, so offline calculation need not have been used online first. Failure of a sample calculation must not fail normal deal/spec sync.
+
+Offline estimate = recorded sample margin * requested volume / sample volume, labelled a dated approximation with sample price/date. This is a technical approximation from a broker result, not an exact reconstruction of leverage, tiers, conversion or changing market prices. No guessed price multiplier. Invalidate on account connection identity/currency or relevant specification changes; no cross-account/symbol/direction reuse. Display age and limitations, not an invented freshness guarantee. First-sync missing samples remain unavailable; final acceptance must verify the supported offline path with actual broker evidence.
+
+MetaQuotes sources: [Python margin calculation](https://www.mql5.com/en/docs/python_metatrader5/mt5ordercalcmargin_py), [symbol properties](https://www.mql5.com/en/docs/constants/environment_state/marketinfoconstants), [margin modes](https://www.mql5.com/en/book/automation/symbols/symbols_margin). order_calc_margin reports hypothetical required margin in account currency excluding existing positions/orders; it is not a free-margin forecast. The cached scaling is an explicitly labelled engineering inference, not a broker guarantee.
+
+### Acceptance evidence
+
+Automated pure-core tests use labelled synthetic examples for all four symbols and edge cases (>=80% position-sizing coverage). They do not satisfy real FundedNext specification acceptance. Borys supplies recorded specs and compares EURUSD/GBPUSD/XAUUSD/GER40 sizing/margin to MT5 within one volume step. No real account operations or unauthorized live calls during development.
