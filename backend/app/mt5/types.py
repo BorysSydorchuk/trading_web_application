@@ -71,6 +71,8 @@ class RawSymbolSpec:
     volume_max: Decimal
     currency_profit: str
     currency_margin: str
+    point: Decimal | None = None
+    tick_value_loss: Decimal | None = None
 
 
 @dataclass(frozen=True)
