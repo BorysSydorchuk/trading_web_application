@@ -7,7 +7,7 @@ Stdlib only, Python 3.12+. Steps:
   3. `.env` from `.env.example` if missing,
   4. `uv sync` / `npm install` when dependencies are missing or stale,
   5. PostgreSQL reachable (starts Docker Desktop and the `db` service if needed) +
-     `alembic upgrade head`,
+     migrations via `python -m app.tools.migrate` (pg_dump backup to `backups/` first),
   6. starts API, worker and Vite dev server with prefixed output,
   7. waits for http://127.0.0.1:8000/api/health and http://127.0.0.1:5173/, opens the browser.
 
@@ -125,7 +125,7 @@ MSG: dict[str, str] = {
     "step_uv_sync": "Встановлюю залежності бекенду (uv sync)",
     "step_npm_install": "Встановлюю залежності фронтенду (npm install)",
     "step_compose_up": "Запускаю PostgreSQL у Docker (docker compose up -d --wait db)",
-    "step_migrate": "Застосовую міграції БД (alembic upgrade head)",
+    "step_migrate": "Застосовую міграції БД (з резервною копією в backups/)",
     # database / Docker
     "db_url_missing": "DATABASE_URL не задано в .env (див. .env.example).",
     "db_url_invalid": "Некоректний DATABASE_URL: " + DB_URL_ERROR + ".",
@@ -1104,7 +1104,8 @@ def ensure_db(env: Mapping[str, str]) -> None:
 
 
 def migrate(uv: Sequence[str]) -> None:
-    run_step([*uv, "run", "alembic", "upgrade", "head"], BACKEND, MSG["step_migrate"], 300)
+    # Backs up the dev DB with pg_dump before `alembic upgrade head` (app/tools/migrate.py).
+    run_step([*uv, "run", "python", "-m", "app.tools.migrate"], BACKEND, MSG["step_migrate"], 900)
 
 
 # --------------------------------------------------------------------------- child processes
