@@ -241,6 +241,8 @@ def _upsert_specs(
             "contract_size": raw.contract_size,
             "tick_size": raw.tick_size,
             "tick_value": raw.tick_value,
+            "point": raw.point,
+            "tick_value_loss": raw.tick_value_loss,
             "volume_min": raw.volume_min,
             "volume_step": raw.volume_step,
             "volume_max": raw.volume_max,

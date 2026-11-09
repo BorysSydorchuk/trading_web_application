@@ -20,6 +20,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Iterable
+from decimal import Decimal
 from typing import Any, Protocol, cast
 
 from pydantic import SecretStr
@@ -111,7 +112,7 @@ def _dec(obj: object, name: str) -> Any:
     return to_decimal(getattr(obj, name, 0) or 0)
 
 
-def _opt_dec(obj: object, name: str) -> Any:
+def _opt_dec(obj: object, name: str) -> Decimal | None:
     value = getattr(obj, name, None)
     return None if value is None else to_decimal(value)
 
@@ -143,6 +144,8 @@ def spec_from_mt5(obj: object) -> RawSymbolSpec:
         volume_max=_dec(obj, "volume_max"),
         currency_profit=_str(obj, "currency_profit"),
         currency_margin=_str(obj, "currency_margin"),
+        point=_opt_dec(obj, "point"),
+        tick_value_loss=_opt_dec(obj, "trade_tick_value_loss"),
     )
 
 

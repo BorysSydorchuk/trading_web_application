@@ -18,6 +18,8 @@ from tests.conftest import alembic_config
 EXPECTED_TABLES = {
     "accounts",
     "symbol_specs",
+    "calculator_margin_samples",
+    "calculator_margin_requests",
     "trades",
     "trade_exit_deals",
     "chart_links",
@@ -232,9 +234,11 @@ def test_bias_notes_downgrade_refuses_note_without_entries(db_engine: Engine) ->
                 "VALUES ('pre_ny', '2026-11-03', 'x')"
             )
         )
+    before = _current_revision(db_engine)
     try:
         with pytest.raises(RuntimeError, match="have no entries"):
             command.downgrade(alembic_config(), _BEFORE_BIAS_NOTES)
-        assert _current_revision(db_engine) == _BIAS_NOTES
+        # A refused downgrade rolls back fully; later heads must not shift this.
+        assert _current_revision(db_engine) == before
     finally:
         _clear_bias_any_revision(db_engine)

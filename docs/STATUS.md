@@ -226,7 +226,7 @@ PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real
 
 - [x] M5-01 architecture/API contract and recorded M4 approval (root, architect assessment complete)
 - [x] M5-02 pure Decimal sizing core, financial TDD and >=80% coverage (tdd-guide then backend-dev; root runner)
-- [ ] M5-03 broker point/loss tick-value capture and margin persistence, migration review (backend-dev, database-reviewer)
+- [x] M5-03 broker point/loss tick-value capture and margin persistence, migration review (backend-dev, database-reviewer)
 - [ ] M5-04 offline calculator/specs API and worker-owned read-only margin refresh (backend-dev)
 - [ ] M5-05 reusable calculator page and compact Home panel, Ukrainian UI (frontend-dev)
 - [ ] M5-06 isolated QA, full regression and independent reviews (qa-tester, root runner, reviewers)
@@ -290,6 +290,20 @@ Continue M5-01/02: finish core tests, root observes RED, backend implements pure
 - Added per-test10s budget for recurring pre-existing voice test timeout after QA traced real polling+1.3s wait; assertions/app behavior unchanged. This is verification repair, not M5 product scope expansion.
 - No calculator API/margin/schema/UI yet. Owner real-spec validation remains pending; M4 deferrals unchanged. Root sole runner, all core agents/reviewers completed.
 
+### Historical resume note (before M5-03 completion)
+
+M5-01/02 committed as `1cb42a7`, merged locally with `--no-ff` as `058406b`. Current topic is `m5/calculator-data` for M5-03. Sol backend owns metadata/model/migration and focused tests, initially tests only; root owns test execution and documentation. Observe RED before implementation, then full checks and independent database/general/Python review. Follow docs/api.md M5. Then API/worker, reusable UI and isolated QA. Continue authorizes work until owner says otherwise; do not repeatedly ask allowance. Never push or run real trading/AI/Whisper operations. Original untracked scripts manifests and QA resources remain preserved.
+
+## M5-03 verification - 2026-11-09
+
+- Resume found implementation beyond STATUS: nullable symbol_specs.point/tick_value_loss (captured from MT5 `point`/`trade_tick_value_loss`, never inferred), calculator_margin_samples and calculator_margin_requests tables (migration c8a41e62b903, downgrade tested), sync upsert of the new fields, tests in backend/tests/mt5/test_calculator_metadata.py and backend/tests/test_calculator_data.py. Signature computation, margin worker/dispatcher, order_calc_margin allow-list and API are NOT implemented (M5-04).
+- Root retroactive RED against committed HEAD code (exported copy): 5 metadata tests failed, DB tests collection ImportError. GREEN focused 70 passed.
+- Root fixes (no behaviour change): 12 ruff findings in new test/migration; test_bias_notes_downgrade_refuses_note_without_entries assumed bias migration was head, now asserts a refused downgrade leaves the revision unchanged.
+- Docker Desktop was stopped; `make db-ensure` started it and also upgraded the DEV DB (trading_journal) to c8a41e62b903 (additive only, reversible with `alembic downgrade b6d41a9e2c57`). No data deleted.
+- Full make check PASSED with both URLs pinned to local trading_journal_test, AI key empty: 1959 backend + 1 intentional skip (240.89 s), 337 frontend (23 files), all lint/type checks. Independent database/general/Python reviews next; no commit yet.
+- Reviews: database-reviewer, code-reviewer and python-reviewer all APPROVE, no CRITICAL/HIGH. Applied post-review (tests/typing only): legacy_spec moved to tests/mt5/factories.py, named `_BEFORE_CALCULATOR` revision and guarded cleanup, DB refresh before final sync assertion, `_opt_dec -> Decimal | None`. PK/FK names verified in the test DB to follow the naming convention. Remaining notes recorded in DECISIONS.md 2026-11-09 (no range CHECK on point/tick_value_loss; request de-dup in API; worker DB clock and failure fields).
+- Final full make check PASSED after fixes: 1959 backend + 1 intentional skip (208.36 s), 337 frontend, all lint/type checks; both URLs pinned to trading_journal_test, AI key empty.
+
 ### RESUME FROM HERE
 
-Proceed to M5-03 broker point/loss tick-value capture and margin persistence on a new topic after local M5-01/02 commit/merge. Follow docs/api.md M5, tests first, database review for migrations and independent review after full gate. Then API/worker, reusable UI and isolated QA. Continue authorizes work until owner says otherwise; do not repeatedly ask allowance. Never push or run real trading/AI/Whisper operations.
+M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (no push). Next: M5-04 on a new branch `m5/calculator-api` from `main`: `GET /api/accounts/{id}/symbol-specs`, `POST /api/calculator/calculate`, margin requests API, and the worker dispatcher with read-only `order_calc_margin` (allow-list change) per docs/api.md M5 and DECISIONS 2026-11-09. Tests first (tdd-guide for sizing/risk paths), root sole test runner, full gate with both DB URLs pinned to trading_journal_test and AI disabled, then independent reviews. The dev DB `trading_journal` is already at revision c8a41e62b903. Then M5-05 UI, M5-06 QA, M5-07 owner real-spec comparisons (still pending from Borys). Never push, no real trading/AI/Whisper operations. Keep scripts/pyproject.toml and scripts/uv.lock untracked and untouched.

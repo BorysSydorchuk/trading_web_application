@@ -69,6 +69,9 @@ class SymbolSpec(TimestampMixin, Base):
     contract_size: Mapped[Decimal] = mapped_column(PRICE)
     tick_size: Mapped[Decimal] = mapped_column(PRICE)
     tick_value: Mapped[Decimal] = mapped_column(PRICE)
+    # Nullable until explicitly supplied by a broker sync; never inferred.
+    point: Mapped[Decimal | None] = mapped_column(PRICE)
+    tick_value_loss: Mapped[Decimal | None] = mapped_column(PRICE)
     volume_min: Mapped[Decimal] = mapped_column(PRICE)
     volume_step: Mapped[Decimal] = mapped_column(PRICE)
     volume_max: Mapped[Decimal] = mapped_column(PRICE)
