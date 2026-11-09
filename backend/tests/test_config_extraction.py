@@ -44,6 +44,8 @@ ACCUSATIVE_NUMBER_WORDS = {
     **dict.fromkeys(("четвірку", "четверку"), 4),
     **dict.fromkeys(("п'ятірку", "пятерку"), 5),
 }
+# M5 (PM 2026-11-09, bias confidence words): UA diminutive, like RU "единичка".
+DIMINUTIVE_NUMBER_WORDS = dict.fromkeys(("одиничка", "одиничку"), 1)
 
 
 @pytest.fixture
@@ -71,7 +73,7 @@ def _error(cfg_dir: Path, content: str) -> str:
 
 def test_real_file_is_the_m2_list_plus_accusative_forms() -> None:
     words = dict(load_number_words(REAL_CONFIG / "extraction.yaml").words)
-    assert words == M2_NUMBER_WORDS | ACCUSATIVE_NUMBER_WORDS
+    assert words == M2_NUMBER_WORDS | ACCUSATIVE_NUMBER_WORDS | DIMINUTIVE_NUMBER_WORDS
 
 
 def test_words_are_normalised_on_load(cfg_dir: Path) -> None:

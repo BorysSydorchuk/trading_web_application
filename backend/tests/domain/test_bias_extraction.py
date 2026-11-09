@@ -239,3 +239,71 @@ def test_dropped_sorted_by_symbol_then_field() -> None:
         ("GER40", "confidence", "evidence_not_in_text"),
         ("NAS100", "direction", "not_fillable"),
     ]
+
+
+def test_confidence_russian_number_word_single() -> None:
+    # Live M4 miss (PM 2026-11-09): "уверенность единица" = confidence 1.
+    text = "Кабель в шорт от POI H4 1.2710. Евро тоже вниз, уверенность единица."
+    result = guard(text, ("EURUSD", "confidence", "1", "уверенность единица"))
+    assert result.entries[0].fields == {"confidence": 1}
+
+
+# --- key_levels: several levels joined by "; " in text order (PM 2026-11-09) ---
+
+DAX_TEXT = (
+    "Сьогодні по золоту шукаю покупки від FVG H1 2648, впевненість 2. "
+    "Дакс ведмежий, чекаю зняття хаю Азії, потім вниз до 18900."
+)
+DAX_QUOTE = "чекаю зняття хаю Азії, потім вниз до 18900"
+
+
+def test_key_levels_several_parts_in_text_order_kept() -> None:
+    result = guard(DAX_TEXT, ("GER40", "key_levels", "хаю Азії; 18900", DAX_QUOTE))
+    assert result.entries[0].fields == {"key_levels": "хаю Азії; 18900"}
+    assert result.dropped == []
+
+
+def test_key_levels_single_part_still_kept() -> None:
+    result = guard(DAX_TEXT, ("GER40", "key_levels", "18900", "вниз до 18900"))
+    assert result.entries[0].fields == {"key_levels": "18900"}
+
+
+@pytest.mark.parametrize(
+    ("value", "reason"),
+    [
+        ("18900; хаю Азії", "invalid_option"),  # not in text order
+        ("хаю Азії; 18900; хаю Азії", "invalid_option"),  # duplicate part
+        ("хаю Азії; хаю Азії", "invalid_option"),  # duplicate part
+        ("хаю Азії; ; 18900", "invalid_option"),  # empty part
+        ("хаю Азії; ", "evidence_not_in_text"),  # value is stripped first -> "хаю Азії;"
+        ("; 18900", "invalid_option"),  # empty first part
+        ("хаю Азії;", "evidence_not_in_text"),  # no "; " separator: ";" is not in the text
+        ("хаю Азії; 19000", "evidence_not_in_text"),  # one part not in the text
+        ("хай Азії; 18900", "evidence_not_in_text"),  # paraphrased part
+        ("хаю Азії; Азії", "invalid_option"),  # second part only inside the first
+        ("хаю Азії; 18900?", "question"),
+        ("хаю Азії; " + "x" * 5000, "out_of_range"),  # total length limit
+    ],
+)
+def test_key_levels_bad_parts_are_dropped(value: str, reason: str) -> None:
+    result = guard(DAX_TEXT, ("GER40", "key_levels", value, DAX_QUOTE))
+    assert result.entries == []
+    assert dropped(result) == [("GER40", "key_levels", reason)]
+
+
+def test_key_levels_extra_space_after_separator_kept() -> None:
+    result = guard(DAX_TEXT, ("GER40", "key_levels", "хаю Азії;  18900", DAX_QUOTE))
+    assert result.entries[0].fields == {"key_levels": "хаю Азії;  18900"}
+
+
+def test_key_levels_part_also_said_earlier_is_matched_after_previous_part() -> None:
+    text = "Дакс: 18900 тримає, чекаю зняття хаю Азії, потім знову 18900."
+    quote = "18900 тримає, чекаю зняття хаю Азії, потім знову 18900"
+    result = guard(text, ("GER40", "key_levels", "хаю Азії; 18900", quote))
+    assert result.entries[0].fields == {"key_levels": "хаю Азії; 18900"}
+
+
+def test_narrative_is_still_one_continuous_piece() -> None:
+    result = guard(DAX_TEXT, ("GER40", "narrative", "хаю Азії; 18900", DAX_QUOTE))
+    assert result.entries == []
+    assert dropped(result) == [("GER40", "narrative", "evidence_not_in_text")]

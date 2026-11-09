@@ -5,7 +5,8 @@ same shape as the trade schema plus `symbol`, so the grammar stays as simple). T
 reuse the trade extraction's checks (app.domain.extraction): evidence quoted from the text
 on word boundaries, free text = his own words, no questions, ints said as the only number
 of their quote. On top, the symbol must be mentioned in the text (its name or a bias.yaml
-alias), else the value is dropped with `symbol_not_in_text`.
+alias), else the value is dropped with `symbol_not_in_text`. `key_levels` may hold several
+pieces of his text joined by "; " (in text order, no repeats); `narrative` is one piece.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.domain.extraction import (
     DropReason,
     NumberWords,
     evidence_in_text,
+    find_phrase,
     normalise_for_match,
     number_in_evidence,
     string_items,
@@ -44,6 +46,7 @@ DIRECTIONS: tuple[str, ...] = tuple(d.value for d in BiasDirection)
 CONFIDENCE_MIN = 1
 CONFIDENCE_MAX = 3
 TEXT_MAX_LENGTH = 5000  # same limit as BiasEntryInput text fields
+KEY_LEVELS_SEPARATOR = "; "  # several levels for one symbol, in the order he named them
 
 BiasDropReason = Literal[DropReason, "symbol_not_in_text"]
 
@@ -194,8 +197,34 @@ def _check_value(
         return number, None
     if len(value) > TEXT_MAX_LENGTH:
         return None, "out_of_range"
-    issue = text_value_issue(value, evidence, text)
+    if key == KEY_LEVELS:
+        issue = key_levels_issue(value, evidence, text)
+    else:
+        issue = text_value_issue(value, evidence, text)
     return (None, issue) if issue is not None else (value, None)
+
+
+def key_levels_issue(value: str, evidence: str, normalised_text: str) -> BiasDropReason | None:
+    """`key_levels` = one or more pieces of his text joined by "; ". Each piece passes the
+    free-text check (text_value_issue); the pieces are distinct and occur in the text in
+    this order, each after the previous one (else `invalid_option`)."""
+    parts = value.split(KEY_LEVELS_SEPARATOR)
+    for part in parts:
+        if not part.strip():
+            return "invalid_option"
+        issue = text_value_issue(part, evidence, normalised_text)
+        if issue is not None:
+            return issue
+    phrases = [normalise_for_match(part) for part in parts]
+    if len(set(phrases)) != len(phrases):
+        return "invalid_option"
+    position = 0
+    for phrase in phrases:
+        found = find_phrase(phrase, normalised_text, position)
+        if found == -1:
+            return "invalid_option"
+        position = found + len(phrase)
+    return None
 
 
 def _guard_one(

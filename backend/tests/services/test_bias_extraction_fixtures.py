@@ -13,7 +13,12 @@ from typing import Any
 import pytest
 
 from app.config_files import get_bias_config, get_number_words
-from app.domain.bias_extraction import TEXT_KEYS, mentioned_symbols
+from app.domain.bias_extraction import (
+    KEY_LEVELS,
+    KEY_LEVELS_SEPARATOR,
+    TEXT_KEYS,
+    mentioned_symbols,
+)
 from app.domain.extraction import contains_phrase, evidence_in_text, normalise_for_match
 from app.models.enums import BiasKind
 from app.services.ai.bias_extraction import extract_bias_fields
@@ -72,5 +77,8 @@ def test_bias_extraction_fixture(path: Path, tmp_path: Path) -> None:
             assert evidence_in_text(evidence, normalised), f"{entry.symbol}.{key}"
             if key in TEXT_KEYS:
                 assert isinstance(value, str)
-                assert contains_phrase(normalise_for_match(value), normalised)
+                # key_levels: one or more pieces of his text joined by "; "
+                parts = value.split(KEY_LEVELS_SEPARATOR) if key == KEY_LEVELS else [value]
+                for part in parts:
+                    assert contains_phrase(normalise_for_match(part), normalised)
                 assert "?" not in value or "?" in evidence

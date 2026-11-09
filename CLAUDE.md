@@ -35,7 +35,7 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 - M0 and M1 live on `main`. From M2 on, one branch per topic: `m<N>/<topic>` (for example `m2/terminal-path-guard`), created from up-to-date `main`. Commit the topic's tasks there.
 - Merge a topic branch into `main` with `git merge --no-ff` only after code-reviewer APPROVE and a green `make check`.
 - **Never push** (no `git push` of any branch, no force-push). Commit and merge locally only; Borys pushes himself. This overrides any push step in `.claude/rules/ecc/` or older notes.
-- `main` is pushed after every merge to `main`; Borys does the push. After each merge, tell him `main` is ready to push (with the merge commit).
+- Borys pushes, you never push. After every merge to `main`, end your message to Borys with exactly one line: `main готовий до push: <commit>`.
 - Each milestone report (`docs/reports/M<n>.md`) lists the milestone's commit range.
 
 ## Decisions and questions

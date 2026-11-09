@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config_files import get_bias_config, get_journal_fields
+from app.config_files import get_bias_config, get_journal_fields, get_number_words
 from app.models.enums import BiasKind
 from app.services.ai.prompt import (
     EXTRACT_BIAS_PROMPT,
@@ -33,6 +33,14 @@ def test_system_prompt_has_rules_glossary_and_yaml_options() -> None:
         assert phrase in prompt
     assert "`fvg_kind` (Тип FVG): one option value:" in prompt
     assert "  - `post_manipulation`: після маніпуляції" in prompt
+
+
+def test_trade_prompt_maps_take_profit_at_point_b_to_point_b() -> None:
+    # PM 2026-11-09 (live M4 eval): "по тейку в точке B" = the point B target, not TP.
+    prompt = extract_trade_system_prompt(get_journal_fields())
+    for phrase in ("по тейку в точке B", "тейк на точці B", "закрив по тейку в точці B"):
+        assert phrase in prompt
+    assert "is the point B target (`point_b`), not the plain TP (`tp`)" in prompt
 
 
 def test_system_prompt_is_deterministic() -> None:
@@ -76,3 +84,29 @@ def test_bias_prompt_missing_file_or_placeholder(tmp_path: Path) -> None:
     (tmp_path / EXTRACT_BIAS_PROMPT).write_text("only {{KIND}}", encoding="utf-8")
     with pytest.raises(PromptError, match="SYMBOLS"):
         extract_bias_system_prompt(config, BiasKind.PRE_LONDON, tmp_path)
+
+
+# Number words the bias prompt names for `confidence`; each must mean the same number in
+# config/extraction.yaml, or the guard would drop what the prompt asks for.
+BIAS_PROMPT_NUMBER_WORDS = {
+    **dict.fromkeys(("один", "одна", "одиниця", "одиничка", "единица", "единичка", "one"), 1),
+    **dict.fromkeys(("два", "дві", "двійка", "двойка", "two"), 2),
+    **dict.fromkeys(("три", "трійка", "тройка", "three"), 3),
+}
+
+
+def test_bias_prompt_lists_confidence_number_words_known_to_the_guard() -> None:
+    prompt = extract_bias_system_prompt(get_bias_config(), BiasKind.PRE_NY)
+    words = get_number_words().words
+    for word, number in BIAS_PROMPT_NUMBER_WORDS.items():
+        assert f'"{word}"' in prompt, word
+        assert words[word] == number, word
+    assert '"уверенность единица" = 1' in prompt
+
+
+def test_bias_prompt_asks_for_all_key_levels_joined_in_text_order() -> None:
+    prompt = extract_bias_system_prompt(get_bias_config(), BiasKind.PRE_LONDON)
+    assert 'joined by "; "' in prompt
+    assert '`key_levels` "хаю Азії; 18900"' in prompt
+    assert 'never "POI H4; 1.2710"' in prompt  # a zone with its price stays one level
+    assert "`narrative` is one continuous piece" in prompt

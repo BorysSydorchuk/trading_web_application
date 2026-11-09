@@ -1,5 +1,5 @@
 {
-  "description": "RU, кабель/евро aliases, POI level, confidence as a number word (единица)",
+  "description": "RU, кабель/евро aliases, POI level, confidence as a number word: 'уверенность единица' = 1 (live M4 eval left it empty; PM 2026-11-09)",
   "kind": "pre_ny",
   "text": "Кабель в шорт от POI H4 1.2710. Евро тоже вниз, уверенность единица.",
   "model_output": [

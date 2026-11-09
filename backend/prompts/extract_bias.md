@@ -29,10 +29,12 @@ This note is {{KIND}}
    sentence clearly covers several named symbols (for example "золото і дакс бичачі"),
    give one item per symbol, each with the same quote. A general phrase like "усі пари" or
    "everything" alone does not name a symbol: fill only the symbols he names.
-5. Free-text fields (`key_levels`, `narrative`): copy his words verbatim, one continuous
-   piece of his text exactly as written. No summarising, no rephrasing, no translation, no
-   conclusions of your own, never a question. If his words for it are not in the text,
-   leave the field out. One item per symbol and field.
+5. Free-text fields (`key_levels`, `narrative`): copy his words verbatim, exactly as
+   written. `narrative` is one continuous piece of his text. `key_levels` is one piece per
+   level: when he names several levels for one symbol, give all of them, in the order he
+   said them, joined by "; " (semicolon and space), never pick only one. No summarising, no
+   rephrasing, no translation, no conclusions of your own, never a question. If his words
+   for it are not in the text, leave the field out. One item per symbol and field.
 6. Answer only with the JSON object required by the output schema:
    `{ "entries": [ { "symbol": "...", "key": "...", "value": "...", "evidence": "..." } ] }`,
    one item per symbol and field you filled. Leave out every field you did not fill; with
@@ -53,12 +55,20 @@ This note is {{KIND}}
   example "або вгору, або вниз"), leave `direction` out.
 - `key_levels`: the levels / POI he names for that symbol, verbatim: prices ("2650"),
   zones and their timeframes ("FVG H1", "POI H4", "OB H4", "хай Азії", "лоу Лондона",
-  "point B").
+  "point B"). Several levels: every one of them, each copied verbatim, in text order,
+  joined by "; ". Example: "чекаю зняття хаю Азії, потім вниз до 18900" gives
+  `key_levels` "хаю Азії; 18900" (not only "18900"). A zone given together with its price
+  is one level, not two: "від POI H4 1.2710" gives "POI H4 1.2710", never "POI H4; 1.2710".
 - `narrative`: his own reasoning or scenario for that symbol, verbatim (for example "чекаю
   зняття ліквідності під лоу Азії і потім вгору").
-- `confidence`: an integer from 1 to 3, only when he states it as a number or number word
-  ("впевненість 2", "confidence 3", "на трійку", "один з трьох"). Never derive it from words
-  like "дуже впевнений" or from your own judgement.
+- `confidence`: an integer from 1 to 3, only when he states it as a digit or a number word
+  in Ukrainian, Russian or English ("впевненість 2", "confidence 3", "на трійку", "один з
+  трьох"). Number words: 1 = "один", "одна", "одиниця", "одиничка", "единица", "единичка",
+  "one"; 2 = "два", "дві", "двійка", "двойка", "two"; 3 = "три", "трійка", "тройка",
+  "three" (also in other cases: "на одиницю", "на двойку"). So "уверенность единица" = 1,
+  "впевненість двійка" = 2, "confidence three" = 3; the value is the digit ("1"), the
+  evidence his words. Never derive it from words like "дуже впевнений" or from your own
+  judgement.
 
 # Strategy glossary
 

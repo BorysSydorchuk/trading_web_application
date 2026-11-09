@@ -1,5 +1,5 @@
 {
-  "description": "UA, two symbols in one note via inflected aliases (по золоту, Дакс), level, confidence digit, narrative",
+  "description": "UA, two symbols in one note via inflected aliases (по золоту, Дакс), level, confidence digit, narrative; GER40 names two levels, kept both in text order joined by '; ' (PM 2026-11-09: never pick one; live M4 eval picked only 18900)",
   "kind": "pre_london",
   "text": "Сьогодні по золоту шукаю покупки від FVG H1 2648, впевненість 2. Дакс ведмежий, чекаю зняття хаю Азії, потім вниз до 18900.",
   "model_output": [
@@ -29,6 +29,12 @@
     },
     {
       "symbol": "GER40",
+      "key": "key_levels",
+      "value": "хаю Азії; 18900",
+      "evidence": "чекаю зняття хаю Азії, потім вниз до 18900"
+    },
+    {
+      "symbol": "GER40",
       "key": "narrative",
       "value": "чекаю зняття хаю Азії, потім вниз до 18900",
       "evidence": "чекаю зняття хаю Азії, потім вниз до 18900"
@@ -42,18 +48,7 @@
     },
     "GER40": {
       "direction": "bearish",
-      "narrative": "чекаю зняття хаю Азії, потім вниз до 18900"
-    }
-  },
-  "eval_expected_entries": {
-    "XAUUSD": {
-      "direction": "bullish",
-      "key_levels": "FVG H1 2648",
-      "confidence": 2
-    },
-    "GER40": {
-      "direction": "bearish",
-      "key_levels": "хаю Азії",
+      "key_levels": "хаю Азії; 18900",
       "narrative": "чекаю зняття хаю Азії, потім вниз до 18900"
     }
   }
