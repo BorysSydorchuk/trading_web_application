@@ -435,7 +435,23 @@ PRD 6.8 / ROADMAP M5. This section specifies planned endpoints; M5-02 initially 
 
 `POST /api/calculator/calculate` body `{account_id, symbol, direction, entry, sl_price? | sl_points?, risk_percent? | risk_amount?}`. Strict JSON; decimal strings/integers only, no floats/bools/NaN, unknown keys rejected. Account/symbol selection never prefix-matches. Response includes account_id, symbol, direction, entry, effective SL/distance, balance and source/date, risk_budget, volume, actual_risk, actual_risk_percent, tp_1_5/tp_2/tp_3, specs_at and margin metadata. Missing account/spec 404; unusable/missing balance/specs and no permissible minimum volume are visible domain errors. Existing field-error envelope applies.
 
-Margin metadata: `{source: cached_estimate | unavailable, amount: string | null, currency, calculated_at, sample_price, sample_volume, reason}`. Built from the latest done margin request (see design below). A margin failure never erases a valid sizing result. No sample yields unavailable/no_cached_margin, not zero margin.
+M5-04c exact shapes (2026-11-09, orchestrator):
+
+- Specs item: `{symbol, contract_size, point, tick_size, tick_value_loss, volume_min, volume_step, volume_max, digits, currency_profit, currency_margin, synced_at}`; decimals as strings, `point`/`tick_value_loss` may be `null` (not yet synced), ordered by symbol.
+- Calculate 200: `{account_id, symbol, direction, entry, sl_price, sl_distance, sl_points, balance, balance_source: "reference" | "synced", balance_synced_at, currency, risk_percent, risk_amount, risk_budget, volume, actual_risk, actual_risk_percent, tp_1_5, tp_2, tp_3, specs_at, margin}`. Decimal strings in plain notation (no exponent), full core precision (UI rounds for display). `sl_points` = sl_distance / point; `risk_percent` / `risk_amount`: the one used, the other `null`; `currency` = account currency.
+- Calculate errors (envelope `{error: {code, message, details}}`):
+  - 422 `validation_error` with `details.fields` (strict JSON, types, unknown keys, both/neither SL, both risk fields, non-positive numbers, numbers outside the core representation limits, `symbol` containing NUL or a UTF-16 surrogate code point; the symbol is never stripped or case-folded). `details.fields` is always an object, `{}` when the core's precision/arithmetic guard names no field.
+  - 404 `not_found` with `details.account_id` or `details.symbol` (exact match only).
+  - 409 `balance_unavailable`: no reference balance and no synced balance, or the effective balance is not a positive finite number.
+  - 409 `specs_incomplete` with `details.missing` (list of spec keys that are null, non-positive or not finite, e.g. `["point", "tick_value_loss"]`): needs a sync.
+  - 409 `specs_invalid`: volume limits not ordered / not on the step grid.
+  - 422 `invalid_stop`: SL not on the loss side of entry or not positive.
+  - 422 `off_tick_grid` with `details.fields` naming `entry` / `sl_price`.
+  - 422 `below_min_volume` with `details.volume_min` and `details.min_volume_risk` (risk at the minimum volume, account currency): the budget cannot pay for the minimum volume, never rounded up.
+  - 422 `invalid_targets`: a sell TP would be ≤ 0.
+- The pure core raises `PositionSizeError(ValueError)` with a `code` from the list above (`invalid_stop`, `off_tick_grid`, `below_min_volume`, `invalid_targets`, `specs_invalid`, `validation_error`); existing ValueError behaviour unchanged.
+
+Margin metadata: `{source: cached_estimate | unavailable, amount: string | null, currency, calculated_at, sample_price, sample_volume, reason}`; with `unavailable` every field except `source` and `reason` is `null` (also `currency`); with `cached_estimate` `reason` is `null`. Built from the latest done margin request (see design below). A margin failure never erases a valid sizing result. No sample yields unavailable/no_cached_margin, not zero margin.
 
 `POST /api/calculator/margin-requests` reuses validated sizing input and recomputes rounded volume server-side; returns 202 with request id/status. `GET /api/calculator/margin-requests/{id}` returns pending/processing/done/failed/expired. Exact live result includes source=mt5, amount/currency, entry/volume and UTC time. Frontend discards results for a superseded form state. No API process owns or initializes MT5.
 

@@ -1,5 +1,8 @@
 """Prospective tick-risk oracles; all specs are synthetic, never broker evidence."""
 
+import copy
+import pickle
+from collections.abc import Callable
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any, Literal
@@ -7,6 +10,7 @@ from typing import Any, Literal
 import pytest
 
 from app.domain.position_size import (
+    PositionSizeError,
     PositionSizeRequest,
     SymbolSpec,
     calculate_position_size,
@@ -374,3 +378,178 @@ def test_decimal_representation_boundary_is_accepted_for_unused_point(
     result = calculate_position_size(sizing_request, replace(spec, point=point))
     assert result.volume == D("1")
     assert result.actual_risk == D("100")
+
+
+# --- PositionSizeError: stable codes for the API mapping (docs/api.md M5-04c) ---
+
+
+def _error(request: PositionSizeRequest, spec: SymbolSpec) -> PositionSizeError:
+    with pytest.raises(PositionSizeError) as caught:
+        calculate_position_size(request, spec)
+    return caught.value
+
+
+def test_position_size_error_is_a_value_error_with_code_and_empty_fields(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    assert issubclass(PositionSizeError, ValueError)
+    error = _error(replace(sizing_request, sl_price=D("101")), spec)
+    assert isinstance(error, ValueError)
+    assert error.code == "invalid_stop"
+    assert error.fields == ()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"sl_price": D("101")},  # buy stop above entry
+        {"sl_price": D("100")},  # zero distance
+        {"sl_price": None, "sl_points": D("10001")},  # stop would be <= 0
+    ],
+)
+def test_stop_on_wrong_side_or_nonpositive_has_code_invalid_stop(
+    changes: dict[str, Any], sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, **changes), spec)
+    assert error.code == "invalid_stop"
+    assert error.fields == ()
+
+
+def test_sell_stop_below_entry_has_code_invalid_stop(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, direction="sell", sl_price=D("99")), spec)
+    assert error.code == "invalid_stop"
+
+
+@pytest.mark.parametrize(
+    ("changes", "fields"),
+    [
+        ({"entry": D("100.001")}, ("entry",)),
+        ({"sl_price": D("99.001")}, ("sl_price",)),
+        ({"sl_price": None, "sl_points": D("0.5")}, ("sl_price",)),
+        ({"entry": D("100.001"), "sl_price": D("99.001")}, ("entry", "sl_price")),
+    ],
+)
+def test_off_grid_prices_have_code_off_tick_grid_and_name_the_fields(
+    changes: dict[str, Any],
+    fields: tuple[str, ...],
+    sizing_request: PositionSizeRequest,
+    spec: SymbolSpec,
+) -> None:
+    error = _error(replace(sizing_request, **changes), spec)
+    assert error.code == "off_tick_grid"
+    assert error.fields == fields
+
+
+@pytest.mark.parametrize("budget", ["0.000001", "0.99999999999999999999999999"])
+def test_budget_below_minimum_has_code_below_min_volume(
+    budget: str, sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, risk_percent=None, risk_amount=D(budget)), spec)
+    assert error.code == "below_min_volume"
+
+
+def test_nonpositive_sell_target_has_code_invalid_targets(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, direction="sell", entry=D("1"), sl_price=D("2")), spec)
+    assert error.code == "invalid_targets"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"volume_min": D("101")},  # min above max
+        {"volume_min": D("0.03"), "volume_step": D("0.02")},
+        {"volume_max": D("1.1"), "volume_step": D("0.25"), "volume_min": D("0.25")},
+    ],
+)
+def test_bad_volume_limits_have_code_specs_invalid(
+    changes: dict[str, Decimal], sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(sizing_request, replace(spec, **changes))
+    assert error.code == "specs_invalid"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"entry": D("0")},
+        {"entry": D("NaN")},
+        {"balance": D("-1")},
+        {"sl_price": D("-1")},
+        {"risk_percent": D("0")},
+        {"risk_percent": None},  # neither risk field
+        {"risk_amount": D("100")},  # both risk fields
+        {"sl_price": None},  # neither sl field
+        {"sl_points": D("100")},  # both sl fields
+        {"sl_price": None, "sl_points": D("0")},
+        {"direction": "hold"},
+    ],
+)
+def test_bad_request_values_have_code_validation_error(
+    changes: dict[str, Any], sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, **changes), spec)
+    assert error.code == "validation_error"
+
+
+def test_representation_limit_has_code_validation_error(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, entry=D("1" * 65)), spec)
+    assert error.code == "validation_error"
+
+
+def test_existing_value_error_messages_are_kept(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    error = _error(replace(sizing_request, sl_price=D("99.001")), spec)
+    assert "entry and SL must be on the tick-size grid" in str(error)
+
+
+def test_spec_value_errors_name_no_request_field_and_request_errors_name_theirs(
+    sizing_request: PositionSizeRequest, spec: SymbolSpec
+) -> None:
+    spec_error = _error(sizing_request, replace(spec, tick_size=D("0")))
+    request_error = _error(replace(sizing_request, entry=D("0")), spec)
+
+    assert spec_error.code == "specs_invalid"
+    assert spec_error.fields == ()
+    assert request_error.code == "validation_error"
+    assert request_error.fields == ("entry",)
+
+
+def test_position_size_error_accepts_field_names_keyword() -> None:
+    error = PositionSizeError("bad", "off_tick_grid", field_names=("entry",))
+
+    assert error.fields == ("entry",)
+    assert str(error) == "bad"
+
+
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        lambda error: pickle.loads(pickle.dumps(error)),  # noqa: S301 - own bytes
+        copy.copy,
+        copy.deepcopy,
+    ],
+)
+def test_position_size_error_survives_pickle_and_copy(
+    duplicate: Callable[[PositionSizeError], PositionSizeError],
+) -> None:
+    error = PositionSizeError(
+        "Risk budget cannot support the minimum volume",
+        "below_min_volume",
+        ("risk_amount",),
+        min_volume_risk=D("2.5"),
+    )
+
+    clone = duplicate(error)
+
+    assert isinstance(clone, PositionSizeError)
+    assert str(clone) == str(error)
+    assert clone.code == "below_min_volume"
+    assert clone.fields == ("risk_amount",)
+    assert clone.min_volume_risk == D("2.5")
