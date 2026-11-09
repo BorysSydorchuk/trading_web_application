@@ -78,11 +78,21 @@ Run from the repo root (needs GNU make):
 | `make dev` | same as `start.bat` (`python scripts/dev.py`) |
 | `make stop` | same as `stop.bat` (`python scripts/dev.py --stop`) |
 | `make check` | lint (ruff, eslint), type check (mypy, tsc), tests (pytest); starts the DB if needed |
-| `make migrate` | apply Alembic migrations (`alembic upgrade head`) |
+| `make migrate` | back up the DB, then apply Alembic migrations (see below) |
 | `make db-ensure` | start the DB if needed and migrate, then exit |
 | `make install` | install backend and frontend dependencies |
 
 Without make: `python scripts/dev.py [--no-browser | --ensure-db | --stop]`.
+
+**Backups before migrations.** `start.bat`, `make dev`, `make db-ensure` and `make migrate`
+apply migrations through `python -m app.tools.migrate`: when a migration is pending on the
+dev DB it first runs `pg_dump -Fc` (host `pg_dump`, or `docker compose exec db pg_dump` for a
+local Docker DB) to `backups/pre-migration-<revision>-<UTC time>.dump`, prints the path and
+keeps the 10 newest. If the backup fails, the migration is not applied. Databases ending in
+`_test` are not backed up. Restore: `pg_restore -c -d trading_journal <file>` (add `-h/-U`
+as needed), or with Docker
+`docker compose exec -T db pg_restore -c -U journal -d trading_journal < <file>`. A raw
+`alembic upgrade head` bypasses the backup.
 
 ## Using native PostgreSQL instead of Docker
 

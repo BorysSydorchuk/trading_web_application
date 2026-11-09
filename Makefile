@@ -20,7 +20,7 @@ db-up:
 	docker compose up -d --wait db
 
 migrate:
-	cd backend && uv run alembic upgrade head
+	cd backend && uv run python -m app.tools.migrate
 
 check: lint typecheck test
 
