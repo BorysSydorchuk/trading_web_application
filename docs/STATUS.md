@@ -229,7 +229,7 @@ PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real
 - [x] M5-03 broker point/loss tick-value capture and margin persistence, migration review (backend-dev, database-reviewer)
 - [ ] M5-04 calculator API + margin (PM scope check 2026-11-09: sizing from symbol_specs, never MT5; margin secondary). Owners: claude (no codex task open)
   - [x] M5-04a (code-reviewer APPROVE after fixes; make check 1990+1 skip / 337; real no-op run and real docker dump verified) pre-migration pg_dump backup for non-test DBs (backend-dev) + process rules, scripts manifests, M4 live eval/report (orchestrator), branch m5/premigration-backup
-  - [ ] M5-04b migration dropping calculator_margin_samples and signature columns (backend-dev, database-reviewer)
+  - [x] M5-04b (database-reviewer + code-reviewer APPROVE; make check 1995+1 skip / 337; LOW: samples CHECK names + empty-table asserts added, DECISIONS data-loss note) migration 80ae699b47ce dropping calculator_margin_samples and signature columns (backend-dev, database-reviewer), branch m5/calculator-api
   - [ ] M5-04c `GET /api/accounts/{id}/symbol-specs`, `POST /api/calculator/calculate` incl. cached estimate (tdd-guide tests first, backend-dev)
   - [ ] M5-04d margin requests API + worker job + read-only `order_calc_margin` (allow-list) + fixture source (backend-dev)
 - [ ] M5-05 reusable calculator page and compact Home panel, Ukrainian UI (frontend-dev)
@@ -329,5 +329,5 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-`m5/extraction-fixes` merged into main. Next:
+`m5/extraction-fixes` merged into main (480d87d). M5-04b done and merged into main (m5/calculator-api, migration 80ae699b47ce); dev DB upgrade via `make migrate` (auto pg_dump backup) right after the merge. Next: M5-04c on a new branch `m5/calculator-calculate` from main. Next:
 M5-04a merged into `main` locally (Borys pushes). Next M5-04b on branch `m5/calculator-api` from main: migration dropping `calculator_margin_samples` and the `signature` columns (database-reviewer); the dev DB upgrade will go through the new backup. Then M5-04c (tdd-guide tests first: specs list + calculate with cached estimate, never MT5) and M5-04d (margin requests API, 2 s worker job under the sync lock, read-only order_calc_margin, fixture source). Then M5-05 UI with the owner checklist (4 symbols, exact Ukrainian UI names and MT5 menu paths), M5-06 QA, M5-07 owner comparisons. Never push; no real trading; no further live AI without authorization.

@@ -11,15 +11,17 @@ from sqlalchemy import Engine, delete, inspect, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Account, CalculatorMarginRequest, CalculatorMarginSample, SymbolSpec
+from app.models import Account, CalculatorMarginRequest, SymbolSpec
 from app.services.sync import _upsert_specs
 from tests.conftest import alembic_config
 from tests.mt5.factories import legacy_spec
 
 NOW = datetime(2026, 11, 8, 10, tzinfo=UTC)
-SIGNATURE = "a" * 64
 # Revision before the calculator migration (its down_revision).
 _BEFORE_CALCULATOR = "b6d41a9e2c57"
+# Calculator migration, before samples and request signatures were dropped.
+_WITH_MARGIN_SAMPLES = "c8a41e62b903"
+_REQUESTS = "calculator_margin_requests"
 
 
 @pytest.fixture
@@ -39,21 +41,6 @@ def account(db_session: Session) -> Account:
     return row
 
 
-def sample_values(account: Account, **changes: Any) -> dict[str, Any]:
-    return {
-        "account_id": account.id,
-        "symbol": "GER40.cash",
-        "direction": "buy",
-        "margin": Decimal("123.12345678"),
-        "volume": Decimal("0.01"),
-        "price": Decimal("19000.5"),
-        "currency": "USD",
-        "calculated_at": NOW,
-        "spec_synced_at": NOW,
-        "signature": SIGNATURE,
-    } | changes
-
-
 def request_values(account: Account, **changes: Any) -> dict[str, Any]:
     return {
         "account_id": account.id,
@@ -62,72 +49,10 @@ def request_values(account: Account, **changes: Any) -> dict[str, Any]:
         "volume": Decimal("0.01"),
         "entry": Decimal("19000.5"),
         "currency": "USD",
-        "signature": SIGNATURE,
         "status": "pending",
         "created_at": NOW,
         "expires_at": NOW + timedelta(minutes=1),
     } | changes
-
-
-def test_sample_preserves_raw_margin_and_is_unique_per_exact_key(
-    db_session: Session,
-    account: Account,
-) -> None:
-    row = CalculatorMarginSample(**sample_values(account))
-    db_session.add(row)
-    db_session.flush()
-    db_session.refresh(row)
-    assert row.margin == Decimal("123.12345678")
-    assert row.calculated_at == NOW
-    for changes in ({"symbol": "GER40"}, {"direction": "sell"}):
-        db_session.add(CalculatorMarginSample(**sample_values(account, **changes)))
-    db_session.flush()
-    db_session.add(CalculatorMarginSample(**sample_values(account)))
-    with pytest.raises(IntegrityError):
-        db_session.flush()
-
-
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"direction": "hold"},
-        {"volume": Decimal("0")},
-        {"price": Decimal("-1")},
-        {"margin": Decimal("-0.01")},
-        {"margin": Decimal("NaN")},
-        {"volume": Decimal("NaN")},
-        {"price": Decimal("NaN")},
-        {"symbol": ""},
-        {"currency": ""},
-        {"signature": ""},
-    ],
-)
-def test_invalid_sample_rejected(
-    db_session: Session,
-    account: Account,
-    changes: dict[str, Any],
-) -> None:
-    db_session.add(CalculatorMarginSample(**sample_values(account, **changes)))
-    with pytest.raises(IntegrityError):
-        db_session.flush()
-
-
-def test_zero_margin_is_a_valid_broker_result(db_session: Session, account: Account) -> None:
-    db_session.add(CalculatorMarginSample(**sample_values(account, margin=Decimal("0"))))
-    db_session.flush()
-
-
-@pytest.mark.parametrize("value", [Decimal("Infinity"), Decimal("-Infinity")])
-@pytest.mark.parametrize("field", ["margin", "volume", "price"])
-def test_infinite_sample_numbers_rejected(
-    db_session: Session,
-    account: Account,
-    value: Decimal,
-    field: str,
-) -> None:
-    db_session.add(CalculatorMarginSample(**sample_values(account, **{field: value})))
-    with pytest.raises((IntegrityError, DataError)):
-        db_session.flush()
 
 
 @pytest.mark.parametrize(
@@ -164,7 +89,6 @@ def test_valid_request_lifecycle_snapshots(
         {"volume": Decimal("NaN")},
         {"symbol": ""},
         {"currency": ""},
-        {"signature": ""},
         {"margin": Decimal("1")},
         {"finished_at": NOW},
         {"started_at": NOW},
@@ -203,12 +127,10 @@ def test_invalid_request_states_rejected(
         db_session.flush()
 
 
-def test_account_delete_cascades_margin_data(db_session: Session, account: Account) -> None:
-    db_session.add(CalculatorMarginSample(**sample_values(account)))
+def test_account_delete_cascades_margin_requests(db_session: Session, account: Account) -> None:
     db_session.add(CalculatorMarginRequest(**request_values(account)))
     db_session.flush()
     db_session.execute(delete(Account).where(Account.id == account.id))
-    assert db_session.scalar(select(CalculatorMarginSample.id)) is None
     assert db_session.scalar(select(CalculatorMarginRequest.id)) is None
 
 
@@ -305,6 +227,95 @@ def test_metadata_upgrade_preserves_legacy_rows_and_downgrades(db_engine: Engine
                 ).scalar_one()
                 == 1
             )
+    finally:
+        try:
+            if account_id is not None:
+                with db_engine.begin() as conn:
+                    conn.execute(text("DELETE FROM accounts WHERE id=:id"), {"id": account_id})
+        finally:
+            command.upgrade(cfg, "head")
+
+
+def _column_names(engine: Engine, table: str) -> set[str]:
+    return {col["name"] for col in inspect(engine).get_columns(table)}
+
+
+def test_head_has_no_margin_samples_or_request_signature(db_engine: Engine) -> None:
+    assert "calculator_margin_samples" not in inspect(db_engine).get_table_names()
+    assert "signature" not in _column_names(db_engine, _REQUESTS)
+
+
+def test_samples_and_signature_restored_on_downgrade_and_dropped_on_upgrade(
+    db_engine: Engine,
+) -> None:
+    cfg = alembic_config()
+    account_id: int | None = None
+    try:
+        with db_engine.begin() as conn:
+            account_id = conn.execute(
+                text(
+                    "INSERT INTO accounts (name, firm, program, phase, login, server, "
+                    "starting_balance, currency) VALUES ('Margin downgrade', 'Fixture', "
+                    "'Fixture', 'phase_1', 987654323, 'Fixture', 10000, 'USD') RETURNING id"
+                )
+            ).scalar_one()
+            request_id = conn.execute(
+                text(
+                    "INSERT INTO calculator_margin_requests (account_id, symbol, direction, "
+                    "volume, entry, currency, status, created_at, expires_at) "
+                    "VALUES (:id, 'GER40.cash', 'buy', 0.01, 19000.5, 'USD', 'pending', :now, "
+                    ":expires) RETURNING id"
+                ),
+                {"id": account_id, "now": NOW, "expires": NOW + timedelta(minutes=1)},
+            ).scalar_one()
+        command.downgrade(cfg, _WITH_MARGIN_SAMPLES)
+        inspector = inspect(db_engine)
+        assert "calculator_margin_samples" in inspector.get_table_names()
+        assert [
+            uq["name"] for uq in inspector.get_unique_constraints("calculator_margin_samples")
+        ] == ["uq_calculator_margin_samples_account_id_symbol_direction"]
+        assert {
+            ck["name"] for ck in inspector.get_check_constraints("calculator_margin_samples")
+        } == {
+            f"ck_calculator_margin_samples_{name}"
+            for name in (
+                "direction_valid",
+                "symbol_not_empty",
+                "currency_valid",
+                "signature_not_empty",
+                "margin_valid",
+                "volume_valid",
+                "price_valid",
+            )
+        }
+        with db_engine.connect() as conn:
+            restored_rows = conn.execute(
+                text("SELECT count(*) FROM calculator_margin_samples")
+            ).scalar_one()
+        assert restored_rows == 0  # restored empty, old samples are not recovered
+        signature = next(
+            col for col in inspector.get_columns(_REQUESTS) if col["name"] == "signature"
+        )
+        assert signature["nullable"] is False
+        assert "ck_calculator_margin_requests_signature_not_empty" in {
+            ck["name"] for ck in inspector.get_check_constraints(_REQUESTS)
+        }
+        with db_engine.connect() as conn:
+            filled = conn.execute(
+                text("SELECT signature FROM calculator_margin_requests WHERE id=:id"),
+                {"id": request_id},
+            ).scalar_one()
+        assert filled == f"downgraded:{request_id}"
+
+        command.upgrade(cfg, "head")
+        assert "calculator_margin_samples" not in inspect(db_engine).get_table_names()
+        assert "signature" not in _column_names(db_engine, _REQUESTS)
+        with db_engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT symbol, entry FROM calculator_margin_requests WHERE id=:id"),
+                {"id": request_id},
+            ).one()
+        assert tuple(row) == ("GER40.cash", Decimal("19000.5"))
     finally:
         try:
             if account_id is not None:
