@@ -227,7 +227,11 @@ PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real
 - [x] M5-01 architecture/API contract and recorded M4 approval (root, architect assessment complete)
 - [x] M5-02 pure Decimal sizing core, financial TDD and >=80% coverage (tdd-guide then backend-dev; root runner)
 - [x] M5-03 broker point/loss tick-value capture and margin persistence, migration review (backend-dev, database-reviewer)
-- [ ] M5-04 offline calculator/specs API and worker-owned read-only margin refresh (backend-dev)
+- [ ] M5-04 calculator API + margin (PM scope check 2026-11-09: sizing from symbol_specs, never MT5; margin secondary). Owners: claude (no codex task open)
+  - [x] M5-04a (code-reviewer APPROVE after fixes; make check 1990+1 skip / 337; real no-op run and real docker dump verified) pre-migration pg_dump backup for non-test DBs (backend-dev) + process rules, scripts manifests, M4 live eval/report (orchestrator), branch m5/premigration-backup
+  - [ ] M5-04b migration dropping calculator_margin_samples and signature columns (backend-dev, database-reviewer)
+  - [ ] M5-04c `GET /api/accounts/{id}/symbol-specs`, `POST /api/calculator/calculate` incl. cached estimate (tdd-guide tests first, backend-dev)
+  - [ ] M5-04d margin requests API + worker job + read-only `order_calc_margin` (allow-list) + fixture source (backend-dev)
 - [ ] M5-05 reusable calculator page and compact Home panel, Ukrainian UI (frontend-dev)
 - [ ] M5-06 isolated QA, full regression and independent reviews (qa-tester, root runner, reviewers)
 - [ ] M5-07 owner real-spec/MT5 comparisons and PM acceptance report
@@ -304,6 +308,19 @@ M5-01/02 committed as `1cb42a7`, merged locally with `--no-ff` as `058406b`. Cur
 - Reviews: database-reviewer, code-reviewer and python-reviewer all APPROVE, no CRITICAL/HIGH. Applied post-review (tests/typing only): legacy_spec moved to tests/mt5/factories.py, named `_BEFORE_CALCULATOR` revision and guarded cleanup, DB refresh before final sync assertion, `_opt_dec -> Decimal | None`. PK/FK names verified in the test DB to follow the naming convention. Remaining notes recorded in DECISIONS.md 2026-11-09 (no range CHECK on point/tick_value_loss; request de-dup in API; worker DB clock and failure fields).
 - Final full make check PASSED after fixes: 1959 backend + 1 intentional skip (208.36 s), 337 frontend, all lint/type checks; both URLs pinned to trading_journal_test, AI key empty.
 
-### RESUME FROM HERE
+### Historical resume note (before M5-04a)
 
 M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (no push). Next: M5-04 on a new branch `m5/calculator-api` from `main`: `GET /api/accounts/{id}/symbol-specs`, `POST /api/calculator/calculate`, margin requests API, and the worker dispatcher with read-only `order_calc_margin` (allow-list change) per docs/api.md M5 and DECISIONS 2026-11-09. Tests first (tdd-guide for sizing/risk paths), root sole test runner, full gate with both DB URLs pinned to trading_journal_test and AI disabled, then independent reviews. The dev DB `trading_journal` is already at revision c8a41e62b903. Then M5-05 UI, M5-06 QA, M5-07 owner real-spec comparisons (still pending from Borys). Never push, no real trading/AI/Whisper operations. Keep scripts/pyproject.toml and scripts/uv.lock untracked and untouched.
+
+## M5-04a and PM process rules - 2026-11-09
+
+- PM accepted M5-03 and M4 (with open items). Process rules added to CLAUDE.md, AGENTS.md and DECISIONS: Codex only on `codex/<topic>`, never merges; session-start git check; pre-migration backup; Borys pushes main after every merge (orchestrator never pushes).
+- Session-start check 2026-11-09: git matched STATUS; unexplained only `origin/m5/calculator-plan` on the remote (pushed by Borys, assumed) and the scripts manifests.
+- scripts/pyproject.toml + scripts/uv.lock: empty PyCharm `uv init` project (created 2026-11-05 16:28, before scripts/.idea 16:30), not needed by the stdlib-only qa scripts: deleted and gitignored.
+- M4 live AI eval: 10 calls exactly, 0.0860 USD, logged in logs/ai_usage.jsonl; 0 invented values, 0 questions; results in docs/reports/M4.md (which also records that M4-01..07 were Claude Code and M4-08/09 Codex).
+- M5-04a: `python -m app.tools.migrate` (dev.py migrate step, make migrate). Backup only when migrations pending, non-`_test` DBs, host pg_dump else docker (local + compose port), failure aborts upgrade, unknown DB revision stops before dump, keep 10. Real run on dev DB: no migrations; real docker dump of trading_journal to a scratch folder is a valid archive (16 tables).
+- QA DBs trading_journal_qa_m3 / qa_m4 kept; ask Borys before dropping.
+
+### RESUME FROM HERE
+
+M5-04a merged into `main` locally (Borys pushes). Next M5-04b on branch `m5/calculator-api` from main: migration dropping `calculator_margin_samples` and the `signature` columns (database-reviewer); the dev DB upgrade will go through the new backup. Then M5-04c (tdd-guide tests first: specs list + calculate with cached estimate, never MT5) and M5-04d (margin requests API, 2 s worker job under the sync lock, read-only order_calc_margin, fixture source). Then M5-05 UI with the owner checklist (4 symbols, exact Ukrainian UI names and MT5 menu paths), M5-06 QA, M5-07 owner comparisons. Never push; no real trading; no further live AI without authorization.

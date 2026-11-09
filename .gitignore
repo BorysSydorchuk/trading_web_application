@@ -26,6 +26,10 @@ node_modules/
 frontend/dist/
 *.tsbuildinfo
 
+# PyCharm/uv init when scripts/ is opened as its own project (scripts are stdlib-only)
+scripts/pyproject.toml
+scripts/uv.lock
+
 # OS / editors
 .DS_Store
 Thumbs.db

@@ -43,12 +43,19 @@ Europe/Brussels sessions. Never push or operate real trading accounts.
   reviewers do not run git, tests or modifying commands. General review is
   required for every task; migration review and financial TDD remain mandatory
   where CLAUDE.md requires them.
-- Commit completed tasks locally with repository conventions; merge topics with
-  `--no-ff` only after green checks and independent APPROVE. Preserve unrelated
-  changes, including original untracked `scripts/pyproject.toml` and `scripts/uv.lock`.
-- Track progress in existing docs. Stop before M4-10 owner acceptance; only Borys
-  can provide it. Current owner authorization permits M4-08 recovery and M4-09,
-  superseding the old STATUS instruction to stop before M4-09.
+- Branch and merge rules (PM, 2026-11-09; supersede older merge instructions):
+  work only on your own branch `codex/<topic>`, created from up-to-date `main`, one
+  task at a time, and only on a task listed in `docs/STATUS.md` with owner `codex`.
+  Commit completed work there with repository conventions. **Never merge to `main`**:
+  the Claude Code orchestrator reviews the branch (make check, code-reviewer and the
+  required specialist reviewers) and merges it with `--no-ff`. Preserve unrelated
+  changes you did not make.
+- At the start of every session: `git status` and `git log --all --oneline -20`,
+  compared with `docs/STATUS.md`; report anything unexplained to Borys first.
+- Before any `alembic upgrade` on the dev database `trading_journal` a pre-migration
+  `pg_dump` backup is required (see CLAUDE.md); `trading_journal_test` is exempt.
+- Track progress in existing docs. Owner acceptance of a milestone comes only from
+  Borys.
 
 ## Usage checkpoint and safe shutdown
 

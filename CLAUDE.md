@@ -25,11 +25,17 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 - Independent tasks (for example backend endpoint + frontend page against an agreed API contract) may run in parallel. Agree the API contract first and write it into `docs/api.md`.
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
+- **Start of every session:** run `git status` and `git log --all --oneline -20` and compare with `docs/STATUS.md`. Report anything unexplained (unknown commits, untracked files, code not described in STATUS) to Borys before building on it.
+- **Codex (OpenAI) and any other non-Claude-Code agent** also works on this repo (its instructions: `AGENTS.md`):
+  - Works only on its own branch `codex/<topic>`, one task at a time; the task is listed in `docs/STATUS.md` with owner `codex`.
+  - Never merges to `main`. The orchestrator reviews its branch like a subagent task: `make check`, `code-reviewer` (plus the required specialist reviewers), then `git merge --no-ff`.
+- **Pre-migration backup:** before any `alembic upgrade` on the dev database `trading_journal` (`make db-ensure`, `start.bat`, `make migrate`, anything), a `pg_dump` goes to `backups/pre-migration-<revision>-<timestamp>.dump` and its path is printed; keep the last 10. Tests on `trading_journal_test` do not need this.
 
 ## Git workflow
 - M0 and M1 live on `main`. From M2 on, one branch per topic: `m<N>/<topic>` (for example `m2/terminal-path-guard`), created from up-to-date `main`. Commit the topic's tasks there.
 - Merge a topic branch into `main` with `git merge --no-ff` only after code-reviewer APPROVE and a green `make check`.
 - **Never push** (no `git push` of any branch, no force-push). Commit and merge locally only; Borys pushes himself. This overrides any push step in `.claude/rules/ecc/` or older notes.
+- `main` is pushed after every merge to `main`; Borys does the push. After each merge, tell him `main` is ready to push (with the merge commit).
 - Each milestone report (`docs/reports/M<n>.md`) lists the milestone's commit range.
 
 ## Decisions and questions
