@@ -292,4 +292,12 @@ Continue M5-01/02: finish core tests, root observes RED, backend implements pure
 
 ### RESUME FROM HERE
 
-Proceed to M5-03 broker point/loss tick-value capture and margin persistence on a new topic after local M5-01/02 commit/merge. Follow docs/api.md M5, tests first, database review for migrations and independent review after full gate. Then API/worker, reusable UI and isolated QA. Continue authorizes work until owner says otherwise; do not repeatedly ask allowance. Never push or run real trading/AI/Whisper operations.
+M5-01/02 committed as `1cb42a7`, merged locally with `--no-ff` as `058406b`. Current topic is `m5/calculator-data` for M5-03. Sol backend owns metadata/model/migration and focused tests, initially tests only; root owns test execution and documentation. Observe RED before implementation, then full checks and independent database/general/Python review. Follow docs/api.md M5. Then API/worker, reusable UI and isolated QA. Continue authorizes work until owner says otherwise; do not repeatedly ask allowance. Never push or run real trading/AI/Whisper operations. Original untracked scripts manifests and QA resources remain preserved.
+
+## M5-03 verification - 2026-11-09
+
+- Resume found implementation beyond STATUS: nullable symbol_specs.point/tick_value_loss (captured from MT5 `point`/`trade_tick_value_loss`, never inferred), calculator_margin_samples and calculator_margin_requests tables (migration c8a41e62b903, downgrade tested), sync upsert of the new fields, tests in backend/tests/mt5/test_calculator_metadata.py and backend/tests/test_calculator_data.py. Signature computation, margin worker/dispatcher, order_calc_margin allow-list and API are NOT implemented (M5-04).
+- Root retroactive RED against committed HEAD code (exported copy): 5 metadata tests failed, DB tests collection ImportError. GREEN focused 70 passed.
+- Root fixes (no behaviour change): 12 ruff findings in new test/migration; test_bias_notes_downgrade_refuses_note_without_entries assumed bias migration was head, now asserts a refused downgrade leaves the revision unchanged.
+- Docker Desktop was stopped; `make db-ensure` started it and also upgraded the DEV DB (trading_journal) to c8a41e62b903 (additive only, reversible with `alembic downgrade b6d41a9e2c57`). No data deleted.
+- Full make check PASSED with both URLs pinned to local trading_journal_test, AI key empty: 1959 backend + 1 intentional skip (240.89 s), 337 frontend (23 files), all lint/type checks. Independent database/general/Python reviews next; no commit yet.
