@@ -245,9 +245,15 @@ def contains_phrase(phrase: str, normalised_text: str) -> bool:
     """`phrase` (already normalised) occurs in the text starting and ending at word edges:
     no letter/digit/apostrophe/underscore right before a phrase that starts with one, or
     right after a phrase that ends with one ("лан" does not match inside "план")."""
+    return find_phrase(phrase, normalised_text) != -1
+
+
+def find_phrase(phrase: str, normalised_text: str, start: int = 0) -> int:
+    """Index of the first word-edge occurrence of `phrase` (already normalised, see
+    contains_phrase) at or after `start`, or -1."""
     if not phrase:
-        return False
-    start = normalised_text.find(phrase)
+        return -1
+    start = normalised_text.find(phrase, start)
     while start != -1:
         end = start + len(phrase)
         before_ok = (
@@ -259,9 +265,9 @@ def contains_phrase(phrase: str, normalised_text: str) -> bool:
             or not _word_char(normalised_text[end])
         )
         if before_ok and after_ok:
-            return True
+            return start
         start = normalised_text.find(phrase, start + 1)
-    return False
+    return -1
 
 
 def evidence_in_text(evidence: Any, normalised_text: str) -> bool:

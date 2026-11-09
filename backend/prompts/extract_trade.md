@@ -69,7 +69,9 @@ He trades a liquidity / smart-money style strategy. Terms and the spellings he u
   "зняв фрактал", "оновив хай/лоу"): price takes out the latest fractal. As an exit reason it
   means he closed because a fractal was updated.
 - **Point B** ("точка B", "точка Б", "точка бе", "point B"): his target level. As an exit
-  reason: the trade was closed at the point B target.
+  reason: the trade was closed at the point B target. When the take profit sat at point B
+  ("по тейку в точке B", "тейк на точці B", "закрив по тейку в точці B"), the exit reason
+  is the point B target (`point_b`), not the plain TP (`tp`).
 - **OB** ("ОБ", "ордер блок", "ордерблок", "order block"): an order block (a POI of type
   `other`).
 - **SL / TP**: "стоп", "стоп-лос", "вибило по стопу", "вибило", "вынесло", "словив стоп" =

@@ -1,0 +1,73 @@
+{
+  "description": "Confidence as number words in EN/UA/RU (one, одиничка, двойка, на тройку), PM 2026-11-09",
+  "kind": "pre_london",
+  "text": "Gold long, confidence one. Дакс вниз, впевненість одиничка. Кабель в шорт, уверенность двойка. Фібер вгору, на тройку.",
+  "model_output": [
+    {
+      "symbol": "XAUUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Gold long"
+    },
+    {
+      "symbol": "XAUUSD",
+      "key": "confidence",
+      "value": "1",
+      "evidence": "confidence one"
+    },
+    {
+      "symbol": "GER40",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "Дакс вниз"
+    },
+    {
+      "symbol": "GER40",
+      "key": "confidence",
+      "value": "1",
+      "evidence": "впевненість одиничка"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "direction",
+      "value": "bearish",
+      "evidence": "Кабель в шорт"
+    },
+    {
+      "symbol": "GBPUSD",
+      "key": "confidence",
+      "value": "2",
+      "evidence": "уверенность двойка"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "direction",
+      "value": "bullish",
+      "evidence": "Фібер вгору"
+    },
+    {
+      "symbol": "EURUSD",
+      "key": "confidence",
+      "value": "3",
+      "evidence": "на тройку"
+    }
+  ],
+  "expected_entries": {
+    "EURUSD": {
+      "direction": "bullish",
+      "confidence": 3
+    },
+    "GBPUSD": {
+      "direction": "bearish",
+      "confidence": 2
+    },
+    "XAUUSD": {
+      "direction": "bullish",
+      "confidence": 1
+    },
+    "GER40": {
+      "direction": "bearish",
+      "confidence": 1
+    }
+  }
+}

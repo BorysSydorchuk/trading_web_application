@@ -29,8 +29,12 @@ with a fake model that replays `model_output`. It never calls the real API.
 
 Invariants checked for every fixture: every kept value has evidence that appears in `text`
 (>= 3 letters/digits, whole words); its symbol is named in `text` (symbol name or a
-bias.yaml alias); kept free text is a whole-word piece of `text`; no kept text contains `?`
-unless its evidence does.
+bias.yaml alias); kept free text is a whole-word piece of `text` (`key_levels`: each of its
+"; "-joined pieces is); no kept text contains `?` unless its evidence does.
+
+`key_levels` may name several levels joined by "; " (PM 2026-11-09): every piece must be a
+whole-word piece of `text`, the pieces must occur in `text` in that order and must not
+repeat (else `invalid_option`). `narrative` stays one continuous piece.
 
 Reasons: `evidence_not_in_text`, `invalid_option`, `out_of_range`, `question`,
 `not_fillable`, `symbol_not_in_text`.

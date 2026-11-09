@@ -321,6 +321,13 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 - M5-04a: `python -m app.tools.migrate` (dev.py migrate step, make migrate). Backup only when migrations pending, non-`_test` DBs, host pg_dump else docker (local + compose port), failure aborts upgrade, unknown DB revision stops before dump, keep 10. Real run on dev DB: no migrations; real docker dump of trading_journal to a scratch folder is a valid archive (16 tables).
 - QA DBs trading_journal_qa_m3 / qa_m4 kept; ask Borys before dropping.
 
+## M5 extraction fixes (PM live-eval follow-up) - 2026-11-09
+
+- Branch `m5/extraction-fixes` from main (d794465). PM fixes: bias confidence from UA/RU/EN number words (prompt list + test against extraction.yaml, "одиничка" added), bias key_levels several verbatim pieces joined by "; " (guard `key_levels_issue`, `find_phrase`), trade "тейк в точці B" → exit_reason `point_b`; zone+price = one level (prompt). CLAUDE.md push line per PM. DECISIONS/api.md/M4 report updated.
+- Live re-run done (PM-authorized, exactly 3 calls, 0.0280 USD, logs/ai_usage.jsonl). Zone+price prompt fix verified live with 1 extra call authorized by Borys (0.0076 USD, MATCH, docs/reports/M4.md).
+- 2026-11-09 evening: laptop lost power during the full make check (uncommitted). Resumed: full make check PASSED (2008 backend + 1 intentional skip, 337 frontend, all lint/types; both DB URLs pinned to trading_journal_test, AI key empty). code-reviewer APPROVE (no CRITICAL/HIGH/MEDIUM); LOW fixes: 3 more key_levels edge tests (focused 91 passed), report heading; punctuation-only piece → BACKLOG. Committed and merged --no-ff into main.
+
 ### RESUME FROM HERE
 
+`m5/extraction-fixes` merged into main. Next:
 M5-04a merged into `main` locally (Borys pushes). Next M5-04b on branch `m5/calculator-api` from main: migration dropping `calculator_margin_samples` and the `signature` columns (database-reviewer); the dev DB upgrade will go through the new backup. Then M5-04c (tdd-guide tests first: specs list + calculate with cached estimate, never MT5) and M5-04d (margin requests API, 2 s worker job under the sync lock, read-only order_calc_margin, fixture source). Then M5-05 UI with the owner checklist (4 symbols, exact Ukrainian UI names and MT5 menu paths), M5-06 QA, M5-07 owner comparisons. Never push; no real trading; no further live AI without authorization.

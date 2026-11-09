@@ -23,3 +23,4 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 | 2026-11-05 | "Re-align all trades" action (button or endpoint) after editing bias.yaml symbols: today old trades are re-aligned only when a matching bias note is written or the trade is synced again | code-reviewer (M4-04/05) | Only on a bias.yaml symbol change |
 
 | 2026-11-07 | Show bias in Journal trade-detail card | PM M4 approval | Nonblocking UX improvement; Describe bias works. Outside M5 calculator scope. |
+| 2026-11-09 | Reject a bias free-text piece with no letter or digit (e.g. `хаю Азії; ,`) as `invalid_option` | code-reviewer LOW, m5/extraction-fixes | Passes the guard today, same as a single free-text value before this change; harmless, not seen live. |

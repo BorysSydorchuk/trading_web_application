@@ -1,12 +1,12 @@
 {
-  "description": "UA/RU mix with glossary terms; everything stated clearly is kept",
+  "description": "UA/RU mix with glossary terms; everything stated clearly is kept. 'Закрыл по тейку в точке B' = point B target (TP placed at point B) -> point_b, not tp (PM 2026-11-09)",
   "text": "Лондон, золото. Флоу H1 синхронний з H4, POI — FVG H4, фвг после манипуляции, сняли ликвидность под лоу. Вход по IFVG M5. Закрыл по тейку в точке B. По плану, спокойно. Сетап на 4 из 5. Урок: не двигать стоп раньше времени.",
   "model_output": {
     "setup_context": { "value": "yes", "evidence": "Флоу H1 синхронний з H4" },
     "poi_type": { "value": "fvg_h4", "evidence": "POI — FVG H4" },
     "fvg_kind": { "value": "post_manipulation", "evidence": "фвг после манипуляции" },
     "entry_model": { "value": "ifvg_m5", "evidence": "Вход по IFVG M5" },
-    "exit_reason": { "value": "tp", "evidence": "Закрыл по тейку" },
+    "exit_reason": { "value": "point_b", "evidence": "Закрыл по тейку в точке B" },
     "followed_plan": { "value": true, "evidence": "По плану" },
     "emotion_before": { "value": "calm", "evidence": "спокойно" },
     "quality_rating": { "value": 4, "evidence": "Сетап на 4 из 5" },
@@ -17,7 +17,7 @@
     "poi_type": "fvg_h4",
     "fvg_kind": "post_manipulation",
     "entry_model": "ifvg_m5",
-    "exit_reason": "tp",
+    "exit_reason": "point_b",
     "followed_plan": true,
     "emotion_before": "calm",
     "lesson": "не двигать стоп раньше времени",
