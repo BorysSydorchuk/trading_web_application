@@ -346,3 +346,25 @@ def test_fixture_files_match_generator(name: str) -> None:
         f"{name} is stale: run `uv run python -m tests.fixtures.mt5.build_fixtures`"
     )
     assert json.loads(on_disk)["format"] == 1
+
+
+# --- funded_next_ger30.json (M5-08) ---------------------------------------------------------
+
+
+def test_funded_next_ger30_has_ger30_and_no_ger40() -> None:
+    src = source("funded_next_ger30.json")
+    with connected(src, "D:/MT5/x/terminal64.exe", 51234571, PW, SERVER) as info:
+        assert (info.balance, info.equity) == (Decimal("100034.80"), Decimal("100058.00"))
+        names = [s.name for s in src.symbols_matching(["EURUSD", "GBPUSD", "XAUUSD", "GER"])]
+        assert names == ["EURUSD", "GBPUSD", "XAUUSD", "GER30"]
+        assert src.symbol_spec("GER40") is None
+        ger30 = src.symbol_spec("GER30")
+        assert ger30 is not None
+        assert (ger30.point, ger30.tick_value_loss) == (Decimal("0.01"), Decimal("0.01161"))
+        assert {d.symbol for d in src.deals(0, 2**31) if d.position_id} == {"GER30"}
+        assert [p.symbol for p in src.open_positions()] == ["GER30"]
+        assert src.calc_margin("buy", "GER30", Decimal("0.5"), Decimal("24000")) == Decimal(
+            "2400.000"
+        )
+        with pytest.raises(Mt5Error):
+            src.calc_margin("buy", "GER40", Decimal("0.5"), Decimal("24000"))

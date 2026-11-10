@@ -107,12 +107,12 @@ def lookup_key(kind: BiasKind, period_date: date, symbol: str) -> tuple[BiasKind
 
 
 def match_bias_symbol(trade_symbol: str, symbols: Iterable[str]) -> str | None:
-    """The bias symbol ``trade_symbol`` starts with (case-insensitive), or None.
+    """The bias symbol equal to the trade's canonical symbol, or None (M5-08).
 
-    bias.yaml guarantees no symbol is the prefix of another, so at most one matches.
+    Trades carry canonical names from config/symbols.yaml (GER30 at FundedNext is stored as
+    GER40) and bias.yaml symbols must be canonical names, so no prefix match is needed.
     """
-    folded = trade_symbol.casefold()
-    return next((s for s in symbols if folded.startswith(s.casefold())), None)
+    return next((s for s in symbols if s == trade_symbol), None)
 
 
 def daily_periods(open_time: datetime, settings: AlignmentSettings) -> tuple[BiasPeriod, ...]:

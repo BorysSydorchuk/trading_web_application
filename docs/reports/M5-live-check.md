@@ -93,6 +93,8 @@ No real MT5 / AI / Whisper: MT5 only via fixture (log line above, no `terminal64
 process); `/api/health` `ai.state: not_configured`, `/api/ai/usage` calls 0; no voice notes,
 so Whisper never loaded (only the empty `transcription` queue job ran).
 
+> **Superseded in part by M5-08 (canonical symbols, 2026-11-10):** the evidence above was taken before M5-08. Since M5-08 the calculator takes the canonical name (`GER40`, not the broker name `GER40.cash`; the exact-match 404 example is now the other way round: `GER40` is valid, a broker name like `GER40.cash` as input is 404), the QA symbol shows as `GER40 (GER40.cash)` only if the QA account's firm has no override (the FundedNext override allows only `GER30`), and `EURUSD.legacy` is renamed to canonical EURUSD and hidden behind the real EURUSD row, so the `specs_incomplete` case is no longer reachable with this fixture (covered by API tests). Re-run the QA flow only after updating the fixture/checklist.
+
 ### [QA] Browser check (orchestrator, Chrome, same QA app, 2026-11-10 ~08:58 UTC)
 
 - «Калькулятор», EURUSD Buy, «Вхід» typed with a comma `1,16350`, SL 1.16180, 1 %: «Лот» 5.88, «Реальний ризик» 999.60 USD · 1.00%, budget 1 000.00 USD, TP 1.16605 / 1.16690 / 1.16860, balance with sync date, specs date, «Маржа» 6 841.38 USD «MT5, 08:58:47» (live via worker) ✅ (same as the HTTP evidence).
@@ -111,8 +113,9 @@ no margin there, write «не показано»).
 1. [OWNER] Start the normal app (`start.bat`), wait for a successful sync of the FundedNext
    account (Головна / Налаштування).
 2. [OWNER] Open **Калькулятор** in the menu. «Рахунок»: the FundedNext account. «Символ»
-   lists EURUSD, GBPUSD, XAUUSD, GER40 with the real broker names; none says
-   «(потрібна синхронізація)».
+   lists EURUSD, GBPUSD, XAUUSD and `GER40 (GER30)` (canonical name, broker name in brackets,
+   M5-08); none says «(потрібна синхронізація)» or «символ не знайдено у брокера». First
+   owner run 2026-11-10: EURUSD/GBPUSD/XAUUSD OK; GER40 needed M5-08 (FundedNext calls it GER30).
 3. [OWNER] For each of the 4 symbols write down from MT5 Specification: Digits, Contract
    size, Tick size, Tick value, Volume min / step / max, Margin currency, Profit currency;
    compare with the hint under «Вхід» («крок ціни … · пункт …»).
@@ -121,7 +124,7 @@ no margin there, write «не показано»).
    must match **within one volume step (0.01)**; compare «Маржа» (MT5, …) with the New Order margin for that «Лот».
 5. [OWNER] GBPUSD: same as 4 with «Як вказати SL» → «Пункти». «Лот» within 0.01; margin vs New Order.
 6. [OWNER] XAUUSD: same as 4, SL a few dollars away. «Лот» within 0.01; margin vs New Order.
-7. [OWNER] GER40 (EUR index on a USD account): same as 4. «Лот» within **one GER40 volume
+7. [OWNER] GER40 (EUR index on a USD account; in MT5 Market Watch it is **GER30**): same as 4. «Лот» within **one GER40 volume
    step** (from Specification); margin vs New Order. This is the one where loss tick value
    (EUR→USD) matters most.
 8. [OWNER] For one symbol, check «Реальний ризик» ≤ «Бюджет ризику» and the three

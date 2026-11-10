@@ -15,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import MONEY, PRICE, RATIO, Base, TimestampMixin, enum_check
+from app.models.base import MONEY, PRICE, RATIO, Base, TimestampMixin, copy_of, enum_check
 from app.models.enums import AccountPhase, AccountStatus
 
 
@@ -65,7 +65,9 @@ class SymbolSpec(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    # Broker name (MT5 calls); the app shows `canonical_symbol` (config/symbols.yaml, M5-08).
     symbol: Mapped[str] = mapped_column(String(50))
+    canonical_symbol: Mapped[str] = mapped_column(String(50), default=copy_of("symbol"))
     contract_size: Mapped[Decimal] = mapped_column(PRICE)
     tick_size: Mapped[Decimal] = mapped_column(PRICE)
     tick_value: Mapped[Decimal] = mapped_column(PRICE)

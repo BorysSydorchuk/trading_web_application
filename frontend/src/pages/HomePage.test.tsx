@@ -136,7 +136,7 @@ describe('HomePage calculator panel', () => {
     mockApi(
       http.get('/api/bias/status', () => HttpResponse.json(status())),
       http.get('/api/accounts', () => HttpResponse.json({ items: [account()] })),
-      http.get('/api/accounts/:id/symbol-specs', () => HttpResponse.json({ items: [spec()] })),
+      http.get('/api/accounts/:id/symbol-specs', () => HttpResponse.json({ items: [spec()], missing: [] })),
     )
     renderWithProviders(<HomePage />)
     const panel = await screen.findByRole('region', { name: uk.calculator.home.title })

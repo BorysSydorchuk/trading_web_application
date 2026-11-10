@@ -11,10 +11,17 @@ import type { SymbolSpec } from './types'
 export const f = uk.calculator.form
 export const r = uk.calculator.result
 
-export function serveSetup({ accounts = [account()], specs = [spec()] }: { accounts?: Account[]; specs?: SymbolSpec[] } = {}) {
+interface SetupOptions {
+  accounts?: Account[]
+  specs?: SymbolSpec[]
+  /** Canonical names not found at the broker. */
+  missing?: string[]
+}
+
+export function serveSetup({ accounts = [account()], specs = [spec()], missing = [] }: SetupOptions = {}) {
   mockApi(
     http.get('/api/accounts', () => HttpResponse.json({ items: accounts })),
-    http.get('/api/accounts/:id/symbol-specs', () => HttpResponse.json({ items: specs })),
+    http.get('/api/accounts/:id/symbol-specs', () => HttpResponse.json({ items: specs, missing })),
   )
 }
 

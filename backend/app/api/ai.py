@@ -10,13 +10,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.api.config_files import config_error
 from app.api.trades import journal_context
 from app.config import get_settings
 from app.config_files import ConfigError, get_bias_config, get_number_words
 from app.db import get_db
 from app.domain.extraction import NumberWords
-from app.errors import ApiError
+from app.errors import ApiError, config_error
 from app.models import Trade
 from app.models.enums import BiasKind
 from app.schemas import ai as schemas

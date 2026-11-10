@@ -130,3 +130,24 @@ configured broker_time rule is used). Symbols EURUSD, GBPUSD, XAUUSD, GER40.cash
 `point` and `tick_value_loss`; GER40.cash tick_value_loss 0.01161) and `EURUSD.legacy`
 with `point`/`tick_value_loss` null (→ `specs_incomplete`). `margins` per 1.0 lot for
 EURUSD/GBPUSD/XAUUSD buy and sell; none for GER40.cash (→ failed `mt5_error`, «маржа недоступна»).
+
+## funded_next_ger30.json (M5-08, SYNTHETIC)
+
+The real FundedNext case from the M5-07 owner check: the broker names the DAX **GER30** and has
+no GER40 symbol. Values are synthetic (not broker evidence). Account `51234571` @
+`FundedNext-Server`, USD, deposit 100 000.00 (Mon 2026-11-02 09:00 server). Ticks for EURUSD,
+GBPUSD, XAUUSD, GER30 at Tue 2026-11-03 16:00 server = **14:00 UTC** (15:00 Brussels, trading
+hours; offset +2 agrees with ny_close). Balance **100 034.80**, equity **100 058.00**.
+
+Specs carry `point` and `tick_value_loss`. GER30: digits 2, contract 1, tick size 0.01,
+tick value 0.0116 (loss 0.01161), point 0.01, volume 0.1 / 0.1 / 100, EUR / EUR.
+
+| pos id | symbol, dir | open UTC → close UTC | Brussels, session | entry → exit | vol | net | initial SL (source) | TP | risk | status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 8000101 | GER30 buy | 11-03 08:30 → 09:30 | Tue 09:30 london | 24000 → 24030 | 1.0 | 34.80 | 23970 (deal) | 24060 | 34.80 (realised), R 1.0000, planned RR 2.0000 | needs_description |
+| 8000201 | GER30 sell | 11-03 13:00 → open | Tue 14:00 ny | 24100 → – | 2.0 | 0.00 | 24130 (position) | 24040 | **69.60** (spec: 30 / 0.01 × 0.0116 × 2) | open |
+
+With `config/symbols.yaml` both trades are stored as `symbol` **GER40**, `broker_symbol`
+**GER30**; the spec row keeps `symbol` GER30 with `canonical_symbol` GER40. The open trade's risk
+needs the spec found by the broker name. Margins: GER30 buy 4800.00 / sell 4799.50 per lot; a
+`calc_margin` with `GER40` fails (`mt5_error`), so the worker must call MT5 with the broker name.

@@ -808,6 +808,8 @@ export const uk = {
       symbol: 'Символ',
       symbolPlaceholder: 'Оберіть символ',
       symbolNeedsSync: (symbol: string) => `${symbol} (потрібна синхронізація)`,
+      symbolWithBroker: (symbol: string, broker: string) => `${symbol} (${broker})`,
+      symbolMissing: (symbol: string) => `символ не знайдено у брокера: ${symbol}`,
       direction: 'Напрямок',
       entry: 'Вхід',
       slMode: 'Як вказати SL',
@@ -838,6 +840,9 @@ export const uk = {
     },
     result: {
       title: 'Результат',
+      symbol: 'Символ',
+      brokerSymbol: (broker: string) => `(${broker})`,
+      brokerSymbolTitle: (broker: string) => `Назва у брокера: ${broker}`,
       volume: 'Лот',
       actualRisk: 'Реальний ризик',
       riskBudget: 'Бюджет ризику',

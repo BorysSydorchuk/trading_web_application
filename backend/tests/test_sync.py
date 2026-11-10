@@ -24,6 +24,7 @@ from app.api import sync_status as sync_status_api
 from app.config import Settings
 from app.config_files import get_rules
 from app.config_files.rules import RulesConfig
+from app.config_files.symbols import SymbolsConfig
 from app.db import make_session_factory
 from app.domain.trade_builder import SkippedPosition
 from app.models import Account, RuleViolation, SymbolSpec, SyncLog, Trade, TradeExitDeal
@@ -48,6 +49,19 @@ WEEK_NOW = datetime(2026, 10, 23, 10, 0, tzinfo=UTC)
 WEEK_STEP1_NOW = datetime(2026, 10, 23, 13, 31, tzinfo=UTC)
 DST_NOW = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
 FAIL_NOW = datetime(2026, 10, 28, 10, 0, tzinfo=UTC)
+# The real symbols.yaml names, without its FundedNext override (GER40 -> only GER30): these
+# fixtures predate M5-08 and name the DAX GER40, so the watch list and tick detection keep
+# finding it. The FundedNext GER30 case is tests/test_canonical_symbols.py.
+SYMBOLS = SymbolsConfig.model_validate(
+    {
+        "symbols": [
+            {"name": "EURUSD"},
+            {"name": "GBPUSD"},
+            {"name": "XAUUSD"},
+            {"name": "GER40", "broker_names": ["GER30", "GER40.cash", "DE40"]},
+        ]
+    }
+)
 
 
 def password(_: int) -> SecretStr:
@@ -89,18 +103,18 @@ def rules() -> RulesConfig:
 
 
 def add_account(session: Session, login: int, name: str | None = None, **kw: Any) -> Account:
-    account = Account(
-        name=name or f"FN {login}",
-        firm="FundedNext",
-        program="Stellar 2-Step",
-        phase=AccountPhase.PHASE_1.value,
-        login=login,
-        server=SERVER,
-        terminal_path="D:\\MT5\\fn\\terminal64.exe",
-        starting_balance=Decimal("100000.00"),
-        currency="USD",
-        **kw,
-    )
+    defaults: dict[str, Any] = {
+        "name": name or f"FN {login}",
+        "firm": "FundedNext",
+        "program": "Stellar 2-Step",
+        "phase": AccountPhase.PHASE_1.value,
+        "login": login,
+        "server": SERVER,
+        "terminal_path": "D:\\MT5\\fn\\terminal64.exe",
+        "starting_balance": Decimal("100000.00"),
+        "currency": "USD",
+    }
+    account = Account(**(defaults | kw))  # overrides (e.g. firm) win
     session.add(account)
     session.commit()
     return account
@@ -113,7 +127,7 @@ def source(name: str, step: int = 0) -> FixtureMt5Source:
 def run(
     session: Session, account: Account, src: Mt5Source, rules: RulesConfig, now: datetime
 ) -> SyncLog:
-    return sync_account(session, account, src, rules, now, password_for=password)
+    return sync_account(session, account, src, rules, now, password_for=password, symbols=SYMBOLS)
 
 
 def trades_by_pid(session: Session, account_id: int) -> dict[int, Trade]:

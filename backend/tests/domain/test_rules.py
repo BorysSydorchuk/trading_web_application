@@ -26,7 +26,6 @@ RAW: dict[str, Any] = {
         "interval_idle_seconds": 900,
         "initial_history_days": 30,
         "overlap_days": 3,
-        "watch_symbols": ["XAUUSD"],
     },
     "broker_time": "ny_close",
     "rules": {

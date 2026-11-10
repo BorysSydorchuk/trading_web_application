@@ -405,3 +405,81 @@ def test_worker_start_fails_interrupted_margin_requests_before_jobs_run(
 
     assert "margin" in order
     assert order.index("margin") < order.index("scheduler.start")
+
+
+def test_worker_start_reapplies_the_symbol_map_before_jobs_run(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """M5-08: stored rows get their canonical names (symbols.yaml) at every worker start."""
+    from app.worker import main as worker_main
+
+    order: list[str] = []
+    factory = object()
+
+    class FakeScheduler:
+        running = False
+
+        def start(self) -> None:
+            order.append("scheduler.start")
+            raise KeyboardInterrupt
+
+    def fake_reapply(session_factory: Any, **_kw: Any) -> int:
+        assert session_factory is factory
+        order.append("symbols")
+        return 0
+
+    monkeypatch.setattr(worker_main, "get_settings", lambda: settings)
+    monkeypatch.setattr(worker_main, "setup_logging", lambda *_: tmp_path / "worker.log")
+    monkeypatch.setattr(worker_main, "check_config_files", lambda: None)
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: factory)
+    monkeypatch.setattr(worker_main, "mark_interrupted_runs", lambda _f: None)
+    monkeypatch.setattr(worker_main, "reset_interrupted_notes", lambda _f: None)
+    monkeypatch.setattr(worker_main, "mark_interrupted_margin_requests", lambda _f: 0)
+    monkeypatch.setattr(worker_main, "reapply_symbol_map", fake_reapply)
+    monkeypatch.setattr(worker_main, "_install_signal_handlers", lambda _stop: None)
+    monkeypatch.setattr(worker_main, "build_scheduler", lambda *_a, **_k: FakeScheduler())
+    monkeypatch.setattr(worker_main, "dispose_engine", lambda: None)
+
+    assert worker_main.main() == 0
+
+    assert order == ["symbols", "scheduler.start"]
+
+
+def test_worker_starts_even_when_the_symbol_map_fails(
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed re-apply (None) is logged at ERROR; the scheduler still starts."""
+    from app.worker import main as worker_main
+
+    order: list[str] = []
+
+    class FakeScheduler:
+        running = False
+
+        def start(self) -> None:
+            order.append("scheduler.start")
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(worker_main, "get_settings", lambda: settings)
+    monkeypatch.setattr(worker_main, "setup_logging", lambda *_: tmp_path / "worker.log")
+    monkeypatch.setattr(worker_main, "check_config_files", lambda: None)
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: None)
+    monkeypatch.setattr(worker_main, "mark_interrupted_runs", lambda _f: None)
+    monkeypatch.setattr(worker_main, "reset_interrupted_notes", lambda _f: None)
+    monkeypatch.setattr(worker_main, "mark_interrupted_margin_requests", lambda _f: 0)
+    monkeypatch.setattr(worker_main, "reapply_symbol_map", lambda _f, **_kw: None)
+    monkeypatch.setattr(worker_main, "_install_signal_handlers", lambda _stop: None)
+    monkeypatch.setattr(worker_main, "build_scheduler", lambda *_a, **_k: FakeScheduler())
+    monkeypatch.setattr(worker_main, "dispose_engine", lambda: None)
+
+    with caplog.at_level(logging.ERROR, logger="app.worker.main"):
+        assert worker_main.main() == 0
+
+    assert order == ["scheduler.start"]
+    assert any(
+        r.levelno == logging.ERROR and "symbol map" in r.getMessage().lower()
+        for r in caplog.records
+    )

@@ -8,19 +8,11 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.config_files import ConfigError, get_journal_fields, get_rules
-from app.errors import ApiError
+from app.errors import config_error
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def config_error(exc: ConfigError) -> ApiError:
-    logger.error("Config error: %s", exc)
-    details: dict[str, Any] = {"file": exc.path.name, "problems": exc.problems}
-    if exc.reason is not None:
-        details["reason"] = exc.reason
-    return ApiError(500, "config_error", str(exc), details)
 
 
 @router.get("/journal-fields")

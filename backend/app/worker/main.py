@@ -60,6 +60,7 @@ from app.worker.sync_job import (
     SYNC_JOB_INTERVAL_S,
     make_source,
     mark_interrupted_runs,
+    reapply_symbol_map,
     run_sync_cycle,
 )
 from app.worker.transcription_job import (
@@ -309,6 +310,12 @@ def main() -> int:
     mark_interrupted_margin_requests(get_session_factory())
     # Single worker process assumed: every `processing` note is re-queued here.
     reset_interrupted_notes(get_session_factory())
+    # Stored rows get their canonical names from symbols.yaml (also every sync cycle).
+    if reapply_symbol_map(get_session_factory()) is None:
+        logger.error(
+            "Symbol map not applied at start (see above); the worker starts anyway and the "
+            "sync job retries it every cycle"
+        )
     logging.getLogger("apscheduler.scheduler").addFilter(_SkipNoiseFilter())
     stop = threading.Event()
     _install_signal_handlers(stop)

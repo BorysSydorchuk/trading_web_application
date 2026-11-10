@@ -35,7 +35,8 @@ def _storable_symbol(value: str) -> str:
     return value
 
 
-# Exact broker symbol: not stripped or case-folded (never prefix/fuzzy matched).
+# Exact canonical symbol (config/symbols.yaml, M5-08): not stripped or case-folded, never
+# prefix/fuzzy matched and never a broker name.
 Symbol = Annotated[
     str,
     StringConstraints(min_length=1, max_length=MAX_SYMBOL_LENGTH),
@@ -83,7 +84,8 @@ class CalculateInput(BaseModel):
 
 
 class SymbolSpecItem(BaseModel):
-    symbol: str
+    symbol: str  # canonical name (config/symbols.yaml), what calculate expects (M5-08)
+    broker_symbol: str  # the broker's own name (MT5)
     contract_size: PlainDecimal
     point: PlainDecimal | None
     tick_size: PlainDecimal
@@ -98,7 +100,8 @@ class SymbolSpecItem(BaseModel):
 
 
 class SymbolSpecList(BaseModel):
-    items: list[SymbolSpecItem]
+    items: list[SymbolSpecItem]  # symbols.yaml order, then the others by name
+    missing: list[str]  # symbols.yaml names without a spec row on the account
 
 
 class MarginInfo(BaseModel):

@@ -3,7 +3,10 @@
 export type Direction = 'buy' | 'sell'
 
 export interface SymbolSpec {
+  /** Canonical name (config/symbols.yaml); the value sent to calculate / margin-requests. */
   symbol: string
+  /** The broker's own name for it (e.g. GER30 for GER40 at FundedNext); MT5 calls only. */
+  broker_symbol: string
   contract_size: string
   /** null = not synced yet (the calculator answers specs_incomplete). */
   point: string | null
@@ -19,7 +22,10 @@ export interface SymbolSpec {
 }
 
 export interface SymbolSpecList {
+  /** Already in display order (symbols.yaml order, then others by name). */
   items: SymbolSpec[]
+  /** Canonical names configured in symbols.yaml but not found at this broker. */
+  missing: string[]
 }
 
 /** POST /api/calculator/calculate and /margin-requests body: exactly one SL and at most one risk field. */

@@ -477,3 +477,26 @@ MetaQuotes sources: [Python margin calculation](https://www.mql5.com/en/docs/pyt
 ### Acceptance evidence
 
 Automated pure-core tests use labelled synthetic examples for all four symbols and edge cases (>=80% position-sizing coverage). They do not satisfy real FundedNext specification acceptance. Borys supplies recorded specs and compares EURUSD/GBPUSD/XAUUSD/GER40 sizing/margin to MT5 within one volume step. No real account operations or unauthorized live calls during development.
+
+### M5-08 Canonical symbols (Borys, M5-07 owner check 2026-11-10)
+
+Problem: FundedNext names the DAX `GER30` (old name), the app uses `GER40`. Canonical names are used in the UI, journal, analytics, bias and rules; broker names only in MT5 calls.
+
+- `config/symbols.yaml` (UTF-8, loader like bias.yaml, reloaded on change, checked at API/worker start):
+  ```yaml
+  symbols:                      # order = UI order; replaces rules.yaml sync.watch_symbols
+    - { name: EURUSD }
+    - { name: GBPUSD }
+    - { name: XAUUSD }
+    - { name: GER40, broker_names: [GER30, GER40.cash, DE40] }
+  firms:                        # optional per account.firm override: only these broker names, in this order
+    FundedNext: { GER40: [GER30] }
+  ```
+  Validation: names and broker names unique across the file (case-insensitive), no name/broker name of one symbol is a prefix of another symbol's, firm overrides name known symbols. `bias.yaml` symbols must be canonical names from `symbols.yaml` (config error otherwise).
+- Canonical → broker (per account, used by spec sync): candidates = firm override if present, else `[name] + broker_names`; the first candidate the broker has exactly (case-insensitive) wins, else the first broker symbol that starts with a candidate (suffixes like `EURUSD.r`). No match: not found at that broker (sync logs a warning; no spec row).
+- Broker → canonical (trades, specs of traded symbols): exact (case-insensitive) name or broker name of any symbol, else the longest name/broker-name prefix, else the broker name itself (unconfigured symbols keep their name).
+- DB (migration, backfill copies): `trades.broker_symbol` (NOT NULL; `trades.symbol` = canonical), `symbol_specs.canonical_symbol` (NOT NULL; `symbol_specs.symbol` stays the broker name, unique per account), `calculator_margin_requests.broker_symbol` (NOT NULL; `symbol` = canonical). The canonical names of existing rows are (re)applied from `symbols.yaml` by an idempotent step in the worker at start and at the start of every sync cycle, so stored `GER30` trades show and aggregate as `GER40` and later edits of `symbols.yaml` apply to history too.
+- Bias alignment compares the canonical trade symbol with the bias symbol exactly (no prefix match any more). Rules: re-entry by canonical symbol; tick size lookups by broker symbol. trade_check compares MT5 deals with `broker_symbol`. Journal symbol filter/list = canonical.
+- Calculator API: `symbol` in calculate / margin-requests bodies = **canonical** name; the spec is found by (account, canonical). Specs list: `{items: [... + broker_symbol], missing: [canonical names from symbols.yaml without a spec row on that account]}`, items in symbols.yaml order then others by name. An account without any spec row (never synced) returns `missing: []` (the UI shows its sync hint instead); several rows with one canonical name show as one item, the row the sync resolver picks for the account's firm (the same row calculate and margin requests use). Margin requests store both; the worker calls MT5 with `broker_symbol`. Cached estimate keyed by canonical symbol.
+- UI: option label `GER40 (GER30)` when the broker name differs, `EURUSD` otherwise; `missing` entries shown as disabled options «символ не знайдено у брокера: GER40»; «(потрібна синхронізація)» only for a spec row with null point / tick_value_loss.
+- Acceptance: fixture with broker symbol `GER30` (real FundedNext case): trades → `GER40`, spec `GER40 (GER30)`, calculate on `GER40` works, margin request calls MT5 with `GER30`, a GER40 bias aligns with the GER30 trade; an account without any DAX symbol → `missing: ["GER40"]`.

@@ -26,6 +26,7 @@ CONFIG_FILES = (
     "transcription.yaml",
     "transcript_glossary.yaml",
     "bias.yaml",
+    "symbols.yaml",
 )
 
 # The list that was hardcoded as NUMBER_WORDS in app/domain/extraction.py before M3-02,

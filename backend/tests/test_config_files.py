@@ -46,6 +46,7 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcription.yaml",
         "transcript_glossary.yaml",
         "bias.yaml",
+        "symbols.yaml",
     ):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -106,6 +107,23 @@ def test_real_rules_load() -> None:
     assert ny is not None
     assert ny.contains(time(13))
     assert not ny.contains(time(16))
+
+
+def test_watch_symbols_moved_to_symbols_yaml() -> None:
+    """M5-08: config/symbols.yaml replaces rules.yaml sync.watch_symbols."""
+    raw = _read(REAL_CONFIG / "rules.yaml")
+    assert "watch_symbols" not in raw["sync"]
+    assert not hasattr(load_rules(REAL_CONFIG / "rules.yaml").sync, "watch_symbols")
+
+
+def test_old_watch_symbols_key_is_rejected(tmp_path: Path) -> None:
+    raw = _read(REAL_CONFIG / "rules.yaml")
+    raw["sync"]["watch_symbols"] = ["EURUSD"]
+    path = tmp_path / "rules.yaml"
+    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ConfigError) as info:
+        load_rules(path)
+    assert any("sync.watch_symbols" in p for p in info.value.problems)
 
 
 def test_real_journal_fields_load() -> None:

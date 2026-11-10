@@ -4,7 +4,7 @@ Two entry points, both flush-only (the caller commits) and both one bias query p
 
 - `recompute_trades`: a given set of trades (the MT5 sync after its upsert).
 - `recompute_for_scopes`: every trade a bias note change can affect: opened in the note's
-  local day / week / month, symbol starting with one of the note's entry symbols (old and new
+  local day / week / month, symbol equal to one of the note's entry symbols (old and new
   state, so a kind / period / symbol change also fixes the trades it no longer covers).
 
 `bias_alignment_override` is never touched; open and closed trades alike.
@@ -39,8 +39,6 @@ from app.models import BiasEntry, BiasNote, Trade
 from app.models.enums import BiasKind, TradingSession
 
 logger = logging.getLogger(__name__)
-
-_LIKE_ESCAPE = "\\"
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,21 +123,13 @@ def recompute_trades(session: Session, trades: Sequence[Trade], settings: Alignm
     return changed
 
 
-def _escape_like(text: str) -> str:
-    for char in (_LIKE_ESCAPE, "%", "_"):
-        text = text.replace(char, _LIKE_ESCAPE + char)
-    return text
-
-
 def _scope_condition(scope: NoteScope, tz: str) -> ColumnElement[bool]:
     if not scope.symbols:
         return false()
     start, end = period_utc_range(scope.kind, scope.period_date, tz)
-    prefixes = [
-        Trade.symbol.ilike(_escape_like(s) + "%", escape=_LIKE_ESCAPE)
-        for s in sorted(scope.symbols)
-    ]
-    return and_(Trade.open_time >= start, Trade.open_time < end, or_(*prefixes))
+    # Trades carry canonical names (M5-08): exact equality, no prefix match.
+    symbol = Trade.symbol.in_(sorted(scope.symbols))
+    return and_(Trade.open_time >= start, Trade.open_time < end, symbol)
 
 
 def recompute_for_scopes(

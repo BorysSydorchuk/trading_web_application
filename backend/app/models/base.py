@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import enum
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import CheckConstraint, DateTime, MetaData, Numeric, TextClause, func, text
+from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 NAMING_CONVENTION: dict[str, str] = {
@@ -24,6 +25,25 @@ PRICE = Numeric(20, 8)  # prices, volumes, contract size, tick size/value
 RATIO = Numeric(10, 4)  # percentages and R values (risk %, P&L %, R multiple, planned RR)
 
 TZ_DATETIME = DateTime(timezone=True)
+
+
+def copy_of(column: str) -> Callable[[DefaultExecutionContext], Any]:
+    """Python-side insert default: the value given for ``column`` in the same INSERT.
+
+    M5-08: a row created without its broker/canonical name keeps `symbol` (as the
+    migration backfill does); the sync and the calculator always set both explicitly.
+    """
+
+    def default(context: DefaultExecutionContext) -> Any:
+        params = context.get_current_parameters()  # type: ignore[no-untyped-call]
+        if column not in params:
+            raise ValueError(
+                f"insert default copies {column!r}, but the INSERT has no {column!r} value; "
+                f"set it (or the defaulted column) explicitly"
+            )
+        return params[column]
+
+    return default
 
 
 class Base(DeclarativeBase):

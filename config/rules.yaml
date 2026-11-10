@@ -18,8 +18,7 @@ sync:
   interval_idle_seconds: 900
   initial_history_days: 30   # first sync of a new account
   overlap_days: 3            # later syncs re-read this many days back (idempotent upsert)
-  # Symbols whose specs are always synced (plus every traded symbol). Broker suffixes are matched by prefix.
-  watch_symbols: [EURUSD, GBPUSD, XAUUSD, GER40]
+  # The symbols whose specs are always synced (plus every traded symbol) are in symbols.yaml.
 
 # Broker server time (PRD 6.3). FundedNext MT5 servers run on "New York close" time:
 # UTC+2 in winter, UTC+3 while US daylight saving is active. The offset detected from

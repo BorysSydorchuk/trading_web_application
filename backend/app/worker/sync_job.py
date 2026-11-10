@@ -20,11 +20,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import REPO_ROOT, Settings
 from app.config_files import ConfigError, get_rules
 from app.config_files.rules import RulesConfig
+from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.models import Account
 from app.models.enums import AccountStatus
 from app.mt5.fixture import FixtureMt5Source
 from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
+from app.services.symbol_map import apply_symbol_map
 from app.services.sync import close_orphaned_runs, is_due, sync_account
 
 logger = logging.getLogger(__name__)
@@ -48,32 +50,73 @@ def make_source(settings: Settings) -> Mt5Source:
     raise ValueError(f"MT5_SOURCE must be 'real' or 'fixture:<path>', got {spec!r}")
 
 
+def reapply_symbol_map(
+    session_factory: sessionmaker[Session],
+    *,
+    symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config,
+) -> int | None:
+    """Give stored rows their canonical names from symbols.yaml and commit (M5-08).
+
+    Never raises. Returns the number of changed rows, or None when the map was not applied
+    (broken symbols/bias/rules YAML or a DB error; logged at ERROR, rows unchanged, retried
+    on the next attempt).
+    """
+    try:
+        symbols = symbols_getter()
+    except ConfigError as exc:
+        logger.error("Symbol map not applied: %s", exc)
+        return None
+    try:
+        with session_factory() as session:
+            changed = apply_symbol_map(session, symbols)
+            if changed is None:
+                session.rollback()
+                return None
+            session.commit()
+    except Exception as exc:
+        # Traceback included; type and message on the line itself for a quick diagnosis.
+        logger.exception("Symbol map not applied: %s: %s", type(exc).__name__, exc)
+        return None
+    if changed:
+        logger.info("Symbol map applied: %s stored rows renamed", changed)
+    return changed
+
+
 def run_sync_cycle(
     session_factory: sessionmaker[Session],
     source: Mt5Source,
     *,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     rules_getter: Callable[[], RulesConfig] = get_rules,
+    symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config,
     lock: threading.Lock | None = None,
 ) -> list[int]:
-    """Sync every due active account sequentially. Returns the ids of synced accounts.
+    """Re-apply the symbol map, then sync every due active account sequentially. Returns
+    the ids of synced accounts. A broken rules.yaml or symbols.yaml, or a symbol map that
+    could not be applied, skips the cycle (ERROR "MT5 sync skipped"): stored names and new
+    rows would otherwise disagree.
 
     ``lock`` (shared with the margin job, `app.worker.mt5_shared`) is acquired blocking and
     held for the whole cycle: sync has priority and waits for a running margin lookup.
     """
     try:
         rules = rules_getter()
+        symbols = symbols_getter()
     except ConfigError as exc:
         logger.error("MT5 sync skipped: %s", exc)
         return []
+    if reapply_symbol_map(session_factory, symbols_getter=lambda: symbols) is None:
+        logger.error("MT5 sync skipped: the symbol map could not be applied (see above)")
+        return []
     with lock if lock is not None else nullcontext():
-        return _sync_due_accounts(session_factory, source, rules, now)
+        return _sync_due_accounts(session_factory, source, rules, symbols, now)
 
 
 def _sync_due_accounts(
     session_factory: sessionmaker[Session],
     source: Mt5Source,
     rules: RulesConfig,
+    symbols: SymbolsConfig,
     now: Callable[[], datetime],
 ) -> list[int]:
     with session_factory() as session:
@@ -94,7 +137,7 @@ def _sync_due_accounts(
                 started = now()
                 if not is_due(session, account_id, rules, started):
                     continue
-                sync_account(session, account, source, rules, started)
+                sync_account(session, account, source, rules, started, symbols=symbols)
                 synced.append(account_id)
         except Exception:
             # sync_account records MT5/data errors itself; this catches e.g. a DB outage.

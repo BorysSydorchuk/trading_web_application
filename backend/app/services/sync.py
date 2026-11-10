@@ -6,7 +6,10 @@
 2. Read phase (inside ``connected``, terminal shut down afterwards): account info, server
    offset from a watch-symbol tick, deals of the history window, then *all* deals of every
    position touched in the window or still open, their opening orders, open positions and
-   symbol specs (traded + watch symbols).
+   symbol specs (traded symbols + the broker symbol of every config/symbols.yaml name for
+   the account's firm; a name the broker lacks is logged as a warning). Trades and specs
+   are stored with their canonical name; broker names stay in `trades.broker_symbol` and
+   `symbol_specs.symbol` (M5-08).
 3. Write phase, one transaction: account balance/offset, symbol specs, trades (upsert by
    account + position_id; journal fields never touched), exit deals (upsert by account +
    ticket), computed metrics, then re-entry flags and auto violations for the affected weeks,
@@ -20,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import time as monotonic_time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -32,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.config import mt5_password_for, mt5_password_key
 from app.config_files.rules import RulesConfig, SyncConfig
+from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.domain import metrics
 from app.domain.broker_time import (
     BrokerTimeRule,
@@ -41,6 +45,7 @@ from app.domain.broker_time import (
     offset_hours,
 )
 from app.domain.sessions import brussels_weekday_hour, classify, is_trading_time
+from app.domain.symbols import broker_candidates, canonical_symbol, resolve_broker_symbol
 from app.domain.trade_builder import (
     BuiltTrade,
     Deal,
@@ -147,6 +152,31 @@ def _detect(
     return choice.conversion, detected
 
 
+def watch_specs(source: Mt5Source, symbols: SymbolsConfig, account: Account) -> list[RawSymbolSpec]:
+    """The broker spec of every symbols.yaml name for this account's firm (connected).
+
+    One prefix lookup for all candidates, then the pure resolver picks per name. A name the
+    broker does not have is logged as a warning (no spec row; the calculator lists it as
+    missing).
+    """
+    firm = account.firm
+    candidates = {c for name in symbols.names for c in broker_candidates(symbols, name, firm)}
+    by_name = {spec.name: spec for spec in source.symbols_matching(sorted(candidates))}
+    found: dict[str, RawSymbolSpec] = {}
+    for name in symbols.names:
+        broker = resolve_broker_symbol(symbols, name, firm, by_name)
+        if broker is None:
+            logger.warning(
+                "Account %s: symbol %s not found at the broker (tried %s); no spec synced",
+                account.id,
+                name,
+                ", ".join(broker_candidates(symbols, name, firm)),
+            )
+            continue
+        found.setdefault(broker, by_name[broker])
+    return list(found.values())
+
+
 def fetch(
     source: Mt5Source,
     account: Account,
@@ -154,12 +184,13 @@ def fetch(
     rules: RulesConfig,
     now: datetime,
     window_from: datetime,
+    symbols: SymbolsConfig,
 ) -> Fetched:
     """Everything the write phase needs, read while connected. Raises `Mt5Error`."""
     with connected(
         source, account.terminal_path or "", account.login, password, account.server
     ) as info:
-        watch = source.symbols_matching(rules.sync.watch_symbols)
+        watch = watch_specs(source, symbols, account)
         specs = {s.name: s for s in watch}
         conversion, detected = _detect(source, watch, rules, now)
 
@@ -229,8 +260,15 @@ def _assign(obj: Any, values: dict[str, Any]) -> bool:
 
 
 def _upsert_specs(
-    session: Session, account_id: int, specs: Iterable[RawSymbolSpec], now: datetime
+    session: Session,
+    account_id: int,
+    specs: Iterable[RawSymbolSpec],
+    now: datetime,
+    canonical: Mapping[str, str] | None = None,
 ) -> int:
+    """Upsert by (account, broker name); ``canonical`` maps broker -> canonical name
+    (missing: the broker name itself)."""
+    names = canonical or {}
     existing = {
         s.symbol: s
         for s in session.scalars(select(SymbolSpec).where(SymbolSpec.account_id == account_id))
@@ -249,6 +287,7 @@ def _upsert_specs(
             "digits": raw.digits,
             "currency_profit": raw.currency_profit,
             "currency_margin": raw.currency_margin,
+            "canonical_symbol": names.get(raw.name, raw.name),
             "synced_at": now,
         }
         row = existing.get(raw.name)
@@ -294,8 +333,13 @@ def trade_values(
     balance: Decimal,
     spec: RawSymbolSpec | None,
     rules: RulesConfig,
+    symbol: str | None = None,
 ) -> dict[str, Any]:
-    """Auto (MT5-derived and computed) columns of a trade. Journal fields are not included."""
+    """Auto (MT5-derived and computed) columns of a trade. Journal fields are not included.
+
+    ``symbol`` is the canonical name (default: the broker name); ``spec`` belongs to the
+    broker symbol ``built.symbol``.
+    """
     initial_sl, sl_source = _initial_sl(built, current)
     balance_open = metrics.balance_at_open(balance, built.open_time, deals)
     risk = metrics.risk_amount(
@@ -316,7 +360,8 @@ def trade_values(
         has_initial_sl=initial_sl is not None,
     )
     return {
-        "symbol": built.symbol,
+        "symbol": symbol if symbol is not None else built.symbol,
+        "broker_symbol": built.symbol,
         "direction": built.direction.value,
         "open_time": built.open_time,
         "close_time": built.close_time,
@@ -382,9 +427,17 @@ def _upsert_exit_deals(
 
 
 def write(
-    session: Session, account: Account, fetched: Fetched, rules: RulesConfig, now: datetime
+    session: Session,
+    account: Account,
+    fetched: Fetched,
+    rules: RulesConfig,
+    now: datetime,
+    symbols: SymbolsConfig,
 ) -> Counters:
-    """Persist one fetched snapshot (no commit). Raises on unexpected data."""
+    """Persist one fetched snapshot (no commit). Raises on unexpected data.
+
+    Trades and specs get their canonical name from ``symbols``.
+    """
     counters = Counters(
         deals_fetched=len(fetched.deals),
         open_positions=len(fetched.positions),
@@ -424,7 +477,10 @@ def write(
     account.server_offset_hours = offset_hours(now, fetched.conversion)
     if fetched.detected_offset is not None:
         account.server_offset_detected_at = now
-    counters.symbols_synced = _upsert_specs(session, account.id, fetched.specs.values(), now)
+    canonical = {name: canonical_symbol(symbols, name) for name in fetched.specs}
+    counters.symbols_synced = _upsert_specs(
+        session, account.id, fetched.specs.values(), now, canonical
+    )
 
     touched: dict[int, tuple[Trade, BuiltTrade]] = {}
     updated: set[int] = set()
@@ -437,6 +493,7 @@ def write(
             balance=fetched.info.balance,
             spec=fetched.specs.get(built.symbol),
             rules=rules,
+            symbol=canonical_symbol(symbols, built.symbol),
         )
         if current is None:
             current = Trade(account_id=account.id, position_id=built.position_id, **values)
@@ -492,9 +549,11 @@ def sync_account(
     now_utc: datetime,
     *,
     password_for: PasswordLookup = mt5_password_for,
+    symbols: SymbolsConfig | None = None,
 ) -> SyncLog:
     """One sync cycle for one account; never raises for MT5/data errors (see module doc).
 
+    ``symbols`` defaults to config/symbols.yaml (a broken file fails this sync, recorded).
     Commits. Returns the completed sync_log row (``ok`` True or False).
     """
     started = monotonic_time.monotonic()
@@ -514,9 +573,10 @@ def sync_account(
                 Mt5ErrorCode.PASSWORD_MISSING,
                 f"{mt5_password_key(account.login)} is not set in .env",
             )
+        config = symbols if symbols is not None else get_symbols_config()
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
-        fetched = fetch(source, account, password, rules, now_utc, window_from)
-        counters = write(session, account, fetched, rules, now_utc)
+        fetched = fetch(source, account, password, rules, now_utc, window_from, config)
+        counters = write(session, account, fetched, rules, now_utc, config)
         log.ok = True
         log.finished_at = finished()
         log.deals_fetched = counters.deals_fetched

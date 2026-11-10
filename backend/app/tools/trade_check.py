@@ -233,7 +233,9 @@ def build_block(
 
     m = mt5
     cmp("Позиція (ticket)", str(trade.position_id), str(m.position_id) if m else None, True)
-    cmp("Символ", trade.symbol, m.symbol if m else None, m is not None and m.symbol == trade.symbol)
+    # MT5 deals carry the broker name; trade.symbol is canonical (M5-08).
+    broker = trade.broker_symbol
+    cmp("Символ", broker, m.symbol if m else None, m is not None and m.symbol == broker)
     cmp(
         "Напрям",
         trade.direction,
@@ -407,7 +409,7 @@ def _fetch_mt5(
     with connected(source, account.terminal_path or "", account.login, password, account.server):
         detected: int | None = None
         digits: dict[str, int] = {}
-        for symbol in sorted({t.symbol for t in trades}):
+        for symbol in sorted({t.broker_symbol for t in trades}):
             spec = source.symbol_spec(symbol)
             if spec is not None:
                 digits[symbol] = spec.digits
@@ -458,7 +460,7 @@ def build_report(
         build_block(
             t,
             fetched.sides.get(t.position_id) if fetched else None,
-            digits.get(t.symbol),
+            digits.get(t.broker_symbol),
             conversion,
             fetched is not None,
         )

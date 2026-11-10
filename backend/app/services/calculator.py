@@ -7,6 +7,7 @@ creates margin requests: the margin metadata is read from the latest done reques
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, localcontext
@@ -15,6 +16,8 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config_files import ConfigError
+from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.domain.position_size import (
     ErrorCode,
     PositionSizeError,
@@ -23,7 +26,8 @@ from app.domain.position_size import (
     calculate_position_size,
 )
 from app.domain.position_size import SymbolSpec as CoreSpec
-from app.errors import ApiError
+from app.domain.symbols import resolve_broker_symbol
+from app.errors import ApiError, config_error
 from app.models import Account
 from app.models.account import SymbolSpec
 from app.models.calculator import CalculatorMarginRequest
@@ -71,7 +75,8 @@ class SizingContext:
 
     account_id: int
     currency: str
-    symbol: str
+    symbol: str  # canonical (requests, cached estimate)
+    broker_symbol: str  # the spec row's broker name (MT5 margin lookup)
     specs_at: datetime
     point: Decimal
     balance: EffectiveBalance
@@ -89,14 +94,59 @@ def get_account_or_404(db: Session, account_id: int) -> Account:
     return account
 
 
+def _symbols_config() -> SymbolsConfig:
+    try:
+        return get_symbols_config()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
+def pick_spec(
+    config: SymbolsConfig, firm: str, canonical: str, rows: Sequence[SymbolSpec]
+) -> SymbolSpec | None:
+    """Which of the account's rows of ``canonical`` the calculator uses (deterministic).
+
+    Several broker symbols can share one canonical name (e.g. GER30 and GER40.cash). The pick
+    is `resolve_broker_symbol` over the rows' broker names, the same rule the sync uses:
+    candidates = the firm override, else the name followed by its broker names; the first
+    candidate equal to a broker name (case-insensitive) wins, else, in candidate order, the
+    first broker name starting with a candidate, broker names taken in sorted order. If no
+    candidate matches (e.g. a canonical name no longer in symbols.yaml), the row with the
+    smallest broker name. None only for no rows.
+    """
+    if not rows:
+        return None
+    by_name = {row.symbol: row for row in rows}
+    chosen = resolve_broker_symbol(config, canonical, firm, sorted(by_name))
+    return by_name[chosen] if chosen is not None else by_name[min(by_name)]
+
+
+def _spec_item(row: SymbolSpec) -> schemas.SymbolSpecItem:
+    names = {"symbol": row.canonical_symbol, "broker_symbol": row.symbol}
+    values = {
+        key: getattr(row, key) for key in schemas.SymbolSpecItem.model_fields if key not in names
+    }
+    return schemas.SymbolSpecItem.model_validate(values | names)
+
+
 def list_symbol_specs(db: Session, account_id: int) -> schemas.SymbolSpecList:
-    get_account_or_404(db, account_id)
-    rows = db.scalars(
-        select(SymbolSpec).where(SymbolSpec.account_id == account_id).order_by(SymbolSpec.symbol)
-    )
-    return schemas.SymbolSpecList(
-        items=[schemas.SymbolSpecItem.model_validate(row, from_attributes=True) for row in rows]
-    )
+    """One item per canonical name (the row calculate uses), symbols.yaml order first."""
+    account = get_account_or_404(db, account_id)
+    config = _symbols_config()
+    rows = db.scalars(select(SymbolSpec).where(SymbolSpec.account_id == account_id)).all()
+    grouped: dict[str, list[SymbolSpec]] = {}
+    for spec in rows:
+        grouped.setdefault(spec.canonical_symbol, []).append(spec)
+    configured = [name for name in config.names if name in grouped]
+    others = sorted(name for name in grouped if name not in config.names)
+    items: list[schemas.SymbolSpecItem] = []
+    for name in (*configured, *others):
+        chosen = pick_spec(config, account.firm, name, grouped[name])
+        if chosen is not None:
+            items.append(_spec_item(chosen))
+    # No rows at all = never synced: the UI shows its sync hint, not "not at the broker".
+    missing = [name for name in config.names if name not in grouped] if grouped else []
+    return schemas.SymbolSpecList(items=items, missing=missing)
 
 
 def _validate_combinations(body: schemas.CalculateInput) -> None:
@@ -111,11 +161,15 @@ def _validate_combinations(body: schemas.CalculateInput) -> None:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": fields})
 
 
-def _spec_or_404(db: Session, account_id: int, symbol: str) -> SymbolSpec:
-    # Exact match only (VARCHAR equality): never a prefix or case-insensitive match.
-    spec = db.scalar(
-        select(SymbolSpec).where(SymbolSpec.account_id == account_id, SymbolSpec.symbol == symbol)
-    )
+def _spec_or_404(db: Session, account: Account, symbol: str) -> SymbolSpec:
+    """The spec of canonical ``symbol``. Exact match only (VARCHAR equality): never a prefix,
+    case-insensitive or broker-name match (M5-08)."""
+    rows = db.scalars(
+        select(SymbolSpec).where(
+            SymbolSpec.account_id == account.id, SymbolSpec.canonical_symbol == symbol
+        )
+    ).all()
+    spec = pick_spec(_symbols_config(), account.firm, symbol, rows)
     if spec is None:
         raise ApiError(404, "not_found", "Symbol spec not found", {"symbol": symbol})
     return spec
@@ -143,7 +197,7 @@ def core_spec(spec: SymbolSpec) -> CoreSpec:
             409,
             "specs_incomplete",
             "Symbol spec is incomplete; run a sync",
-            {"missing": missing, "symbol": spec.symbol},
+            {"missing": missing, "symbol": spec.canonical_symbol},
         )
     return CoreSpec(**values)
 
@@ -212,7 +266,8 @@ def _latest_sample(
 def margin_info(
     db: Session, context: SizingContext, direction: str, volume: Decimal
 ) -> schemas.MarginInfo:
-    """Offline estimate from the latest done request (same account, exact symbol, direction)."""
+    """Offline estimate from the latest done request (same account, exact canonical symbol,
+    direction)."""
     sample = _latest_sample(db, context, direction)
     if sample is None or sample.margin is None:
         return NO_CACHED_MARGIN
@@ -280,7 +335,7 @@ def size(db: Session, body: schemas.CalculateInput) -> Sized:
     """Validate selection, balance and specs and size with the pure core. Raises `ApiError`."""
     _validate_combinations(body)
     account = get_account_or_404(db, body.account_id)
-    spec = _spec_or_404(db, account.id, body.symbol)
+    spec = _spec_or_404(db, account, body.symbol)
     balance = effective_balance(account)
     sizing_spec = core_spec(spec)
     request = _core_request(body, balance.amount)
@@ -291,7 +346,8 @@ def size(db: Session, body: schemas.CalculateInput) -> Sized:
     context = SizingContext(
         account_id=account.id,
         currency=account.currency,
-        symbol=spec.symbol,
+        symbol=spec.canonical_symbol,
+        broker_symbol=spec.symbol,
         specs_at=spec.synced_at,
         point=sizing_spec.point,
         balance=balance,

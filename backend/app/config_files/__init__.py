@@ -1,5 +1,6 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
-ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml, bias.yaml).
+ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml, bias.yaml,
+symbols.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -39,6 +40,12 @@ from app.config_files.rules import (
     clear_rules_cache,
     get_rules,
 )
+from app.config_files.symbols import (
+    CanonicalSymbol,
+    SymbolsConfig,
+    clear_symbols_cache,
+    get_symbols_config,
+)
 from app.config_files.transcript_glossary import (
     clear_transcript_glossary_cache,
     get_transcript_glossary,
@@ -61,6 +68,7 @@ def reload_config() -> None:
     clear_transcription_cache()
     clear_transcript_glossary_cache()
     clear_bias_cache()
+    clear_symbols_cache()
 
 
 def check_config_files() -> list[ConfigError]:
@@ -74,13 +82,15 @@ def check_config_files() -> list[ConfigError]:
         get_transcription,
         get_transcript_glossary,
         get_bias_config,
+        get_symbols_config,
     ]
     for load in loaders:
         try:
             load()
         except ConfigError as exc:
-            logger.error("CONFIG ERROR, fix the file and reload the page. %s", exc)
             errors.append(exc)
+    for error in errors:
+        logger.error("CONFIG ERROR, fix the file and reload the page. %s", error)
     if not errors:
         logger.info("Config files OK (%s)", config_dir())
     return errors
@@ -91,6 +101,7 @@ __all__ = [
     "AiPricingConfig",
     "BiasConfig",
     "BiasSymbol",
+    "CanonicalSymbol",
     "ConfigError",
     "JournalField",
     "JournalFieldsConfig",
@@ -99,6 +110,7 @@ __all__ = [
     "ReminderWindow",
     "RulesConfig",
     "SessionWindow",
+    "SymbolsConfig",
     "TranscriptionConfig",
     "check_config_files",
     "config_dir",
@@ -107,6 +119,7 @@ __all__ = [
     "get_journal_fields",
     "get_number_words",
     "get_rules",
+    "get_symbols_config",
     "get_transcript_glossary",
     "get_transcription",
     "reload_config",

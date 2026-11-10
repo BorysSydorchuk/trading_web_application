@@ -13,9 +13,10 @@ export function account(overrides: Partial<Account> = {}): Account {
   }
 }
 
+/** broker_symbol defaults to the (overridden) canonical symbol. */
 export function spec(overrides: Partial<SymbolSpec> = {}): SymbolSpec {
   return {
-    symbol: 'XAUUSD', contract_size: '100', point: '0.01', tick_size: '0.01', tick_value_loss: '1',
+    symbol: 'XAUUSD', broker_symbol: overrides.symbol ?? 'XAUUSD', contract_size: '100', point: '0.01', tick_size: '0.01', tick_value_loss: '1',
     volume_min: '0.01', volume_step: '0.01', volume_max: '50', digits: 2, currency_profit: 'USD',
     currency_margin: 'USD', synced_at: '2026-11-10T06:00:00Z', ...overrides,
   }

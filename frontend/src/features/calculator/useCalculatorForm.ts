@@ -12,6 +12,8 @@ import { mapCalculatorError, type CalculatorErrors } from './serverErrors'
 import type { CalculateResult } from './types'
 import { useLiveMargin, type MarginJob } from './useLiveMargin'
 
+const NO_MISSING: readonly string[] = []
+
 function pickAccountId(form: CalculatorFormState, accounts: readonly Account[]): string {
   if (accounts.some((a) => String(a.id) === form.accountId)) return form.accountId
   return accounts[0] ? String(accounts[0].id) : ''
@@ -31,6 +33,7 @@ export function useCalculatorForm(accounts: readonly Account[]) {
   const accountId = pickAccountId(rawForm, accounts)
   const specsQuery = useSymbolSpecs(accountId === '' ? null : Number(accountId))
   const specs = specsQuery.data?.items
+  const missing = specsQuery.data?.missing ?? NO_MISSING
   const symbol = specs?.some((s) => s.symbol === rawForm.symbol) ? rawForm.symbol : ''
   const form: CalculatorFormState = { ...rawForm, accountId, symbol }
   const account = accounts.find((a) => String(a.id) === accountId) ?? null
@@ -87,6 +90,7 @@ export function useCalculatorForm(accounts: readonly Account[]) {
     account,
     specsQuery,
     specs,
+    missing,
     spec,
     update,
     submit,

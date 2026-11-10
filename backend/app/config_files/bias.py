@@ -1,10 +1,12 @@
 """`config/bias.yaml`: bias symbols with spoken aliases and reminder windows (docs/api.md M4).
 
 Strictly validated: at least one symbol; symbol names non-empty, without spaces, at most 50
-characters, unique case-insensitively and none the prefix of another (trades match a bias
-symbol by prefix); aliases non-empty and unique across the whole file case-insensitively
-(also against symbol names of other symbols); reminders exactly `pre_london` and `pre_ny`,
-each a quoted "HH:MM" `from` before `until`. No extra keys. Reloaded when the file changes.
+characters, unique case-insensitively and none the prefix of another (kept from M4; since
+M5-08 trades match a bias symbol exactly by canonical name and `check_config_files` requires
+every bias symbol to be a symbols.yaml name); aliases non-empty and unique across the whole
+file case-insensitively (also against symbol names of other symbols); reminders exactly
+`pre_london` and `pre_ny`, each a quoted "HH:MM" `from` before `until`. No extra keys.
+Reloaded when the file changes.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from app.config_files.loader import (
     validation_problems,
 )
 from app.config_files.rules import format_hhmm, parse_hhmm
+from app.config_files.symbols import get_symbols_config
 from app.models.enums import BiasKind
 
 BIAS_FILE = "bias.yaml"
@@ -106,7 +109,7 @@ def _name_problems(symbols: tuple[BiasSymbol, ...]) -> list[str]:
             if other_index != index and other != name and other.startswith(name):
                 problems.append(
                     f"symbols[{index}].symbol: {symbols[index].symbol!r} is the start of "
-                    f"{symbols[other_index].symbol!r} (trades match symbols by prefix)"
+                    f"{symbols[other_index].symbol!r} (no symbol may be the start of another)"
                 )
     return problems
 
@@ -180,9 +183,31 @@ def load_bias(path: Path | None = None) -> BiasConfig:
 _cache: FileCache[BiasConfig] = FileCache(lambda: [bias_path()], load_bias)
 
 
+def canonical_symbol_problems(config: BiasConfig) -> list[str]:
+    """Bias symbols that are not canonical names of symbols.yaml (M5-08). An unreadable
+    symbols.yaml is reported by its own loader, so the check is skipped then."""
+    try:
+        symbols = get_symbols_config()
+    except ConfigError:
+        return []
+    known = set(symbols.names)
+    return [
+        f"symbols[{index}].symbol: {name!r} is not a symbol name in symbols.yaml "
+        f"(known: {', '.join(symbols.names)})"
+        for index, name in enumerate(config.symbol_names)
+        if name not in known
+    ]
+
+
 def get_bias_config() -> BiasConfig:
-    """Cached config; reloaded automatically when the file changes. Raises ConfigError."""
-    return _cache.get()
+    """Cached config; reloaded automatically when the file changes. Raises ConfigError, also
+    when a bias symbol is not a symbols.yaml name (checked on every call: both files reload
+    at runtime)."""
+    config = _cache.get()
+    problems = canonical_symbol_problems(config)
+    if problems:
+        raise ConfigError(bias_path(), problems)
+    return config
 
 
 def clear_bias_cache() -> None:

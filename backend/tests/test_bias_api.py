@@ -405,7 +405,7 @@ def test_alignment_follows_notes(client: TestClient, session: Session, account: 
     london = add_trade(  # 09:30 Brussels, sell
         session,
         account,
-        symbol="XAUUSD.r",
+        symbol="XAUUSD",  # canonical name (M5-08; was XAUUSD.r)
         direction="sell",
         open_time=datetime(2026, 11, 5, 8, 30, tzinfo=UTC),
         close_time=datetime(2026, 11, 5, 9, 0, tzinfo=UTC),
@@ -413,7 +413,7 @@ def test_alignment_follows_notes(client: TestClient, session: Session, account: 
     ny = add_trade(  # 14:30 Brussels, buy, still open
         session,
         account,
-        symbol="XAUUSD.r",
+        symbol="XAUUSD",  # canonical name (M5-08; was XAUUSD.r)
         direction="buy",
         status="open",
         open_time=datetime(2026, 11, 5, 13, 30, tzinfo=UTC),

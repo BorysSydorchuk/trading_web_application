@@ -28,6 +28,7 @@ from app.models.base import (
     RATIO,
     Base,
     TimestampMixin,
+    copy_of,
     enum_check,
     jsonb_default,
 )
@@ -79,7 +80,9 @@ class Trade(TimestampMixin, Base):
     # RESTRICT: trade history must never vanish with an account; archive accounts instead.
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"))
     position_id: Mapped[int] = mapped_column(BigInteger)
+    # Canonical name (config/symbols.yaml, M5-08); the broker's own name for MT5 calls.
     symbol: Mapped[str] = mapped_column(String(50), index=True)
+    broker_symbol: Mapped[str] = mapped_column(String(50), default=copy_of("symbol"))
     direction: Mapped[str] = mapped_column(String(4))
     open_time: Mapped[datetime]
     close_time: Mapped[datetime | None] = mapped_column(index=True)

@@ -1,9 +1,11 @@
 # Bias (expectations) settings, PRD 6.6 / docs/api.md M4.
 #
-# symbols: the symbols Borys writes a bias for, in the order the UI shows them. `aliases` are
-# the words he says for a symbol in a voice or text note (case does not matter). A symbol or
-# alias may appear only once in the whole file. A trade matches a bias symbol by prefix
-# (GER40.cash -> GER40), so no symbol may be the start of another one.
+# symbols: the symbols Borys writes a bias for, in the order the UI shows them. Each must be a
+# canonical name from symbols.yaml (exactly as written there). Trades carry canonical names
+# (FundedNext's GER30 is stored as GER40), so a trade matches a bias symbol only when the names
+# are equal. `aliases` are the words he says for a symbol in a voice or text note (case does
+# not matter). A symbol or alias may appear only once in the whole file, and no symbol may be
+# the start of another one.
 #
 # reminders: when the dashboard reminds about a missing pre_london / pre_ny bias
 # (Europe/Brussels time, weekdays only, from inclusive, until exclusive). Write times quoted,
