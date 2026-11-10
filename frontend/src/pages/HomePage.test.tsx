@@ -1,9 +1,10 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { biasKeys, invalidateAfterWrite } from '@/features/bias/api'
 import type { BiasStatus } from '@/features/bias/types'
+import { account, spec } from '@/features/calculator/calculator.fixture'
 import { uk } from '@/i18n/uk'
 import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
@@ -27,6 +28,9 @@ function serveSidebar() {
 }
 
 describe('HomePage bias status', () => {
+  // The calculator panel on Home loads the accounts list; these tests are about bias status only.
+  beforeEach(() => mockApi(http.get('/api/accounts', () => HttpResponse.json({ items: [] }))))
+
   it('shows all periods, server reminders and links with the server Brussels date', async () => {
     mockApi(http.get('/api/bias/status', () => HttpResponse.json(status())))
     renderWithProviders(<HomePage />)
@@ -124,5 +128,21 @@ describe('HomePage bias status', () => {
     expect(screen.queryByLabelText(t.badge(1))).not.toBeInTheDocument()
     expect(screen.queryByRole('article')).not.toBeInTheDocument()
     expect(screen.getByText(t.loadError)).toBeInTheDocument()
+  })
+})
+
+describe('HomePage calculator panel', () => {
+  it('renders the compact calculator with a link to the full page', async () => {
+    mockApi(
+      http.get('/api/bias/status', () => HttpResponse.json(status())),
+      http.get('/api/accounts', () => HttpResponse.json({ items: [account()] })),
+      http.get('/api/accounts/:id/symbol-specs', () => HttpResponse.json({ items: [spec()] })),
+    )
+    renderWithProviders(<HomePage />)
+    const panel = await screen.findByRole('region', { name: uk.calculator.home.title })
+    expect(within(panel).getByRole('link', { name: uk.calculator.home.openFull })).toHaveAttribute('href', '/calculator')
+    expect(await within(panel).findByRole('option', { name: 'XAUUSD' })).toBeInTheDocument()
+    expect(within(panel).getByRole('form', { name: uk.calculator.form.label })).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: uk.calculator.form.submit })).toBeEnabled()
   })
 })

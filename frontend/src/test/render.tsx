@@ -18,6 +18,8 @@ export interface RenderOptions {
   url?: string
   /** Other pages the test navigates to (e.g. `/inbox`). */
   routes?: readonly TestRoute[]
+  /** Use this client instead of a fresh test client (e.g. one with the app's global error toasts). */
+  queryClient?: QueryClient
 }
 
 /** No retries, so an error response shows its error state at once. */
@@ -36,7 +38,7 @@ export function createTestQueryClient(): QueryClient {
  */
 export function renderWithProviders(ui: ReactElement, options: RenderOptions = {}) {
   const { path = '/', url = path, routes = [] } = options
-  const queryClient = createTestQueryClient()
+  const queryClient = options.queryClient ?? createTestQueryClient()
   const router = createMemoryRouter([{ path, element: ui }, ...routes], { initialEntries: [url] })
   const user = userEvent.setup()
   const result = render(
