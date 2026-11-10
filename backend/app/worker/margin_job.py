@@ -55,7 +55,8 @@ class ClaimedRequest:
 
     id: int
     direction: Direction
-    symbol: str
+    symbol: str  # canonical (logs)
+    broker_symbol: str  # what MT5 is asked with (M5-08)
     volume: Decimal
     entry: Decimal
     login: int
@@ -127,6 +128,7 @@ def claim_next(session: Session) -> ClaimedRequest | None:
         id=row.id,
         direction=row.direction,  # type: ignore[arg-type]  # CHECK direction_valid
         symbol=row.symbol,
+        broker_symbol=row.broker_symbol,
         volume=row.volume,
         entry=row.entry,
         login=account.login,
@@ -159,7 +161,7 @@ def lookup_margin(
         password = password_for(claimed.login)
         with connected(source, claimed.terminal_path, claimed.login, password, claimed.server):
             margin = source.calc_margin(
-                claimed.direction, claimed.symbol, claimed.volume, claimed.entry
+                claimed.direction, claimed.broker_symbol, claimed.volume, claimed.entry
             )
         return _checked_margin(margin), None
     except Mt5Error as exc:

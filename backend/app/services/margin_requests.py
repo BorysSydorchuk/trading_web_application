@@ -5,7 +5,7 @@ errors), stores the server-computed volume and returns. The worker job
 (`app.worker.margin_job`) asks MT5. No API process owns or initializes MT5.
 
 De-duplication is done here, not by a DB index (DECISIONS 2026-11-09): an identical
-(account, exact symbol, direction, volume, entry) request still `pending` and not past
+(account, exact canonical symbol, direction, volume, entry) request still `pending` and not past
 `expires_at`, or `processing` for less than `STALE_PROCESSING_S`, is returned instead of a
 new row. It is best effort: two identical POSTs at the same moment may both insert, which
 only costs one extra MT5 lookup.
@@ -131,6 +131,7 @@ def create(db: Session, body: schemas.CalculateInput) -> schemas.MarginRequestIt
     row = CalculatorMarginRequest(
         account_id=context.account_id,
         symbol=context.symbol,
+        broker_symbol=context.broker_symbol,  # MT5 is asked with the broker name (M5-08)
         direction=direction,
         volume=volume,
         entry=entry,

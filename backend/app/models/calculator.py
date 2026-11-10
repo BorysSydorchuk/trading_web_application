@@ -1,6 +1,7 @@
 """Worker-owned margin request snapshots (no execution).
 
-The latest done request for an account/exact symbol/direction is the offline margin sample.
+The latest done request for an account/exact canonical symbol/direction is the offline
+margin sample.
 """
 
 from datetime import datetime
@@ -17,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import PRICE, Base, enum_check
+from app.models.base import PRICE, Base, copy_of, enum_check
 
 # Raw broker margin must survive storage without account-display cent rounding.
 MARGIN = Numeric(28, 8)
@@ -70,7 +71,9 @@ class CalculatorMarginRequest(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
+    # Canonical name (config/symbols.yaml); MT5 is asked with `broker_symbol` (M5-08).
     symbol: Mapped[str] = mapped_column(String(50))
+    broker_symbol: Mapped[str] = mapped_column(String(50), default=copy_of("symbol"))
     direction: Mapped[str] = mapped_column(String(4))
     volume: Mapped[Decimal] = mapped_column(PRICE)
     entry: Mapped[Decimal] = mapped_column(PRICE)

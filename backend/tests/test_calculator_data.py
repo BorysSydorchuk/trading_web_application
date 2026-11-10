@@ -261,10 +261,10 @@ def test_samples_and_signature_restored_on_downgrade_and_dropped_on_upgrade(
             ).scalar_one()
             request_id = conn.execute(
                 text(
-                    "INSERT INTO calculator_margin_requests (account_id, symbol, direction, "
-                    "volume, entry, currency, status, created_at, expires_at) "
-                    "VALUES (:id, 'GER40.cash', 'buy', 0.01, 19000.5, 'USD', 'pending', :now, "
-                    ":expires) RETURNING id"
+                    "INSERT INTO calculator_margin_requests (account_id, symbol, broker_symbol, "
+                    "direction, volume, entry, currency, status, created_at, expires_at) "
+                    "VALUES (:id, 'GER40.cash', 'GER40.cash', 'buy', 0.01, 19000.5, 'USD', "
+                    "'pending', :now, :expires) RETURNING id"
                 ),
                 {"id": account_id, "now": NOW, "expires": NOW + timedelta(minutes=1)},
             ).scalar_one()

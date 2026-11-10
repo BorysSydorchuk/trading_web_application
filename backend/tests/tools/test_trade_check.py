@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.db import make_session_factory
@@ -333,3 +333,18 @@ def test_make_source_specs(tmp_path: Path) -> None:
         trade_check.make_source(f"fixture:{tmp_path / 'x.json'}")
     with pytest.raises(TradeCheckError, match="--source"):
         trade_check.make_source("bogus")
+
+
+def test_mt5_deals_are_compared_with_the_broker_symbol(session: Session) -> None:
+    """M5-08: the stored `symbol` is canonical; MT5 deals carry the broker name."""
+    account = seed(session)
+    for trade in session.scalars(select(Trade).where(Trade.account_id == account.id)):
+        if trade.symbol == "GER40":
+            trade.symbol = "DAX"  # canonical name differs from the broker's GER40
+    session.commit()
+
+    rep = report(session)
+
+    assert [b.trade.symbol for b in rep.blocks].count("DAX") == 2
+    assert rep.mt5_error is None
+    assert rep.all_match, rep.markdown

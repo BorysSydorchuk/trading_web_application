@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.config_files.loader import ConfigError
 from app.domain.terminal_path import PROGRAM_FILES_CODE
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,16 @@ class ApiError(Exception):
         self.code = code
         self.message = message
         self.details = details
+
+
+def config_error(exc: ConfigError) -> ApiError:
+    """A broken config file as the API error: 500 `config_error` naming the file and its
+    problems (and `reason`, e.g. mojibake). Logged. Used by routers and services alike."""
+    logger.error("Config error: %s", exc)
+    details: dict[str, Any] = {"file": exc.path.name, "problems": exc.problems}
+    if exc.reason is not None:
+        details["reason"] = exc.reason
+    return ApiError(500, "config_error", str(exc), details)
 
 
 def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:

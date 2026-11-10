@@ -12,13 +12,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
-from app.api.config_files import config_error
 from app.clock import utc_now
 from app.config_files import BiasConfig, ConfigError, get_bias_config
 from app.db import get_db
 from app.domain.bias_alignment import AlignmentSettings
 from app.domain.sessions import DEFAULT_TZ, to_local
-from app.errors import ApiError
+from app.errors import ApiError, config_error
 from app.models.enums import BiasKind
 from app.schemas.bias import (
     BiasEntryOut,

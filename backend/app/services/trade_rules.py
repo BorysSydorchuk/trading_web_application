@@ -103,7 +103,9 @@ def recompute_rules(
     }
     context = [_rule_input(t) for t in trades]
     for trade in targets:
-        violations = evaluate(_rule_input(trade), context, rules, ticks.get(trade.symbol))
+        # Specs are keyed by the broker name; trade.symbol is canonical (M5-08).
+        tick = ticks.get(trade.broker_symbol)
+        violations = evaluate(_rule_input(trade), context, rules, tick)
         apply_auto_violations(session, trade.id, violations)
     return len(targets)
 

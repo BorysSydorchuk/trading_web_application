@@ -107,7 +107,7 @@ class SyncConfig(_Strict):
     interval_idle_seconds: int = Field(ge=5)
     initial_history_days: int = Field(ge=1)
     overlap_days: int = Field(ge=0)
-    watch_symbols: tuple[str, ...]
+    # Watched symbols moved to config/symbols.yaml (M5-08).
 
     @field_validator("trading_days")
     @classmethod
@@ -115,14 +115,6 @@ class SyncConfig(_Strict):
         if len(set(value)) != len(value):
             raise ValueError("duplicate weekday")
         return value
-
-    @field_validator("watch_symbols")
-    @classmethod
-    def _symbols(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        cleaned = tuple(s.strip() for s in value)
-        if any(not s for s in cleaned):
-            raise ValueError("empty symbol")
-        return cleaned
 
 
 class Rule(_Strict):

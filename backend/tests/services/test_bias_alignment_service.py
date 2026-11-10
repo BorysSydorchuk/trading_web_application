@@ -96,9 +96,7 @@ def test_recompute_trades_sets_all_three(session: Session, account: Account) -> 
 
 def test_one_bias_query_per_batch(session: Session, account: Account, db_engine: Engine) -> None:
     note(session, BiasKind.PRE_NY, TUE, XAUUSD="bullish", GER40="bearish")
-    trades = [
-        trade(session, account, open_time=NY, symbol=s) for s in ("XAUUSD", "GER40.cash", "US30")
-    ]
+    trades = [trade(session, account, open_time=NY, symbol=s) for s in ("XAUUSD", "GER40", "US30")]
     statements: list[str] = []
 
     def record(*args: Any) -> None:
@@ -131,7 +129,7 @@ def test_override_untouched(session: Session, account: Account) -> None:
 
 
 def test_scope_recompute_selects_period_and_symbol(session: Session, account: Account) -> None:
-    hit = trade(session, account, open_time=NY, symbol="XAUUSD+")
+    hit = trade(session, account, open_time=NY, symbol="XAUUSD")  # canonical (M5-08)
     other_day = trade(session, account, open_time=datetime(2026, 11, 4, 13, 30, tzinfo=UTC))
     other_symbol = trade(session, account, open_time=NY, symbol="EURUSD")
     created = note(session, BiasKind.PRE_LONDON, TUE, XAUUSD="bullish")
@@ -177,7 +175,7 @@ def test_edit_delete_and_kind_change(session: Session, account: Account) -> None
 
 
 def test_symbol_removed_from_note_is_recomputed(session: Session, account: Account) -> None:
-    t = trade(session, account, open_time=NY, symbol="GER40.cash")
+    t = trade(session, account, open_time=NY, symbol="GER40")
     n = note(session, BiasKind.MONTHLY, date(2026, 11, 1), GER40="bullish", XAUUSD="bearish")
     recompute_for_scopes(session, [scope_of(n)], SETTINGS)
     assert values(session, t)[2] == "aligned"
@@ -187,7 +185,17 @@ def test_symbol_removed_from_note_is_recomputed(session: Session, account: Accou
     assert values(session, t)[2] == "no_bias"
 
 
-def test_like_wildcards_are_escaped(session: Session, account: Account) -> None:
+def test_scope_matches_the_canonical_symbol_exactly(session: Session, account: Account) -> None:
+    """M5-08: a note for GER40 recomputes GER40 trades only, not GER40.cash or GER4."""
+    exact = trade(session, account, open_time=NY, symbol="GER40")
+    suffixed = trade(session, account, open_time=NY, symbol="GER40.cash")
+    n = note(session, BiasKind.PRE_NY, TUE, GER40="bullish")
+    recompute_for_scopes(session, [scope_of(n)], SETTINGS)
+    assert values(session, exact)[0] == "aligned"
+    assert values(session, suffixed)[0] is None
+
+
+def test_sql_wildcards_in_note_symbols_match_nothing(session: Session, account: Account) -> None:
     t = trade(session, account, open_time=NY, symbol="GERX40")
     scope = NoteScope(BiasKind.PRE_NY, TUE, frozenset({"GER_40", "GER%"}))
     assert recompute_for_scopes(session, [scope], SETTINGS) == 0

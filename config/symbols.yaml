@@ -1,0 +1,23 @@
+# Canonical symbol names (docs/api.md "M5-08 Canonical symbols").
+#
+# symbols: the names the app uses everywhere (journal, analytics, bias, rules, calculator), in
+# the order the UI shows them. `broker_names` are other names a broker uses for the same
+# instrument; MT5 calls always use the broker's own name. A broker symbol with a suffix
+# (EURUSD.r, GER40.cash.x) still matches by prefix.
+# A name or broker name may appear only once in the whole file (case does not matter), and no
+# name/broker name of one symbol may be the start of another symbol's.
+#
+# firms: optional per account firm (Accounts -> firm): only these broker names are tried for
+# that firm, in this order.
+#
+# config/bias.yaml symbols must be names from this file. Changes apply on the next sync
+# (stored trades are renamed too), no restart needed.
+
+symbols:
+  - { name: EURUSD }
+  - { name: GBPUSD }
+  - { name: XAUUSD }
+  - { name: GER40, broker_names: [GER30, GER40.cash, DE40] }
+
+firms:
+  FundedNext: { GER40: [GER30] }

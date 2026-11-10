@@ -204,7 +204,7 @@ def test_duplicate_symbol_case_insensitive(tmp_path: Path) -> None:
 def test_symbol_prefix_of_another_rejected(tmp_path: Path) -> None:
     text = "symbols:\n  - { symbol: GER, aliases: [] }\n  - { symbol: GER40, aliases: [] }\n"
     assert _problems(tmp_path, text + REMINDERS) == [
-        "symbols[0].symbol: 'GER' is the start of 'GER40' (trades match symbols by prefix)"
+        "symbols[0].symbol: 'GER' is the start of 'GER40' (no symbol may be the start of another)"
     ]
 
 

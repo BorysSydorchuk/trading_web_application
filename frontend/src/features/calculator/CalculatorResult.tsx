@@ -30,18 +30,28 @@ function budgetNote(result: CalculateResult): string {
 
 interface CalculatorResultProps {
   result: CalculateResult
+  /** Broker name of the symbol; shown in brackets when it differs from the canonical one. */
+  brokerSymbol: string | null
   /** Symbol digits for price display; null when the spec is not in the list. */
   digits: number | null
   margin: LiveMargin | null
   compact?: boolean
 }
 
-export function CalculatorResult({ result, digits, margin, compact }: CalculatorResultProps) {
+export function CalculatorResult({ result, brokerSymbol, digits, margin, compact }: CalculatorResultProps) {
   const price = (value: string) => formatPriceDigits(value, digits)
   const cur = result.currency
   return (
     <section aria-label={t.title} className="flex flex-col gap-2 rounded-lg border p-3">
       <dl className={cn('grid gap-x-6', compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
+        <Row label={t.symbol}>
+          {result.symbol}
+          {brokerSymbol !== null && brokerSymbol !== result.symbol && (
+            <span className="ml-1 text-xs text-muted-foreground" title={t.brokerSymbolTitle(brokerSymbol)}>
+              {t.brokerSymbol(brokerSymbol)}
+            </span>
+          )}
+        </Row>
         <Row label={t.volume} strong>{formatVolume(result.volume)}</Row>
         <Row label={t.actualRisk}>
           {formatMoney(result.actual_risk)} {cur} · {formatPercent(result.actual_risk_percent)}

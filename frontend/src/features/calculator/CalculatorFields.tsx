@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { DecimalInput, Field } from './Field'
 import type { CalculatorFormState, FieldErrors, RiskMode, SlMode } from './formModel'
 import { SegmentedToggle } from './SegmentedToggle'
+import { symbolLabel } from './symbolLabel'
 import type { Direction, SymbolSpec } from './types'
 
 const t = uk.calculator.form
@@ -31,16 +32,15 @@ interface CalculatorFieldsProps {
   account: Account | null
   /** undefined while loading or on error (the symbol select is then disabled). */
   specs: readonly SymbolSpec[] | undefined
+  /** Canonical names not found at this broker: shown, never selectable. */
+  missing: readonly string[]
   spec: SymbolSpec | null
   onChange: (patch: Partial<CalculatorFormState>) => void
   compact?: boolean
 }
 
-function symbolLabel(spec: SymbolSpec): string {
-  return spec.point === null || spec.tick_value_loss === null ? t.symbolNeedsSync(spec.symbol) : spec.symbol
-}
 
-export function CalculatorFields({ form, errors, accounts, account, specs, spec, onChange, compact }: CalculatorFieldsProps) {
+export function CalculatorFields({ form, errors, accounts, account, specs, missing, spec, onChange, compact }: CalculatorFieldsProps) {
   const id = useId()
   const sl = form.slMode === 'price'
   const percent = form.riskMode === 'percent'
@@ -73,6 +73,11 @@ export function CalculatorFields({ form, errors, accounts, account, specs, spec,
           {specs?.map((s) => (
             <option key={s.symbol} value={s.symbol}>{symbolLabel(s)}</option>
           ))}
+          {specs !== undefined &&
+            missing.map((name) => (
+                // Distinct value so it never matches a real symbol; the form drops it anyway.
+                <option key={`missing-${name}`} value={`missing:${name}`} disabled>{t.symbolMissing(name)}</option>
+              ))}
         </NativeSelect>
       </Field>
       <Field id={`${id}-direction`} label={t.direction} required group>

@@ -14,13 +14,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.config_files import config_error
 from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
 from app.db import get_db
 from app.domain import metrics
 from app.domain.sessions import DEFAULT_TZ
 from app.domain.trade_builder import next_status
-from app.errors import ApiError
+from app.errors import ApiError, config_error
 from app.models import Account, RuleViolation, SymbolSpec, Trade
 from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
@@ -301,7 +300,9 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     """Set a user-entered initial SL; recompute risk, risk %, R, planned RR and violations."""
     spec = db.scalar(
         select(SymbolSpec).where(
-            SymbolSpec.account_id == trade.account_id, SymbolSpec.symbol == trade.symbol
+            # Specs are keyed by the broker name; trade.symbol is canonical (M5-08).
+            SymbolSpec.account_id == trade.account_id,
+            SymbolSpec.symbol == trade.broker_symbol,
         )
     )
     exit_volume = sum((d.volume for d in trade.exit_deals), Decimal(0)) or trade.volume

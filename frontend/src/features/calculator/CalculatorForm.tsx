@@ -84,6 +84,7 @@ function Calculator({ accounts, compact }: { accounts: readonly Account[]; compa
           accounts={accounts}
           account={calc.account}
           specs={specs}
+          missing={calc.missing}
           spec={calc.spec}
           onChange={calc.update}
           compact={compact}
@@ -104,7 +105,7 @@ function Calculator({ accounts, compact }: { accounts: readonly Account[]; compa
           <p role="alert" className="rounded-lg border border-destructive/50 p-3 text-sm text-destructive">{calc.generalError}</p>
         )}
         {calc.result ? (
-          <CalculatorResult result={calc.result} digits={calc.spec?.digits ?? null} margin={calc.margin} compact={compact} />
+          <CalculatorResult result={calc.result} brokerSymbol={calc.spec?.broker_symbol ?? null} digits={calc.spec?.digits ?? null} margin={calc.margin} compact={compact} />
         ) : (
           !calc.generalError && (
             <p className="text-xs text-muted-foreground">{calc.changed ? t.form.changed : s.empty}</p>

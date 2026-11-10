@@ -12,6 +12,7 @@ import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -19,12 +20,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
+from app.config_files import reload_config
 from app.domain.position_size import PositionSizeError
 from app.domain.position_size import SymbolSpec as CoreSpec
 from app.models import Account
 from app.models.account import SymbolSpec
 from app.models.calculator import CalculatorMarginRequest
 from app.services.calculator import error_details
+from tests.symbols_fixture import use_test_config
 
 D = Decimal
 SYNCED_AT = datetime(2026, 11, 1, 8, 30, tzinfo=UTC)
@@ -34,6 +37,7 @@ _logins = itertools.count(70000001)
 
 SPEC_KEYS = {
     "symbol",
+    "broker_symbol",
     "contract_size",
     "point",
     "tick_size",
@@ -180,6 +184,12 @@ def later_times(offset: timedelta) -> dict[str, Any]:
 
 
 @pytest.fixture
+def test_symbols_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    yield use_test_config(tmp_path, monkeypatch)
+    reload_config()
+
+
+@pytest.fixture
 def account(db_session: Session) -> Account:
     return make_account(db_session)
 
@@ -257,9 +267,13 @@ def request_count(db: Session) -> int:
 # --- GET /api/accounts/{id}/symbol-specs ---
 
 
-def test_symbol_specs_items_have_exact_shape_and_are_ordered_by_symbol(
-    client: TestClient, db_session: Session, account: Account
+def test_symbol_specs_items_have_exact_shape_and_symbols_yaml_order(
+    client: TestClient,
+    db_session: Session,
+    account: Account,
+    test_symbols_config: Path,  # fixed symbols.yaml: EURUSD is a configured name
 ) -> None:
+    # M5-08: symbols.yaml names first (EURUSD), then the others by name.
     make_ger40(db_session, account, "GER40.cash")
     make_spec(db_session, account, "EURUSD")
     make_spec(db_session, account, "AUDUSD")
@@ -268,9 +282,10 @@ def test_symbol_specs_items_have_exact_shape_and_are_ordered_by_symbol(
 
     assert response.status_code == 200
     items = response.json()["items"]
-    assert [item["symbol"] for item in items] == ["AUDUSD", "EURUSD", "GER40.cash"]
-    assert set(items[1]) == SPEC_KEYS
-    eurusd = items[1]
+    assert [item["symbol"] for item in items] == ["EURUSD", "AUDUSD", "GER40.cash"]
+    assert set(items[0]) == SPEC_KEYS
+    eurusd = items[0]
+    assert eurusd["broker_symbol"] == "EURUSD"
     assert D(eurusd["tick_size"]) == D("0.00001")
     assert D(eurusd["point"]) == D("0.00001")
     assert D(eurusd["tick_value_loss"]) == D("1")
@@ -300,7 +315,8 @@ def test_symbol_specs_account_without_specs_returns_empty_list(
     response = client.get(f"/api/accounts/{account.id}/symbol-specs")
 
     assert response.status_code == 200
-    assert response.json() == {"items": []}
+    # M5-08: never synced (no rows at all) -> nothing reported missing; the UI shows its hint.
+    assert response.json() == {"items": [], "missing": []}
 
 
 def test_symbol_specs_missing_account_is_404(client: TestClient) -> None:

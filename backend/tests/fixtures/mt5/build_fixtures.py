@@ -852,6 +852,126 @@ def calculator_qa() -> dict[str, Any]:
     }
 
 
+# --- M5-08 canonical symbols: FundedNext names the DAX GER30 (SYNTHETIC values) ----------
+
+GER30_LOGIN = 51234571
+GER30_NAMES = ["EURUSD", "GBPUSD", "XAUUSD", "GER30"]
+
+
+def _ger30_specs() -> list[dict[str, Any]]:
+    usd = {"currency_profit": "USD"}
+    fx = {
+        "contract_size": "100000",
+        "tick_size": "0.00001",
+        "tick_value": "1",
+        "tick_value_loss": "1",
+        "point": "0.00001",
+        "volume_min": "0.01",
+        "volume_step": "0.01",
+        "volume_max": "50",
+    }
+    return [
+        _calc_spec("EURUSD", 5, currency_margin="EUR", **fx, **usd),
+        _calc_spec("GBPUSD", 5, currency_margin="GBP", **fx, **usd),
+        _calc_spec(
+            "XAUUSD",
+            2,
+            contract_size="100",
+            tick_size="0.01",
+            tick_value="1",
+            tick_value_loss="1",
+            point="0.01",
+            volume_min="0.01",
+            volume_step="0.01",
+            volume_max="20",
+            currency_margin="XAU",
+            **usd,
+        ),
+        # The DAX under its old name; no GER40 symbol at this broker.
+        _calc_spec(
+            "GER30",
+            2,
+            contract_size="1",
+            tick_size="0.01",
+            tick_value="0.0116",
+            tick_value_loss="0.01161",
+            point="0.01",
+            volume_min="0.1",
+            volume_step="0.1",
+            volume_max="100",
+            currency_profit="EUR",
+            currency_margin="EUR",
+        ),
+    ]
+
+
+def funded_next_ger30() -> dict[str, Any]:
+    """FundedNext-like account whose broker has GER30 (no GER40): the M5-07 owner finding."""
+    ger = "GER30"
+    deals = [
+        balance_deal(7000001, "2026-11-02 09:00:00", "100000"),
+        deal(
+            7000101,
+            8000101,
+            8000101,
+            "2026-11-03 10:30:00",
+            BUY,
+            IN,
+            "1",
+            "24000",
+            "0",
+            ger,
+            sl="23970",
+            tp="24060",
+        ),
+        deal(
+            7000102, 8000102, 8000101, "2026-11-03 11:30:00", SELL, OUT, "1", "24030", "34.8", ger
+        ),
+        deal(7000201, 8000201, 8000201, "2026-11-03 15:00:00", SELL, IN, "2", "24100", "0", ger),
+    ]
+    orders = [
+        order(
+            8000101, 8000101, "2026-11-03 10:30:00", BUY, "1", "24000", ger, sl="23970", tp="24060"
+        ),
+        order(8000102, 8000101, "2026-11-03 11:30:00", SELL, "1", "24030", ger),
+        order(8000201, 8000201, "2026-11-03 15:00:00", SELL, "2", "24100", ger),
+    ]
+    opened = sv("2026-11-03 15:00:00")
+    position = {
+        "_server_time": "2026-11-03 15:00:00",
+        "ticket": 8000201,
+        "identifier": 8000201,
+        "time": opened,
+        "time_msc": opened * 1000,
+        "type": SELL,
+        "volume": "2",
+        "price_open": "24100",
+        "sl": "24130",
+        "tp": "24040",
+        "price_current": "24090",
+        "profit": "23.2",
+        "swap": "0",
+        "symbol": ger,
+    }
+    balance = _balance(deals)
+    assert balance == Decimal("100034.80"), balance
+    return {
+        "format": 1,
+        "description": (
+            "SYNTHETIC FundedNext-like account with the DAX named GER30 (no GER40), "
+            "M5-08 canonical symbols (see README.md). Not broker evidence."
+        ),
+        "account": account("100034.80", "100058.00", GER30_LOGIN),
+        "ticks": ticks("2026-11-03 16:00:00", GER30_NAMES),
+        "symbols": _ger30_specs(),
+        "deals": deals,
+        "orders": orders,
+        "positions": [position],
+        # Per 1.0 lot in USD; keyed by the broker name only.
+        "margins": {"GER30": {"buy": "4800.00", "sell": "4799.50"}},
+    }
+
+
 FIXTURES = {
     "basic_week.json": basic_week,
     "dst_switch.json": dst_switch,
@@ -860,6 +980,7 @@ FIXTURES = {
     "fail_timeout_mid_sync.json": fail_timeout_mid_sync,
     "fail_then_recover.json": fail_then_recover,
     "calculator_qa.json": calculator_qa,
+    "funded_next_ger30.json": funded_next_ger30,
 }
 
 

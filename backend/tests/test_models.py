@@ -288,3 +288,20 @@ def test_initial_sl_source_values(db_session: Session, source: str | None) -> No
 def test_initial_sl_source_invalid_rejected(db_session: Session) -> None:
     with pytest.raises(IntegrityError, match="ck_trades_initial_sl_source_valid"):
         _trade(db_session, _account(db_session), initial_sl_source="guess")
+
+
+def test_copy_of_default_names_the_missing_column() -> None:
+    """M5-08 insert default (broker/canonical symbol = symbol): a clear error, not KeyError."""
+    from app.models.base import copy_of
+
+    class Context:
+        def __init__(self, params: dict[str, object]) -> None:
+            self.params = params
+
+        def get_current_parameters(self) -> dict[str, object]:
+            return self.params
+
+    default = copy_of("symbol")
+    assert default(Context({"symbol": "GER30"})) == "GER30"  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="'symbol'"):
+        default(Context({}))  # type: ignore[arg-type]

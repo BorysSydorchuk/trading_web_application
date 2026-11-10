@@ -152,15 +152,18 @@ def test_period_utc_range() -> None:
     ("trade_symbol", "expected"),
     [
         ("GER40", "GER40"),
-        ("GER40.cash", "GER40"),
-        ("XAUUSD+", "XAUUSD"),
-        ("xauusd.r", "XAUUSD"),
-        ("EURUSDm", "EURUSD"),
+        ("XAUUSD", "XAUUSD"),
+        # M5-08: trades carry canonical names (symbols.yaml); no prefix match any more.
+        ("GER40.cash", None),
+        ("XAUUSD+", None),
+        ("xauusd.r", None),
+        ("EURUSDm", None),
+        ("GER30", None),
         ("US30", None),
-        ("GER", None),  # shorter than the bias symbol
+        ("GER", None),
     ],
 )
-def test_prefix_matching(trade_symbol: str, expected: str | None) -> None:
+def test_exact_canonical_matching(trade_symbol: str, expected: str | None) -> None:
     assert match_bias_symbol(trade_symbol, SETTINGS.symbols) == expected
 
 
@@ -183,7 +186,8 @@ FULL = lookup(
 
 
 def test_align_trade_london() -> None:
-    result = align_trade("XAUUSD.r", "buy", utc(2026, 11, 3, 8, 30), SETTINGS, FULL)
+    # M5-08: trades carry canonical names (was "XAUUSD.r" while bias matched by prefix).
+    result = align_trade("XAUUSD", "buy", utc(2026, 11, 3, 8, 30), SETTINGS, FULL)
     assert (result.daily, result.weekly, result.monthly) == (
         BiasAlignment.ALIGNED,
         BiasAlignment.NEUTRAL_BIAS,
