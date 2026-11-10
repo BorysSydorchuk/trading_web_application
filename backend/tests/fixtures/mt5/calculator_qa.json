@@ -1,0 +1,101 @@
+{
+ "format": 1,
+ "description": "SYNTHETIC M5 calculator QA fixture (scripts/qa_live_check_m5.py). Values look realistic but are NOT FundedNext specifications and NOT broker evidence.",
+ "account": {
+  "login": 51234570,
+  "server": "QA-Synthetic-Server",
+  "balance": "100000.00",
+  "equity": "100000.00",
+  "currency": "USD"
+ },
+ "ticks": {},
+ "symbols": [
+  {
+   "name": "EURUSD",
+   "digits": 5,
+   "contract_size": "100000",
+   "tick_size": "0.00001",
+   "tick_value": "1",
+   "volume_min": "0.01",
+   "volume_step": "0.01",
+   "volume_max": "50",
+   "currency_profit": "USD",
+   "currency_margin": "EUR",
+   "point": "0.00001",
+   "tick_value_loss": "1"
+  },
+  {
+   "name": "GBPUSD",
+   "digits": 5,
+   "contract_size": "100000",
+   "tick_size": "0.00001",
+   "tick_value": "1",
+   "volume_min": "0.01",
+   "volume_step": "0.01",
+   "volume_max": "50",
+   "currency_profit": "USD",
+   "currency_margin": "GBP",
+   "point": "0.00001",
+   "tick_value_loss": "1"
+  },
+  {
+   "name": "XAUUSD",
+   "digits": 2,
+   "contract_size": "100",
+   "tick_size": "0.01",
+   "tick_value": "1",
+   "volume_min": "0.01",
+   "volume_step": "0.01",
+   "volume_max": "50",
+   "currency_profit": "USD",
+   "currency_margin": "XAU",
+   "point": "0.01",
+   "tick_value_loss": "1"
+  },
+  {
+   "name": "GER40.cash",
+   "digits": 2,
+   "contract_size": "1",
+   "tick_size": "0.01",
+   "tick_value": "0.0116",
+   "volume_min": "0.1",
+   "volume_step": "0.1",
+   "volume_max": "100",
+   "currency_profit": "EUR",
+   "currency_margin": "EUR",
+   "point": "0.01",
+   "tick_value_loss": "0.01161"
+  },
+  {
+   "name": "EURUSD.legacy",
+   "digits": 5,
+   "contract_size": "100000",
+   "tick_size": "0.00001",
+   "tick_value": "1",
+   "volume_min": "0.01",
+   "volume_step": "0.01",
+   "volume_max": "50",
+   "currency_profit": "USD",
+   "currency_margin": "EUR",
+   "point": null,
+   "tick_value_loss": null
+  }
+ ],
+ "deals": [],
+ "orders": [],
+ "positions": [],
+ "margins": {
+  "EURUSD": {
+   "buy": "1163.50",
+   "sell": "1163.20"
+  },
+  "GBPUSD": {
+   "buy": "1342.10",
+   "sell": "1341.90"
+  },
+  "XAUUSD": {
+   "buy": "4105.20",
+   "sell": "4104.80"
+  }
+ }
+}

@@ -33,14 +33,14 @@ run_dev = common.run_dev
 shown_env = common.shown_env
 
 
-def check_qa_database(url: str) -> None:
-    """Accept only an exact local PostgreSQL target without routing overrides."""
+def check_local_database(url: str, db_name: str) -> None:
+    """Accept only an exact local PostgreSQL `db_name` target without routing overrides."""
     try:
         parts = urlsplit(url)
         valid = (
             parts.scheme == "postgresql+psycopg"
             and parts.hostname in {"localhost", "127.0.0.1", "::1"}
-            and parts.path == f"/{QA_DB_NAME}"
+            and parts.path == f"/{db_name}"
             and not parts.query
             and not parts.fragment
         )
@@ -50,23 +50,26 @@ def check_qa_database(url: str) -> None:
     except ValueError:
         valid = False
     if not valid:
-        raise QaError(
-            f"Дозволена лише локальна PostgreSQL QA-база {QA_DB_NAME} без параметрів URL."
-        )
+        raise QaError(f"Дозволена лише локальна PostgreSQL QA-база {db_name} без параметрів URL.")
 
 
-def qa_env(
+def check_qa_database(url: str) -> None:
+    check_local_database(url, QA_DB_NAME)
+
+
+def isolated_env(
     base: Path,
     config: Path,
     database_url: str,
+    extra: Mapping[str, str],
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Override inherited application settings in the child, including any AI key."""
-    check_qa_database(database_url)
+    """Child env: QA overrides (AI key forced empty) win over inherited settings and .env."""
     env = dict(os.environ if environ is None else environ)
     # Settings are case-insensitive: discard case variants before writing canonical names.
     overrides = {
         **common.QA_ENV,
+        **extra,
         "DATABASE_URL": database_url,
         "DATA_DIR": str(base / "data"),
         "LOG_DIR": str(base / "logs"),
@@ -80,6 +83,17 @@ def qa_env(
     return env
 
 
+def qa_env(
+    base: Path,
+    config: Path,
+    database_url: str,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Override inherited application settings in the child, including any AI key."""
+    check_qa_database(database_url)
+    return isolated_env(base, config, database_url, {}, environ)
+
+
 def check_base_dir(base: Path) -> None:
     common.check_base_dir(base)
     # Refuse junctions/symlinks into unrelated config, audio or log directories.
@@ -89,23 +103,30 @@ def check_base_dir(base: Path) -> None:
             raise QaError("QA-папки config/data/logs не можуть бути посиланнями на інші папки.")
 
 
-def prepare_config(src: Path, dest: Path) -> None:
-    """Only replace a marked M4 copy; preserve every source byte and all QA audio."""
+def prepare_marked_config(
+    src: Path, dest: Path, marker_name: str, marker_text: str, label: str
+) -> None:
+    """Only replace a copy carrying exactly this marker; preserve every source byte."""
     check_base_dir(dest.parent)
     if not src.is_dir():
         raise QaError("Не знайдено config/ застосунку.")
     if dest.exists():
-        marker = dest / COPY_MARKER
+        marker = dest / marker_name
         if (
             not dest.is_dir()
             or not marker.is_file()
             or marker.is_symlink()
-            or marker.read_text(encoding="utf-8") != MARKER_TEXT
+            or marker.read_text(encoding="utf-8") != marker_text
         ):
-            raise QaError("Відмовляюся замінювати config/: це не позначена QA-копія M4.")
+            raise QaError(f"Відмовляюся замінювати config/: це не позначена QA-копія {label}.")
         shutil.rmtree(dest)
     shutil.copytree(src, dest)
-    (dest / COPY_MARKER).write_text(MARKER_TEXT, encoding="utf-8")
+    (dest / marker_name).write_text(marker_text, encoding="utf-8")
+
+
+def prepare_config(src: Path, dest: Path) -> None:
+    """Only replace a marked M4 copy; preserve every source byte and all QA audio."""
+    prepare_marked_config(src, dest, COPY_MARKER, MARKER_TEXT, "M4")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -726,6 +726,132 @@ def fail_then_recover() -> dict[str, Any]:
     return data
 
 
+# --- M5-06 calculator QA (SYNTHETIC values, not FundedNext evidence) --------------------
+
+QA_CALC_LOGIN = 51234570
+QA_CALC_SERVER = "QA-Synthetic-Server"
+
+
+def _calc_spec(name: str, digits: int, **values: str | None) -> dict[str, Any]:
+    keys = (
+        "contract_size",
+        "tick_size",
+        "tick_value",
+        "volume_min",
+        "volume_step",
+        "volume_max",
+        "currency_profit",
+        "currency_margin",
+        "point",
+        "tick_value_loss",
+    )
+    return {"name": name, "digits": digits, **{k: values[k] for k in keys}}
+
+
+def calculator_qa() -> dict[str, Any]:
+    """One synced USD account, 4 broker-style symbols + one legacy spec, margins for 3."""
+    usd = {"currency_profit": "USD"}
+    return {
+        "format": 1,
+        "description": (
+            "SYNTHETIC M5 calculator QA fixture (scripts/qa_live_check_m5.py). Values look "
+            "realistic but are NOT FundedNext specifications and NOT broker evidence."
+        ),
+        "account": {
+            "login": QA_CALC_LOGIN,
+            "server": QA_CALC_SERVER,
+            "balance": "100000.00",
+            "equity": "100000.00",
+            "currency": "USD",
+        },
+        # No ticks: the offset check falls back to the configured broker_time rule.
+        "ticks": {},
+        "symbols": [
+            _calc_spec(
+                "EURUSD",
+                5,
+                contract_size="100000",
+                tick_size="0.00001",
+                tick_value="1",
+                tick_value_loss="1",
+                point="0.00001",
+                volume_min="0.01",
+                volume_step="0.01",
+                volume_max="50",
+                currency_margin="EUR",
+                **usd,
+            ),
+            _calc_spec(
+                "GBPUSD",
+                5,
+                contract_size="100000",
+                tick_size="0.00001",
+                tick_value="1",
+                tick_value_loss="1",
+                point="0.00001",
+                volume_min="0.01",
+                volume_step="0.01",
+                volume_max="50",
+                currency_margin="GBP",
+                **usd,
+            ),
+            _calc_spec(
+                "XAUUSD",
+                2,
+                contract_size="100",
+                tick_size="0.01",
+                tick_value="1",
+                tick_value_loss="1",
+                point="0.01",
+                volume_min="0.01",
+                volume_step="0.01",
+                volume_max="50",
+                currency_margin="XAU",
+                **usd,
+            ),
+            # EUR index on a USD account: loss tick value differs slightly from profit.
+            _calc_spec(
+                "GER40.cash",
+                2,
+                contract_size="1",
+                tick_size="0.01",
+                tick_value="0.0116",
+                tick_value_loss="0.01161",
+                point="0.01",
+                volume_min="0.1",
+                volume_step="0.1",
+                volume_max="100",
+                currency_profit="EUR",
+                currency_margin="EUR",
+            ),
+            # A spec synced before point/tick_value_loss were captured -> specs_incomplete.
+            _calc_spec(
+                "EURUSD.legacy",
+                5,
+                contract_size="100000",
+                tick_size="0.00001",
+                tick_value="1",
+                tick_value_loss=None,
+                point=None,
+                volume_min="0.01",
+                volume_step="0.01",
+                volume_max="50",
+                currency_margin="EUR",
+                **usd,
+            ),
+        ],
+        "deals": [],
+        "orders": [],
+        "positions": [],
+        # Per 1.0 lot, account currency (USD). GER40.cash deliberately has none.
+        "margins": {
+            "EURUSD": {"buy": "1163.50", "sell": "1163.20"},
+            "GBPUSD": {"buy": "1342.10", "sell": "1341.90"},
+            "XAUUSD": {"buy": "4105.20", "sell": "4104.80"},
+        },
+    }
+
+
 FIXTURES = {
     "basic_week.json": basic_week,
     "dst_switch.json": dst_switch,
@@ -733,6 +859,7 @@ FIXTURES = {
     "fail_terminal_not_found.json": fail_terminal_not_found,
     "fail_timeout_mid_sync.json": fail_timeout_mid_sync,
     "fail_then_recover.json": fail_then_recover,
+    "calculator_qa.json": calculator_qa,
 }
 
 
