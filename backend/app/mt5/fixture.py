@@ -11,26 +11,32 @@ Fixture format (version 1); keys starting with ``_`` are comments:
       "deals":     [RawDeal, ...],
       "orders":    [RawOrder, ...],
       "positions": [RawPosition, ...],
+      "margins":   {"EURUSD": {"buy": "<margin per 1.0 lot>", "sell": "..."}, ...},
       "failures":  {"<method>": Failure, ...},
       "steps":     [Step, ...]
     }
 
 The top level is step 0. Each entry of ``steps`` is an overlay applied on top of the
 previous step (step i = top level + steps[0..i-1]): keys ``account``, ``ticks``,
-``symbols``, ``deals``, ``orders``, ``positions``, ``failures`` replace the previous value;
+``symbols``, ``deals``, ``orders``, ``positions``, ``margins``, ``failures`` replace the
+previous value;
 ``add_deals`` / ``add_orders`` append. Use `advance()` to move to the next step, e.g. to
 simulate a position opening and then closing between two sync cycles.
 
 Failure: ``{"last_error": [code, "message"]}`` (mapped exactly like the real source) or
 ``{"code": "<Mt5ErrorCode>", "message": "..."}``. Method names: connect, account_info,
 server_tick_epoch, symbol_spec, symbols_matching, deals, deals_for_position,
-opening_order, open_positions.
+opening_order, open_positions, calc_margin.
+
+Margins: decimal strings, finite and >= 0, in account currency for 1.0 lot; `calc_margin`
+returns ``per_lot * volume`` and ignores the price (a fixture is not a margin model).
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -44,12 +50,15 @@ from app.mt5.source import (
     verify_account,
 )
 from app.mt5.types import (
+    DIRECTIONS,
+    Direction,
     RawAccountInfo,
     RawDeal,
     RawOrder,
     RawPosition,
     RawSymbolSpec,
     from_json_dict,
+    to_decimal,
 )
 
 FORMAT_VERSION = 1
@@ -64,9 +73,19 @@ METHODS = frozenset(
         "deals_for_position",
         "opening_order",
         "open_positions",
+        "calc_margin",
     }
 )
-_REPLACE_KEYS = ("account", "ticks", "symbols", "deals", "orders", "positions", "failures")
+_REPLACE_KEYS = (
+    "account",
+    "ticks",
+    "symbols",
+    "deals",
+    "orders",
+    "positions",
+    "margins",
+    "failures",
+)
 _STEP_KEYS = frozenset({*_REPLACE_KEYS, "add_deals", "add_orders", "name"})
 _TOP_KEYS = frozenset({*_REPLACE_KEYS, "format", "description", "steps"})
 
@@ -84,6 +103,28 @@ def _failure(spec: Mapping[str, Any], method: str) -> Mt5Error:
     return Mt5Error(Mt5ErrorCode(spec["code"]), str(spec.get("message", "scripted failure")))
 
 
+def _parse_margins(data: object) -> dict[tuple[str, str], Decimal]:
+    """``{symbol: {direction: per-lot margin}}`` -> ``{(symbol, direction): Decimal}``."""
+    if not isinstance(data, Mapping):
+        raise ValueError(f"margins must be an object, got {type(data).__name__}")
+    parsed: dict[tuple[str, str], Decimal] = {}
+    for symbol, per_direction in data.items():
+        if not isinstance(per_direction, Mapping):
+            raise ValueError(f"margins.{symbol} must map buy/sell to a margin per lot")
+        for direction, value in per_direction.items():
+            where = f"margins.{symbol}.{direction}"
+            if direction not in DIRECTIONS:
+                raise ValueError(f"{where}: direction must be buy or sell")
+            try:
+                margin = to_decimal(value)
+            except ValueError as exc:
+                raise ValueError(f"{where}: {exc}") from None
+            if margin < 0:
+                raise ValueError(f"{where}: margin must be >= 0, got {margin}")
+            parsed[(str(symbol), str(direction))] = margin
+    return parsed
+
+
 class _Snapshot:
     def __init__(self, data: Mapping[str, Any]) -> None:
         account = data.get("account")
@@ -93,6 +134,7 @@ class _Snapshot:
         self.deals = [from_json_dict(RawDeal, d) for d in data.get("deals", [])]
         self.orders = [from_json_dict(RawOrder, o) for o in data.get("orders", [])]
         self.positions = [from_json_dict(RawPosition, p) for p in data.get("positions", [])]
+        self.margins = _parse_margins(data.get("margins", {}))
         failures: Mapping[str, Mapping[str, Any]] = data.get("failures", {})
         unknown = sorted(set(failures) - METHODS)
         if unknown:
@@ -231,3 +273,17 @@ class FixtureMt5Source:
     def open_positions(self) -> list[RawPosition]:
         self._enter("open_positions")
         return list(self._snap.positions)
+
+    def calc_margin(
+        self, direction: Direction, symbol: str, volume: Decimal, price: Decimal
+    ) -> Decimal:
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be 'buy' or 'sell', got {direction!r}")
+        self._enter("calc_margin")
+        per_lot = self._snap.margins.get((symbol, direction))
+        if per_lot is None:
+            raise Mt5Error(
+                Mt5ErrorCode.MT5_ERROR,
+                f"order_calc_margin failed: no margin data for {symbol} {direction} (fixture)",
+            )
+        return per_lot * volume

@@ -43,6 +43,8 @@ from app.mt5.source import (
     verify_account,
 )
 from app.mt5.types import (
+    DIRECTIONS,
+    Direction,
     RawAccountInfo,
     RawDeal,
     RawOrder,
@@ -72,8 +74,12 @@ ALLOWED_FUNCTIONS = frozenset(
         "history_deals_get",
         "history_orders_get",
         "positions_get",
+        # Hypothetical required margin (PRD 6.8): only calculates, never places/checks orders.
+        "order_calc_margin",
     }
 )
+# Module constants read besides the functions above (arguments of order_calc_margin).
+ALLOWED_CONSTANTS = frozenset({"ORDER_TYPE_BUY", "ORDER_TYPE_SELL"})
 
 
 class Mt5Module(Protocol):
@@ -90,6 +96,12 @@ class Mt5Module(Protocol):
     def history_deals_get(self, *args: Any, **kwargs: Any) -> Any: ...
     def history_orders_get(self, *args: Any, **kwargs: Any) -> Any: ...
     def positions_get(self, *args: Any, **kwargs: Any) -> Any: ...
+    def order_calc_margin(self, action: int, symbol: str, volume: float, price: float) -> Any: ...
+
+    @property
+    def ORDER_TYPE_BUY(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
+    @property
+    def ORDER_TYPE_SELL(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
 
 
 def load_module() -> Mt5Module:
@@ -449,3 +461,29 @@ class RealMt5Source:
     def open_positions(self) -> list[RawPosition]:
         objs = self._read("positions_get", self._mt5().positions_get, empty_ok=True)
         return [position_from_mt5(o) for o in objs or ()]
+
+    def calc_margin(
+        self, direction: Direction, symbol: str, volume: Decimal, price: Decimal
+    ) -> Decimal:
+        """``order_calc_margin``: required margin in account currency (read-only)."""
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be 'buy' or 'sell', got {direction!r}")
+        mt5 = self._mt5()  # _read checks the connection before the module is called
+        action = mt5.ORDER_TYPE_BUY if direction == "buy" else mt5.ORDER_TYPE_SELL
+        result = self._read(
+            "order_calc_margin",
+            lambda: mt5.order_calc_margin(action, symbol, float(volume), float(price)),
+            empty_ok=False,
+        )
+        return margin_from_mt5(result)
+
+
+def margin_from_mt5(value: object) -> Decimal:
+    """A finite, non-negative margin, else `Mt5Error(mt5_error)` (never a silent zero)."""
+    try:
+        margin = to_decimal(value)
+    except ValueError as exc:
+        raise Mt5Error(Mt5ErrorCode.MT5_ERROR, f"order_calc_margin returned {exc}") from None
+    if margin < 0:
+        raise Mt5Error(Mt5ErrorCode.MT5_ERROR, f"order_calc_margin returned {margin} (< 0)")
+    return margin

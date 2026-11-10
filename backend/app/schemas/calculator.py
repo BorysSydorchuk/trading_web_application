@@ -136,3 +136,26 @@ class CalculateResult(BaseModel):
     tp_3: PlainDecimal
     specs_at: UtcDatetime
     margin: MarginInfo
+
+
+MarginRequestStatus = Literal["pending", "processing", "done", "failed", "expired"]
+
+
+class MarginRequestItem(BaseModel):
+    """POST/GET /api/calculator/margin-requests (docs/api.md M5-04d exact shapes)."""
+
+    id: int
+    account_id: int
+    symbol: str
+    direction: Direction
+    volume: PlainDecimal
+    entry: PlainDecimal
+    status: MarginRequestStatus
+    source: Literal["mt5"] | None
+    amount: PlainDecimal | None
+    currency: str
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    finished_at: UtcDatetime | None
+    expires_at: UtcDatetime
+    error_code: str | None

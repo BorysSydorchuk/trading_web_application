@@ -8,7 +8,9 @@ recorded in its sync_log row and logged, the others still run.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,13 +54,28 @@ def run_sync_cycle(
     *,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     rules_getter: Callable[[], RulesConfig] = get_rules,
+    lock: threading.Lock | None = None,
 ) -> list[int]:
-    """Sync every due active account sequentially. Returns the ids of synced accounts."""
+    """Sync every due active account sequentially. Returns the ids of synced accounts.
+
+    ``lock`` (shared with the margin job, `app.worker.mt5_shared`) is acquired blocking and
+    held for the whole cycle: sync has priority and waits for a running margin lookup.
+    """
     try:
         rules = rules_getter()
     except ConfigError as exc:
         logger.error("MT5 sync skipped: %s", exc)
         return []
+    with lock if lock is not None else nullcontext():
+        return _sync_due_accounts(session_factory, source, rules, now)
+
+
+def _sync_due_accounts(
+    session_factory: sessionmaker[Session],
+    source: Mt5Source,
+    rules: RulesConfig,
+    now: Callable[[], datetime],
+) -> list[int]:
     with session_factory() as session:
         account_ids = list(
             session.scalars(

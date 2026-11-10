@@ -32,7 +32,7 @@ from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.fixture import FixtureMt5Source
 from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
-from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
+from app.mt5.types import Direction, RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
 from app.services import sync as sync_service
 from app.services.sync import close_orphaned_runs, is_due, sync_account
 from app.worker import sync_job
@@ -641,6 +641,11 @@ class Wrapped:
 
     def open_positions(self) -> list[RawPosition]:
         return self.base.open_positions() + self.extra_positions
+
+    def calc_margin(
+        self, direction: Direction, symbol: str, volume: Decimal, price: Decimal
+    ) -> Decimal:
+        return self.base.calc_margin(direction, symbol, volume, price)
 
 
 def wall_epoch(wall: datetime) -> int:

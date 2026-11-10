@@ -4,6 +4,8 @@ the main thread just waits for a stop signal.
 Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`),
 `ai_warmup` (one AI call after an extraction schema change or a quiet day, see
 `app.services.ai.warmup`), `ai_warmup_daily` (Mon-Fri 07:30 Brussels cron, flags a warm-up),
+`calculator_margin` (live MT5 margin for calculator requests, every 2 s, sharing the sync
+job's Mt5Source and lock, see `app.worker.margin_job`),
 `transcription` (voice notes -> text, see `app.worker.transcription_job`) and
 `journal_requirements` (stamps required_since soon after a journal_fields.yaml change, see
 `app.services.journal_requirements`; the API syncs too, on every journal read).
@@ -46,6 +48,13 @@ from app.services.ai.warmup import (
 )
 from app.services.journal_requirements import sync_requirements
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
+from app.worker.margin_job import (
+    MARGIN_JOB_ID,
+    MARGIN_JOB_INTERVAL_S,
+    mark_interrupted_margin_requests,
+    run_margin_cycle,
+)
+from app.worker.mt5_shared import SharedMt5
 from app.worker.sync_job import (
     SYNC_JOB_ID,
     SYNC_JOB_INTERVAL_S,
@@ -118,14 +127,29 @@ def sync_journal_requirements(session_factory: sessionmaker[Session] | None = No
         sync_requirements(db, config)
 
 
-def default_sync_job(settings: Settings) -> Callable[[], None]:
-    """One MT5 source for the process (created on first run), DB sessions per account."""
-    source: list[Mt5Source] = []
+def default_mt5(settings: Settings) -> SharedMt5:
+    """One MT5 source for the process (created on the first job run) and its lock."""
+
+    def factory() -> Mt5Source:
+        return make_source(settings)
+
+    return SharedMt5(factory)
+
+
+def default_sync_job(mt5: SharedMt5) -> Callable[[], None]:
+    """Sync under the shared MT5 lock, DB sessions per account."""
 
     def job() -> None:
-        if not source:
-            source.append(make_source(settings))
-        run_sync_cycle(get_session_factory(), source[0])
+        run_sync_cycle(get_session_factory(), mt5.source(), lock=mt5.lock)
+
+    return job
+
+
+def default_margin_job(mt5: SharedMt5) -> Callable[[], None]:
+    """At most one margin request per run; skipped while sync holds the lock."""
+
+    def job() -> None:
+        run_margin_cycle(get_session_factory(), mt5.source(), mt5.lock)
 
     return job
 
@@ -146,14 +170,18 @@ def _noop() -> None:
     return None
 
 
+_QUIET_SKIP_JOBS = (TRANSCRIPTION_JOB_ID, MARGIN_JOB_ID)
+
+
 class _SkipNoiseFilter(logging.Filter):
     """Drop APScheduler's "skipped: maximum number of running instances" line for the
-    transcription job: it runs every 2 s while one note can take a minute."""
+    2 s jobs: one note can take a minute, one margin lookup a terminal start-up."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         return not (
-            "maximum number of running instances" in message and TRANSCRIPTION_JOB_ID in message
+            "maximum number of running instances" in message
+            and any(job_id in message for job_id in _QUIET_SKIP_JOBS)
         )
 
 
@@ -166,9 +194,13 @@ def build_scheduler(
     warmup_daily_job: Callable[[], None] | None = None,
     transcription_job: Callable[[], None] | None = None,
     requirements_job: Callable[[], None] | None = None,
+    margin_job: Callable[[], None] | None = None,
+    mt5: SharedMt5 | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
+    # Sync and margin jobs: one source, one lock.
+    shared = mt5 if mt5 is not None else default_mt5(settings)
     scheduler = BackgroundScheduler(
         timezone=UTC,
         job_defaults={
@@ -190,11 +222,20 @@ def build_scheduler(
         replace_existing=True,
     )
     scheduler.add_job(
-        _safe(SYNC_JOB_ID, sync_job or default_sync_job(settings)),
+        _safe(SYNC_JOB_ID, sync_job or default_sync_job(shared)),
         trigger=IntervalTrigger(seconds=SYNC_JOB_INTERVAL_S, timezone=UTC),
         id=SYNC_JOB_ID,
         name=SYNC_JOB_ID,
         next_run_time=datetime.now(UTC),  # due accounts sync right after start
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(MARGIN_JOB_ID, margin_job or default_margin_job(shared)),
+        trigger=IntervalTrigger(seconds=MARGIN_JOB_INTERVAL_S, timezone=UTC),
+        id=MARGIN_JOB_ID,
+        name=MARGIN_JOB_ID,
+        max_instances=1,  # one MT5 lookup at a time
+        coalesce=True,
         replace_existing=True,
     )
     default_warmup = WarmupJob(settings) if warmup_job is None else None
@@ -264,6 +305,8 @@ def main() -> int:
     # too: the warm-up job makes AI calls and prices them.
     check_config_files()
     mark_interrupted_runs(get_session_factory())
+    # Single worker process assumed: every `processing` margin request was interrupted.
+    mark_interrupted_margin_requests(get_session_factory())
     # Single worker process assumed: every `processing` note is re-queued here.
     reset_interrupted_notes(get_session_factory())
     logging.getLogger("apscheduler.scheduler").addFilter(_SkipNoiseFilter())
