@@ -120,3 +120,13 @@ Optional top-level (and step) key `margins`, read by `FixtureMt5Source.calc_marg
   `calc_margin` (`failures` / `fail()`).
 - The generated files above have no `margins` (none needed by sync); margin tests use inline
   fixture dicts. Values there are SYNTHETIC, never broker evidence.
+
+## calculator_qa.json (M5-06, SYNTHETIC)
+
+Used by `scripts/qa_live_check_m5.py` (docs/reports/M5-live-check.md). Values look
+broker-like but are **not** FundedNext specs and not broker evidence. Account `51234570` @
+`QA-Synthetic-Server`, USD, balance = equity 100 000.00, no deals/positions, no ticks (the
+configured broker_time rule is used). Symbols EURUSD, GBPUSD, XAUUSD, GER40.cash (with
+`point` and `tick_value_loss`; GER40.cash tick_value_loss 0.01161) and `EURUSD.legacy`
+with `point`/`tick_value_loss` null (→ `specs_incomplete`). `margins` per 1.0 lot for
+EURUSD/GBPUSD/XAUUSD buy and sell; none for GER40.cash (→ failed `mt5_error`, «маржа недоступна»).
