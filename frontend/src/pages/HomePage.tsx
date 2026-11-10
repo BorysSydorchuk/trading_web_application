@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useBiasStatus } from '@/features/bias/api'
+import { CalculatorPanel } from '@/features/calculator/CalculatorPanel'
 import { BIAS_KINDS } from '@/features/bias/types'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
@@ -42,6 +43,7 @@ export function HomePage() {
           </div>
         </>
       )}
+      <CalculatorPanel />
     </section>
   )
 }
