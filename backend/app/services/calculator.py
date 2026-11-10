@@ -267,8 +267,17 @@ def _result(
     )
 
 
-def calculate(db: Session, body: schemas.CalculateInput) -> schemas.CalculateResult:
-    """Validate selection, balance and specs, size with the pure core, attach margin info."""
+@dataclass(frozen=True)
+class Sized:
+    """A validated, sized calculator request (shared by calculate and margin requests)."""
+
+    context: SizingContext
+    request: PositionSizeRequest
+    result: PositionSizeResult
+
+
+def size(db: Session, body: schemas.CalculateInput) -> Sized:
+    """Validate selection, balance and specs and size with the pure core. Raises `ApiError`."""
     _validate_combinations(body)
     account = get_account_or_404(db, body.account_id)
     spec = _spec_or_404(db, account.id, body.symbol)
@@ -287,5 +296,11 @@ def calculate(db: Session, body: schemas.CalculateInput) -> schemas.CalculateRes
         point=sizing_spec.point,
         balance=balance,
     )
-    margin = margin_info(db, context, request.direction, sized.volume)
-    return _result(context, request, sized, margin)
+    return Sized(context, request, sized)
+
+
+def calculate(db: Session, body: schemas.CalculateInput) -> schemas.CalculateResult:
+    """Validate selection, balance and specs, size with the pure core, attach margin info."""
+    sized = size(db, body)
+    margin = margin_info(db, sized.context, sized.request.direction, sized.result.volume)
+    return _result(sized.context, sized.request, sized.result, margin)

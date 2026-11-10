@@ -103,3 +103,20 @@ Tue 2026-10-27 11:00 → 12:00 server = 08:00 → 09:00 UTC, net **19.40**, bala
 Not file-driven: missing `MT5_PASSWORD_<login>` → `password_missing` (pass `password=None`);
 connecting to any fixture with another login/server → `login_failed`; ad-hoc failures via
 `FixtureMt5Source.fail(method, Mt5Error(...))`.
+
+## Margins (`calc_margin`, M5-04d)
+
+Optional top-level (and step) key `margins`, read by `FixtureMt5Source.calc_margin`:
+
+    "margins": {"EURUSD": {"buy": "1100.00", "sell": "1099.50"}, "GER40.cash": {"buy": "3820.1"}}
+
+- Value = margin for **1.0 lot** in account currency, decimal string, `>= 0` and finite.
+  Direction keys are `buy` / `sell` only; anything else fails loading with `ValueError`.
+- `calc_margin(direction, symbol, volume, price)` returns `per_lot * volume` (exact
+  Decimal); `price` is accepted and ignored (a fixture is not a margin model).
+- Exact symbol name only. No entry for the symbol or direction → `Mt5Error(mt5_error)`
+  "no margin data ... (fixture)". Needs `connect` like every read.
+- A step's `margins` replaces the previous value. Scripted failures use the method name
+  `calc_margin` (`failures` / `fail()`).
+- The generated files above have no `margins` (none needed by sync); margin tests use inline
+  fixture dicts. Values there are SYNTHETIC, never broker evidence.

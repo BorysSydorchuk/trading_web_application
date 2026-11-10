@@ -5,13 +5,15 @@ An `Mt5Source` talks to ONE terminal at a time (the MetaTrader5 package is proce
 times are server wall-clock epochs, converted to UTC only by `app.mt5.convert`.
 
 The interface is read-only by design: there is no method that could place, modify or close
-anything, and `tests/mt5/test_guard.py` fails if trading calls appear anywhere in ``app``.
+anything (``calc_margin`` only calculates a hypothetical margin), and
+`tests/mt5/test_guard.py` fails if trading calls appear anywhere in ``app``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from decimal import Decimal
 from pathlib import Path
 from typing import Protocol
 
@@ -20,7 +22,14 @@ from pydantic import SecretStr
 from app.config import mt5_password_key
 from app.domain.terminal_path import PROGRAM_FILES_MESSAGE, TERMINAL_EXE, is_in_program_files
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
-from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
+from app.mt5.types import (
+    Direction,
+    RawAccountInfo,
+    RawDeal,
+    RawOrder,
+    RawPosition,
+    RawSymbolSpec,
+)
 
 DEFAULT_CONNECT_TIMEOUT_S = 60.0
 
@@ -68,6 +77,16 @@ class Mt5Source(Protocol):
         ...
 
     def open_positions(self) -> list[RawPosition]: ...
+
+    def calc_margin(
+        self, direction: Direction, symbol: str, volume: Decimal, price: Decimal
+    ) -> Decimal:
+        """Required margin (account currency) to open ``volume`` lots at ``price``.
+
+        Only calculates (MT5 ``order_calc_margin``); never places or checks an order.
+        ``ValueError`` for an unknown direction, `Mt5Error` otherwise.
+        """
+        ...
 
 
 def require_password(login: int, password: SecretStr | None) -> str:

@@ -21,9 +21,13 @@ import types
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 ZERO = Decimal(0)
+
+# Trade direction for `Mt5Source.calc_margin`.
+type Direction = Literal["buy", "sell"]
+DIRECTIONS: frozenset[str] = frozenset({"buy", "sell"})
 
 
 def to_decimal(value: object) -> Decimal:

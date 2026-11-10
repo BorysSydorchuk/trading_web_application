@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -23,6 +26,9 @@ from app.worker.main import (
 )
 from app.worker.sync_job import SYNC_JOB_ID
 from app.worker.transcription_job import TRANSCRIPTION_JOB_ID
+
+# app.worker.margin_job.MARGIN_JOB_ID (literal here so the older tests import without it).
+MARGIN_JOB_ID = "calculator_margin"
 
 
 class _BrokenEngine:
@@ -49,6 +55,7 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
     assert [j.id for j in scheduler.get_jobs()] == [
         HEARTBEAT_JOB_ID,
         SYNC_JOB_ID,
+        MARGIN_JOB_ID,
         WARMUP_JOB_ID,
         WARMUP_DAILY_JOB_ID,
         TRANSCRIPTION_JOB_ID,
@@ -58,6 +65,12 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
     assert sync is not None
     assert isinstance(sync.trigger, IntervalTrigger)
     assert sync.trigger.interval == timedelta(seconds=60)
+    margin = scheduler.get_job(MARGIN_JOB_ID)
+    assert margin is not None
+    assert isinstance(margin.trigger, IntervalTrigger)
+    assert margin.trigger.interval == timedelta(seconds=2)
+    assert margin.max_instances == 1
+    assert margin.coalesce is True
     warmup = scheduler.get_job(WARMUP_JOB_ID)
     assert warmup is not None
     assert isinstance(warmup.trigger, IntervalTrigger)
@@ -162,14 +175,13 @@ def test_skip_noise_filter_only_hides_transcription_skips() -> None:
 
     noise = _SkipNoiseFilter()
     assert noise.filter(record("transcription (trigger: interval[0:00:02])")) is False
+    assert noise.filter(record("calculator_margin (trigger: interval[0:00:02])")) is False
     assert noise.filter(record("mt5_sync (trigger: interval[0:01:00])")) is True
 
 
 def test_default_transcription_job_uses_whisper_lazily(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from pathlib import Path
-    from typing import Any
 
     from app.worker import main as worker_main
 
@@ -245,3 +257,151 @@ def test_daily_job_flags_the_default_warmup_job(settings: Settings) -> None:
     daily.func()
 
     assert target._daily_requested_at is not None
+
+
+# --- calculator margin job (M5-04d): shares the sync job's Mt5Source and lock ---
+
+
+def test_margin_job_id_and_interval() -> None:
+    from app.worker import margin_job
+
+    assert margin_job.MARGIN_JOB_ID == MARGIN_JOB_ID
+    assert margin_job.MARGIN_JOB_INTERVAL_S == 2
+
+
+def test_shared_mt5_creates_one_source_lazily_and_has_one_lock() -> None:
+    from app.worker.mt5_shared import SharedMt5
+
+    made: list[object] = []
+
+    def factory() -> Any:
+        made.append(object())
+        return made[-1]
+
+    shared = SharedMt5(factory)
+    assert made == []  # nothing created before the first job run
+    first = shared.source()
+    assert shared.source() is first
+    assert made == [first]
+    assert isinstance(shared.lock, type(threading.Lock()))
+    assert shared.lock is shared.lock
+
+
+def test_sync_and_margin_jobs_share_one_source_and_one_lock(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.worker import main as worker_main
+    from app.worker.mt5_shared import SharedMt5
+
+    created: list[object] = []
+
+    def factory() -> Any:
+        created.append(object())
+        return created[-1]
+
+    seen: dict[str, tuple[Any, Any]] = {}
+
+    def fake_sync(_factory: Any, source: Any, *, lock: Any, **_: Any) -> list[int]:
+        seen["sync"] = (source, lock)
+        return []
+
+    def fake_margin(_factory: Any, source: Any, lock: Any, **_: Any) -> None:
+        seen["margin"] = (source, lock)
+
+    monkeypatch.setattr(worker_main, "run_sync_cycle", fake_sync)
+    monkeypatch.setattr(worker_main, "run_margin_cycle", fake_margin)
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: None)
+    shared = SharedMt5(factory)
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine, mt5=shared)
+
+    for job_id in (MARGIN_JOB_ID, SYNC_JOB_ID, MARGIN_JOB_ID):
+        job = scheduler.get_job(job_id)
+        assert job is not None
+        job.func.__wrapped__()  # unwrapped: a failure must fail the test, not be logged
+
+    assert len(created) == 1
+    assert seen["sync"] == (created[0], shared.lock)
+    assert seen["margin"] == (created[0], shared.lock)
+
+
+def test_build_scheduler_default_shares_the_mt5_source_without_creating_it(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.worker import main as worker_main
+
+    made: list[Any] = []
+
+    def fake_make_source(_settings: Settings) -> Any:
+        made.append(object())
+        return made[-1]
+
+    monkeypatch.setattr(worker_main, "make_source", fake_make_source)
+    seen: list[Any] = []
+    monkeypatch.setattr(
+        worker_main, "run_sync_cycle", lambda _f, src, **kw: seen.append((src, kw["lock"]))
+    )
+    monkeypatch.setattr(
+        worker_main, "run_margin_cycle", lambda _f, src, lock, **_: seen.append((src, lock))
+    )
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: None)
+
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine)
+    assert made == []  # building the scheduler never creates an MT5 source
+
+    for job_id in (SYNC_JOB_ID, MARGIN_JOB_ID):
+        job = scheduler.get_job(job_id)
+        assert job is not None
+        job.func.__wrapped__()
+
+    assert len(made) == 1
+    assert seen[0] == seen[1]
+    assert seen[0][0] is made[0]
+
+
+def test_margin_job_errors_are_contained(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    def exploding() -> None:
+        raise RuntimeError("margin boom")
+
+    scheduler = build_scheduler(settings, engine_getter=_broken_engine, margin_job=exploding)
+    job = scheduler.get_job(MARGIN_JOB_ID)
+    assert job is not None
+    job.func()  # must not raise
+    assert "Job 'calculator_margin' failed" in caplog.text
+
+
+def test_worker_start_fails_interrupted_margin_requests_before_jobs_run(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.worker import main as worker_main
+
+    order: list[str] = []
+
+    class FakeScheduler:
+        running = False
+
+        def start(self) -> None:
+            order.append("scheduler.start")
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(worker_main, "get_settings", lambda: settings)
+    monkeypatch.setattr(worker_main, "setup_logging", lambda *_: tmp_path / "worker.log")
+    monkeypatch.setattr(worker_main, "check_config_files", lambda: None)
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: None)
+    monkeypatch.setattr(worker_main, "mark_interrupted_runs", lambda _f: order.append("sync"))
+    monkeypatch.setattr(worker_main, "reset_interrupted_notes", lambda _f: order.append("notes"))
+
+    def fake_mark_margin(_factory: Any) -> int:
+        order.append("margin")
+        return 0
+
+    monkeypatch.setattr(worker_main, "mark_interrupted_margin_requests", fake_mark_margin)
+    monkeypatch.setattr(worker_main, "_install_signal_handlers", lambda _stop: None)
+    monkeypatch.setattr(worker_main, "build_scheduler", lambda *_a, **_k: FakeScheduler())
+    monkeypatch.setattr(worker_main, "dispose_engine", lambda: None)
+
+    assert worker_main.main() == 0
+
+    assert "margin" in order
+    assert order.index("margin") < order.index("scheduler.start")
