@@ -58,7 +58,7 @@ Borys trades FundedNext 2-step prop challenges on MT5. The previous tool (a Pyth
 - Session classification by Brussels time: `london` 08:00 to 11:00, `premarket` 11:00 to 13:00, `ny` 13:00 to 16:00, else `outside`. Allowed entry windows: london and ny only. Session boundaries live in `config/rules.yaml`, not in code.
 
 ### 6.4 Trade record (all columns)
-Auto (from MT5): account, symbol, direction, open/close time (UTC), duration, entry/exit price (volume-weighted), volume, initial SL, TP, commission, swap, gross/net P&L, P&L % of balance, risk amount, risk % (from initial SL), R multiple, planned RR (TP vs SL), session, weekday, hour, re-entry flag (same symbol + direction within the same session after a loss).
+Auto (from MT5): account, symbol, direction, open/close time (UTC), duration, entry/exit price (volume-weighted), volume, initial SL, TP, commission, swap, gross/net P&L, P&L % of account size, risk amount, risk % of account size (from initial SL), R multiple, planned RR (TP vs SL), session, weekday, hour, re-entry flag (same symbol + direction within the same session after a loss).
 
 **Journal fields will change over time** (Borys will revise them). Design for it:
 - Field definitions (key, Ukrainian label, type, options, required, used in analytics) live in `config/journal_fields.yaml`. The form, the AI extraction schema and digest breakdowns are generated from this file.
@@ -115,7 +115,7 @@ Journal (from description, AI-prefilled, user-confirmed). Initial set, **require
 ### 6.8 Position size calculator
 - Inputs: account (dropdown), symbol (from that account's `symbol_specs`), direction, entry price, SL price (or SL distance in points), risk % (default 1.0) or risk amount.
 - Output: lot size rounded **down** to volume step, real risk in money and % after rounding, margin required (via `order_calc_margin` when the terminal is reachable, else estimate), TP prices for RR 1.5 / 2 / 3.
-- Uses current account balance (or the firm's reference balance, configurable per account).
+- Risk base = the account size («Розмір рахунку», per account, default = starting balance, editable in Settings → Рахунки), never the current balance (PM 2026-11-11). Example: balance 10 401.70 on a 10 000 account, 1 % = 100.00. The calculator shows «Ризик від розміру рахунку 10 000 USD» next to the budget; the current balance is shown only as information.
 - Works offline with last synced specs; shows the specs date.
 - Must be correct for GER40 and XAUUSD on FundedNext: unit tests with real spec values Borys will provide from the terminal.
 
@@ -128,7 +128,7 @@ Configured in `config/rules.yaml`, editable later in Settings:
 - entries only in london (08:00 to 11:00) or ny (13:00 to 16:00) sessions; entries in premarket or outside are violations
 - QM entry model not in NY session
 - no breakeven moves (detect SL moved to entry)
-Violations auto-attached to the trade. Dashboard shows today's and this week's P&L vs these limits with a clear "СТОП на сьогодні" banner when hit.
+All percentages (risk per trade, daily/weekly stops, trade risk % and P&L %, dashboard limits, digests) are % of the account size (see 6.8), not of the current or period-start balance (PM 2026-11-11). Violations auto-attached to the trade. Dashboard shows today's and this week's P&L vs these limits with a clear "СТОП на сьогодні" banner when hit.
 
 ### 6.10 Dashboard (home)
 Today: bias status for both sessions, P&L today/week vs limits, inbox count, open positions, sync status per account (last sync time, errors). Quick links to calculator and describe.
