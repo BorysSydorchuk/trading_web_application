@@ -79,6 +79,7 @@ _NOT_NULLABLE = (
     "starting_balance",
     "currency",
     "status",
+    "reference_balance",
 )
 
 
@@ -137,7 +138,7 @@ class Account(BaseModel):
     starting_balance: Decimal
     currency: str
     status: AccountStatus
-    reference_balance: Decimal | None
+    reference_balance: Decimal
     daily_loss_pct: Decimal | None
     max_drawdown_pct: Decimal | None
     profit_target_pct: Decimal | None

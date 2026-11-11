@@ -98,6 +98,7 @@ export const uk = {
       server: 'Сервер',
       status: 'Статус',
       balance: 'Баланс',
+      accountSize: 'Розмір рахунку',
       currency: 'Валюта',
       password: 'Пароль у .env',
       actions: 'Дії',
@@ -153,7 +154,7 @@ export const uk = {
         terminal_path: 'Шлях до терміналу',
         starting_balance: 'Початковий баланс',
         currency: 'Валюта',
-        reference_balance: 'Базовий баланс для ризику',
+        reference_balance: 'Розмір рахунку',
         daily_loss_pct: 'Денний ліміт збитку, %',
         max_drawdown_pct: 'Максимальна просадка, %',
         profit_target_pct: 'Ціль прибутку, %',
@@ -172,7 +173,10 @@ export const uk = {
       hints: {
         terminal_path:
           'Необовʼязково. Повний шлях до terminal64.exe портативної копії термінала цього рахунку, напр. D:\\MT5\\<назва-рахунку>\\terminal64.exe. Не з C:\\Program Files.',
-        reference_balance: 'Необовʼязково. Якщо порожньо, ризик рахується від поточного балансу.',
+        reference_balance:
+          'Від цієї суми рахуються всі відсотки: ризик, P&L, денні й тижневі ліміти. Зазвичай = початковий баланс.',
+        reference_balanceCreate:
+          'Від цієї суми рахуються всі відсотки: ризик, P&L, денні й тижневі ліміти. Якщо порожньо, береться початковий баланс.',
         passwordKey: 'Пароль шукатиметься в .env під ключем',
         pct: 'Необовʼязково, від 0 до 100.',
       },
@@ -185,6 +189,7 @@ export const uk = {
     },
     validation: {
       required: 'Обовʼязкове поле',
+      accountSizeRequired: 'Вкажіть розмір рахунку: від нього рахуються ризик, P&L і ліміти',
       tooLong: 'Занадто довге значення',
       login: 'Логін має бути додатним цілим числом',
       decimal: 'Введіть число, напр. 100000.00',
@@ -818,7 +823,7 @@ export const uk = {
       slPoints: 'SL, пунктів',
       riskMode: 'Як вказати ризик',
       riskModes: { percent: '%', amount: 'Сума' },
-      riskPercent: 'Ризик, % балансу',
+      riskPercent: 'Ризик, % від розміру рахунку',
       riskAmount: (currency: string) => `Ризик, ${currency}`,
       tickHint: (tick: string, point: string | null) =>
         point === null ? `крок ціни ${tick}` : `крок ціни ${tick} · пункт ${point}`,
@@ -846,7 +851,7 @@ export const uk = {
       volume: 'Лот',
       actualRisk: 'Реальний ризик',
       riskBudget: 'Бюджет ризику',
-      riskBudgetPercent: (percent: string) => `${percent}% балансу`,
+      riskBudgetPercent: (percent: string) => `${percent}% від розміру рахунку`,
       riskBudgetAmount: 'задана сума',
       sl: 'SL',
       slDistance: 'Відстань до SL',
@@ -854,10 +859,10 @@ export const uk = {
       targets: 'Цілі (цільовий RR)',
       target: (rr: string) => `TP · RR ${rr}`,
       targetsNote: 'TP округлено до кроку ціни від входу, тому фактичний RR може бути трохи вищим.',
-      balance: 'Баланс',
-      balanceReference: 'референсний баланс',
-      balanceSynced: (date: string) => `синхронізовано ${date}`,
-      balanceSyncedUnknown: 'синхронізований баланс',
+      riskBase: (amount: string, currency: string) => `Ризик від розміру рахунку ${amount} ${currency}`,
+      currentBalance: (amount: string, currency: string, date: string) =>
+        `Поточний баланс ${amount} ${currency} (від ${date})`,
+      currentBalanceNoDate: (amount: string, currency: string) => `Поточний баланс ${amount} ${currency}`,
       specsAt: (date: string) => `специфікації від ${date}`,
       feesNote: 'Без комісій і прослизання.',
       margin: 'Маржа',
@@ -895,7 +900,7 @@ export const uk = {
       accountNotFound: 'Рахунок не знайдено. Оновіть сторінку.',
       symbolNotFound: (symbol: string) => `Символ ${symbol} не знайдено серед специфікацій рахунку. Запустіть синхронізацію.`,
       balanceUnavailable:
-        'Немає балансу рахунку: вкажіть референсний баланс у налаштуваннях рахунку або запустіть синхронізацію.',
+        'Не вказано розмір рахунку: задайте його в Налаштуваннях → Рахунки.',
       specsIncomplete: (missing: string) =>
         missing === ''
           ? 'Дані символу неповні, потрібна синхронізація.'

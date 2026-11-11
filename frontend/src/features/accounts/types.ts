@@ -17,7 +17,8 @@ export interface AccountInput {
   starting_balance: string
   currency: string
   status: AccountStatus
-  reference_balance: string | null
+  /** Account size («Розмір рахунку»): base for risk %, P&L %, daily/weekly limits (M5-10). */
+  reference_balance: string
   daily_loss_pct: string | null
   max_drawdown_pct: string | null
   profit_target_pct: string | null

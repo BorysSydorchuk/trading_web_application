@@ -83,6 +83,7 @@ def seed(session: Session) -> Account:
         server="FundedNext-Server",
         terminal_path="D:/MT5/fn/terminal64.exe",
         starting_balance=Decimal("100000.00"),
+        reference_balance=Decimal("100000.00"),  # account size (M5-10)
         currency="USD",
     )
     session.add(account)
@@ -135,8 +136,8 @@ def seed(session: Session) -> Account:
             "net_pnl": t.net_pnl,
             "balance_at_open": bal,
             "risk_amount": risk,
-            "risk_pct": risk_pct(risk, bal),
-            "pnl_pct": pnl_pct(t.net_pnl, bal),
+            "risk_pct": risk_pct(risk, account_size=account.reference_balance),
+            "pnl_pct": pnl_pct(t.net_pnl, account_size=account.reference_balance),
             "r_multiple": r_multiple(t.net_pnl, risk),
             "planned_rr": planned_rr(t.entry_price, t.initial_sl, t.tp),
             "status": next_status(
@@ -178,7 +179,7 @@ def test_last_five_trades_all_match(session: Session) -> None:
     assert "| Обсяг, лоти | 1.00 | 1.00 | ✓ |" in md
     assert "| R | 0.9829 |  |  |" in md
     assert "R = чистий P&L / ризик = 497.00 / 350.00 = 1.4200." in md
-    assert "Ризик % = ризик / баланс на відкритті × 100 = 500.00 / 100628.00 × 100" in md
+    assert "Ризик % = ризик / розмір рахунку × 100 = 500.00 / 100000.00 × 100 = 0.5000 %." in md
     assert "статус needs_sl" in md  # T5 has no SL
 
 
@@ -348,3 +349,19 @@ def test_mt5_deals_are_compared_with_the_broker_symbol(session: Session) -> None
     assert [b.trade.symbol for b in rep.blocks].count("DAX") == 2
     assert rep.mt5_error is None
     assert rep.all_match, rep.markdown
+
+
+def test_risk_percent_formula_uses_the_account_size_not_the_balance_at_open(
+    session: Session,
+) -> None:
+    account = seed(session)
+    account.reference_balance = Decimal("50000.00")
+    trade = session.query(Trade).filter_by(account_id=account.id, position_id=2000301).one()
+    trade.risk_pct = Decimal("1.0000")  # 500.00 / 50000.00
+    session.commit()
+
+    md = report(session).markdown
+
+    assert "Ризик % = ризик / розмір рахунку × 100 = 500.00 / 50000.00 × 100 = 1.0000 %." in md
+    assert "баланс на відкритті × 100" not in md
+    assert "| Баланс на відкритті |" in md  # still shown as information

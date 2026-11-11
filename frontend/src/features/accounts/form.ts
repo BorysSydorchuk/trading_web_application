@@ -52,6 +52,11 @@ export const REQUIRED_FIELDS: ReadonlySet<FormField> = new Set<FormField>([
   'currency',
 ])
 
+/** Required set per mode: the account size can be left empty only on create (defaults to starting balance). */
+export function requiredFields(isEdit: boolean): ReadonlySet<FormField> {
+  return isEdit ? new Set<FormField>([...REQUIRED_FIELDS, 'reference_balance']) : REQUIRED_FIELDS
+}
+
 export const DECIMAL_FIELDS: ReadonlySet<FormField> = new Set<FormField>([
   'starting_balance',
   'reference_balance',
@@ -97,7 +102,7 @@ export function valuesFromAccount(account: Account): FormValues {
     terminal_path: account.terminal_path ?? '',
     starting_balance: account.starting_balance,
     currency: account.currency,
-    reference_balance: account.reference_balance ?? '',
+    reference_balance: account.reference_balance,
     daily_loss_pct: account.daily_loss_pct ?? '',
     max_drawdown_pct: account.max_drawdown_pct ?? '',
     profit_target_pct: account.profit_target_pct ?? '',
@@ -142,9 +147,12 @@ export function isInProgramFiles(path: string): boolean {
   return PROGRAM_FILES_ROOT.test(normalized)
 }
 
-function validateField(field: FormField, raw: string): string | undefined {
+function validateField(field: FormField, raw: string, required: ReadonlySet<FormField>): string | undefined {
   const value = DECIMAL_FIELDS.has(field) ? normalizeDecimalInput(raw) : raw.trim()
-  if (value === '') return REQUIRED_FIELDS.has(field) ? v.required : undefined
+  if (value === '') {
+    if (!required.has(field)) return undefined
+    return field === 'reference_balance' ? v.accountSizeRequired : v.required
+  }
 
   switch (field) {
     case 'name':
@@ -179,10 +187,12 @@ function validateField(field: FormField, raw: string): string | undefined {
   }
 }
 
-export function validate(values: FormValues): FieldErrors {
+/** `isEdit`: the account size is required when editing (PATCH null → 422). */
+export function validate(values: FormValues, isEdit = false): FieldErrors {
+  const required = requiredFields(isEdit)
   const errors: FieldErrors = {}
   for (const field of FORM_FIELDS) {
-    const error = validateField(field, values[field])
+    const error = validateField(field, values[field], required)
     if (error) errors[field] = error
   }
   return errors
@@ -198,8 +208,14 @@ function optionalDecimal(value: string): string | null {
   return normalized === '' ? null : normalized
 }
 
-/** Builds the request body. Call only after `validate` returned no errors. */
+/**
+ * Builds the request body. Call only after `validate` returned no errors.
+ * An empty account size (create only) is sent as the starting balance, so the
+ * stored value is explicit and matches the server default.
+ */
 export function toInput(values: FormValues): AccountInput {
+  const startingBalance = normalizeDecimalInput(values.starting_balance)
+  const accountSize = normalizeDecimalInput(values.reference_balance)
   return {
     name: values.name.trim(),
     firm: values.firm.trim(),
@@ -208,10 +224,10 @@ export function toInput(values: FormValues): AccountInput {
     login: Number(values.login.trim()),
     server: values.server.trim(),
     terminal_path: optionalText(values.terminal_path),
-    starting_balance: normalizeDecimalInput(values.starting_balance),
+    starting_balance: startingBalance,
     currency: values.currency.trim().toUpperCase(),
     status: values.status as AccountStatus,
-    reference_balance: optionalDecimal(values.reference_balance),
+    reference_balance: accountSize === '' ? startingBalance : accountSize,
     daily_loss_pct: optionalDecimal(values.daily_loss_pct),
     max_drawdown_pct: optionalDecimal(values.max_drawdown_pct),
     profit_target_pct: optionalDecimal(values.profit_target_pct),

@@ -61,6 +61,8 @@ RESULT_KEYS = {
     "balance",
     "balance_source",
     "balance_synced_at",
+    "current_balance",  # M5-10: info only
+    "current_balance_synced_at",  # M5-10
     "currency",
     "risk_percent",
     "risk_amount",
@@ -451,9 +453,11 @@ def test_volume_is_floored_to_step_and_actual_risk_never_exceeds_budget(
 
 
 @pytest.mark.usefixtures("eurusd")
-def test_reference_balance_is_preferred_over_synced_balance(
+def test_the_account_size_is_the_base_not_the_synced_balance(
     client: TestClient, db_session: Session, account: Account
 ) -> None:
+    # M5-10: was "reference preferred over synced"; now the size is the only base and the
+    # synced balance is information (current_balance).
     account.balance = D("20000.00")
     account.balance_synced_at = BALANCE_AT
     db_session.commit()
@@ -461,24 +465,32 @@ def test_reference_balance_is_preferred_over_synced_balance(
     data = ok(client, eurusd_body(account))
 
     assert data["balance"] == "10000.00"
-    assert data["balance_source"] == "reference"
+    assert data["balance_source"] == "account_size"
     assert data["balance_synced_at"] is None
-    assert D(data["volume"]) == D("0.5")
+    assert data["current_balance"] == "20000.00"
+    assert parse_utc(data["current_balance_synced_at"]) == BALANCE_AT
+    assert D(data["volume"]) == D("0.5")  # 1 % of 10000, not of 20000
 
 
-def test_synced_balance_is_used_without_reference_balance(
+@pytest.mark.usefixtures("eurusd")
+def test_current_balance_is_null_when_never_synced(client: TestClient, account: Account) -> None:
+    data = ok(client, eurusd_body(account))
+
+    assert data["balance_source"] == "account_size"
+    assert data["current_balance"] is None
+    assert data["current_balance_synced_at"] is None
+
+
+def test_an_account_created_without_a_size_sizes_from_starting_balance(
     client: TestClient, db_session: Session
 ) -> None:
-    account = make_account(
-        db_session, reference_balance=None, balance=D("20000.00"), balance_synced_at=BALANCE_AT
-    )
+    # M5-10: the size is never null (was test_synced_balance_is_used_without_reference_balance).
+    account = make_account(db_session, reference_balance=None, starting_balance=D("20000.00"))
     make_spec(db_session, account, "EURUSD")
 
     data = ok(client, eurusd_body(account))
 
     assert data["balance"] == "20000.00"
-    assert data["balance_source"] == "synced"
-    assert parse_utc(data["balance_synced_at"]) == BALANCE_AT
     assert D(data["volume"]) == D("1")
 
 
@@ -709,25 +721,14 @@ def test_symbol_of_another_account_is_404(client: TestClient, db_session: Sessio
     assert error["details"]["symbol"] == "EURUSD"
 
 
-def test_no_reference_and_no_synced_balance_is_409_balance_unavailable(
-    client: TestClient, db_session: Session
-) -> None:
-    # starting_balance is set (99999) and must not be used as an implicit fallback.
-    account = make_account(db_session, reference_balance=None, balance=None)
-    make_spec(db_session, account, "EURUSD")
-
-    error_of(calculate(client, eurusd_body(account)), 409, "balance_unavailable")
-
-
 @pytest.mark.parametrize(
     "changes",
     [
         {"reference_balance": D("0")},
         {"reference_balance": D("-1.00")},
-        {"reference_balance": None, "balance": D("0"), "balance_synced_at": BALANCE_AT},
     ],
 )
-def test_nonpositive_effective_balance_is_409_balance_unavailable(
+def test_nonpositive_account_size_is_409_balance_unavailable(
     client: TestClient, db_session: Session, changes: dict[str, Any]
 ) -> None:
     account = make_account(db_session, **changes)
@@ -740,13 +741,12 @@ def test_nonpositive_effective_balance_is_409_balance_unavailable(
     "statement",
     [
         "UPDATE accounts SET reference_balance = 'NaN' WHERE id = :id",
-        "UPDATE accounts SET balance = 'NaN' WHERE id = :id",
     ],
 )
-def test_nan_effective_balance_is_409_balance_unavailable(
+def test_nan_account_size_is_409_balance_unavailable(
     client: TestClient, db_session: Session, statement: str
 ) -> None:
-    account = make_account(db_session, reference_balance=None, balance_synced_at=BALANCE_AT)
+    account = make_account(db_session, balance_synced_at=BALANCE_AT)
     make_spec(db_session, account, "EURUSD")
     # Postgres NUMERIC accepts NaN and the accounts columns have no CHECK against it.
     db_session.execute(text(statement), {"id": account.id})

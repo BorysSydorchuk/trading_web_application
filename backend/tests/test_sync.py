@@ -159,18 +159,19 @@ def D(value: str) -> Decimal:  # noqa: N802 - short Decimal constructor for tabl
 # --- basic_week ------------------------------------------------------------------------
 
 # pid: session, entry, exit, net, initial_sl, source, risk, risk_pct, R, planned RR, status
+# risk_pct = risk / account size (100000 = starting balance default, M5-10), not balance_at_open
 EXPECTED: dict[int, tuple[Any, ...]] = {
     2000101: ("london", "1.165", "1.1679", "284.00", "1.162", "deal", "300.00", "0.3000",
               "0.9467", "1.6667", "needs_description"),
     2000201: ("ny", "1.3405", "1.337", "344.00", "1.344", "order", "350.00", None,
               "0.9829", "1.0000", "needs_description"),
-    2000301: ("london", "4105.5", "4095.5", "-503.00", "4095.5", "deal", "500.00", "0.4969",
+    2000301: ("london", "4105.5", "4095.5", "-503.00", "4095.5", "deal", "500.00", "0.5000",
               "-1.0060", "2.0000", "needs_description"),
     2000401: ("london", "4093", "4103", "497.00", "4086", "deal", "350.00", None,
               "1.4200", "2.4286", "needs_description"),
     2000501: ("premarket", "24150", "24110", "92.80", None, None, None, None,
               None, None, "needs_sl"),
-    2000601: ("ny", "24200", "24260", "348.00", "24170", "order", "174.00", "0.1728",
+    2000601: ("ny", "24200", "24260", "348.00", "24170", "order", "174.00", "0.1740",
               "2.0000", "3.0000", "needs_description"),
     2000701: ("london", "1.163", None, "-2.40", "1.165", "position", "160.00", None,
               None, "2.0000", "open"),

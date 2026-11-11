@@ -64,7 +64,7 @@ def tr(
     close_time: datetime | None = None,
     pnl: str | None = None,
     *,
-    balance: str | None = "100000",
+    size: str | None = "100000",
     account_id: int = 1,
     symbol: str = "XAUUSD",
     direction: str = "buy",
@@ -80,7 +80,7 @@ def tr(
         close_time=close_time,
         session=session,
         net_pnl=D(pnl) if pnl is not None else None,
-        balance_at_open=D(balance) if balance is not None else None,
+        account_size=D(size) if size is not None else None,
         risk_pct=kw.pop("risk_pct", None),
         planned_rr=kw.pop("planned_rr", None),
         entry_price=kw.pop("entry_price", None),
@@ -134,21 +134,21 @@ def test_max_risk_details() -> None:
 
 def _day_losses(a: str, b: str) -> list[RuleTradeInput]:
     return [
-        tr(10, utc(11, 2, 7, 5), utc(11, 2, 7, 30), a, balance="100000"),
+        tr(10, utc(11, 2, 7, 5), utc(11, 2, 7, 30), a),
         tr(11, utc(11, 2, 7, 40), utc(11, 2, 8, 30), b),
     ]
 
 
 def test_daily_stop_loss_boundary_hit() -> None:
     ctx = _day_losses("-1500.00", "-1500.00")
-    trade = tr(1, utc(11, 2, 9), balance="97000")  # start of day 100000, P&L -3.00 %
+    trade = tr(1, utc(11, 2, 9))  # size 100000, P&L -3.00 %
     (v,) = [x for x in evaluate(trade, ctx, RULES, None) if x.rule_key == "daily_stop_loss_pct"]
     assert v.details == "day P&L reached -3.00% (-3000.00) before entry <= limit -3.0%"
 
 
 def test_daily_stop_loss_just_above() -> None:
     ctx = _day_losses("-1500.00", "-1499.00")
-    trade = tr(1, utc(11, 2, 9), balance="97001")
+    trade = tr(1, utc(11, 2, 9))
     assert "daily_stop_loss_pct" not in keys(trade, ctx)
 
 
@@ -157,7 +157,7 @@ def test_daily_stop_counts_only_trades_closed_before_entry() -> None:
         tr(10, utc(11, 2, 7), utc(11, 2, 7, 30), "-2000"),
         tr(11, utc(11, 2, 7, 40), utc(11, 2, 9, 30), "-2000"),  # closes after entry
     ]
-    trade = tr(1, utc(11, 2, 9), balance="98000")
+    trade = tr(1, utc(11, 2, 9))
     assert "daily_stop_loss_pct" not in keys(trade, ctx)
 
 
@@ -169,18 +169,18 @@ def test_daily_stop_other_account_ignored() -> None:
 def test_daily_stop_profit() -> None:
     ctx = [tr(10, utc(11, 2, 7), utc(11, 2, 7, 30), "3000"), tr(11, utc(11, 2, 7), None, None)]
     ctx.append(tr(12, utc(11, 2, 7, 35), utc(11, 2, 8), "2000"))
-    trade = tr(1, utc(11, 2, 9), balance="105000")
+    trade = tr(1, utc(11, 2, 9))
     assert keys(trade, ctx) >= {"daily_stop_profit_pct"}
     assert "daily_stop_profit_pct" not in keys(
         trade, ctx, rules(daily_stop_profit_pct={"enabled": False})
     )
 
 
-def test_daily_stop_disabled_and_no_balance() -> None:
+def test_daily_stop_disabled_and_no_account_size() -> None:
     ctx = _day_losses("-1500", "-1500")
     cfg = rules(daily_stop_loss_pct={"enabled": False})
-    assert "daily_stop_loss_pct" not in keys(tr(1, utc(11, 2, 9), balance="97000"), ctx, cfg)
-    assert "daily_stop_loss_pct" not in keys(tr(1, utc(11, 2, 9), balance=None), ctx)
+    assert "daily_stop_loss_pct" not in keys(tr(1, utc(11, 2, 9)), ctx, cfg)
+    assert "daily_stop_loss_pct" not in keys(tr(1, utc(11, 2, 9), size=None), ctx)
 
 
 def test_weekly_stop_loss_over_several_days() -> None:
@@ -189,11 +189,11 @@ def test_weekly_stop_loss_over_several_days() -> None:
         tr(11, utc(11, 3, 8), utc(11, 3, 9), "-2000"),  # Tue
         tr(12, utc(10, 30, 8), utc(10, 30, 9), "-5000"),  # previous Friday: other week
     ]
-    trade = tr(1, utc(11, 4, 8), balance="94000")  # Wed; week start balance 100000
+    trade = tr(1, utc(11, 4, 8))  # Wed; size 100000
     found = keys(trade, ctx)
     assert "weekly_stop_loss_pct" in found
     assert "daily_stop_loss_pct" not in found
-    trade_ok = tr(1, utc(11, 4, 8), balance="94001")
+    trade_ok = tr(1, utc(11, 4, 8))
     ctx_ok = [*ctx[:1], tr(11, utc(11, 3, 8), utc(11, 3, 9), "-1999")]
     assert "weekly_stop_loss_pct" not in keys(trade_ok, ctx_ok)
 
@@ -203,7 +203,7 @@ def test_weekly_stop_profit() -> None:
         tr(10, utc(11, 2, 8), utc(11, 2, 9), "6000"),
         tr(11, utc(11, 3, 8), utc(11, 3, 9), "4000"),
     ]
-    trade = tr(1, utc(11, 5, 8), balance="110000")
+    trade = tr(1, utc(11, 5, 8))
     assert "weekly_stop_profit_pct" in keys(trade, ctx)
     cfg = rules(weekly_stop_profit_pct={"enabled": False})
     assert "weekly_stop_profit_pct" not in keys(trade, ctx, cfg)
@@ -215,20 +215,20 @@ def test_brussels_day_boundary_sunday_vs_monday_winter() -> None:
     # Mon 00:10 Brussels = Sun 23:10 UTC: same Brussels day/week as a Monday entry.
     monday_loss = tr(11, utc(11, 1, 23), utc(11, 1, 23, 10), "-3500")
     entry = utc(11, 1, 23, 30)  # Mon 00:30 Brussels
-    assert keys(tr(1, entry, balance="93000", session=None), [sunday_loss]) == set()
-    found = keys(tr(1, entry, balance="89500", session=None), [sunday_loss, monday_loss])
+    assert keys(tr(1, entry, session=None), [sunday_loss]) == set()
+    found = keys(tr(1, entry, session=None), [sunday_loss, monday_loss])
     assert {"daily_stop_loss_pct"} <= found
-    assert "weekly_stop_loss_pct" not in found  # -3500 / 93000 = -3.76 % of the week
+    assert "weekly_stop_loss_pct" not in found  # -3500 / 100000 = -3.50 % of the week
 
 
 def test_brussels_day_boundary_across_eu_dst_end() -> None:
     # EU DST ends Sun 2026-10-25. Sun 23:30 Brussels (+1) = 22:30 UTC; Mon 00:30 = 23:30 UTC.
     sunday_loss = tr(10, utc(10, 25, 22), utc(10, 25, 22, 30), "-4000")
-    monday = tr(1, utc(10, 25, 23, 30), balance="96000", session=None)
+    monday = tr(1, utc(10, 25, 23, 30), session=None)
     assert keys(monday, [sunday_loss]) == set()
     # Summer week before: Mon 2026-10-19 00:30 Brussels (+2) = Sun 22:30 UTC.
     early_monday_loss = tr(11, utc(10, 18, 22, 10), utc(10, 18, 22, 20), "-4000")
-    monday_summer = tr(2, utc(10, 18, 22, 30), balance="96000", session=None)
+    monday_summer = tr(2, utc(10, 18, 22, 30), session=None)
     assert "daily_stop_loss_pct" in keys(monday_summer, [early_monday_loss])
 
 
@@ -407,7 +407,7 @@ def test_daily_stop_loss_is_sticky_after_recovery() -> None:
         tr(10, utc(11, 2, 7, 5), utc(11, 2, 7, 30), "-3200.00"),  # -3.20 %
         tr(11, utc(11, 2, 7, 40), utc(11, 2, 8, 20), "1000.00"),  # back to -2.20 %
     ]
-    trade = tr(1, utc(11, 2, 9), balance="97800")  # day start 100000
+    trade = tr(1, utc(11, 2, 9))  # size 100000
     (v,) = [x for x in evaluate(trade, ctx, RULES, None) if x.rule_key == "daily_stop_loss_pct"]
     assert v.details == "day P&L reached -3.20% (-3200.00) before entry <= limit -3.0%"
 
@@ -417,7 +417,7 @@ def test_daily_stop_profit_is_sticky_after_giveback() -> None:
         tr(11, utc(11, 2, 7, 40), utc(11, 2, 8, 20), "-2000.00"),  # closes second
         tr(10, utc(11, 2, 7, 5), utc(11, 2, 7, 30), "5500.00"),  # +5.50 % first
     ]
-    trade = tr(1, utc(11, 2, 9), balance="103500")  # day start 100000, now +3.50 %
+    trade = tr(1, utc(11, 2, 9))  # size 100000, now +3.50 %
     (v,) = [x for x in evaluate(trade, ctx, RULES, None) if x.rule_key == "daily_stop_profit_pct"]
     assert v.details == "day P&L reached 5.50% (5500.00) before entry >= limit 5.0%"
     assert "daily_stop_loss_pct" not in keys(trade, ctx)
@@ -428,4 +428,4 @@ def test_weekly_stop_loss_is_sticky() -> None:
         tr(10, utc(11, 2, 8), utc(11, 2, 9), "-6500"),  # Mon: -6.50 %
         tr(11, utc(11, 3, 8), utc(11, 3, 9), "2000"),  # Tue: back to -4.50 %
     ]
-    assert "weekly_stop_loss_pct" in keys(tr(1, utc(11, 4, 8), balance="95500"), ctx)
+    assert "weekly_stop_loss_pct" in keys(tr(1, utc(11, 4, 8)), ctx)

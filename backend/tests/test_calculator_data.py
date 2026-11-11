@@ -255,8 +255,9 @@ def test_samples_and_signature_restored_on_downgrade_and_dropped_on_upgrade(
             account_id = conn.execute(
                 text(
                     "INSERT INTO accounts (name, firm, program, phase, login, server, "
-                    "starting_balance, currency) VALUES ('Margin downgrade', 'Fixture', "
-                    "'Fixture', 'phase_1', 987654323, 'Fixture', 10000, 'USD') RETURNING id"
+                    "starting_balance, currency, reference_balance) VALUES ('Margin downgrade', "
+                    "'Fixture', 'Fixture', 'phase_1', 987654323, 'Fixture', 10000, 'USD', 10000) "
+                    "RETURNING id"  # reference_balance NOT NULL since M5-10
                 )
             ).scalar_one()
             request_id = conn.execute(

@@ -170,6 +170,7 @@ def values(trade: BuiltTrade, **extra: Any) -> dict[str, Any]:
         spec=ger30_spec(),
         rules=get_rules(),
         symbol="GER40",
+        account_size=D("10000"),
         **extra,
     )
 

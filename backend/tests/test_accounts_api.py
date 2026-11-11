@@ -34,7 +34,6 @@ def _body(**overrides: Any) -> dict[str, Any]:
         "starting_balance": "100000.00",
         "currency": "USD",
         "status": "active",
-        "reference_balance": None,
         "daily_loss_pct": "5.00",
         "max_drawdown_pct": "10.00",
         "profit_target_pct": "8.00",
@@ -116,7 +115,7 @@ def test_create_returns_account_with_decimal_strings(client: TestClient) -> None
     assert data["login"] == LOGIN
     assert data["starting_balance"] == "100000.00"
     assert data["daily_loss_pct"] == "5.0000"  # NUMERIC(10,4)
-    assert data["reference_balance"] is None
+    assert data["reference_balance"] == "100000.00"  # defaults to starting_balance (M5-10)
     assert data["password_env_key"] == f"MT5_PASSWORD_{LOGIN}"
     assert data["password_configured"] is False
     assert data["balance"] is None
@@ -134,7 +133,6 @@ def test_create_minimal_uses_defaults(client: TestClient) -> None:
     for key in (
         "terminal_path",
         "status",
-        "reference_balance",
         "daily_loss_pct",
         "max_drawdown_pct",
         "profit_target_pct",
@@ -431,6 +429,7 @@ def test_upper_bounds_accepted(client: TestClient) -> None:
         "starting_balance",
         "currency",
         "status",
+        "reference_balance",  # the account size cannot be removed (M5-10)
     ],
 )
 def test_patch_required_field_to_null_rejected(client: TestClient, field: str) -> None:

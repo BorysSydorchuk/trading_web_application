@@ -21,9 +21,9 @@ import { accountKeys, useCreateAccount, useUpdateAccount } from './api'
 import {
   DECIMAL_FIELDS,
   EMPTY_VALUES,
-  REQUIRED_FIELDS,
   diffInput,
   normalizeOnInput,
+  requiredFields,
   serverFormErrors,
   toInput,
   validate,
@@ -87,7 +87,9 @@ function AccountForm({ account, onDone }: AccountFormProps) {
   const updateMutation = useUpdateAccount()
   const isSaving = createMutation.isPending || updateMutation.isPending
 
-  const clientErrors = validate(values)
+  const isEdit = account !== null
+  const required = requiredFields(isEdit)
+  const clientErrors = validate(values, isEdit)
 
   function errorFor(field: FormField): string | undefined {
     if (serverErrors[field]) return serverErrors[field]
@@ -161,7 +163,7 @@ function AccountForm({ account, onDone }: AccountFormProps) {
       onChange: (e: { target: { value: string } }) => setValue(field, e.target.value),
       onBlur: () => markTouched(field),
       'aria-invalid': error ? true : undefined,
-      'aria-required': REQUIRED_FIELDS.has(field) || undefined,
+      'aria-required': required.has(field) || undefined,
       'aria-describedby': `${idPrefix}-${field}-msg`,
       disabled: isSaving,
       autoComplete: 'off',
@@ -176,7 +178,7 @@ function AccountForm({ account, onDone }: AccountFormProps) {
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${idPrefix}-${name}`}>
           {t.fields[name]}
-          {REQUIRED_FIELDS.has(name) && (
+          {required.has(name) && (
             <span className="text-foreground" aria-hidden>
               {uk.common.requiredMark}
             </span>
@@ -287,8 +289,11 @@ function AccountForm({ account, onDone }: AccountFormProps) {
           )}
           {field(
             'reference_balance',
-            <Input {...inputProps('reference_balance')} placeholder={t.placeholders.money} />,
-            t.hints.reference_balance,
+            <Input
+              {...inputProps('reference_balance')}
+              placeholder={isEdit ? t.placeholders.money : values.starting_balance || t.placeholders.money}
+            />,
+            isEdit ? t.hints.reference_balance : t.hints.reference_balanceCreate,
           )}
         </div>
       </FormSection>

@@ -6,9 +6,11 @@ other trades (``context``) for day/week/idea rules. Missing inputs never produce
 Conventions (local = ``RulesConfig.timezone``, Europe/Brussels):
 - Daily/weekly stop: P&L of the same account's trades closed strictly before this trade's
   open, whose close falls on the same local day / Mon-Sun week as this trade's open, as %
-  of the start balance of that day/week (``balance_at_open`` minus that P&L). Sticky: the
-  running P&L is replayed in close order and a limit crossed at any point flags every later
-  entry of the period, even if P&L recovered.
+  of the account size (``account_size`` = accounts.reference_balance, M5-10; never a
+  balance). No usable size (None or <= 0) -> no stop violation. Sticky: the running P&L is
+  replayed in close order and a limit crossed at any point flags every later entry of the
+  period, even if P&L recovered.
+- max_risk_pct: compares ``risk_pct`` (already % of the account size).
 - entry_session: flagged for ``outside`` or a configured window without entries; a session
   name missing from the config is not a violation.
 - max_trades_per_week: per account; trades ordered by (open_time, key); the N-th trade of a
@@ -50,7 +52,7 @@ class RuleTradeInput:
     close_time: datetime | None
     session: str | None
     net_pnl: Decimal | None
-    balance_at_open: Decimal | None
+    account_size: Decimal | None
     risk_pct: Decimal | None
     planned_rr: Decimal | None
     entry_price: Decimal | None
@@ -101,9 +103,10 @@ def _period_stop(
     """Lowest/highest running closed P&L of the period before entry (sticky stops).
 
     Trades closed in the period before this entry are replayed in (close_time, key) order;
-    the running P&L is taken as % of the period start balance (balance_at_open - total).
+    the running P&L is taken as % of the entering trade's account size.
     """
-    if trade.balance_at_open is None:
+    size = trade.account_size
+    if size is None or not size.is_finite() or size <= 0:
         return None
     period = _week_start if weekly else _local_day
     start_key = period(trade.open_time, tz)
@@ -119,15 +122,12 @@ def _period_stop(
         key=lambda t: (t.close_time, t.key),
     )
     pnls = [t.net_pnl for t in closed if t.net_pnl is not None]
-    start_balance = trade.balance_at_open - sum(pnls, Decimal(0))
-    if start_balance <= 0:
-        return None
     running = low = high = Decimal(0)
     for pnl in pnls:
         running += pnl
         low = min(low, running)
         high = max(high, running)
-    return _PeriodExtremes(low, low / start_balance * HUNDRED, high, high / start_balance * HUNDRED)
+    return _PeriodExtremes(low, low / size * HUNDRED, high, high / size * HUNDRED)
 
 
 def _near(a: Decimal, b: Decimal, tick: Decimal | None) -> bool:

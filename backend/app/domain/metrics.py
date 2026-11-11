@@ -111,18 +111,22 @@ def risk_amount(
     return money(distance / tick_size * per_tick * volume)
 
 
-def _pct(amount: Decimal | None, balance: Decimal | None) -> Decimal | None:
-    if amount is None or balance is None or balance <= 0:
+def _pct(amount: Decimal | None, account_size: Decimal | None) -> Decimal | None:
+    if amount is None or account_size is None or not account_size.is_finite():
         return None
-    return ratio(amount / balance * HUNDRED)
+    if account_size <= 0:
+        return None
+    return ratio(amount / account_size * HUNDRED)
 
 
-def risk_pct(risk: Decimal | None, balance_open: Decimal | None) -> Decimal | None:
-    return _pct(risk, balance_open)
+def risk_pct(risk: Decimal | None, account_size: Decimal | None) -> Decimal | None:
+    """Risk amount / account size (accounts.reference_balance) x 100 (M5-10)."""
+    return _pct(risk, account_size)
 
 
-def pnl_pct(net_pnl: Decimal | None, balance_open: Decimal | None) -> Decimal | None:
-    return _pct(net_pnl, balance_open)
+def pnl_pct(net_pnl: Decimal | None, account_size: Decimal | None) -> Decimal | None:
+    """Net P&L / account size (accounts.reference_balance) x 100 (M5-10)."""
+    return _pct(net_pnl, account_size)
 
 
 def r_multiple(net_pnl: Decimal | None, risk: Decimal | None) -> Decimal | None:

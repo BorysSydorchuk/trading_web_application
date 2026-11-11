@@ -141,9 +141,11 @@ class CalculateResult(BaseModel):
     sl_price: PlainDecimal
     sl_distance: PlainDecimal
     sl_points: PlainDecimal
-    balance: PlainDecimal
-    balance_source: Literal["reference", "synced"]
-    balance_synced_at: UtcDatetime | None
+    balance: PlainDecimal  # the account size (M5-10)
+    balance_source: Literal["account_size"]
+    balance_synced_at: UtcDatetime | None  # always null since M5-10
+    current_balance: PlainDecimal | None  # last synced balance, information only
+    current_balance_synced_at: UtcDatetime | None
     currency: str
     risk_percent: PlainDecimal | None
     risk_amount: PlainDecimal | None

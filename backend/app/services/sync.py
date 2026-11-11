@@ -340,6 +340,7 @@ def trade_values(
     balance: Decimal,
     spec: RawSymbolSpec | None,
     rules: RulesConfig,
+    account_size: Decimal | None,
     symbol: str | None = None,
     account_currency: str | None = None,
     fx_loss_per_tick: Decimal | None = None,
@@ -349,7 +350,9 @@ def trade_values(
     ``symbol`` is the canonical name (default: the broker name); ``spec`` belongs to the
     broker symbol ``built.symbol``. A spec whose profit currency differs from
     ``account_currency`` (M5-09) uses only ``fx_loss_per_tick`` in the risk fallback, never
-    its tick_value (None -> no fallback risk).
+    its tick_value (None -> no fallback risk). Risk % and P&L % divide by
+    ``account_size`` (accounts.reference_balance, M5-10; None -> both None);
+    ``balance`` only feeds ``balance_at_open`` (information).
     """
     initial_sl, sl_source = _initial_sl(built, current)
     balance_open = metrics.balance_at_open(balance, built.open_time, deals)
@@ -396,10 +399,10 @@ def trade_values(
         "gross_pnl": built.gross_pnl,
         "net_pnl": built.net_pnl,
         # P&L % and R describe the final result: only for closed trades.
-        "pnl_pct": metrics.pnl_pct(built.net_pnl, balance_open) if closed else None,
+        "pnl_pct": metrics.pnl_pct(built.net_pnl, account_size) if closed else None,
         "balance_at_open": balance_open,
         "risk_amount": risk,
-        "risk_pct": metrics.risk_pct(risk, balance_open),
+        "risk_pct": metrics.risk_pct(risk, account_size),
         "r_multiple": metrics.r_multiple(built.net_pnl, risk) if closed else None,
         "planned_rr": metrics.planned_rr(built.entry_price, initial_sl, built.tp),
         "session": classify(built.open_time, rules.sessions, rules.timezone),
@@ -517,6 +520,7 @@ def write(
             symbol=canonical_symbol(symbols, built.symbol),
             account_currency=fetched.info.currency,
             fx_loss_per_tick=fx_loss.get(built.symbol),
+            account_size=account.reference_balance,
         )
         if current is None:
             current = Trade(account_id=account.id, position_id=built.position_id, **values)

@@ -245,7 +245,7 @@ def test_calculate_errors_pass_through_unchanged_and_create_no_row(
 
 
 def test_balance_and_specs_errors_pass_through(client: TestClient, db_session: Session) -> None:
-    no_balance = make_account(db_session, reference_balance=None)
+    no_balance = make_account(db_session, reference_balance=D("0"))  # unusable size (M5-10)
     make_spec(db_session, no_balance, "EURUSD")
     incomplete = make_account(db_session)
     make_spec(db_session, incomplete, "EURUSD", point=None)

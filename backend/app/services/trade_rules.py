@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, time, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
@@ -20,7 +21,7 @@ from app.config_files.rules import RulesConfig, get_rules
 from app.domain.metrics import ReentryCandidate, reentry_flags
 from app.domain.rules import RuleExitDeal, RuleTradeInput, evaluate
 from app.domain.sessions import to_local
-from app.models import SymbolSpec, Trade
+from app.models import Account, SymbolSpec, Trade
 from app.services.violations import apply_auto_violations
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def week_start_utc(moment: datetime, tz: str) -> datetime:
     return datetime.combine(monday, time(0), tzinfo=ZoneInfo(tz)).astimezone(UTC)
 
 
-def _rule_input(trade: Trade) -> RuleTradeInput:
+def _rule_input(trade: Trade, account_size: Decimal | None) -> RuleTradeInput:
     return RuleTradeInput(
         key=trade.id,
         account_id=trade.account_id,
@@ -43,7 +44,7 @@ def _rule_input(trade: Trade) -> RuleTradeInput:
         close_time=trade.close_time,
         session=trade.session,
         net_pnl=trade.net_pnl,
-        balance_at_open=trade.balance_at_open,
+        account_size=account_size,
         risk_pct=trade.risk_pct,
         planned_rr=trade.planned_rr,
         entry_price=trade.entry_price,
@@ -101,11 +102,13 @@ def recompute_rules(
         spec.symbol: spec.tick_size
         for spec in session.scalars(select(SymbolSpec).where(SymbolSpec.account_id == account_id))
     }
-    context = [_rule_input(t) for t in trades]
+    # Rule percentages are % of the account size (M5-10), never of a balance.
+    account_size = session.scalar(select(Account.reference_balance).where(Account.id == account_id))
+    context = [_rule_input(t, account_size) for t in trades]
     for trade in targets:
         # Specs are keyed by the broker name; trade.symbol is canonical (M5-08).
         tick = ticks.get(trade.broker_symbol)
-        violations = evaluate(_rule_input(trade), context, rules, tick)
+        violations = evaluate(_rule_input(trade, account_size), context, rules, tick)
         apply_auto_violations(session, trade.id, violations)
     return len(targets)
 
