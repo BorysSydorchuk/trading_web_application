@@ -220,7 +220,12 @@ def _brussels(utc_dt: datetime | None) -> datetime | None:
 
 
 def build_block(
-    trade: Trade, mt5: Mt5Side | None, digits: int | None, conversion: Conversion, have_mt5: bool
+    trade: Trade,
+    mt5: Mt5Side | None,
+    digits: int | None,
+    conversion: Conversion,
+    have_mt5: bool,
+    account_size: Decimal | None = None,
 ) -> TradeBlock:
     block = TradeBlock(trade, mt5)
     rows = block.rows
@@ -300,12 +305,15 @@ def build_block(
         block.notes.append(m.note)
     if have_mt5 and m is None:
         block.notes.append("MT5 не повернув угод для цієї позиції.")
-    block.notes.extend(_formulas(trade, digits))
+    block.notes.extend(_formulas(trade, digits, account_size))
     return block
 
 
-def _formulas(t: Trade, digits: int | None) -> list[str]:
-    """The app-only values written out with numbers, so Borys can recompute them by hand."""
+def _formulas(t: Trade, digits: int | None, account_size: Decimal | None) -> list[str]:
+    """The app-only values written out with numbers, so Borys can recompute them by hand.
+
+    Risk % divides by the account size (accounts.reference_balance, M5-10).
+    """
     out: list[str] = []
     if t.initial_sl is None:
         return ["Початкового SL немає → ризик, ризик % і R не рахуються (статус needs_sl)."]
@@ -317,10 +325,10 @@ def _formulas(t: Trade, digits: int | None) -> list[str]:
             f"{fmt_price(e, digits)}| ≈ {fmt_money(t.risk_amount)} "
             "(якщо вихід ≈ вхід, застосунок рахує через tick value символу)."
         )
-    if t.risk_pct is not None and t.risk_amount is not None and t.balance_at_open is not None:
+    if t.risk_pct is not None and t.risk_amount is not None and account_size is not None:
         out.append(
-            f"Ризик % = ризик / баланс на відкритті × 100 = {fmt_money(t.risk_amount)} / "
-            f"{fmt_money(t.balance_at_open)} × 100 = {fmt_ratio(t.risk_pct)} %."
+            f"Ризик % = ризик / розмір рахунку × 100 = {fmt_money(t.risk_amount)} / "
+            f"{fmt_money(account_size)} × 100 = {fmt_ratio(t.risk_pct)} %."
         )
     if t.r_multiple is not None and t.risk_amount is not None and t.net_pnl is not None:
         out.append(
@@ -463,6 +471,7 @@ def build_report(
             digits.get(t.broker_symbol),
             conversion,
             fetched is not None,
+            account.reference_balance,
         )
         for t in trades
     ]

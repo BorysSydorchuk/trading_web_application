@@ -1,7 +1,8 @@
 """Position-size calculator service (docs/api.md M5-04c, PRD 6.8).
 
-Answers from synced symbol specs and the account balance only. Never touches MT5 and never
-creates margin requests: the margin metadata is read from the latest done request.
+Answers from synced symbol specs and the account size (accounts.reference_balance, M5-10)
+only. Never touches MT5 and never creates margin requests: the margin metadata is read
+from the latest done request.
 Cross-currency specs size with the synced FX rate (M5-09, `app.services.calculator_fx`).
 """
 
@@ -12,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, localcontext
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -71,9 +72,11 @@ NO_CACHED_MARGIN = schemas.MarginInfo(
 
 @dataclass(frozen=True)
 class EffectiveBalance:
+    """The sizing base (the account size) plus the last synced balance as information."""
+
     amount: Decimal
-    source: Literal["reference", "synced"]
-    synced_at: datetime | None
+    current: Decimal | None
+    current_synced_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -185,16 +188,14 @@ def _spec_or_404(db: Session, account: Account, symbol: str) -> SymbolSpec:
 
 
 def effective_balance(account: Account) -> EffectiveBalance:
-    """Reference balance, else last synced balance; never starting_balance."""
-    if account.reference_balance is not None:
-        balance = EffectiveBalance(account.reference_balance, "reference", None)
-    elif account.balance is not None:
-        balance = EffectiveBalance(account.balance, "synced", account.balance_synced_at)
-    else:
-        raise ApiError(409, "balance_unavailable", "No reference balance and no synced balance")
-    if not _is_positive(balance.amount):
-        raise ApiError(409, "balance_unavailable", "The effective balance is not positive")
-    return balance
+    """The account size (M5-10): never the synced or starting balance. The synced balance is
+    information only (None when not finite)."""
+    if not _is_positive(account.reference_balance):
+        raise ApiError(409, "balance_unavailable", "The account size is not a positive number")
+    current = account.balance
+    if current is not None and not current.is_finite():  # NUMERIC NaN: show no balance
+        current = None
+    return EffectiveBalance(account.reference_balance, current, account.balance_synced_at)
 
 
 def _require_spec_fields(spec: SymbolSpec, keys: Sequence[str]) -> dict[str, Decimal]:
@@ -340,8 +341,10 @@ def _result(
         sl_distance=sized.sl_distance,
         sl_points=_sl_points(request, context.point, sized.sl_distance),
         balance=balance.amount,
-        balance_source=balance.source,
-        balance_synced_at=balance.synced_at,
+        balance_source="account_size",
+        balance_synced_at=None,
+        current_balance=balance.current,
+        current_balance_synced_at=balance.current_synced_at,
         currency=context.currency,
         risk_percent=request.risk_percent,
         risk_amount=request.risk_amount,

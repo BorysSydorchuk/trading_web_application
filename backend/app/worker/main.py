@@ -47,6 +47,7 @@ from app.services.ai.warmup import (
     WarmupJob,
 )
 from app.services.journal_requirements import sync_requirements
+from app.services.risk_base import recompute_all
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.worker.margin_job import (
     MARGIN_JOB_ID,
@@ -315,6 +316,12 @@ def main() -> int:
         logger.error(
             "Symbol map not applied at start (see above); the worker starts anyway and the "
             "sync job retries it every cycle"
+        )
+    # Stored percents and rule violations follow the account size (M5-10), idempotent.
+    if recompute_all(get_session_factory()) is None:
+        logger.error(
+            "Risk base recompute (account size) failed at start (see above); the worker "
+            "starts anyway, percents follow the size on the next account size change"
         )
     logging.getLogger("apscheduler.scheduler").addFilter(_SkipNoiseFilter())
     stop = threading.Event()

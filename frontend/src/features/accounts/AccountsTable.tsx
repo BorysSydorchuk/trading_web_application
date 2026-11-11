@@ -28,6 +28,7 @@ export function AccountsTable({ accounts, onEdit, onDelete }: AccountsTableProps
             <th className="text-right">{c.login}</th>
             <th className="text-left">{c.server}</th>
             <th className="text-left">{c.status}</th>
+            <th className="text-right">{c.accountSize}</th>
             <th className="text-right">{c.balance}</th>
             <th className="text-left">{c.currency}</th>
             <th className="text-left">{c.password}</th>
@@ -73,6 +74,7 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       <td className="num text-right">{account.login}</td>
       <td className="whitespace-nowrap">{account.server}</td>
       <td className="whitespace-nowrap">{uk.accounts.status[account.status]}</td>
+      <td className="num text-right whitespace-nowrap">{formatDecimal(account.reference_balance)}</td>
       <td className="text-right whitespace-nowrap">
         <BalanceCell account={account} />
       </td>

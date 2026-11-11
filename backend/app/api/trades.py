@@ -326,7 +326,9 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     trade.initial_sl = sl
     trade.initial_sl_source = InitialSlSource.USER.value
     trade.risk_amount = risk
-    trade.risk_pct = metrics.risk_pct(risk, trade.balance_at_open)
+    # Risk % divides by the account size (M5-10), not balance_at_open.
+    size = account.reference_balance if account is not None else None
+    trade.risk_pct = metrics.risk_pct(risk, size)
     trade.r_multiple = metrics.r_multiple(trade.net_pnl, risk)
     trade.planned_rr = metrics.planned_rr(trade.entry_price, sl, trade.tp)
     trade.status = next_status(trade.status, is_closed=True, has_initial_sl=True).value

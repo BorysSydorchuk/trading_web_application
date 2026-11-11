@@ -7,15 +7,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import exists, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import mt5_password_for, mt5_password_key
+from app.config_files.loader import ConfigError
 from app.db import get_db
-from app.errors import ApiError
+from app.errors import ApiError, config_error
 from app.models import Account, Trade
 from app.models.enums import AccountPhase, AccountStatus
 from app.schemas import accounts as schemas
+from app.services.risk_base import recompute_account
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,9 @@ _CONFLICTS: dict[str, tuple[str, str]] = {
         "An account with this login and server already exists",
     ),
 }
+
+# PATCH size whose recomputed risk % / P&L % overflow trades' NUMERIC(10,4) (M5-10).
+_SIZE_TOO_SMALL = "Account size is too small: trade percentages would exceed 999999.9999 %"
 
 
 def to_schema(account: Account) -> schemas.Account:
@@ -96,6 +101,8 @@ def create_account(body: schemas.AccountInput, db: Session = Depends(get_db)) ->
     data: dict[str, Any] = body.model_dump()
     data["phase"] = body.phase.value
     data["status"] = body.status.value
+    if data["reference_balance"] is None:  # account size defaults to starting balance (M5-10)
+        data["reference_balance"] = body.starting_balance
     account = Account(**data)
     db.add(account)
     _commit(db)
@@ -111,14 +118,46 @@ def get_account(account_id: int, db: Session = Depends(get_db)) -> schemas.Accou
     return to_schema(_get_or_404(db, account_id))
 
 
+def _recompute_size(db: Session, account_id: int) -> None:
+    """Percents and rule violations follow the account size, in this transaction (M5-10).
+
+    On failure the transaction is rolled back (the size is not changed): a broken rules.yaml is
+    500 config_error, percents overflowing NUMERIC(10,4) (a tiny size) are 422 on the field.
+    """
+    try:
+        count = recompute_account(db, account_id)
+    except ConfigError as exc:
+        db.rollback()
+        logger.error("Account %s: size not changed, rules.yaml is invalid: %s", account_id, exc)
+        raise config_error(exc) from None
+    except DataError:
+        db.rollback()
+        logger.error(
+            "Account %s: size not changed, its trade percents would not fit NUMERIC(10,4)",
+            account_id,
+        )
+        raise ApiError(
+            422,
+            "validation_error",
+            "Request validation failed",
+            {"fields": {"reference_balance": _SIZE_TOO_SMALL}},
+        ) from None
+    logger.info("Account %s: size changed, %s trades recomputed", account_id, count)
+
+
 @router.patch("/{account_id}", response_model=schemas.Account)
 def update_account(
     account_id: int, body: schemas.AccountPatch, db: Session = Depends(get_db)
 ) -> schemas.Account:
     account = _get_or_404(db, account_id)
     changes = body.changes()
+    size_changed = (
+        "reference_balance" in changes and changes["reference_balance"] != account.reference_balance
+    )
     for key, value in changes.items():
         setattr(account, key, value)
+    if size_changed:
+        _recompute_size(db, account_id)
     _commit(db)
     db.refresh(account)
     logger.info("Account %s updated: %s", account.id, ", ".join(sorted(changes)) or "no fields")

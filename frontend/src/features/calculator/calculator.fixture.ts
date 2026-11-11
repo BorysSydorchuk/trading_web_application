@@ -25,8 +25,8 @@ export function spec(overrides: Partial<SymbolSpec> = {}): SymbolSpec {
 export function result(overrides: Partial<CalculateResult> = {}): CalculateResult {
   return {
     account_id: 1, symbol: 'XAUUSD', direction: 'buy', entry: '2650.50', sl_price: '2645.50',
-    sl_distance: '5.00', sl_points: '500', balance: '100000.00', balance_source: 'reference',
-    balance_synced_at: null, currency: 'USD', risk_percent: '1.0', risk_amount: null,
+    sl_distance: '5.00', sl_points: '500', balance: '100000.00', balance_source: 'account_size',
+    balance_synced_at: null, current_balance: null, current_balance_synced_at: null, currency: 'USD', risk_percent: '1.0', risk_amount: null,
     risk_budget: '1000.000', volume: '2.00000000', actual_risk: '1000.00000000',
     actual_risk_percent: '1.000000', tp_1_5: '2658.00', tp_2: '2660.50', tp_3: '2665.50',
     specs_at: '2026-11-10T06:00:00Z', loss_per_tick: '1.00000000', conversion: null,

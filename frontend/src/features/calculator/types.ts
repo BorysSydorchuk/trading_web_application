@@ -78,9 +78,15 @@ export interface CalculateResult {
   sl_price: string
   sl_distance: string
   sl_points: string
+  /** Account size (M5-10): the base of every percentage. */
   balance: string
-  balance_source: 'reference' | 'synced'
+  balance_source: 'account_size'
+  /** Always null since M5-10. */
   balance_synced_at: string | null
+  /** Last synced MT5 balance, information only (not used for sizing). */
+  current_balance: string | null
+  /** UTC ISO time of current_balance. */
+  current_balance_synced_at: string | null
   currency: string
   risk_percent: string | null
   risk_amount: string | null

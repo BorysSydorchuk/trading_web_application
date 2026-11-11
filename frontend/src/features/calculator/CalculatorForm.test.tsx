@@ -139,19 +139,24 @@ describe('CalculatorForm result', () => {
     expect(rowValue(r.target('2'))).toHaveTextContent('2660.50')
     expect(rowValue(r.target('3'))).toHaveTextContent('2665.50')
     expect(within(resultView()).getByText(r.targets)).toBeInTheDocument()
-    expect(rowValue(r.balance)).toHaveTextContent(`100 000.00 USD${r.balanceReference}`)
+    expect(rowValue(r.riskBudget)).toHaveTextContent(r.riskBase('100 000.00', 'USD'))
+    expect(within(resultView()).queryByText(/Поточний баланс/)).not.toBeInTheDocument()
     expect(within(resultView()).getByText(r.specsAt(formatDateTimeBrussels('2026-11-10T06:00:00Z')), { exact: false })).toBeInTheDocument()
     expect(await within(rowValue(r.margin)).findByText('5 300.00 USD')).toBeInTheDocument()
   })
 
-  it('names the synced balance date in Brussels time', async () => {
+  it('sizes from the account size and shows the current balance as info in Brussels time', async () => {
     serveSetup()
-    serveCalculate(() => HttpResponse.json(result({ balance_source: 'synced', balance: '101250.40', balance_synced_at: '2026-11-10T07:00:00Z' })))
+    serveCalculate(() => HttpResponse.json(result({
+      balance: '10000.00', risk_budget: '100.00', current_balance: '10401.70', current_balance_synced_at: '2026-11-10T07:00:00Z',
+    })))
     const { user } = renderPage()
     await fillForm(user)
     await submit(user)
     await screen.findByRole('region', { name: r.title })
-    expect(rowValue(r.balance)).toHaveTextContent(r.balanceSynced('10.11.2026, 08:00:00'))
+    expect(rowValue(r.riskBudget)).toHaveTextContent('100.00 USD')
+    expect(rowValue(r.riskBudget)).toHaveTextContent(r.riskBase('10 000.00', 'USD'))
+    expect(within(resultView()).getByText(r.currentBalance('10 401.70', 'USD', '10.11.2026, 08:00:00'))).toBeInTheDocument()
   })
 
   it('clears the result when an input changes', async () => {

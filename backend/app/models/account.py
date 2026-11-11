@@ -42,8 +42,9 @@ class Account(TimestampMixin, Base):
     starting_balance: Mapped[Decimal] = mapped_column(MONEY)
     currency: Mapped[str] = mapped_column(String(3))
     status: Mapped[str] = mapped_column(String(20), server_default=AccountStatus.ACTIVE.value)
-    # Firm's reference balance for risk sizing (PRD 6.8); NULL = use current balance.
-    reference_balance: Mapped[Decimal | None] = mapped_column(MONEY)
+    # Account size (UI «Розмір рахунку», PRD 6.8/6.9): the base of every percentage
+    # (risk %, P&L %, rules, calculator). Defaults to starting_balance on insert (M5-10).
+    reference_balance: Mapped[Decimal] = mapped_column(MONEY, default=copy_of("starting_balance"))
     daily_loss_pct: Mapped[Decimal | None] = mapped_column(RATIO)
     max_drawdown_pct: Mapped[Decimal | None] = mapped_column(RATIO)
     profit_target_pct: Mapped[Decimal | None] = mapped_column(RATIO)

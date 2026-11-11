@@ -20,9 +20,12 @@ function Row({ label, children, strong }: { label: string; children: ReactNode; 
   )
 }
 
-function balanceNote(result: CalculateResult): string {
-  if (result.balance_source === 'reference') return t.balanceReference
-  return result.balance_synced_at === null ? t.balanceSyncedUnknown : t.balanceSynced(formatDateTimeBrussels(result.balance_synced_at))
+function currentBalanceNote(result: CalculateResult): string | null {
+  if (result.current_balance === null) return null
+  const amount = formatMoney(result.current_balance)
+  return result.current_balance_synced_at === null
+    ? t.currentBalanceNoDate(amount, result.currency)
+    : t.currentBalance(amount, result.currency, formatDateTimeBrussels(result.current_balance_synced_at))
 }
 
 function budgetNote(result: CalculateResult): string {
@@ -42,6 +45,7 @@ interface CalculatorResultProps {
 export function CalculatorResult({ result, brokerSymbol, digits, margin, compact }: CalculatorResultProps) {
   const price = (value: string) => formatPriceDigits(value, digits)
   const cur = result.currency
+  const currentBalance = compact ? null : currentBalanceNote(result)
   return (
     <section aria-label={t.title} className="flex flex-col gap-2 rounded-lg border p-3">
       <dl className={cn('grid gap-x-6', compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
@@ -58,24 +62,24 @@ export function CalculatorResult({ result, brokerSymbol, digits, margin, compact
           {formatMoney(result.actual_risk)} {cur} · {formatPercent(result.actual_risk_percent)}
         </Row>
         <Row label={t.riskBudget}>
-          {formatMoney(result.risk_budget)} {cur}
-          <span className="ml-1 text-xs text-muted-foreground">({budgetNote(result)})</span>
+          <span className="flex flex-col items-end">
+            <span>
+              {formatMoney(result.risk_budget)} {cur}
+              <span className="ml-1 text-xs text-muted-foreground">({budgetNote(result)})</span>
+            </span>
+            <span className="text-xs text-muted-foreground">{t.riskBase(formatMoney(result.balance), cur)}</span>
+          </span>
         </Row>
         <Row label={t.sl}>{price(result.sl_price)}</Row>
         <Row label={t.slDistance}>
           {price(result.sl_distance)} · {t.points(formatPoints(result.sl_points))}
-        </Row>
-        <Row label={t.balance}>
-          <span className="flex flex-col items-end">
-            <span>{formatMoney(result.balance)} {cur}</span>
-            <span className="text-xs text-muted-foreground">{balanceNote(result)}</span>
-          </span>
         </Row>
         <Row label={t.margin}>
           <MarginValue live={margin} cached={result.margin} digitsPrice={price} />
         </Row>
         {!compact && <Row label={t.lossPerTick}>{t.lossPerTickValue(formatTickValue(result.loss_per_tick), cur)}</Row>}
       </dl>
+      {currentBalance !== null && <p className="num text-xs text-muted-foreground">{currentBalance}</p>}
       {result.conversion !== null && <ConversionNote conversion={result.conversion} compact={compact} />}
       <div>
         <h3 className="pt-1 text-xs font-semibold">{t.targets}</h3>
