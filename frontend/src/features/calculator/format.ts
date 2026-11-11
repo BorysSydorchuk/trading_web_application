@@ -29,6 +29,24 @@ export function formatPoints(value: string): string {
   return trimDecimal(value)
 }
 
+/** Display places for an FX rate ≥ 1 (EURUSD 1.10910000 → 1.1091). */
+const RATE_PLACES = 5
+const RATE_MIN_PLACES = 4
+
+/**
+ * FX rate for display only (the server already sized with the full value):
+ * ≥ 1 → 5 places, trailing zeros dropped down to 4; < 1 (inverse pairs like 1/USDJPY) → all digits, zeros dropped.
+ */
+export function formatRate(value: string): string {
+  if (/^0*(\.|$)/.test(value)) return trimDecimal(value, RATE_MIN_PLACES)
+  return trimDecimal(roundDecimal(value, RATE_PLACES), RATE_MIN_PLACES)
+}
+
+/** Loss per tick per lot: digits as sent, trailing zeros dropped. */
+export function formatTickValue(value: string | null): string {
+  return value === null ? EMPTY : trimDecimal(value)
+}
+
 /** Worker codes that read well after «MT5 не порахував маржу:» (uk.sync.errors). */
 const MT5_CODES = ['password_missing', 'terminal_not_found', 'terminal_in_program_files', 'terminal_start_failed', 'login_failed', 'timeout', 'mt5_error'] as const
 type Mt5Code = (typeof MT5_CODES)[number]

@@ -50,6 +50,26 @@ export interface MarginInfo {
   reason: 'no_cached_margin' | null
 }
 
+/** M5-09: profit currency → account currency conversion used for the loss per tick. */
+export interface ConversionInfo {
+  /** Broker symbol of the rate pair (e.g. EURUSD or EURUSD.r). */
+  pair: string
+  from_currency: string
+  to_currency: string
+  /** Profit → account currency rate (already inverted when `inverted`). */
+  rate: string
+  side: 'ask' | 'bid'
+  inverted: boolean
+  /** UTC ISO time of the pair's tick. */
+  rate_at: string
+  /** rate_at older than 1 h at calculate time. */
+  stale: boolean
+  source: 'rate' | 'mt5_check'
+  rate_loss_per_tick: string
+  mt5_loss_per_tick: string | null
+  mt5_checked_at: string | null
+}
+
 export interface CalculateResult {
   account_id: number
   symbol: string
@@ -72,6 +92,10 @@ export interface CalculateResult {
   tp_2: string
   tp_3: string
   specs_at: string
+  /** Loss per tick per lot in the account currency, the value used for sizing. */
+  loss_per_tick: string
+  /** null for same-currency specs. */
+  conversion: ConversionInfo | null
   margin: MarginInfo
 }
 

@@ -25,7 +25,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 ZERO = Decimal(0)
 
-# Trade direction for `Mt5Source.calc_margin`.
+# Trade direction for `Mt5Source.calc_margin` / `calc_profit`.
 type Direction = Literal["buy", "sell"]
 DIRECTIONS: frozenset[str] = frozenset({"buy", "sell"})
 
@@ -77,6 +77,15 @@ class RawSymbolSpec:
     currency_margin: str
     point: Decimal | None = None
     tick_value_loss: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class RawQuote:
+    """symbol_info_tick(): bid, ask and ``time`` (server wall clock epoch, NOT UTC)."""
+
+    bid: Decimal
+    ask: Decimal
+    time: int
 
 
 @dataclass(frozen=True)
@@ -139,7 +148,7 @@ class RawPosition:
     swap: Decimal = ZERO
 
 
-type RawRecord = RawAccountInfo | RawSymbolSpec | RawDeal | RawOrder | RawPosition
+type RawRecord = RawAccountInfo | RawSymbolSpec | RawQuote | RawDeal | RawOrder | RawPosition
 
 
 def to_json_dict(record: RawRecord) -> dict[str, Any]:

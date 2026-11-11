@@ -73,6 +73,8 @@ RESULT_KEYS = {
     "tp_3",
     "specs_at",
     "margin",
+    "loss_per_tick",  # M5-09
+    "conversion",  # M5-09: null for same-currency specs
 }
 MARGIN_KEYS = {
     "source",
@@ -138,19 +140,19 @@ def make_spec(db: Session, account: Account, symbol: str, **changes: Any) -> Sym
     return row
 
 
-def make_ger40(db: Session, account: Account, symbol: str = "GER40.cash") -> SymbolSpec:
+def make_ger40(
+    db: Session, account: Account, symbol: str = "GER40.cash", **changes: Any
+) -> SymbolSpec:
     # Synthetic GER40-like: 60 ticks (30 index points) = 150 per lot.
-    return make_spec(
-        db,
-        account,
-        symbol,
-        contract_size=D("1"),
-        point=D("0.1"),
-        tick_size=D("0.5"),
-        tick_value=D("2.5"),
-        tick_value_loss=D("2.5"),
-        digits=1,
-    )
+    values: dict[str, Any] = {
+        "contract_size": D("1"),
+        "point": D("0.1"),
+        "tick_size": D("0.5"),
+        "tick_value": D("2.5"),
+        "tick_value_loss": D("2.5"),
+        "digits": 1,
+    }
+    return make_spec(db, account, symbol, **(values | changes))
 
 
 def make_margin_request(db: Session, account: Account, **changes: Any) -> CalculatorMarginRequest:

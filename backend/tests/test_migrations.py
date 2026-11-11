@@ -18,6 +18,7 @@ from tests.conftest import alembic_config
 EXPECTED_TABLES = {
     "accounts",
     "symbol_specs",
+    "fx_rates",
     "calculator_margin_requests",
     "trades",
     "trade_exit_deals",

@@ -73,6 +73,7 @@ def risk_amount(
     gross_pnl: Decimal | None = None,
     tick_size: Decimal | None = None,
     tick_value: Decimal | None = None,
+    loss_per_tick: Decimal | None = None,
 ) -> Decimal | None:
     """Money at risk from the initial SL, in account currency.
 
@@ -83,13 +84,16 @@ def risk_amount(
     was realised at a different price (breakeven, still open), and also when
     ``|exit - entry| < MIN_REALISED_MOVE_RATIO * |entry - SL|`` and a spec is available
     (if no spec, the realised formula is still used in that case).
+    ``loss_per_tick`` (account currency per tick per lot, cross-currency specs, M5-09) replaces
+    ``tick_value`` in the fallback when given.
     """
+    per_tick = tick_value if loss_per_tick is None else loss_per_tick
     if entry_price is None or initial_sl is None or volume is None or volume <= 0:
         return None
     distance = abs(entry_price - initial_sl)
     if distance == 0:
         return money(Decimal(0))
-    has_spec = tick_size is not None and tick_value is not None and tick_size > 0 and tick_value > 0
+    has_spec = tick_size is not None and per_tick is not None and tick_size > 0 and per_tick > 0
     if (
         exit_price is not None
         and exit_volume is not None
@@ -102,9 +106,9 @@ def risk_amount(
         if not (has_spec and move < MIN_REALISED_MOVE_RATIO * distance):
             per_unit = abs(gross_pnl) / (move * exit_volume)
             return money(per_unit * distance * volume)
-    if not has_spec or tick_size is None or tick_value is None:
+    if not has_spec or tick_size is None or per_tick is None:
         return None
-    return money(distance / tick_size * tick_value * volume)
+    return money(distance / tick_size * per_tick * volume)
 
 
 def _pct(amount: Decimal | None, balance: Decimal | None) -> Decimal | None:

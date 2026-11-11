@@ -877,6 +877,12 @@ export const uk = {
         interrupted: 'Запит маржі перервано: worker перезапустився.',
         internal_error: 'MT5 не порахував маржу: внутрішня помилка worker. Подробиці в logs/worker.log.',
       },
+      lossPerTick: 'Вартість тіку',
+      lossPerTickValue: (value: string, currency: string) => `${value} ${currency} за лот`,
+      conversionRate: (pair: string, rate: string, side: 'ask' | 'bid', date: string) =>
+        `курс ${pair} ${rate} (${side}) від ${date}`,
+      conversionStale: 'Курс старший за 1 год — результат може бути неточним, запустіть синхронізацію',
+      conversionMt5Check: (mt5: string, rate: string) => `вартість тіку за MT5: ${mt5} (курс дає ${rate})`,
     },
     validation: {
       account: 'Оберіть рахунок зі списку',
@@ -905,6 +911,8 @@ export const uk = {
         `Ризику не вистачає на мінімальний лот ${volumeMin}: ризик мінімального лота ${risk} ${currency}. Позиції в межах цього ризику немає.`,
       belowMinVolumeShort: 'Ризику не вистачає на мінімальний лот. Позиції в межах цього ризику немає.',
       invalidTargets: 'Для Sell ціль TP виходить нульовою або відʼємною. Перевірте вхід і SL.',
+      conversionRateUnavailable: (from: string, to: string) => `Немає курсу ${from}→${to}, запустіть синхронізацію`,
+      conversionRateUnavailableShort: 'Немає курсу валюти прибутку до валюти рахунку, запустіть синхронізацію',
     },
     home: {
       title: 'Калькулятор позиції',

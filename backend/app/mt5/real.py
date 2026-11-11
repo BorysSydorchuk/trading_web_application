@@ -49,6 +49,7 @@ from app.mt5.types import (
     RawDeal,
     RawOrder,
     RawPosition,
+    RawQuote,
     RawSymbolSpec,
     to_decimal,
 )
@@ -76,9 +77,11 @@ ALLOWED_FUNCTIONS = frozenset(
         "positions_get",
         # Hypothetical required margin (PRD 6.8): only calculates, never places/checks orders.
         "order_calc_margin",
+        # Hypothetical profit for the M5-09 loss-value check: only calculates, never trades.
+        "order_calc_profit",
     }
 )
-# Module constants read besides the functions above (arguments of order_calc_margin).
+# Module constants read besides the functions above (order_calc_margin/profit arguments).
 ALLOWED_CONSTANTS = frozenset({"ORDER_TYPE_BUY", "ORDER_TYPE_SELL"})
 
 
@@ -97,6 +100,9 @@ class Mt5Module(Protocol):
     def history_orders_get(self, *args: Any, **kwargs: Any) -> Any: ...
     def positions_get(self, *args: Any, **kwargs: Any) -> Any: ...
     def order_calc_margin(self, action: int, symbol: str, volume: float, price: float) -> Any: ...
+    def order_calc_profit(
+        self, action: int, symbol: str, volume: float, price_open: float, price_close: float
+    ) -> Any: ...
 
     @property
     def ORDER_TYPE_BUY(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
@@ -407,7 +413,8 @@ class RealMt5Source:
         obj = self._read("account_info", self._mt5().account_info, empty_ok=False)
         return account_from_mt5(obj)
 
-    def server_tick_epoch(self, symbol: str) -> int | None:
+    def _tick(self, symbol: str) -> Any:
+        """``symbol_info_tick``; on an empty read select the symbol once and ask again."""
         mt5 = self._mt5()
         tick = self._read("symbol_info_tick", lambda: mt5.symbol_info_tick(symbol), empty_ok=True)
         if tick is None:
@@ -416,10 +423,24 @@ class RealMt5Source:
             tick = self._read(
                 "symbol_info_tick", lambda: mt5.symbol_info_tick(symbol), empty_ok=True
             )
+        return tick
+
+    def server_tick_epoch(self, symbol: str) -> int | None:
+        tick = self._tick(symbol)
         if tick is None:
             return None
         epoch = _int(tick, "time")
         return epoch or None
+
+    def quote(self, symbol: str) -> RawQuote | None:
+        """Latest bid/ask and server wall epoch; None without a usable tick (no price/time)."""
+        tick = self._tick(symbol)
+        if tick is None:
+            return None
+        quote = RawQuote(bid=_dec(tick, "bid"), ask=_dec(tick, "ask"), time=_int(tick, "time"))
+        if quote.bid <= 0 or quote.ask <= 0 or quote.time <= 0:
+            return None
+        return quote
 
     def symbol_spec(self, symbol: str) -> RawSymbolSpec | None:
         mt5 = self._mt5()
@@ -476,6 +497,31 @@ class RealMt5Source:
             empty_ok=False,
         )
         return margin_from_mt5(result)
+
+    def calc_profit(
+        self,
+        direction: Direction,
+        symbol: str,
+        volume: Decimal,
+        price_open: Decimal,
+        price_close: Decimal,
+    ) -> Decimal:
+        """``order_calc_profit``: hypothetical profit in account currency (read-only)."""
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be 'buy' or 'sell', got {direction!r}")
+        mt5 = self._mt5()  # _read checks the connection before the module is called
+        action = mt5.ORDER_TYPE_BUY if direction == "buy" else mt5.ORDER_TYPE_SELL
+        result = self._read(
+            "order_calc_profit",
+            lambda: mt5.order_calc_profit(
+                action, symbol, float(volume), float(price_open), float(price_close)
+            ),
+            empty_ok=False,
+        )
+        try:
+            return to_decimal(result)
+        except ValueError as exc:
+            raise Mt5Error(Mt5ErrorCode.MT5_ERROR, f"order_calc_profit returned {exc}") from None
 
 
 def margin_from_mt5(value: object) -> Decimal:

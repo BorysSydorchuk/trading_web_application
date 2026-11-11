@@ -5,7 +5,7 @@ An `Mt5Source` talks to ONE terminal at a time (the MetaTrader5 package is proce
 times are server wall-clock epochs, converted to UTC only by `app.mt5.convert`.
 
 The interface is read-only by design: there is no method that could place, modify or close
-anything (``calc_margin`` only calculates a hypothetical margin), and
+anything (``calc_margin`` / ``calc_profit`` only calculate a hypothetical margin / profit), and
 `tests/mt5/test_guard.py` fails if trading calls appear anywhere in ``app``.
 """
 
@@ -28,6 +28,7 @@ from app.mt5.types import (
     RawDeal,
     RawOrder,
     RawPosition,
+    RawQuote,
     RawSymbolSpec,
 )
 
@@ -54,6 +55,10 @@ class Mt5Source(Protocol):
 
     def server_tick_epoch(self, symbol: str) -> int | None:
         """``symbol_info_tick(symbol).time`` (server wall epoch) or None if no tick."""
+        ...
+
+    def quote(self, symbol: str) -> RawQuote | None:
+        """Latest ``symbol_info_tick`` bid/ask/time (server wall epoch) or None if no tick."""
         ...
 
     def symbol_spec(self, symbol: str) -> RawSymbolSpec | None:
@@ -84,6 +89,21 @@ class Mt5Source(Protocol):
         """Required margin (account currency) to open ``volume`` lots at ``price``.
 
         Only calculates (MT5 ``order_calc_margin``); never places or checks an order.
+        ``ValueError`` for an unknown direction, `Mt5Error` otherwise.
+        """
+        ...
+
+    def calc_profit(
+        self,
+        direction: Direction,
+        symbol: str,
+        volume: Decimal,
+        price_open: Decimal,
+        price_close: Decimal,
+    ) -> Decimal:
+        """Hypothetical profit (account currency, negative = loss) of ``volume`` lots.
+
+        Only calculates (MT5 ``order_calc_profit``); never places or checks an order.
         ``ValueError`` for an unknown direction, `Mt5Error` otherwise.
         """
         ...

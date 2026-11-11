@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     ForeignKey,
     Integer,
     SmallInteger,
@@ -61,7 +62,18 @@ class Account(TimestampMixin, Base):
 
 class SymbolSpec(TimestampMixin, Base):
     __tablename__ = "symbol_specs"
-    __table_args__ = (UniqueConstraint("account_id", "symbol"),)
+    __table_args__ = (
+        UniqueConstraint("account_id", "symbol"),
+        CheckConstraint(
+            "(mt5_loss_per_tick IS NULL) = (mt5_loss_per_tick_at IS NULL)",
+            name="mt5_loss_per_tick_pair",
+        ),
+        CheckConstraint(
+            "mt5_loss_per_tick IS NULL OR (mt5_loss_per_tick > 0 "
+            "AND mt5_loss_per_tick::text NOT IN ('NaN', 'Infinity', '-Infinity'))",
+            name="mt5_loss_per_tick_valid",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"))
@@ -74,6 +86,10 @@ class SymbolSpec(TimestampMixin, Base):
     # Nullable until explicitly supplied by a broker sync; never inferred.
     point: Mapped[Decimal | None] = mapped_column(PRICE)
     tick_value_loss: Mapped[Decimal | None] = mapped_column(PRICE)
+    # M5-09 order_calc_profit check (account currency per tick per lot) and when it ran (UTC);
+    # cross-currency specs only, both NULL or both set.
+    mt5_loss_per_tick: Mapped[Decimal | None] = mapped_column(PRICE)
+    mt5_loss_per_tick_at: Mapped[datetime | None]
     volume_min: Mapped[Decimal] = mapped_column(PRICE)
     volume_step: Mapped[Decimal] = mapped_column(PRICE)
     volume_max: Mapped[Decimal] = mapped_column(PRICE)

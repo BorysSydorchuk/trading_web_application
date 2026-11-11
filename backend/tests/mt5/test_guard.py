@@ -14,10 +14,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EXCLUDED_DIRS = {"tests", ".venv", ".claude", "node_modules", ".git"}
 
 # Trading functions of the MetaTrader5 package (and its Buy/Sell/Close helpers).
-# order_calc_margin is allowed (PRD 6.8, M5-04d): it only calculates. order_calc_profit is
-# not needed and stays forbidden.
+# order_calc_margin (PRD 6.8, M5-04d) and order_calc_profit (M5-09 loss-value check) are
+# allowed: they only calculate. order_send / order_check stay forbidden.
 FORBIDDEN = re.compile(
-    r"\border_send\b|\border_check\b|\border_calc_profit\b|\b_RawOrder\b|\bTRADE_ACTION_\w*|"
+    r"\border_send\b|\border_check\b|\b_RawOrder\b|\bTRADE_ACTION_\w*|"
     r"\b(?:mt5|MetaTrader5|_mt5\(\)|module)\s*\.\s*(?:Buy|Sell|Close)\b|"
     r"\.(?:Buy|Sell|Close)\s*\("
 )
@@ -50,7 +50,6 @@ def test_pattern_catches_trading_calls() -> None:
         "MetaTrader5.Buy('EURUSD', 0.1)",
         "self._mt5().Sell('X', 1)",
         '{"action": mt5.TRADE_ACTION_DEAL}',
-        "mt5.order_calc_profit(mt5.ORDER_TYPE_BUY, 'EURUSD', 1.0, 1.1, 1.2)",
     ):
         assert FORBIDDEN.search(sample), sample
     for sample in (
@@ -59,6 +58,8 @@ def test_pattern_catches_trading_calls() -> None:
         "positions_get()",
         "mt5.order_calc_margin(mt5.ORDER_TYPE_BUY, symbol, volume, price)",
         "source.calc_margin(direction, symbol, volume, price)",
+        "mt5.order_calc_profit(mt5.ORDER_TYPE_BUY, 'EURUSD', 1.0, 1.1, 1.2)",
+        "source.calc_profit(direction, symbol, volume, price_open, price_close)",
     ):
         assert not FORBIDDEN.search(sample), sample
 
@@ -87,9 +88,9 @@ def test_scan_flags_source_and_skips_excluded_dirs(tmp_path: Path) -> None:
 def test_allow_list_is_read_only() -> None:
     # order_calc_margin joined the allow-list for the calculator (PRD 6.8, docs/api.md M5-04d).
     assert "order_calc_margin" in ALLOWED_FUNCTIONS
-    assert ALLOWED_FUNCTIONS.isdisjoint(
-        {"order_send", "order_check", "order_calc_profit", "Buy", "Sell", "Close"}
-    )
+    # order_calc_profit joined it in M5-09 (docs/api.md): only calculates a hypothetical profit.
+    assert "order_calc_profit" in ALLOWED_FUNCTIONS
+    assert ALLOWED_FUNCTIONS.isdisjoint({"order_send", "order_check", "Buy", "Sell", "Close"})
     assert not any(name.startswith(("order_send", "order_check")) for name in ALLOWED_FUNCTIONS)
 
 
@@ -108,5 +109,18 @@ def test_order_calc_margin_is_called_only_by_the_real_adapter() -> None:
         path.relative_to(REPO_ROOT).as_posix()
         for path in _python_files(app_root)
         if ORDER_CALC_MARGIN_CALL.search(path.read_text(encoding="utf-8", errors="replace"))
+    )
+    assert callers == ["backend/app/mt5/real.py"]
+
+
+ORDER_CALC_PROFIT_CALL = re.compile(r"\border_calc_profit\s*\(")
+
+
+def test_order_calc_profit_is_called_only_by_the_real_adapter() -> None:
+    app_root = REPO_ROOT / "backend" / "app"
+    callers = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in _python_files(app_root)
+        if ORDER_CALC_PROFIT_CALL.search(path.read_text(encoding="utf-8", errors="replace"))
     )
     assert callers == ["backend/app/mt5/real.py"]

@@ -25,6 +25,7 @@ from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeSta
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
 from app.services.bias_alignment import alignment_settings, lookup_for, trade_bias
+from app.services.fx_values import stored_spec_tick_values
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
@@ -305,6 +306,11 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
             SymbolSpec.symbol == trade.broker_symbol,
         )
     )
+    account = db.get(Account, trade.account_id)
+    # Cross-currency specs use the synced FX rate, never tick_value (M5-09).
+    per_tick = stored_spec_tick_values(
+        db, trade.account_id, account.currency if account is not None else "", spec
+    )
     exit_volume = sum((d.volume for d in trade.exit_deals), Decimal(0)) or trade.volume
     risk = metrics.risk_amount(
         entry_price=trade.entry_price,
@@ -314,7 +320,8 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
         exit_volume=exit_volume,
         gross_pnl=trade.gross_pnl,
         tick_size=spec.tick_size if spec is not None else None,
-        tick_value=spec.tick_value if spec is not None else None,
+        tick_value=per_tick.tick_value,
+        loss_per_tick=per_tick.loss_per_tick,
     )
     trade.initial_sl = sl
     trade.initial_sl_source = InitialSlSource.USER.value
