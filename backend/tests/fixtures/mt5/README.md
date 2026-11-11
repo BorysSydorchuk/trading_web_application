@@ -130,6 +130,10 @@ configured broker_time rule is used). Symbols EURUSD, GBPUSD, XAUUSD, GER40.cash
 `point` and `tick_value_loss`; GER40.cash tick_value_loss 0.01161) and `EURUSD.legacy`
 with `point`/`tick_value_loss` null (→ `specs_incomplete`). `margins` per 1.0 lot for
 EURUSD/GBPUSD/XAUUSD buy and sell; none for GER40.cash (→ failed `mt5_error`, «маржа недоступна»).
+`quotes` (M5-09): EURUSD bid 1.16095 / ask 1.16100 and GER40.cash, fixed server time
+2026-11-11 10:00 (so the rate shows as stale); GER40.cash (EUR profit) sizes with
+0.01 × 1 × 1.161 = 0.01161, the same as its tick_value_loss. `profit_per_tick` GER40.cash
+0.01161 (MT5 check agrees with the rate).
 
 ## funded_next_ger30.json (M5-08, SYNTHETIC)
 
@@ -145,9 +149,31 @@ tick value 0.0116 (loss 0.01161), point 0.01, volume 0.1 / 0.1 / 100, EUR / EUR.
 | pos id | symbol, dir | open UTC → close UTC | Brussels, session | entry → exit | vol | net | initial SL (source) | TP | risk | status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 8000101 | GER30 buy | 11-03 08:30 → 09:30 | Tue 09:30 london | 24000 → 24030 | 1.0 | 34.80 | 23970 (deal) | 24060 | 34.80 (realised), R 1.0000, planned RR 2.0000 | needs_description |
-| 8000201 | GER30 sell | 11-03 13:00 → open | Tue 14:00 ny | 24100 → – | 2.0 | 0.00 | 24130 (position) | 24040 | **69.60** (spec: 30 / 0.01 × 0.0116 × 2) | open |
+| 8000201 | GER30 sell | 11-03 13:00 → open | Tue 14:00 ny | 24100 → – | 2.0 | 0.00 | 24130 (position) | 24040 | **none** without quotes (cross-currency, no rate; M5-09), 66.55 with EURUSD 1.1091 (see Quotes) | open |
 
 With `config/symbols.yaml` both trades are stored as `symbol` **GER40**, `broker_symbol`
 **GER30**; the spec row keeps `symbol` GER30 with `canonical_symbol` GER40. The open trade's risk
 needs the spec found by the broker name. Margins: GER30 buy 4800.00 / sell 4799.50 per lot; a
 `calc_margin` with `GER40` fails (`mt5_error`), so the worker must call MT5 with the broker name.
+
+## Quotes and profit check (`quote`, `calc_profit`, M5-09)
+
+Optional top-level (and step) keys, read by `FixtureMt5Source.quote` / `calc_profit`; a step's
+value replaces the previous one. Values are SYNTHETIC, never broker evidence.
+
+    "quotes":          {"EURUSD": {"bid": "1.10905", "ask": "1.1091", "time": 1793721600}}
+    "profit_per_tick": {"GER30": "0.011091"}
+
+- `quotes`: `bid`/`ask` decimal strings, `time` = server wall epoch (like `ticks`, converted to
+  UTC by the sync with the account offset). `quote(symbol)` returns `RawQuote(bid, ask, time)`
+  or `None` for a symbol without an entry. Separate from `ticks` (which only feeds the broker
+  time detection). Failure method names: `quote`, `calc_profit`.
+- `profit_per_tick`: account-currency profit per tick per 1.0 lot, decimal string `> 0`.
+  `calc_profit(direction, symbol, volume, price_open, price_close)` = `(close - open) /
+  tick_size * per_tick * volume` (negated for a sell), exact Decimal (MT5 rounds to 2 dp, the
+  fixture does not), tick size from the fixture's symbol spec. No entry -> `Mt5Error(mt5_error)`.
+- With `funded_next_ger30.json` (GER30 contract 1, tick 0.01) a rate of EURUSD 1.1091 means
+  `0.01 * 1 * 1.1091 = 0.011091` per tick per lot. Without `quotes` the open GER30 trade has
+  **no risk** (cross-currency, no rate; was 69.60 before M5-09). With the quotes above it is
+  3000 ticks * 0.011091 * 2.0 = **66.55**. Tests build the quote keys inline
+  (tests/test_sync_fx.py); the generated JSON files do not carry them.

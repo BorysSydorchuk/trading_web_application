@@ -2,6 +2,7 @@
 
 Answers from synced symbol specs and the account balance only. Never touches MT5 and never
 creates margin requests: the margin metadata is read from the latest done request.
+Cross-currency specs size with the synced FX rate (M5-09, `app.services.calculator_fx`).
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, localcontext
 from typing import Any, Literal
 
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError
 from app.config_files.symbols import SymbolsConfig, get_symbols_config
+from app.domain.fx import is_cross_currency
 from app.domain.position_size import (
     ErrorCode,
     PositionSizeError,
@@ -33,6 +35,7 @@ from app.models.account import SymbolSpec
 from app.models.calculator import CalculatorMarginRequest
 from app.schemas import calculator as schemas
 from app.schemas.calculator import plain_decimal
+from app.services.calculator_fx import chosen_loss_per_tick, conversion_for
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,10 @@ SIZING_SPEC_KEYS = (
     "volume_step",
     "volume_max",
 )
+# Cross-currency specs never use tick_value_loss (M5-09): their loss per tick comes from the
+# rate, which also needs contract_size (validated separately, not a CoreSpec field).
+CROSS_SPEC_KEYS = tuple(k for k in SIZING_SPEC_KEYS if k != "tick_value_loss")
+CROSS_RATE_KEYS = ("contract_size",)
 # PositionSizeError code -> HTTP status (docs/api.md M5-04c); unknown codes are 422.
 _ERROR_STATUS: dict[ErrorCode, int] = {"specs_invalid": 409}
 NO_CACHED_MARGIN = schemas.MarginInfo(
@@ -80,6 +87,8 @@ class SizingContext:
     specs_at: datetime
     point: Decimal
     balance: EffectiveBalance
+    loss_per_tick: Decimal
+    conversion: schemas.ConversionInfo | None
 
 
 def _is_positive(value: Decimal) -> bool:
@@ -188,9 +197,9 @@ def effective_balance(account: Account) -> EffectiveBalance:
     return balance
 
 
-def core_spec(spec: SymbolSpec) -> CoreSpec:
-    """Sizing fields of a stored spec; null or non-positive values are specs_incomplete."""
-    values = {key: getattr(spec, key) for key in SIZING_SPEC_KEYS}
+def _require_spec_fields(spec: SymbolSpec, keys: Sequence[str]) -> dict[str, Decimal]:
+    """The named fields; null or non-positive values are specs_incomplete."""
+    values = {key: getattr(spec, key) for key in keys}
     missing = [key for key, value in values.items() if value is None or not _is_positive(value)]
     if missing:
         raise ApiError(
@@ -199,7 +208,33 @@ def core_spec(spec: SymbolSpec) -> CoreSpec:
             "Symbol spec is incomplete; run a sync",
             {"missing": missing, "symbol": spec.canonical_symbol},
         )
-    return CoreSpec(**values)
+    return values
+
+
+def core_spec(spec: SymbolSpec) -> CoreSpec:
+    """Sizing fields of a stored same-currency spec (tick_value_loss as the loss per tick)."""
+    return CoreSpec(**_require_spec_fields(spec, SIZING_SPEC_KEYS))
+
+
+@dataclass(frozen=True)
+class LossValue:
+    spec: CoreSpec  # tick_value_loss = the loss per tick per lot used for sizing
+    conversion: schemas.ConversionInfo | None
+
+
+def loss_value(db: Session, account: Account, spec: SymbolSpec, now: datetime) -> LossValue:
+    """Core spec with the loss per tick: tick_value_loss, or the FX value for cross-currency
+    specs (409 conversion_rate_unavailable without a synced rate; ``now`` = UTC, for the
+    stale flag)."""
+    if not is_cross_currency(spec.currency_profit, account.currency):
+        return LossValue(core_spec(spec), None)
+    sizing_fields = _require_spec_fields(spec, (*CROSS_SPEC_KEYS, *CROSS_RATE_KEYS))
+    conversion = conversion_for(db, account.id, spec, account.currency, now)
+    sizing = CoreSpec(
+        **{key: sizing_fields[key] for key in CROSS_SPEC_KEYS},
+        tick_value_loss=chosen_loss_per_tick(conversion),
+    )
+    return LossValue(sizing, conversion)
 
 
 def _core_request(body: schemas.CalculateInput, balance: Decimal) -> PositionSizeRequest:
@@ -319,6 +354,8 @@ def _result(
         tp_3=sized.tp_3,
         specs_at=context.specs_at,
         margin=margin,
+        loss_per_tick=context.loss_per_tick,
+        conversion=context.conversion,
     )
 
 
@@ -331,13 +368,17 @@ class Sized:
     result: PositionSizeResult
 
 
-def size(db: Session, body: schemas.CalculateInput) -> Sized:
-    """Validate selection, balance and specs and size with the pure core. Raises `ApiError`."""
+def size(db: Session, body: schemas.CalculateInput, now: datetime | None = None) -> Sized:
+    """Validate selection, balance and specs and size with the pure core. Raises `ApiError`.
+
+    ``now`` (UTC, default the current time) decides the conversion's stale flag.
+    """
     _validate_combinations(body)
     account = get_account_or_404(db, body.account_id)
     spec = _spec_or_404(db, account, body.symbol)
     balance = effective_balance(account)
-    sizing_spec = core_spec(spec)
+    loss = loss_value(db, account, spec, now if now is not None else datetime.now(UTC))
+    sizing_spec = loss.spec
     request = _core_request(body, balance.amount)
     try:
         sized = calculate_position_size(request, sizing_spec)
@@ -351,6 +392,8 @@ def size(db: Session, body: schemas.CalculateInput) -> Sized:
         specs_at=spec.synced_at,
         point=sizing_spec.point,
         balance=balance,
+        loss_per_tick=sizing_spec.tick_value_loss,
+        conversion=loss.conversion,
     )
     return Sized(context, request, sized)
 

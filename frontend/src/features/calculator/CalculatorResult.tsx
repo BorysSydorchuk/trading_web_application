@@ -3,7 +3,8 @@ import { uk } from '@/i18n/uk'
 import { trimDecimal } from '@/lib/decimal'
 import { formatDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { formatMoney, formatPercent, formatPoints, formatPriceDigits, formatVolume } from './format'
+import { ConversionNote } from './ConversionNote'
+import { formatMoney, formatPercent, formatPoints, formatPriceDigits, formatTickValue, formatVolume } from './format'
 import { MarginValue } from './MarginValue'
 import type { CalculateResult } from './types'
 import type { LiveMargin } from './useLiveMargin'
@@ -73,7 +74,9 @@ export function CalculatorResult({ result, brokerSymbol, digits, margin, compact
         <Row label={t.margin}>
           <MarginValue live={margin} cached={result.margin} digitsPrice={price} />
         </Row>
+        {!compact && <Row label={t.lossPerTick}>{t.lossPerTickValue(formatTickValue(result.loss_per_tick), cur)}</Row>}
       </dl>
+      {result.conversion !== null && <ConversionNote conversion={result.conversion} compact={compact} />}
       <div>
         <h3 className="pt-1 text-xs font-semibold">{t.targets}</h3>
         <dl className={cn('grid gap-x-6', compact ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1')}>

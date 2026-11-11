@@ -33,7 +33,15 @@ from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.fixture import FixtureMt5Source
 from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
-from app.mt5.types import Direction, RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
+from app.mt5.types import (
+    Direction,
+    RawAccountInfo,
+    RawDeal,
+    RawOrder,
+    RawPosition,
+    RawQuote,
+    RawSymbolSpec,
+)
 from app.services import sync as sync_service
 from app.services.sync import close_orphaned_runs, is_due, sync_account
 from app.worker import sync_job
@@ -660,6 +668,19 @@ class Wrapped:
         self, direction: Direction, symbol: str, volume: Decimal, price: Decimal
     ) -> Decimal:
         return self.base.calc_margin(direction, symbol, volume, price)
+
+    def quote(self, symbol: str) -> RawQuote | None:
+        return self.base.quote(symbol)
+
+    def calc_profit(
+        self,
+        direction: Direction,
+        symbol: str,
+        volume: Decimal,
+        price_open: Decimal,
+        price_close: Decimal,
+    ) -> Decimal:
+        return self.base.calc_profit(direction, symbol, volume, price_open, price_close)
 
 
 def wall_epoch(wall: datetime) -> int:

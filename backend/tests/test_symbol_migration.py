@@ -19,6 +19,7 @@ from tests.conftest import alembic_config
 
 # Head before M5-08 (drop margin samples and signature).
 BEFORE = "80ae699b47ce"
+THIS = "5d2e8b1c4a90"
 NOW = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
 NEW_COLUMNS = {
     "trades": "broker_symbol",
@@ -33,10 +34,7 @@ def _column(engine: Engine, table: str, name: str) -> ReflectedColumn | None:
 
 def test_new_revision_follows_80ae699b47ce() -> None:
     script = ScriptDirectory.from_config(alembic_config())
-    head = script.get_current_head()
-    assert head is not None
-    assert head != BEFORE
-    revision = script.get_revision(head)
+    revision = script.get_revision(THIS)  # no longer the head since M5-09 (test_fx_migration.py)
     assert revision is not None
     assert revision.down_revision == BEFORE
 

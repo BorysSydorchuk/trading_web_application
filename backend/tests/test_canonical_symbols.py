@@ -29,7 +29,16 @@ from app.config_files import ConfigError, get_rules, reload_config
 from app.config_files.rules import RulesConfig
 from app.config_files.symbols import SymbolsConfig
 from app.db import make_session_factory
-from app.models import Account, BiasEntry, BiasNote, RuleViolation, SymbolSpec, SyncLog, Trade
+from app.models import (
+    Account,
+    BiasEntry,
+    BiasNote,
+    FxRate,
+    RuleViolation,
+    SymbolSpec,
+    SyncLog,
+    Trade,
+)
 from app.models.calculator import CalculatorMarginRequest
 from app.models.enums import AccountStatus, BiasKind
 from app.mt5.fixture import FixtureMt5Source
@@ -207,9 +216,10 @@ def test_ger30_sync_stores_canonical_trades_and_broker_spec(
         D("1.0000"),
         D("2.0000"),
     )
-    # Open position: risk from the GER30 spec, found by the broker name.
+    # Open position (M5-09): GER30 is EUR-profit on a USD account and this fixture has no
+    # quotes, so there is no rate and the risk is None, never the spec's tick_value (was 69.60).
     assert (still_open.initial_sl, still_open.initial_sl_source) == (D("24130"), "position")
-    assert still_open.risk_amount == D("69.60")  # 30 / 0.01 * 0.0116 * 2
+    assert still_open.risk_amount is None
     assert still_open.status == "open"
 
 
@@ -650,6 +660,21 @@ def test_patch_initial_sl_finds_the_spec_by_broker_symbol(
             synced_at=GER30_NOW,
         )
     )
+    # EUR-profit spec on a USD account: the risk uses the EUR->USD rate, not tick_value (M5-09).
+    session.add(
+        FxRate(
+            account_id=account.id,
+            from_currency="EUR",
+            to_currency="USD",
+            pair="EURUSD",
+            inverted=False,
+            bid=D("1.1599"),
+            ask=D("1.16"),
+            rate=D("1.16"),
+            rate_at=GER30_NOW,
+            synced_at=GER30_NOW,
+        )
+    )
     session.commit()
     # Breakeven exit: nothing realised, so the risk needs the spec.
     trade = add_trade(
@@ -667,7 +692,7 @@ def test_patch_initial_sl_finds_the_spec_by_broker_symbol(
     )
 
     data = client.patch(f"/api/trades/{trade.id}", json={"initial_sl": "23970"}).json()
-    assert data["risk_amount"] == "34.80"  # 30 / 0.01 * 0.0116 * 1
+    assert data["risk_amount"] == "34.80"  # 30 / 0.01 * (0.01 * 1 * 1.16) * 1
 
 
 # --- acceptance: sync -> calculate GER40 -> margin via MT5 with GER30 ---------------------------
@@ -681,7 +706,10 @@ def test_acceptance_calculate_ger40_and_margin_with_ger30(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     account = ger30_account(session)
-    src = source(GER30_FIXTURE)
+    # GER30 is EUR-profit on the USD account: sizing needs a synced EURUSD rate (M5-09).
+    data = json.loads((FIXTURES / GER30_FIXTURE).read_text(encoding="utf-8"))
+    data["quotes"] = {"EURUSD": {"bid": "1.10905", "ask": "1.1091", "time": 1_794_000_000}}
+    src = FixtureMt5Source(data)
     assert sync(session, account, src, rules).ok is True
 
     listed = client.get(f"/api/accounts/{account.id}/symbol-specs").json()

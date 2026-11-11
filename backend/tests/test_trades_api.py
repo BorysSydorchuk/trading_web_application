@@ -14,7 +14,7 @@ from sqlalchemy import Engine, event, text
 from sqlalchemy.orm import Session
 
 from app.db import make_session_factory
-from app.models import Account, RuleViolation, SymbolSpec, Trade, TradeExitDeal
+from app.models import Account, FxRate, RuleViolation, SymbolSpec, Trade, TradeExitDeal
 from app.models.enums import AccountPhase, AccountStatus, TradeStatus
 
 # Wed 2026-11-04; Brussels is UTC+1.
@@ -502,3 +502,165 @@ def test_patch_validation(client: TestClient, seed: Seed, body: dict[str, Any]) 
     fields = fields_of(client.patch(f"/api/trades/{trade.id}", json=body))
     assert set(fields) & {"initial_sl", "setup_context"}
     assert client.get(f"/api/trades/{trade.id}").json()["status"] == "needs_sl"
+
+
+# --- PATCH initial_sl, cross-currency spec (M5-09) ---
+# PATCH /api/trades/{id} initial SL risk for cross-currency specs (docs/api.md M5-09).
+#
+# A user SL on a trade with nothing realised at a different price (breakeven) uses the spec
+# fallback. Cross-currency spec (profit currency != account currency): loss per tick =
+# ``tick_size * contract_size * rate`` from the account's fx_rates row (or the stored MT5 check
+# by the 0.5 % rule); no rate row -> risk null, never the spec's tick_value. Same-currency
+# specs keep tick_value.
+#
+# Real FundedNext GER30 case: tick 0.01, contract 10, EURUSD 1.1091 -> 0.11091 USD/tick/lot;
+# buy 26478.80, SL 26414.20 = 6460 ticks, 0.14 lot -> 6460 * 0.11091 * 0.14 = 100.31
+# (tick_value 0.12 would give 108.53).
+
+
+def ger30_spec(account: Account, **kw: object) -> SymbolSpec:
+    fields: dict[str, object] = {
+        "account_id": account.id,
+        "symbol": "GER30",
+        "canonical_symbol": "GER40",
+        "contract_size": Decimal(10),
+        "tick_size": Decimal("0.01"),
+        "tick_value": Decimal("0.12"),
+        "tick_value_loss": Decimal("0.12"),
+        "point": Decimal("0.01"),
+        "volume_min": Decimal("0.01"),
+        "volume_step": Decimal("0.01"),
+        "volume_max": Decimal(100),
+        "digits": 2,
+        "currency_profit": "EUR",
+        "currency_margin": "EUR",
+        "synced_at": T0,
+    }
+    return SymbolSpec(**(fields | kw))
+
+
+def eurusd_rate(account: Account, rate: str = "1.1091", **kw: object) -> FxRate:
+    fields: dict[str, object] = {
+        "account_id": account.id,
+        "from_currency": "EUR",
+        "to_currency": "USD",
+        "pair": "EURUSD",
+        "inverted": False,
+        "bid": Decimal("1.10905"),
+        "ask": Decimal(rate),
+        "rate": Decimal(rate),
+        "rate_at": T0,
+        "synced_at": T0,
+    }
+    return FxRate(**(fields | kw))
+
+
+def breakeven_ger30(session: Session, account: Account) -> Trade:
+    return add_trade(
+        session,
+        account,
+        symbol="GER40",
+        broker_symbol="GER30",
+        status="needs_sl",
+        entry_price=Decimal("26478.80"),
+        exit_price=Decimal("26478.80"),
+        volume=Decimal("0.14"),
+        gross_pnl=Decimal("0.00"),
+        net_pnl=Decimal("-1.00"),
+        tp=None,
+    )
+
+
+def patch_sl(client: TestClient, trade: Trade, sl: str = "26414.20") -> dict[str, object]:
+    response = client.patch(f"/api/trades/{trade.id}", json={"initial_sl": sl})
+    assert response.status_code == 200, response.text
+    data: dict[str, object] = response.json()
+    return data
+
+
+def test_cross_currency_user_sl_risk_uses_the_rate(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    trade = breakeven_ger30(session, seed.a)
+    session.add_all([ger30_spec(seed.a), eurusd_rate(seed.a)])
+    session.commit()
+
+    data = patch_sl(client, trade)
+
+    assert data["risk_amount"] == "100.31"  # 6460 * 0.11091 * 0.14, not 108.53 (tick_value)
+
+
+def test_cross_currency_user_sl_risk_matches_lower_case_spec_currency(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    trade = breakeven_ger30(session, seed.a)
+    session.add_all([ger30_spec(seed.a, currency_profit="eur"), eurusd_rate(seed.a)])
+    session.commit()
+
+    assert patch_sl(client, trade)["risk_amount"] == "100.31"
+
+
+def test_cross_currency_user_sl_risk_uses_a_disagreeing_mt5_check(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    trade = breakeven_ger30(session, seed.a)
+    spec = ger30_spec(
+        seed.a, mt5_loss_per_tick=Decimal("0.125"), mt5_loss_per_tick_at=T0 + timedelta(minutes=1)
+    )
+    session.add_all([spec, eurusd_rate(seed.a)])
+    session.commit()
+
+    assert patch_sl(client, trade)["risk_amount"] == "113.05"  # 6460 * 0.125 * 0.14
+
+
+def test_cross_currency_user_sl_without_a_rate_leaves_risk_null(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    trade = breakeven_ger30(session, seed.a)
+    session.add(ger30_spec(seed.a))
+    session.commit()
+
+    data = patch_sl(client, trade)
+
+    assert data["risk_amount"] is None  # never tick_value
+    assert data["r_multiple"] is None
+    assert data["initial_sl_source"] == "user"
+
+
+def test_cross_currency_rate_of_another_account_is_not_used(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    trade = breakeven_ger30(session, seed.a)
+    session.add_all([ger30_spec(seed.a), eurusd_rate(seed.b)])
+    session.commit()
+
+    assert patch_sl(client, trade)["risk_amount"] is None
+
+
+def test_same_currency_user_sl_still_uses_tick_value(
+    client: TestClient, session: Session, seed: Seed
+) -> None:
+    """USD-profit spec on a USD account: unchanged, even with an EUR rate row present."""
+    trade = add_trade(
+        session,
+        seed.a,
+        status="needs_sl",
+        exit_price=Decimal("2650.00"),
+        gross_pnl=Decimal("0.00"),
+        net_pnl=Decimal("-3.50"),
+        tp=None,
+    )
+    spec = ger30_spec(
+        seed.a,
+        symbol="XAUUSD",
+        canonical_symbol="XAUUSD",
+        contract_size=Decimal(100),
+        tick_value=Decimal("1.00"),
+        tick_value_loss=Decimal("1.00"),
+        currency_profit="USD",
+        currency_margin="USD",
+    )
+    session.add_all([spec, eurusd_rate(seed.a)])
+    session.commit()
+
+    assert patch_sl(client, trade, "2645")["risk_amount"] == "250.00"  # 5 / 0.01 * 1.00 * 0.5

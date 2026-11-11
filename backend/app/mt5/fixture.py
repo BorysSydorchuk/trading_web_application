@@ -12,24 +12,33 @@ Fixture format (version 1); keys starting with ``_`` are comments:
       "orders":    [RawOrder, ...],
       "positions": [RawPosition, ...],
       "margins":   {"EURUSD": {"buy": "<margin per 1.0 lot>", "sell": "..."}, ...},
+      "quotes":    {"EURUSD": {"bid": "1.10905", "ask": "1.1091", "time": <server epoch>}},
+      "profit_per_tick": {"GER30": "<account currency per tick per 1.0 lot>"},
       "failures":  {"<method>": Failure, ...},
       "steps":     [Step, ...]
     }
 
 The top level is step 0. Each entry of ``steps`` is an overlay applied on top of the
 previous step (step i = top level + steps[0..i-1]): keys ``account``, ``ticks``,
-``symbols``, ``deals``, ``orders``, ``positions``, ``margins``, ``failures`` replace the
-previous value;
+``symbols``, ``deals``, ``orders``, ``positions``, ``margins``, ``quotes``,
+``profit_per_tick``, ``failures`` replace the previous value;
 ``add_deals`` / ``add_orders`` append. Use `advance()` to move to the next step, e.g. to
 simulate a position opening and then closing between two sync cycles.
 
 Failure: ``{"last_error": [code, "message"]}`` (mapped exactly like the real source) or
 ``{"code": "<Mt5ErrorCode>", "message": "..."}``. Method names: connect, account_info,
 server_tick_epoch, symbol_spec, symbols_matching, deals, deals_for_position,
-opening_order, open_positions, calc_margin.
+opening_order, open_positions, calc_margin, quote, calc_profit.
 
 Margins: decimal strings, finite and >= 0, in account currency for 1.0 lot; `calc_margin`
 returns ``per_lot * volume`` and ignores the price (a fixture is not a margin model).
+
+Quotes (M5-09): ``bid``/``ask`` decimal strings > 0, ``time`` a positive server wall epoch
+(separate from ``ticks``, which only feed broker time detection); `quote` returns None for a
+symbol without an entry. Profit per tick: decimal strings > 0; `calc_profit` returns
+``(close - open) / tick_size * per_tick * volume`` (negated for a sell), exact Decimal (MT5
+rounds to 2 dp, the fixture does not), tick size from the fixture's symbol spec. No entry or
+no spec -> `Mt5Error(mt5_error)`. All values are synthetic, never broker evidence.
 """
 
 from __future__ import annotations
@@ -56,6 +65,7 @@ from app.mt5.types import (
     RawDeal,
     RawOrder,
     RawPosition,
+    RawQuote,
     RawSymbolSpec,
     from_json_dict,
     to_decimal,
@@ -74,6 +84,8 @@ METHODS = frozenset(
         "opening_order",
         "open_positions",
         "calc_margin",
+        "quote",
+        "calc_profit",
     }
 )
 _REPLACE_KEYS = (
@@ -84,6 +96,8 @@ _REPLACE_KEYS = (
     "orders",
     "positions",
     "margins",
+    "quotes",
+    "profit_per_tick",
     "failures",
 )
 _STEP_KEYS = frozenset({*_REPLACE_KEYS, "add_deals", "add_orders", "name"})
@@ -125,6 +139,37 @@ def _parse_margins(data: object) -> dict[tuple[str, str], Decimal]:
     return parsed
 
 
+def _parse_quotes(data: object) -> dict[str, RawQuote]:
+    """``{symbol: {bid, ask, time}}`` -> ``{symbol: RawQuote}``; positive prices and time."""
+    if not isinstance(data, Mapping):
+        raise ValueError(f"quotes must be an object, got {type(data).__name__}")
+    parsed: dict[str, RawQuote] = {}
+    for symbol, value in data.items():
+        if not isinstance(value, Mapping):
+            raise ValueError(f"quotes.{symbol} must be an object with bid, ask and time")
+        quote = from_json_dict(RawQuote, value)
+        if quote.bid <= 0 or quote.ask <= 0 or quote.time <= 0:
+            raise ValueError(f"quotes.{symbol}: bid, ask and time must be > 0")
+        parsed[str(symbol)] = quote
+    return parsed
+
+
+def _parse_profit_per_tick(data: object) -> dict[str, Decimal]:
+    """``{symbol: per-tick profit per lot}`` -> ``{symbol: Decimal > 0}``."""
+    if not isinstance(data, Mapping):
+        raise ValueError(f"profit_per_tick must be an object, got {type(data).__name__}")
+    parsed: dict[str, Decimal] = {}
+    for symbol, value in data.items():
+        try:
+            per_tick = to_decimal(value)
+        except ValueError as exc:
+            raise ValueError(f"profit_per_tick.{symbol}: {exc}") from None
+        if per_tick <= 0:
+            raise ValueError(f"profit_per_tick.{symbol}: must be > 0, got {per_tick}")
+        parsed[str(symbol)] = per_tick
+    return parsed
+
+
 class _Snapshot:
     def __init__(self, data: Mapping[str, Any]) -> None:
         account = data.get("account")
@@ -135,6 +180,8 @@ class _Snapshot:
         self.orders = [from_json_dict(RawOrder, o) for o in data.get("orders", [])]
         self.positions = [from_json_dict(RawPosition, p) for p in data.get("positions", [])]
         self.margins = _parse_margins(data.get("margins", {}))
+        self.quotes = _parse_quotes(data.get("quotes", {}))
+        self.profit_per_tick = _parse_profit_per_tick(data.get("profit_per_tick", {}))
         failures: Mapping[str, Mapping[str, Any]] = data.get("failures", {})
         unknown = sorted(set(failures) - METHODS)
         if unknown:
@@ -247,6 +294,10 @@ class FixtureMt5Source:
         self._enter("server_tick_epoch")
         return self._snap.ticks.get(symbol)
 
+    def quote(self, symbol: str) -> RawQuote | None:
+        self._enter("quote")
+        return self._snap.quotes.get(symbol)
+
     def symbol_spec(self, symbol: str) -> RawSymbolSpec | None:
         self._enter("symbol_spec")
         return next((s for s in self._snap.symbols if s.name == symbol), None)
@@ -287,3 +338,24 @@ class FixtureMt5Source:
                 f"order_calc_margin failed: no margin data for {symbol} {direction} (fixture)",
             )
         return per_lot * volume
+
+    def calc_profit(
+        self,
+        direction: Direction,
+        symbol: str,
+        volume: Decimal,
+        price_open: Decimal,
+        price_close: Decimal,
+    ) -> Decimal:
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be 'buy' or 'sell', got {direction!r}")
+        self._enter("calc_profit")
+        per_tick = self._snap.profit_per_tick.get(symbol)
+        spec = next((s for s in self._snap.symbols if s.name == symbol), None)
+        if per_tick is None or spec is None or spec.tick_size <= 0:
+            raise Mt5Error(
+                Mt5ErrorCode.MT5_ERROR,
+                f"order_calc_profit failed: no profit data for {symbol} (fixture)",
+            )
+        profit = (price_close - price_open) / spec.tick_size * per_tick * volume
+        return profit if direction == "buy" else -profit

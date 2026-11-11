@@ -9,8 +9,10 @@
    symbol specs (traded symbols + the broker symbol of every config/symbols.yaml name for
    the account's firm; a name the broker lacks is logged as a warning). Trades and specs
    are stored with their canonical name; broker names stay in `trades.broker_symbol` and
-   `symbol_specs.symbol` (M5-08).
-3. Write phase, one transaction: account balance/offset, symbol specs, trades (upsert by
+   `symbol_specs.symbol` (M5-08). Then the FX quotes and MT5 loss checks of cross-currency
+   specs (`app.services.fx_sync`, M5-09; failures are warnings, never fail the cycle).
+3. Write phase, one transaction: account balance/offset, symbol specs, FX rates and checks
+   (their loss per tick feeds the risk of cross-currency trades), trades (upsert by
    account + position_id; journal fields never touched), exit deals (upsert by account +
    ticket), computed metrics, then re-entry flags and auto violations for the affected weeks,
    then the bias alignment of the synced (and never aligned) trades.
@@ -73,6 +75,8 @@ from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.source import Mt5Source, connected
 from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
 from app.services.bias_alignment import recompute_after_sync
+from app.services.fx_sync import FxFetched, fetch_fx, write_fx
+from app.services.fx_values import NO_VALUES, tick_values
 from app.services.trade_rules import recompute_rules
 
 logger = logging.getLogger(__name__)
@@ -111,6 +115,7 @@ class Fetched:
     orders: dict[int, RawOrder]  # opening orders by ticket
     positions: list[RawPosition]
     position_ids: set[int] = field(default_factory=set)
+    fx: FxFetched | None = None  # None: no FX step (no cross-currency data fetched)
 
 
 def _is_trade_deal(raw: RawDeal) -> bool:
@@ -222,6 +227,7 @@ def fetch(
         if earliest < window_from:
             lo, hi = server_epoch_range(earliest, now, conversion)
             by_ticket.update((d.ticket, d) for d in source.deals(lo, hi))
+        fx = fetch_fx(source, specs.values(), info.currency)
 
     return Fetched(
         info=info,
@@ -233,6 +239,7 @@ def fetch(
         orders=orders,
         positions=positions,
         position_ids=pids,
+        fx=fx,
     )
 
 
@@ -334,14 +341,24 @@ def trade_values(
     spec: RawSymbolSpec | None,
     rules: RulesConfig,
     symbol: str | None = None,
+    account_currency: str | None = None,
+    fx_loss_per_tick: Decimal | None = None,
 ) -> dict[str, Any]:
     """Auto (MT5-derived and computed) columns of a trade. Journal fields are not included.
 
     ``symbol`` is the canonical name (default: the broker name); ``spec`` belongs to the
-    broker symbol ``built.symbol``.
+    broker symbol ``built.symbol``. A spec whose profit currency differs from
+    ``account_currency`` (M5-09) uses only ``fx_loss_per_tick`` in the risk fallback, never
+    its tick_value (None -> no fallback risk).
     """
     initial_sl, sl_source = _initial_sl(built, current)
     balance_open = metrics.balance_at_open(balance, built.open_time, deals)
+    # Same rule as a user-entered SL (app.services.fx_values, M5-09).
+    per_tick = (
+        tick_values(spec.currency_profit, spec.tick_value, account_currency, fx_loss_per_tick)
+        if spec is not None
+        else NO_VALUES
+    )
     risk = metrics.risk_amount(
         entry_price=built.entry_price,
         initial_sl=initial_sl,
@@ -350,7 +367,8 @@ def trade_values(
         exit_volume=built.exit_volume,
         gross_pnl=built.gross_pnl,
         tick_size=spec.tick_size if spec is not None else None,
-        tick_value=spec.tick_value if spec is not None else None,
+        tick_value=per_tick.tick_value,
+        loss_per_tick=per_tick.loss_per_tick,
     )
     closed = built.is_closed
     weekday, hour = brussels_weekday_hour(built.open_time, rules.timezone)
@@ -481,6 +499,9 @@ def write(
     counters.symbols_synced = _upsert_specs(
         session, account.id, fetched.specs.values(), now, canonical
     )
+    fx_loss: dict[str, Decimal | None] = {}
+    if fetched.fx is not None:
+        fx_loss = write_fx(session, account.id, fetched.fx, fetched.specs, fetched.conversion, now)
 
     touched: dict[int, tuple[Trade, BuiltTrade]] = {}
     updated: set[int] = set()
@@ -494,6 +515,8 @@ def write(
             spec=fetched.specs.get(built.symbol),
             rules=rules,
             symbol=canonical_symbol(symbols, built.symbol),
+            account_currency=fetched.info.currency,
+            fx_loss_per_tick=fx_loss.get(built.symbol),
         )
         if current is None:
             current = Trade(account_id=account.id, position_id=built.position_id, **values)

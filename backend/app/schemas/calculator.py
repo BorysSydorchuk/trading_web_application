@@ -116,6 +116,23 @@ class MarginInfo(BaseModel):
     reason: Literal["no_cached_margin"] | None
 
 
+class ConversionInfo(BaseModel):
+    """Cross-currency loss value used for sizing (docs/api.md M5-09); null when same currency."""
+
+    pair: str
+    from_currency: str
+    to_currency: str
+    rate: PlainDecimal
+    side: Literal["ask", "bid"]
+    inverted: bool
+    rate_at: UtcDatetime
+    stale: bool  # rate_at older than 1 h at calculate time
+    source: Literal["rate", "mt5_check"]
+    rate_loss_per_tick: PlainDecimal
+    mt5_loss_per_tick: PlainDecimal | None
+    mt5_checked_at: UtcDatetime | None
+
+
 class CalculateResult(BaseModel):
     account_id: int
     symbol: str
@@ -139,6 +156,8 @@ class CalculateResult(BaseModel):
     tp_3: PlainDecimal
     specs_at: UtcDatetime
     margin: MarginInfo
+    loss_per_tick: PlainDecimal  # account currency per tick per lot used for sizing
+    conversion: ConversionInfo | None
 
 
 MarginRequestStatus = Literal["pending", "processing", "done", "failed", "expired"]

@@ -47,6 +47,13 @@ describe('mapCalculatorError', () => {
     expect(map('invalid_targets').general).toBe(e.invalidTargets)
   })
 
+  it('names the missing conversion pair from the details', () => {
+    expect(map('conversion_rate_unavailable', { from_currency: 'EUR', to_currency: 'USD' }, FORM, 409)).toEqual({
+      fields: {}, general: 'Немає курсу EUR→USD, запустіть синхронізацію', unexpected: false,
+    })
+    expect(map('conversion_rate_unavailable', null, FORM, 409).general).toBe(e.conversionRateUnavailableShort)
+  })
+
   it('explains below_min_volume with the minimum lot and its risk, never suggesting rounding up', () => {
     const text = map('below_min_volume', { volume_min: '0.10000000', min_volume_risk: '1250.5' }).general
     expect(text).toBe(e.belowMinVolume('0.10', '1 250.50', 'USD'))

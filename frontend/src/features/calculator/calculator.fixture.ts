@@ -1,6 +1,6 @@
 /** Test data for the calculator (docs/api.md M5-04c/d shapes). */
 import type { Account } from '@/features/accounts/types'
-import type { CalculateResult, MarginRequest, SymbolSpec } from './types'
+import type { CalculateResult, ConversionInfo, MarginRequest, SymbolSpec } from './types'
 
 export function account(overrides: Partial<Account> = {}): Account {
   return {
@@ -29,12 +29,21 @@ export function result(overrides: Partial<CalculateResult> = {}): CalculateResul
     balance_synced_at: null, currency: 'USD', risk_percent: '1.0', risk_amount: null,
     risk_budget: '1000.000', volume: '2.00000000', actual_risk: '1000.00000000',
     actual_risk_percent: '1.000000', tp_1_5: '2658.00', tp_2: '2660.50', tp_3: '2665.50',
-    specs_at: '2026-11-10T06:00:00Z',
+    specs_at: '2026-11-10T06:00:00Z', loss_per_tick: '1.00000000', conversion: null,
     margin: {
       source: 'cached_estimate', amount: '5301.00', currency: 'USD', calculated_at: '2026-11-09T09:00:00Z',
       sample_price: '2640.00000000', sample_volume: '1.00000000', reason: null,
     },
     ...overrides,
+  }
+}
+
+/** GER30 at FundedNext (EUR profit, USD account), docs/api.md M5-09 real case. */
+export function conversion(overrides: Partial<ConversionInfo> = {}): ConversionInfo {
+  return {
+    pair: 'EURUSD', from_currency: 'EUR', to_currency: 'USD', rate: '1.10910000', side: 'ask', inverted: false,
+    rate_at: '2026-11-10T07:55:00Z', stale: false, source: 'rate', rate_loss_per_tick: '0.11091000',
+    mt5_loss_per_tick: null, mt5_checked_at: null, ...overrides,
   }
 }
 

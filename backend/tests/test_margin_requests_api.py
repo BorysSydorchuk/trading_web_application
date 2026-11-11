@@ -203,7 +203,8 @@ def test_volume_is_recomputed_server_side_like_calculate(
 
 def test_currency_is_the_account_currency(client: TestClient, db_session: Session) -> None:
     eur = make_account(db_session, currency="EUR")
-    make_ger40(db_session, eur)
+    # EUR profit on the EUR account: same currency, no FX rate needed (M5-09).
+    make_ger40(db_session, eur, currency_profit="EUR", currency_margin="EUR")
 
     item = accepted(client, ger40_body(eur))
 

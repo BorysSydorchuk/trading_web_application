@@ -69,6 +69,13 @@ function belowMinVolume(details: ApiErrorDetails, currency: string): string {
   return t.belowMinVolume(formatVolume(volumeMin), formatMoney(risk), currency)
 }
 
+function conversionRateUnavailable(details: ApiErrorDetails): string {
+  const from = stringDetail(details, 'from_currency')
+  const to = stringDetail(details, 'to_currency')
+  if (from === null || to === null) return t.conversionRateUnavailableShort
+  return t.conversionRateUnavailable(from, to)
+}
+
 function general(text: string): CalculatorErrors {
   return { fields: {}, general: text, unexpected: false }
 }
@@ -96,6 +103,8 @@ export function mapCalculatorError(error: unknown, form: CalculatorFormState, cu
       return general(belowMinVolume(details, currency))
     case 'invalid_targets':
       return general(t.invalidTargets)
+    case 'conversion_rate_unavailable':
+      return general(conversionRateUnavailable(details))
     default:
       return { fields: {}, general: errorText(error), unexpected: true }
   }

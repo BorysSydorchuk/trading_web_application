@@ -46,6 +46,12 @@ SYNTHETIC, not FundedNext specs. Account USD, balance 100 000.00.
 | GER40.cash | 2 | 0.01 | 0.01 | 0.01161 | 0.1 / 0.1 / 100 | EUR / EUR | **none** (→ «маржа недоступна») |
 | EURUSD.legacy | 5 | **null** | 0.00001 | **null** | 0.01 / 0.01 / 50 | USD / EUR | none (→ specs_incomplete) |
 
+M5-09 (2026-11-11): GER40.cash is EUR-profit on the USD account, so it now sizes with the EURUSD
+rate, not tick_value_loss. The fixture has a EURUSD quote (ask 1.16100, fixed time 2026-11-11 10:00
+server, so the UI shows the stale-rate warning) and an MT5 check value 0.01161: loss per tick
+0.01 × 1 × 1.161 = 0.01161, so the GER40.cash hand results below are unchanged; the response
+adds `loss_per_tick` 0.01161 and `conversion` (EURUSD, ask, source `rate`).
+
 ## [QA] Evidence (HTTP against the running QA app, 2026-11-10 07:47–07:51 UTC)
 
 Sync: worker synced the account (state `ok`, balance 100000.00, 5 specs) from the fixture;

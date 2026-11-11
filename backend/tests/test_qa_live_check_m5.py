@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from decimal import Decimal
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -131,6 +132,22 @@ def test_fixture_is_synthetic_and_matches_the_login(qa: ModuleType) -> None:
     # Three symbols have margins for both directions, GER40.cash has none.
     assert set(data["margins"]) == {"EURUSD", "GBPUSD", "XAUUSD"}
     assert all(set(v) == {"buy", "sell"} for v in data["margins"].values())
+
+
+def test_fixture_has_the_eurusd_rate_for_the_eur_index(qa: ModuleType) -> None:
+    """M5-09: GER40.cash is EUR-profit on the USD account; without a EURUSD quote the
+    calculator answers 409 conversion_rate_unavailable."""
+    data = json.loads((REPO_ROOT / qa.FIXTURE_REL).read_text(encoding="utf-8"))
+    ger40 = next(s for s in data["symbols"] if s["name"] == "GER40.cash")
+    assert (ger40["currency_profit"], data["account"]["currency"]) == ("EUR", "USD")
+    eurusd = data["quotes"]["EURUSD"]
+    assert Decimal(eurusd["bid"]) < Decimal(eurusd["ask"])
+    assert eurusd["time"] > 0
+    # Rate value 0.01 * 1 * ask = the documented 0.01161 per tick per lot (M5-06 hand results).
+    loss = Decimal(ger40["tick_size"]) * Decimal(ger40["contract_size"]) * Decimal(eurusd["ask"])
+    assert loss == Decimal(ger40["tick_value_loss"]) == Decimal("0.01161")
+    assert "GER40.cash" in data["quotes"]
+    assert Decimal(data["profit_per_tick"]["GER40.cash"]) == loss
 
 
 def test_config_copy_is_byte_identical_and_keeps_data(qa: ModuleType, tmp_path: Path) -> None:

@@ -748,6 +748,9 @@ def _calc_spec(name: str, digits: int, **values: str | None) -> dict[str, Any]:
     return {"name": name, "digits": digits, **{k: values[k] for k in keys}}
 
 
+QA_CALC_QUOTE_WALL = "2026-11-11 10:00:00"  # server wall clock of the fixture quotes
+
+
 def calculator_qa() -> dict[str, Any]:
     """One synced USD account, 4 broker-style symbols + one legacy spec, margins for 3."""
     usd = {"currency_profit": "USD"}
@@ -849,6 +852,15 @@ def calculator_qa() -> dict[str, Any]:
             "GBPUSD": {"buy": "1342.10", "sell": "1341.90"},
             "XAUUSD": {"buy": "4105.20", "sell": "4104.80"},
         },
+        # M5-09: GER40.cash is EUR-profit on a USD account, so it sizes with the EURUSD rate:
+        # ask 1.16100 -> 0.01 * 1 * 1.161 = 0.01161 per tick per lot (= its tick_value_loss,
+        # so the M5-06 hand results stay valid). Fixed time: the rate is shown as stale.
+        "quotes": {
+            "EURUSD": {"bid": "1.16095", "ask": "1.16100", "time": sv(QA_CALC_QUOTE_WALL)},
+            "GER40.cash": {"bid": "24149.50", "ask": "24150.00", "time": sv(QA_CALC_QUOTE_WALL)},
+        },
+        # order_calc_profit check per tick per lot; agrees with the rate value.
+        "profit_per_tick": {"GER40.cash": "0.01161"},
     }
 
 

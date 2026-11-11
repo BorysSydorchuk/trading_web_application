@@ -255,6 +255,7 @@ describe('CalculatorForm server errors', () => {
     ['specs_invalid', 409, null, e.specsInvalid],
     ['below_min_volume', 422, { volume_min: '0.01', min_volume_risk: '1250.5' }, e.belowMinVolume('0.01', '1 250.50', 'USD')],
     ['invalid_targets', 422, null, e.invalidTargets],
+    ['conversion_rate_unavailable', 409, { from_currency: 'EUR', to_currency: 'USD' }, 'Немає курсу EUR→USD, запустіть синхронізацію'],
   ])('shows %s as exactly one readable alert, no toast', async (code, status, details, text) => {
     await submitWith(errorAnswer(code, status, details))
     expect(await screen.findByRole('alert')).toHaveTextContent(text)
