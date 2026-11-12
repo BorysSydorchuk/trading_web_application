@@ -44,8 +44,10 @@ typecheck-frontend:
 
 test: test-backend test-frontend
 
-test-backend: db-ensure
-	cd backend && uv run pytest
+# Tests build their own schema on the test DB(s); only Postgres must be up (never migrates the
+# dev DB). -n auto: pytest-xdist, one test database per worker (tests/conftest.py).
+test-backend: db-up
+	cd backend && uv run pytest -n auto
 
 test-frontend:
 	cd frontend && npm test
