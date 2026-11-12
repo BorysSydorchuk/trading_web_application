@@ -225,7 +225,7 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Contract: docs/api.md "## M6". All % of account size, canonical symbols.
 
 - [x] M6-01 [S] plan, API contract, decisions (orchestrator), branch m6/plan
-- [ ] M6-02 [L] digest metrics domain (pure): metrics, breakdowns + coverage, rules/bias sections, norm/deviation, chart data; `digest.deviation_sigma` in rules.yaml (tdd-guide tests first, backend-dev; python-reviewer), branch m6/digest-metrics
+- [ ] M6-02 [L] digest metrics domain (pure): metrics, breakdowns + coverage, rules/bias sections, norm/deviation, chart data (tdd-guide tests first, backend-dev; python-reviewer), branch m6/digest-metrics. RED observed 2026-11-12 (55 tests, commit 5861fa0); backend-dev implementing. `digest.deviation_sigma` config moved to M6-04 (module takes k as a parameter)
 - [ ] M6-03 [L] dashboard API: today/week P&L per account vs limits, shared sticky-extremes function with the rules engine, stop flags, open positions, inbox (tdd-guide, backend-dev), branch m6/dashboard-api
 - [ ] M6-04 [L] digests API: generate/regenerate, list, get, by-period, review PATCH, suggestion, next_bias_note_id (backend-dev; database-reviewer only if a migration appears), branch m6/digests-api
 - [ ] M6-05 [M] Home dashboard UI: limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
@@ -347,7 +347,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). NEXT: M6-02 digest metrics, tdd-guide tests first on m6/digest-metrics.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02: tests committed RED (5861fa0) on m6/digest-metrics, backend-dev implementing app/domain/digest_metrics.py; then make check, code-reviewer + python-reviewer, merge.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
