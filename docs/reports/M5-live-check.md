@@ -148,10 +148,12 @@ no margin there, write «не показано»).
 
 | Symbol | Entry | SL | Risk | App «Лот» | Your lot | App margin | MT5 margin | Diff (steps) |
 |---|---|---|---|---|---|---|---|---|
-| EURUSD |  |  |  |  |  |  |  |  |
-| GBPUSD |  |  |  |  |  |  |  |  |
-| XAUUSD |  |  |  |  |  |  |  |  |
-| GER40 |  |  |  |  |  |  |  |  |
+| EURUSD | owner 2026-11-10: OK (numbers not recorded) |  |  |  |  |  |  |  |
+| GBPUSD | owner 2026-11-10: OK (numbers not recorded) |  |  |  |  |  |  |  |
+| XAUUSD | owner 2026-11-10: OK (numbers not recorded) |  |  |  |  |  |  |  |
+| GER40 (GER30) | 26478.80 (buy) | 26414.20 (6460 pt) | 1 % = 100.00 USD | 0.13 | 0.13 (PM hand calculation, confirmed by Borys) | 2 538.82 USD (MT5 order_calc_margin) | not recorded | 0 |
+
+Result 2026-11-12: PASS, M5 accepted by the PM (see docs/reports/M5.md).
 
 Items 9–10 are already proven by synthetic QA ([QA] section); the owner repeats them on
 real data. Items 2–8, 11–12 and every real number are **owner-only**: synthetic QA
