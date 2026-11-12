@@ -220,6 +220,19 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 4. Complete full make check on verified idle local trading_journal_test with BOTH DB URLs pinned and AI disabled; independent review before any commit/merge, no push. Do not rerun M4 seed creation, Whisper or live AI; no QA DB deletion.
 5. M5 acceptance remains Borys comparing four symbol calculations to MT5 within one volume step. M4 rows 9-10 remain scheduled Monday; row 12 and live-AI authorization remain open.
 
+## M6 tasks
+
+Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Contract: docs/api.md "## M6". All % of account size, canonical symbols.
+
+- [x] M6-01 [S] plan, API contract, decisions (orchestrator), branch m6/plan
+- [ ] M6-02 [L] digest metrics domain (pure): metrics, breakdowns + coverage, rules/bias sections, norm/deviation, chart data; `digest.deviation_sigma` in rules.yaml (tdd-guide tests first, backend-dev; python-reviewer), branch m6/digest-metrics
+- [ ] M6-03 [L] dashboard API: today/week P&L per account vs limits, shared sticky-extremes function with the rules engine, stop flags, open positions, inbox (tdd-guide, backend-dev), branch m6/dashboard-api
+- [ ] M6-04 [L] digests API: generate/regenerate, list, get, by-period, review PATCH, suggestion, next_bias_note_id (backend-dev; database-reviewer only if a migration appears), branch m6/digests-api
+- [ ] M6-05 [M] Home dashboard UI: limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
+- [ ] M6-06 [M] Digests UI: list, digest page (metrics with red/green, breakdowns, rules, bias, SVG charts), review form + next-period bias note on one screen (frontend-dev), branch m6/digests-ui
+- [ ] M6-07 [M] AI summary: `POST /api/digests/{id}/ai-summary` + button (backend-dev, frontend-dev), branch m6/digest-ai
+- [ ] M6-08 [L] QA: fixture week hand-calculated (win rate, total R, P&L, PF, DD), deviation fixture, browser check; owner check on one real week + docs/reports/M6.md
+
 ## M5 tasks
 
 PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real FundedNext symbol comparisons against MT5 within one volume step; synthetic cases are not that evidence.
@@ -333,6 +346,8 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 - 2026-11-09 evening: laptop lost power during the full make check (uncommitted). Resumed: full make check PASSED (2008 backend + 1 intentional skip, 337 frontend, all lint/types; both DB URLs pinned to trading_journal_test, AI key empty). code-reviewer APPROVE (no CRITICAL/HIGH/MEDIUM); LOW fixes: 3 more key_levels edge tests (focused 91 passed), report heading; punctuation-only piece → BACKLOG. Committed and merged --no-ff into main.
 
 ### RESUME FROM HERE
+
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). NEXT: M6-02 digest metrics, tdd-guide tests first on m6/digest-metrics.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
