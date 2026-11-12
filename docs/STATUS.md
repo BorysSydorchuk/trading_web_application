@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M5 Position calculator** (bootstrap 2026-11-07). M4 PM-approved 2026-11-07 with deferred checks. M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
+Current milestone: **M6 Dashboard and digests** (from 2026-11-12). M5 accepted 2026-11-12. M4 PM-approved 2026-11-07 with deferred checks. M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
@@ -238,7 +238,8 @@ PRD 6.8 and ROADMAP M5 remain authoritative. Owner acceptance requires four real
 - [x] M5-09 (database-reviewer APPROVE; code-reviewer + python-reviewer APPROVE after fix batch; make check 2684+1 skip / 406; migration f6ea0d1af419) cross-currency loss value (Borys M5-07 GER40 FAIL 2026-11-11: tick_value 0.12 stale, real 0.11091): fx_rates + order_calc_profit check, calculator rate display, trade-risk fallback; contract docs/api.md "M5-09" (tdd-guide, backend-dev, frontend-dev, database-reviewer), branch m5/fx-conversion
 - [x] M5-10 (database-reviewer APPROVE; code-reviewer + python-reviewer APPROVE after fix batch; make check 2758+1 skip / 413; migration a3e7c91d5b20) risk base = account size (PM 2026-11-11): reference_balance NOT NULL «Розмір рахунку», all % of it, recompute stored trades + rules; contract docs/api.md "M5-10" (tdd-guide, backend-dev, frontend-dev, database-reviewer), branch m5/risk-base
 - [x] M5-11 [tier M] PM process change: change tiers in CLAUDE.md/DECISIONS; pytest-xdist (one test DB per worker), test-backend on db-up (no dev DB migrate); make check 844 s → 93 s, branch m5/fast-checks
-- [ ] M5-07 owner real-spec/MT5 comparisons and PM acceptance report (EURUSD/GBPUSD/XAUUSD item 2 OK; GER40 after M5-08)
+- [x] M5-07 owner real-spec/MT5 comparisons: GER40 PASS 2026-11-12 (lot 0.13, risk 92.89, margin 2 538.82 MT5, rate 1.10609 = order_calc_profit 0.11060908); EURUSD/GBPUSD/XAUUSD OK 2026-11-10. **PM: M5 ACCEPTED 2026-11-12.**
+- [x] M5-12 [tier S] close M5: report with owner table, real-spec unit tests (specs synced for 11459118 on 2026-11-12), branch m5/close-report
 
 Root owns docs and all test execution; TDD owns backend/tests/domain/test_position_size.py; backend will own app/domain/position_size.py after observed RED. No overlapping edits or real terminal operations. Architect margin design uses dated broker-derived samples for explicitly labelled offline estimates, no guessed leverage formula. Existing API/schema extended only in later tasks.
 
@@ -332,6 +333,8 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 - 2026-11-09 evening: laptop lost power during the full make check (uncommitted). Resumed: full make check PASSED (2008 backend + 1 intentional skip, 337 frontend, all lint/types; both DB URLs pinned to trading_journal_test, AI key empty). code-reviewer APPROVE (no CRITICAL/HIGH/MEDIUM); LOW fixes: 3 more key_levels edge tests (focused 91 passed), report heading; punctuation-only piece → BACKLOG. Committed and merged --no-ff into main.
 
 ### RESUME FROM HERE
+
+2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
 2026-11-11 evening: M5-10 risk base started on m5/risk-base. GER30 live check still pending: app not running since migration (last sync 18:53 UTC, fx_rates empty). Account 11459118 answer came as an unfilled template: ask again.
 M5-10 DONE and merged. Dev DB migrated 2026-11-11 23:23 UTC to a3e7c91d5b20 (backup backups/pre-migration-a3e7c91d5b20-20261111T232329Z.dump): account 12109877 size 10000.00, 14 trades percents recomputed from it (e.g. trade 4 risk 1.0304 %). Rule violations recompute at first worker start. NEXT: Borys starts app -> after first sync read fx_rates + GER30 mt5_loss_per_tick (~0.11091 expected) -> Borys rechecks GER40 (budget 100.00, lot 0.13). Account 11459118 answer still pending.
