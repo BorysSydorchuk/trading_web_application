@@ -528,3 +528,62 @@ Problem: for GER30 at FundedNext (profit currency EUR, account USD) MT5 `trade_t
 - Recompute: the migration recomputes risk_pct/pnl_pct of stored trades in SQL; changing the account size via PATCH recomputes risk_pct, pnl_pct and rule violations of that account's trades in the same transaction; the worker does the same for all accounts once at start (idempotent, small tables; each account in its own savepoint: a failing account is logged at ERROR with its id and skipped, the others are committed). Sync computes new trades with the account size.
 - M6 dashboard limits and digests will use the same base (not built yet).
 - Tests: balance above (10 401.70) and below (9 857.58) a 10 000 account → 1 % = 100.00 in both; GER40 real case buy 26478.80 / SL 26414.20, 1 % → budget 100.00, lot 0.13 (loss/lot 716.4786); daily stop −3 % = −300.00 regardless of the day's start balance; PATCH size recompute; create default.
+
+## M6 - Dashboard and digests (contract, 2026-11-12)
+
+PRD 6.7, 6.9, 6.10; ROADMAP M6. All percentages are of the account size (`accounts.reference_balance`, PRD 6.8/6.9), never of the current or period-start balance. Symbols are canonical names (`trades.symbol`, M5-08). Periods are Brussels calendar dates (DECISIONS 2026-10-31): week = Monday..Sunday, month = calendar month. Money and R as strings (plain notation, 2 dp money, 4 dp percent/R, ROUND_HALF_UP at the API edge only; Decimal everywhere inside).
+
+### Which trades
+- Period trades = **closed** trades (`close_time` not null, `net_pnl` not null) whose Brussels close date is inside the period, all accounts that are not archived. Open trades are never in metrics.
+- R metrics use only trades with `r_multiple` not null; every R metric returns `{value, n}` with `n` = trades used (UI shows «за 8/10 угод»).
+
+### Metrics (pure, `app/domain/digest_metrics.py`)
+- `trades` (count), `wins` (net_pnl > 0), `losses` (< 0), `breakeven` (= 0).
+- `net_pnl` (sum, account currency; all accounts USD today, a mixed-currency set → 409 `mixed_currency`), `net_pnl_pct` = net_pnl / sum of account sizes of the accounts with a trade in the period × 100 (one account: its size).
+- `total_r` (sum), `win_rate` = wins / trades × 100 (breakeven is not a win), `avg_win_r` (mean R of wins), `avg_loss_r` (mean R of losses, negative), `expectancy_r` = total_r / n.
+- `profit_factor` = sum of winning net_pnl / |sum of losing net_pnl|; null when there is no loss.
+- `max_drawdown` = largest peak-to-trough fall of running closed net P&L in (close_time, id) order, starting at 0, money and % (same base as net_pnl_pct); 0 when it never falls.
+- `best_trade` / `worst_trade`: by net_pnl (ties: earlier close), `{trade_id, symbol, net_pnl, r_multiple, close_time}`.
+- Empty period: counts 0, sums "0.00", ratios null.
+
+### Breakdowns
+By `symbol`, `session`, `hour` (Brussels hour of open), `weekday`, `entry_model`, `poi_type`, `bias_alignment` (effective = override ?? auto), `followed_plan`, `emotion_before`. Each group: `{key, trades, net_pnl, total_r, win_rate}`; trades with an empty field go to key `null` («не заповнено»). Every journal-field breakdown has `coverage: {filled, total}` (DECISIONS 2026-11-04).
+
+### Rules and bias sections
+- Rules: per `rule_key` `{rule_key, violations, trades, pnl}`; `pnl` = sum of net_pnl of the trades with that violation (signed; a trade with two violations counts in both). Total line: distinct trades with any violation and their net_pnl.
+- Bias: `accuracy` = bias entries of the period with `was_correct = true` / entries marked (true or false) × 100, `{value, marked, total}`; P&L and R of `aligned` vs `counter` trades (effective alignment).
+
+### Norm and deviation
+- Norm window: closed trades in the 60 weekdays (Mon–Fri, Brussels) before `period_start`; fewer than 60 weekdays of history → all history before the period.
+- The window is cut into periods of the same kind (weeks or months, only periods that have ≥ 1 trade); each metric is computed per period; norm = mean and population standard deviation over those periods.
+- Highlight when the period value is worse than mean − k × σ (red) or better than mean + k × σ (green), k = `digest.deviation_sigma` in `config/rules.yaml` (default 1.0). "Better" = higher for net_pnl, net_pnl_pct, total_r, win_rate, avg_win_r, avg_loss_r, expectancy_r, profit_factor; lower for max_drawdown (money and %), and violations count. `trades` is not highlighted.
+- Fewer than 3 norm periods, or σ = 0 → no highlight, `deviation: null`, UI «замало історії для норми».
+- Each metric: `{value, norm_mean, norm_sd, deviation: "worse" | "better" | null}`.
+
+### Charts data
+- `equity`: per account and combined, points `{time (UTC), cum_pnl}` after each closed trade of the period, starting at 0.
+- `r_distribution`: buckets of 0.5 R from the min to the max R (−∞..−3 and 3..∞ folded into the edge buckets), count per bucket.
+- `hour_heatmap`: weekday (0–4, plus 5/6 if any) × hour → `{trades, net_pnl}`.
+- UI draws them with plain SVG components (no chart library; DECISIONS).
+
+### Digests API
+- Stored in `digests` (existing table; unique (kind, period_start)): `metrics` = full snapshot (metrics, breakdowns, rules, bias, norm, charts, `trade_ids`), `generated_at` UTC; review fields `what_worked`, `what_to_fix`, `focus_next`; `ai_summary`. No migration expected; if one is needed it goes through database-reviewer + pre-migration backup.
+- `POST /api/digests {kind: "weekly"|"monthly", date: "YYYY-MM-DD"}`: date normalised to the period start (Monday / 1st). Creates (201) or regenerates (200) the snapshot; review fields and ai_summary are kept. A period that has not started → 422 `period_in_future`.
+- `GET /api/digests?kind=` → `{items: DigestListItem[]}` newest first: `{id, kind, period_start, period_end, generated_at, trades, net_pnl, net_pnl_pct, total_r, win_rate, reviewed}` (`reviewed` = any review field non-empty).
+- `GET /api/digests/{id}` → full digest; `GET /api/digests/by-period?kind=&date=` → digest or 404.
+- `PATCH /api/digests/{id} {what_worked?, what_to_fix?, focus_next?}` (text, max 10 000 chars, `""` → null).
+- Next-period bias: the digest page embeds the existing bias note form (`POST/PUT /api/bias/notes`, kind weekly/monthly, date = next period start). The digest response has `next_bias_note_id` (null if none yet).
+- `GET /api/digests/suggestion` → `{weekly: {period_start} | null, monthly: {period_start} | null}`: weekly from Friday 16:00 Brussels until the end of Sunday when that week has no digest; monthly from 16:00 on the last weekday (Mon–Fri) of the month until the end of the month when that month has none. Shown on «Головна» and «Дайджести».
+- `POST /api/digests/{id}/ai-summary`: one Claude call (existing client, model and usage log, purpose `digest_summary`), input = the snapshot numbers + journal texts (mistakes, lesson, raw text) of the period's trades; output = 3–7 short factual observations in Ukrainian, no advice, no moralising; stored in `ai_summary`. Errors as M2 (`ai_not_configured` / `ai_error`), visible in UI and logs.
+
+### Dashboard API (PRD 6.10)
+- `GET /api/dashboard` → `{now, accounts: [...], stop: {today: bool, week: bool}, open_positions: [...], inbox: {needs_sl, needs_description, draft}}`.
+- Per active account: `{id, name, currency, account_size, today: {pnl, pct, low_pct, high_pct}, week: {...}, limits: {daily_loss_pct, daily_profit_pct, weekly_loss_pct, weekly_profit_pct}, today_state, week_state}` with state `ok | stop_loss | stop_profit`. P&L = closed trades of the Brussels day / week by close time; low/high = sticky running extremes, the same replay as the rules engine (`_period_stop`, extracted to a shared pure function). Limits from `config/rules.yaml`.
+- `stop.today` = any account's today_state ≠ ok → banner «СТОП на сьогодні»; `stop.week` → «СТОП на тиждень».
+- Open positions: `{trade_id, account_name, symbol, direction, volume, entry_price, open_time, initial_sl, risk_amount, risk_pct}`.
+- Home page: bias status (exists), limits per account with the banner, inbox counts with links, open positions, sync status per account (existing endpoint), links to calculator and describe, digest suggestion.
+
+### Acceptance (ROADMAP M6)
+- Fixture week with known trades: win rate, total R, P&L, PF, drawdown match hand calculation (tests), then Borys checks one real week by hand.
+- Deviation: fixture history where the week is > 1 σ worse on win rate → red, better on total R → green.
+- Review + next week's bias saved from one screen.
