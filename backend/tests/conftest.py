@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,7 +13,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -26,8 +27,46 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 _base_settings = get_settings()
 if not _base_settings.test_database_url:
     pytest.exit("TEST_DATABASE_URL is not set (see .env.example).", returncode=2)
-TEST_DATABASE_URL: str = _base_settings.test_database_url
+BASE_TEST_DATABASE_URL: str = _base_settings.test_database_url
+TEST_SUFFIX = "_test"
+SAFE_DB_NAME = re.compile(r"[A-Za-z0-9_]+")
+
+
+def worker_database_url(base_url: str, worker: str | None) -> str:
+    """pytest-xdist: one database per worker, `<name>_<worker>_test` (keeps the `_test`
+    suffix the migrate tool and guards rely on). No worker: the base URL unchanged."""
+    if not worker:
+        return base_url
+    url = make_url(base_url)
+    name = url.database or ""
+    stem = name.removesuffix(TEST_SUFFIX)
+    return url.set(database=f"{stem}_{worker}{TEST_SUFFIX}").render_as_string(hide_password=False)
+
+
+def _ensure_database(base_url: str, url: str) -> None:
+    """Create the worker database (via the base test DB) if it does not exist yet."""
+    if url == base_url:
+        return
+    name = make_url(url).database or ""
+    if not SAFE_DB_NAME.fullmatch(name):
+        raise ValueError(f"unsafe worker database name: {name!r}")
+    engine = create_engine(base_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}
+            ).first()
+            if exists is None:
+                conn.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        engine.dispose()
+
+
+TEST_DATABASE_URL: str = worker_database_url(
+    BASE_TEST_DATABASE_URL, os.environ.get("PYTEST_XDIST_WORKER")
+)
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["TEST_DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["LOG_DIR"] = tempfile.mkdtemp(prefix="tj-test-logs-")
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="tj-test-data-")
 # Tests never call the real Anthropic API: no key unless a test sets one (with a fake client).
@@ -62,6 +101,12 @@ def settings() -> Settings:
 @pytest.fixture(scope="session")
 def db_engine() -> Iterator[Engine]:
     """Engine on the test DB; aborts the run with a clear message if it is unreachable."""
+    try:
+        _ensure_database(BASE_TEST_DATABASE_URL, TEST_DATABASE_URL)
+    except (SQLAlchemyError, ValueError) as exc:
+        orig = getattr(exc, "orig", exc)
+        name = make_url(TEST_DATABASE_URL).database
+        pytest.exit(f"Could not create the worker test database {name}: {orig}", returncode=3)
     engine = app_db.make_engine(TEST_DATABASE_URL)
     try:
         with engine.connect() as conn:

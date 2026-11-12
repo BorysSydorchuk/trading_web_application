@@ -10,6 +10,14 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
 3. `docs/STATUS.md`: where we stopped (create it if missing)
 4. `docs/DECISIONS.md`: technical decisions already made (create it if missing)
 
+## Change tiers (PM 2026-11-12: right-size the workflow; overrides the delegation and review lines below where they differ)
+Classify every task at the start and write the tier next to it in `docs/STATUS.md`.
+- **S (small):** <= ~3 files, no migration, no money/risk math, no MT5 calls (UI text, a filter, a config option, a bug in one function). Do it yourself, no subagents. Only affected tests while working; one full `make check` before merge; one `code-reviewer` pass. Report: 3-5 lines. Target 15-30 min.
+- **M (medium):** new endpoint/page, several modules, no data migration. Max 2 subagents. Targeted tests while working; one full `make check` before merge; one `code-reviewer` (re-review only after CHANGES REQUESTED). Short report.
+- **L (large / risky):** DB migrations, money/risk/lot/P&L math, MT5 sync/worker, anything touching real data. Full process: tests first (`tdd-guide`), specialist reviewers (`database-reviewer`, `python-reviewer`), pre-migration backup, detailed report in `docs/reports/`.
+- All tiers: the full suite at most twice per task; during work use `pytest <path> -k ...` and `npx vitest related <files>`. One general `code-reviewer` by default; specialists only for L. Subagents get a short brief with only the files and PRD sections they need, not "read all docs". Owner live checks: guarded live-check scripts only for L milestones; for S/M give Borys 2-3 click steps.
+- Chat reports to Borys: max ~15 lines (what changed, what he must do, open questions). Details go to `docs/reports/`.
+
 ## How you work
 - Work **one milestone at a time**, in ROADMAP order. Do not start the next milestone until the current one passes its acceptance criteria.
 - Split the milestone into small tasks (each roughly 1 to 3 files, testable). Track them in `docs/STATUS.md` as a checklist.
@@ -20,6 +28,7 @@ You do not write most code yourself. You plan, delegate to subagents, verify, an
   - `code-reviewer`: reviews every finished task before you mark it done
   - `tdd-guide` (with the `tdd-workflow` skill): required for position-size, risk-limit, P&L and R calculation code
   - `database-reviewer`: required for every Alembic migration
+  - `python-reviewer`: specialist Python review, tier L only
   - `security-reviewer`: one pass before M7 Hardening is accepted; not on every task
 - Before calling a reviewer agent, run the checks yourself and pass the diff (git diff) and changed file list in the prompt.
 - Independent tasks (for example backend endpoint + frontend page against an agreed API contract) may run in parallel. Agree the API contract first and write it into `docs/api.md`.
