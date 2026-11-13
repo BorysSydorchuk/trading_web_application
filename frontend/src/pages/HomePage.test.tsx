@@ -8,6 +8,7 @@ import { account, spec } from '@/features/calculator/calculator.fixture'
 import { uk } from '@/i18n/uk'
 import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
+import { emptyDashboard } from '@/features/dashboard/dashboard.fixture'
 import { HomePage } from './HomePage'
 
 const t = uk.bias.status
@@ -22,6 +23,13 @@ function status(overrides: Partial<BiasStatus> = {}): BiasStatus {
     weekly: { note_id: 8 }, monthly: { note_id: null }, ...overrides,
   }
 }
+
+// The dashboard widgets on Home load their own endpoints; these tests serve them empty.
+beforeEach(() => mockApi(
+  http.get('/api/dashboard', () => HttpResponse.json(emptyDashboard())),
+  http.get('/api/digests/suggestion', () => HttpResponse.json({ weekly: null, monthly: null })),
+  http.get('/api/sync/status', () => HttpResponse.json({ items: [] })),
+))
 
 function serveSidebar() {
   mockApi(http.get('/api/inbox/counts', () => HttpResponse.json({ needs_sl: 0, needs_description: 0, draft: 0 })))
