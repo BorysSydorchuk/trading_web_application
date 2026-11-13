@@ -229,7 +229,7 @@ Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-rev
 - [x] M6-03 [L] (PM ACCEPTED 2026-11-13; full make check on merged main b926c42: 2903+1 skip / 413; code-reviewer + python-reviewer APPROVE, LOW fixes: no "-0.0000", zero-block asserts; make check 2899+1 skip / 413) dashboard API GET /api/dashboard, shared app/domain/period_pnl.py used by the rules engine, services/inbox.count_inbox, branch m6/dashboard-api
 - [x] M6-04 [M] (code-reviewer APPROVE; MEDIUM fixes: PATCH extra=forbid, NaN size; LOWs: whitespace review, config_error tests; final make check 3013+1 skip / 413) digests API + domain extensions, branch m6/digests-api. PM ACCEPTED 2026-11-13
 - [x] M6-04b [S] (code-reviewer APPROVE; make check 3015+1 skip / 413) PM: suggestion = only the latest due period without review, never older ones; older unreviewed -> list badge «не переглянуто» (orchestrator), branch m6/suggestion-latest
-- [ ] M6-05 [M] Home dashboard UI (percent 2 dp in UI, `-0.42%`): limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
+- [x] M6-05 [M] (code-reviewer APPROVE; fixes: silent polls, stale/suggestion error tests, U+2212 minus; final make check 3015+1 skip / 427; owner click check pending) Home dashboard UI (percent 2 dp in UI, `-0.42%`): limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
 - [ ] M6-06 [M] Digests UI (percent 2 dp in UI, `-0.42%`): list, digest page (metrics with red/green, breakdowns, rules, bias, SVG charts), review form + next-period bias note on one screen (frontend-dev), branch m6/digests-ui OPEN (asked PM 2026-11-13): does the list also show due periods without a created digest («не переглянуто»)? Fix test comment test_digests_api.py ~1112 (17:00 CEST, not 16:00). Must open the period from `/digests?kind=&date=` (Home suggestion link).
 - [ ] M6-07 [M] AI summary: `POST /api/digests/{id}/ai-summary` + button (backend-dev, frontend-dev), branch m6/digest-ai
 - [ ] M6-08 [L] QA: fixture week hand-calculated (win rate, total R, P&L, PF, DD), deviation fixture, browser check; owner check on one real week + docs/reports/M6.md
@@ -348,7 +348,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..04 DONE and merged. NEXT: M6-05 Home dashboard UI (frontend-dev), M6-06 Digests UI; PM question on suggestion start pending.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..05 DONE and merged. NEXT: M6-06 Digests UI (PM answer pending: list also shows due periods without a created digest?).
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
