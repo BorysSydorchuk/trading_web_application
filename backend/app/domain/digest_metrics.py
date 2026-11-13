@@ -1,7 +1,8 @@
 """Digest and dashboard metrics (PRD 6.7, 6.9, 6.10; docs/api.md "M6 - Dashboard and digests").
 
-Pure: no DB, no I/O. Decimal only, nothing rounded (rounding happens at the API edge), every
-result a frozen dataclass, inputs are never mutated or reordered.
+Pure: no DB, no I/O. Decimal only, no explicit rounding (default 28-digit Decimal context);
+the API edge quantizes. Every result is a frozen dataclass (mappings are read-only), inputs
+are never mutated or reordered.
 
 Conventions (DECISIONS 2026-11-12):
 - Periods are Brussels calendar dates: week = Monday..Sunday, month = calendar month; a trade
@@ -22,7 +23,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_FLOOR, Decimal
-from typing import Literal
+from types import MappingProxyType
+from typing import Literal, get_args
 from zoneinfo import ZoneInfo
 
 from app.domain.sessions import DEFAULT_TZ, to_local
@@ -34,9 +36,9 @@ R_CLAMP = Decimal(3)
 MIN_NORM_PERIODS = 3
 NORM_WINDOW_WEEKDAYS = 60
 SATURDAY = 5
-PERIOD_KINDS = ("weekly", "monthly")
+type PeriodKind = Literal["weekly", "monthly"]
+PERIOD_KINDS: tuple[str, ...] = get_args(PeriodKind.__value__)
 
-type PeriodKind = str
 type GroupKey = str | int | bool | None
 type Deviation = Literal["worse", "better"]
 
@@ -182,7 +184,7 @@ class EquityPoint:
 @dataclass(frozen=True)
 class EquityCurves:
     combined: tuple[EquityPoint, ...]
-    by_account: dict[int, tuple[EquityPoint, ...]]
+    by_account: Mapping[int, tuple[EquityPoint, ...]]
 
 
 @dataclass(frozen=True)
@@ -203,7 +205,7 @@ class HeatCell:
 # --- periods ---------------------------------------------------------------------------------
 
 
-def _check_kind(kind: PeriodKind) -> None:
+def _check_kind(kind: str) -> None:
     if kind not in PERIOD_KINDS:
         raise ValueError(f"unknown period kind: {kind!r}")
 
@@ -376,9 +378,9 @@ def breakdown(trades: Iterable[DigestTrade], field: str) -> Breakdown:
     return Breakdown(field=field, groups=groups, filled=filled, total=len(items))
 
 
-def breakdowns(trades: Iterable[DigestTrade]) -> dict[str, Breakdown]:
+def breakdowns(trades: Iterable[DigestTrade]) -> Mapping[str, Breakdown]:
     items = tuple(trades)
-    return {f: breakdown(items, f) for f in BREAKDOWN_FIELDS}
+    return MappingProxyType({f: breakdown(items, f) for f in BREAKDOWN_FIELDS})
 
 
 # --- rules and bias --------------------------------------------------------------------------
@@ -497,20 +499,27 @@ def metric_series(
     return tuple(v for v in values if v is not None)
 
 
-def norm_window_start(period_start: date) -> date:
-    """First day of the 60 weekdays (Mon-Fri) immediately before ``period_start``."""
-    day = period_start
+def norm_window_start(kind: PeriodKind, start: date) -> date:
+    """Start of the norm window for the period of ``kind`` beginning on ``start``.
+
+    Counts the 60 weekdays (Mon-Fri) immediately before ``start``, then aligns that day to
+    the start of its own period (Monday / 1st), so the window holds no partial first period.
+    """
+    _check_kind(kind)
+    day = start
     counted = 0
     while counted < NORM_WINDOW_WEEKDAYS:
         day -= timedelta(days=1)
         if day.weekday() < SATURDAY:
             counted += 1
-    return day
+    return period_start(kind, day)
 
 
-def norm_window_trades(trades: Iterable[DigestTrade], period_start: date) -> list[DigestTrade]:
-    start = norm_window_start(period_start)
-    return [t for t in trades if start <= brussels_date(t.close_time) < period_start]
+def norm_window_trades(
+    trades: Iterable[DigestTrade], kind: PeriodKind, start: date
+) -> list[DigestTrade]:
+    window_start = norm_window_start(kind, start)
+    return [t for t in trades if window_start <= brussels_date(t.close_time) < start]
 
 
 # --- charts ----------------------------------------------------------------------------------
@@ -530,12 +539,12 @@ def _curve(origin: datetime, trades: Sequence[DigestTrade]) -> tuple[EquityPoint
     return tuple(points)
 
 
-def equity_curves(trades: Iterable[DigestTrade], period_start: date) -> EquityCurves:
+def equity_curves(trades: Iterable[DigestTrade], start: date) -> EquityCurves:
     ordered = _chronological(trades)
-    origin = _origin(period_start)
+    origin = _origin(start)
     accounts = sorted({t.account_id for t in ordered})
     by_account = {a: _curve(origin, [t for t in ordered if t.account_id == a]) for a in accounts}
-    return EquityCurves(combined=_curve(origin, ordered), by_account=by_account)
+    return EquityCurves(combined=_curve(origin, ordered), by_account=MappingProxyType(by_account))
 
 
 def _bucket_index(r: Decimal) -> int:
