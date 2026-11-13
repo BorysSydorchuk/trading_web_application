@@ -1,6 +1,7 @@
 /**
- * Dashboard display (docs/api.md "## M6"): percents with 2 decimals as `-0.42%`, money 2 dp with
- * the account currency. Rounding is ROUND_HALF_UP on the digits of the API string (no float).
+ * Dashboard display (docs/api.md "## M6"): percents with 2 decimals as `−0.42%`, money 2 dp with
+ * the account currency; the app's U+2212 minus and grouping (same as Journal/Describe).
+ * Rounding is ROUND_HALF_UP on the digits of the API string (no float).
  */
 import { uk } from '@/i18n/uk'
 import { formatDecimal, roundDecimal } from '@/lib/decimal'
@@ -8,9 +9,9 @@ import { addDays } from '@/lib/time'
 
 const d = uk.dashboard
 
-/** "-0.4250" → "-0.43%", "0.0000" → "0.00%", "-0.0040" → "0.00%" (no negative zero). */
+/** "-0.4250" → "−0.43%", "0.0000" → "0.00%", "-0.0040" → "0.00%" (no negative zero). */
 export function formatPct(value: string): string {
-  return `${roundDecimal(value, 2)}${uk.trades.percentSuffix}`
+  return `${formatDecimal(roundDecimal(value, 2))}${uk.trades.percentSuffix}`
 }
 
 /** A limit in percent, or «вимкнено» when the rule is off (`null`). */
@@ -18,9 +19,9 @@ export function formatLimit(value: string | null): string {
   return value === null ? d.limitOff : formatPct(value)
 }
 
-/** "-1234.5" + "USD" → "-1 234.50 USD" (ASCII minus, same as the percents on this screen). */
+/** "-1234.5" + "USD" → "−1 234.50 USD". */
 export function formatAccountMoney(value: string, currency: string): string {
-  return d.money(formatDecimal(roundDecimal(value, 2)).replace('\u2212', '-'), currency)
+  return d.money(formatDecimal(roundDecimal(value, 2)), currency)
 }
 
 function dayMonth(isoDate: string): { day: number; month: number } {

@@ -13,13 +13,14 @@ export const dashboardKeys = {
   suggestion: ['digests', 'suggestion'] as const,
 }
 
-/** Errors: global toast plus the dashboard's own error block (last data stays visible). */
+/** No global toast (polls every 30 s): DashboardOverview shows the error inline and keeps the last data. */
 export function useDashboard() {
   return useQuery({
     queryKey: dashboardKeys.dashboard,
     queryFn: ({ signal }) => apiGet<Dashboard>('/dashboard', { signal }),
     refetchInterval: DASHBOARD_POLL_MS,
     staleTime: DASHBOARD_POLL_MS / 2,
+    meta: { silentError: true },
   })
 }
 

@@ -1,10 +1,12 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SyncStatusRow } from '@/features/sync/api'
 import { uk } from '@/i18n/uk'
+import { createQueryClient } from '@/lib/query-client'
 import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
+import { dashboardKeys } from './api'
 import { dashboardAccount, emptyDashboard, openPosition, periodBlock } from './dashboard.fixture'
 import { DashboardOverview } from './DashboardOverview'
 import type { Dashboard, DigestSuggestion } from './types'
@@ -62,15 +64,15 @@ describe('DashboardOverview', () => {
     renderWithProviders(<DashboardOverview />)
     const card = await screen.findByRole('article', { name: 'FTMO 100k' })
     const today = within(card).getByRole('row', { name: new RegExp(`^${d.accounts.today}`) })
-    expect(within(today).getByText('-425.00 USD')).toHaveClass('text-loss')
-    expect(within(today).getByText('-0.43%')).toBeInTheDocument()
-    expect(within(today).getByText('-3.00%')).toBeInTheDocument()
+    expect(within(today).getByText('−425.00 USD')).toHaveClass('text-loss')
+    expect(within(today).getByText('−0.43%')).toBeInTheDocument()
+    expect(within(today).getByText('−3.00%')).toBeInTheDocument()
     expect(within(today).getByText(d.limitOff)).toBeInTheDocument()
     expect(within(today).getByText(d.accounts.states.ok)).toBeInTheDocument()
     const week = within(card).getByRole('row', { name: new RegExp(`^${d.accounts.week}`) })
     expect(within(week).getByText('1 200.50 USD')).toHaveClass('text-profit')
     expect(within(week).getByText('1.20%')).toBeInTheDocument()
-    expect(within(week).getByText('-6.00%')).toBeInTheDocument()
+    expect(within(week).getByText('−6.00%')).toBeInTheDocument()
     expect(within(week).getByText('10.00%')).toBeInTheDocument()
     expect(within(card).getByText(d.accounts.size('100 000.00 USD'))).toBeInTheDocument()
   })
@@ -149,5 +151,32 @@ describe('DashboardOverview', () => {
     renderWithProviders(<DashboardOverview />)
     await screen.findByText(d.accounts.empty)
     expect(screen.queryByRole('link', { name: d.suggestion.open })).not.toBeInTheDocument()
+  })
+
+  it('keeps the last data with a stale note when a refresh fails, without a global toast', async () => {
+    // The app client (global error toasts on), without retries so the failure shows at once.
+    const queryClient = createQueryClient()
+    queryClient.setDefaultOptions({ queries: { retry: false } })
+    serve(emptyDashboard({ accounts: [dashboardAccount()] }))
+    renderWithProviders(<DashboardOverview />, { queryClient })
+    await screen.findByRole('article', { name: 'FTMO 100k' })
+    mockApi(http.get('/api/dashboard', () => HttpResponse.json({ error: { code: 'internal_error', message: 'boom' } }, { status: 500 })))
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: dashboardKeys.dashboard }) })
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(d.loadError)).toBeInTheDocument()
+    expect(within(alert).getByText(d.staleNote)).toBeInTheDocument()
+    expect(screen.getByRole('article', { name: 'FTMO 100k' })).toBeInTheDocument()
+    // Only the inline block shows the error text: no toast from the poll.
+    expect(screen.getAllByText(uk.errors.internal_error)).toHaveLength(1)
+  })
+
+  it('shows a short note when the digest suggestion fails to load', async () => {
+    mockApi(
+      http.get('/api/dashboard', () => HttpResponse.json(emptyDashboard())),
+      http.get('/api/digests/suggestion', () => HttpResponse.json({}, { status: 500 })),
+    )
+    renderWithProviders(<DashboardOverview />)
+    expect(await screen.findByText(d.suggestion.loadError)).toBeInTheDocument()
+    expect(screen.getByText(d.accounts.empty)).toBeInTheDocument()
   })
 })

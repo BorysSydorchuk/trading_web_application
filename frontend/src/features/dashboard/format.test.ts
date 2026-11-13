@@ -3,9 +3,9 @@ import { digestPath, formatAccountMoney, formatLimit, formatMonth, formatPct, fo
 
 describe('dashboard format', () => {
   it('shows percents with 2 decimals, rounding half up on the digits', () => {
-    expect(formatPct('-0.4200')).toBe('-0.42%')
+    expect(formatPct('-0.4200')).toBe('−0.42%')
     expect(formatPct('0.0000')).toBe('0.00%')
-    expect(formatPct('-0.4250')).toBe('-0.43%')
+    expect(formatPct('-0.4250')).toBe('−0.43%')
     expect(formatPct('0.4249')).toBe('0.42%')
     expect(formatPct('-0.0049')).toBe('0.00%')
     expect(formatPct('1.0050')).toBe('1.01%')
@@ -13,11 +13,11 @@ describe('dashboard format', () => {
 
   it('shows a disabled limit as «вимкнено»', () => {
     expect(formatLimit(null)).toBe('вимкнено')
-    expect(formatLimit('-3.0000')).toBe('-3.00%')
+    expect(formatLimit('-3.0000')).toBe('−3.00%')
   })
 
   it('shows money with 2 decimals, grouping and the currency', () => {
-    expect(formatAccountMoney('-1234.5', 'USD')).toBe('-1 234.50 USD')
+    expect(formatAccountMoney('-1234.5', 'USD')).toBe('−1 234.50 USD')
     expect(formatAccountMoney('0.00', 'EUR')).toBe('0.00 EUR')
   })
 
