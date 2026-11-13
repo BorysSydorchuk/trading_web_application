@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, and_, func, or_, select
+from sqlalchemy import ColumnElement, Date, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config_files import ConfigError, get_journal_fields, get_rules
@@ -26,6 +27,7 @@ from app.errors import ApiError, config_error
 from app.models import Account, BiasEntry, BiasNote, Digest, Trade
 from app.models.enums import AccountStatus, BiasKind, DigestKind
 from app.schemas import digests as schemas
+from app.schemas.dashboard import money_str
 from app.services.digest_snapshot import Json, Scope, SnapshotInput, build_snapshot
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ FRIDAY = 4
 # Journal field types that are not one value per trade (child tables, lists).
 _NON_SCALAR_TYPES = frozenset({"multi_enum", "links"})
 _DAILY_BIAS_KINDS = (BiasKind.PRE_LONDON.value, BiasKind.PRE_NY.value)
+_KINDS: tuple[dm.PeriodKind, ...] = ("weekly", "monthly")
 
 
 # --- time helpers ----------------------------------------------------------------------------
@@ -255,6 +258,7 @@ def _out(db: Session, digest: Digest) -> schemas.DigestOut:
         focus_next=digest.focus_next,
         ai_summary=digest.ai_summary,
         reviewed=_is_reviewed(digest.what_worked, digest.what_to_fix, digest.focus_next),
+        reviewed_at=digest.reviewed_at,
         next_bias_note_id=_next_bias_note_id(db, digest),
         metrics=digest.metrics,
     )
@@ -309,13 +313,29 @@ def get_by_period(db: Session, kind: dm.PeriodKind, day: date) -> schemas.Digest
     return _out(db, digest)
 
 
-def update_review(db: Session, digest_id: int, patch: schemas.DigestPatch) -> schemas.DigestOut:
-    """Set the given review texts; ``""`` / null clears. Snapshot and ai_summary untouched."""
+def _review_texts(digest: Digest) -> tuple[str | None, ...]:
+    return tuple(getattr(digest, name) for name in schemas.REVIEW_FIELDS)
+
+
+def update_review(
+    db: Session, digest_id: int, patch: schemas.DigestPatch, now: datetime
+) -> schemas.DigestOut:
+    """Set the given review texts; ``""`` / null clears. Snapshot and ai_summary untouched.
+
+    ``reviewed_at`` becomes ``now`` when a text changed and one stays non-empty, null when
+    all three are empty, and is kept otherwise (docs/api.md "M6", ``digests.reviewed_at``).
+    """
     digest = _get_or_404(db, digest_id)
+    before = _review_texts(digest)
     for name in schemas.REVIEW_FIELDS:
         if name in patch.model_fields_set:
             value = getattr(patch, name)
             setattr(digest, name, value if value and value.strip() else None)
+    after = _review_texts(digest)
+    if not _is_reviewed(*after):
+        digest.reviewed_at = None
+    elif after != before:
+        digest.reviewed_at = now
     db.commit()
     return _out(db, digest)
 
@@ -325,8 +345,8 @@ def _summary_value(block: Mapping[str, Any], name: str, default: Any) -> Any:
     return entry.get("value", default) if isinstance(entry, Mapping) else default
 
 
-def list_digests(db: Session, kind: dm.PeriodKind | None) -> schemas.DigestList:
-    """Newest period first; the summary numbers come from the snapshot (one query)."""
+def _created_items(db: Session, kind: dm.PeriodKind | None) -> list[schemas.DigestListItem]:
+    """Created digests, newest period first; summary numbers from the snapshot (one query)."""
     query = select(
         Digest.id,
         Digest.kind,
@@ -336,6 +356,7 @@ def list_digests(db: Session, kind: dm.PeriodKind | None) -> schemas.DigestList:
         Digest.what_worked,
         Digest.what_to_fix,
         Digest.focus_next,
+        Digest.reviewed_at,
         Digest.metrics["combined"]["metrics"].label("summary"),
     ).order_by(Digest.period_start.desc(), Digest.id.desc())
     if kind is not None:
@@ -356,9 +377,68 @@ def list_digests(db: Session, kind: dm.PeriodKind | None) -> schemas.DigestList:
                 total_r=_summary_value(summary, "total_r", "0.0000"),
                 win_rate=_summary_value(summary, "win_rate", None),
                 reviewed=_is_reviewed(row.what_worked, row.what_to_fix, row.focus_next),
+                reviewed_at=row.reviewed_at,
             )
         )
-    return schemas.DigestList(items=items)
+    return items
+
+
+def _closed_by_day(db: Session) -> list[tuple[date, int, Decimal]]:
+    """(Brussels close date, closed trades, net P&L) of non-archived accounts, one grouped query."""
+    day = cast(func.timezone(DEFAULT_TZ, Trade.close_time), Date).label("day")
+    rows = db.execute(
+        select(day, func.count(Trade.id), func.sum(Trade.net_pnl))
+        .join(Account, Account.id == Trade.account_id)
+        .where(_not_archived(), _closed())
+        .group_by(day)
+    )
+    return [(d, int(n), total or Decimal(0)) for d, n, total in rows]
+
+
+def _virtual_items(
+    db: Session, kinds: Sequence[dm.PeriodKind], today: date, created: set[tuple[str, date]]
+) -> list[schemas.DigestListItem]:
+    """Started periods with >= 1 closed trade and no created digest (``id`` null)."""
+    totals: dict[tuple[dm.PeriodKind, date], tuple[int, Decimal]] = {}
+    for day, count, net in _closed_by_day(db):
+        for kind in kinds:
+            key = (kind, dm.period_start(kind, day))
+            n, total = totals.get(key, (0, Decimal(0)))
+            totals[key] = (n + count, total + net)
+    return [
+        schemas.DigestListItem(
+            id=None,
+            kind=kind,
+            period_start=start,
+            period_end=dm.period_end(kind, start),
+            generated_at=None,
+            trades=count,
+            net_pnl=money_str(net),
+            net_pnl_pct=None,
+            total_r=None,
+            win_rate=None,
+            reviewed=False,
+            reviewed_at=None,
+        )
+        for (kind, start), (count, net) in totals.items()
+        if start <= today and (kind, start) not in created
+    ]
+
+
+def list_digests(db: Session, kind: dm.PeriodKind | None, now: datetime) -> schemas.DigestList:
+    """Created digests merged with virtual rows; newest period first, created before virtual."""
+    created = _created_items(db, kind)
+    kinds = _KINDS if kind is None else (kind,)
+    done = {(item.kind, item.period_start) for item in created}
+    virtual = _virtual_items(db, kinds, dm.brussels_date(now), done)
+    virtual.sort(key=lambda item: (item.period_start, item.kind), reverse=True)
+    # stable sort: created rows keep their order and stay ahead of virtual ones on a tie
+    merged = sorted(
+        [*created, *virtual],
+        key=lambda item: (item.period_start, item.id is not None),
+        reverse=True,
+    )
+    return schemas.DigestList(items=merged)
 
 
 # --- suggestion ------------------------------------------------------------------------------

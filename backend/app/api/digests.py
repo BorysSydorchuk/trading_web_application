@@ -30,9 +30,11 @@ def create_digest(
 
 @router.get("", response_model=schemas.DigestList)
 def list_digests(
-    kind: schemas.DigestKindIn | None = None, db: Session = Depends(get_db)
+    kind: schemas.DigestKindIn | None = None,
+    db: Session = Depends(get_db),
+    now: datetime = Depends(utc_now),
 ) -> schemas.DigestList:
-    return service.list_digests(db, kind)
+    return service.list_digests(db, kind, now)
 
 
 # Static paths before "/{digest_id}" so they are not read as an id.
@@ -57,6 +59,9 @@ def get_digest(digest_id: int, db: Session = Depends(get_db)) -> schemas.DigestO
 
 @router.patch("/{digest_id}", response_model=schemas.DigestOut)
 def patch_digest(
-    digest_id: int, body: schemas.DigestPatch, db: Session = Depends(get_db)
+    digest_id: int,
+    body: schemas.DigestPatch,
+    db: Session = Depends(get_db),
+    now: datetime = Depends(utc_now),
 ) -> schemas.DigestOut:
-    return service.update_review(db, digest_id, body)
+    return service.update_review(db, digest_id, body, now)

@@ -47,12 +47,15 @@ class DigestOut(BaseModel):
     focus_next: str | None
     ai_summary: str | None
     reviewed: bool
+    reviewed_at: UtcDatetime | None
     next_bias_note_id: int | None
     metrics: dict[str, Any]
 
 
 class DigestListItem(BaseModel):
-    id: int
+    """A created digest, or a virtual row (``id`` null) for a period with trades and no digest."""
+
+    id: int | None
     kind: str
     period_start: date
     period_end: date
@@ -60,9 +63,10 @@ class DigestListItem(BaseModel):
     trades: int
     net_pnl: str
     net_pnl_pct: str | None
-    total_r: str
+    total_r: str | None
     win_rate: str | None
     reviewed: bool
+    reviewed_at: UtcDatetime | None
 
 
 class DigestList(BaseModel):

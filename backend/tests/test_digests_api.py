@@ -800,7 +800,7 @@ def test_list_is_newest_first_filtered_by_kind_with_summary_numbers(
     item = weekly[0]
     assert set(item) == {
         "id", "kind", "period_start", "period_end", "generated_at", "trades", "net_pnl",
-        "net_pnl_pct", "total_r", "win_rate", "reviewed",
+        "net_pnl_pct", "total_r", "win_rate", "reviewed", "reviewed_at",
     }  # fmt: skip
     assert (item["trades"], item["net_pnl"], item["net_pnl_pct"]) == (6, "400.00", "1.3333")
     assert (item["total_r"], item["win_rate"], item["reviewed"]) == ("3.0000", "50.0000", False)
@@ -1109,7 +1109,7 @@ def test_three_unreviewed_past_weeks_suggest_only_the_latest(
     trade_on(session, "2026-10-05")
     trade_on(session, "2026-10-13")
     trade_on(session, "2026-10-20")
-    set_now(datetime(2026, 10, 23, 15, 0, tzinfo=UTC))  # Fri 16:00 Brussels (CEST ended Oct 25)
+    set_now(datetime(2026, 10, 23, 15, 0, tzinfo=UTC))  # Fri 17:00 Brussels (CEST until Oct 25)
 
     assert weekly_of(client) == "2026-10-19"
 
