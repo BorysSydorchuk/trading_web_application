@@ -35,9 +35,16 @@ interface ActionsArgs {
   unsentRecordingRef: RefObject<boolean>
   /** A note was created on this page (for voice, or by a save that stays): the page keeps this editor. */
   onCreated: (note: BiasNote) => void
+  /** Set when the editor is embedded in another screen (digest): saves and deletes stay on that screen. */
+  embedded?: EmbeddedBiasCallbacks
 }
 
-export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCreated }: ActionsArgs) {
+export interface EmbeddedBiasCallbacks {
+  onSaved: (note: BiasNote) => void
+  onDeleted: () => void
+}
+
+export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCreated, embedded }: ActionsArgs) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const save = useSaveBiasNote()
@@ -72,6 +79,7 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
     setNoteId(note.id)
     queryClient.setQueryData(biasKeys.detail(note.id), note)
     onCreated(note)
+    if (embedded) return
     allowLeaveRef.current = true
     void Promise.resolve(navigate(`${LIST_PATH}/${note.id}`, { replace: true })).finally(() => {
       allowLeaveRef.current = false
@@ -151,6 +159,12 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
     if (id === null) void trackCreate(request).catch(() => undefined)
     try {
       const note = await request
+      if (embedded) {
+        form.markSaved()
+        toast(e.saved, { id: 'bias-saved-embedded' })
+        embedded.onSaved(note)
+        return
+      }
       // Checked when the save lands: the upload may have finished or failed meanwhile.
       if (!unsentRecordingRef.current) return leaveToList(e.saved)
       if (id === null) adopt(note)
@@ -172,8 +186,13 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
     remove.mutate(id, {
       onSuccess: () => {
         onDone()
-        allowLeaveRef.current = true
         toast(e.deleted)
+        if (embedded) {
+          queryClient.removeQueries({ queryKey: biasKeys.detail(id) })
+          embedded.onDeleted()
+          return
+        }
+        allowLeaveRef.current = true
         // Dropped once the editor is gone, so the deleted note is not refetched (404) meanwhile.
         void Promise.resolve(navigate(LIST_PATH)).then(() => queryClient.removeQueries({ queryKey: biasKeys.detail(id) }))
       },
