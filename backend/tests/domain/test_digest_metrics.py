@@ -5,8 +5,8 @@ result type a frozen dataclass, inputs never mutated. Public API (what these tes
 
 Input
 - ``DigestTrade(id, account_id, symbol, close_time, net_pnl, r_multiple, session=None,
-  hour=None, weekday=None, entry_model=None, poi_type=None, bias_alignment=None,
-  followed_plan=None, emotion_before=None, violations=())`` frozen. ``close_time`` aware UTC,
+  hour=None, weekday=None, bias_alignment=None, journal={}, violations=())`` frozen.
+  ``close_time`` aware UTC,
   ``net_pnl`` Decimal, ``r_multiple`` Decimal | None, ``bias_alignment`` is the EFFECTIVE value
   ("aligned" | "counter" | other | None), ``hour`` Brussels hour of open, ``weekday`` 0..6,
   ``violations`` tuple of rule keys (a key may repeat within one trade).
@@ -27,12 +27,12 @@ Metrics
   Empty: counts 0, net_pnl/total_r/max_drawdown 0, every ratio and trade None.
 
 Breakdowns
-- ``BREAKDOWN_FIELDS`` = ("symbol", "session", "hour", "weekday", "entry_model", "poi_type",
-  "bias_alignment", "followed_plan", "emotion_before").
+- ``TRADE_BREAKDOWN_FIELDS`` = ("symbol", "session", "hour", "weekday", "bias_alignment")
+  (M6-04: the journal fields come from journal_fields.yaml, see test_digest_metrics_m604.py).
 - ``breakdown(trades, field) -> Breakdown(field, groups, filled, total)``;
   ``BreakdownGroup(key, trades, net_pnl, total_r, win_rate)``, a None field value is key None,
   groups sorted by key with None last; ``filled`` = trades whose field is not None.
-- ``breakdowns(trades) -> dict[str, Breakdown]`` for all BREAKDOWN_FIELDS.
+- ``breakdowns(trades) -> Mapping[str, Breakdown]`` for all TRADE_BREAKDOWN_FIELDS.
 
 Rules and bias
 - ``rule_section(trades) -> RuleSection(rules, violated_trades, violated_pnl)``;
@@ -79,9 +79,9 @@ from typing import Any
 import pytest
 
 from app.domain.digest_metrics import (
-    BREAKDOWN_FIELDS,
     HIGHER_IS_BETTER,
     LOWER_IS_BETTER,
+    TRADE_BREAKDOWN_FIELDS,
     DigestTrade,
     bias_section,
     breakdown,
@@ -117,9 +117,13 @@ def trade(
     account: int = 1,
     **kw: Any,
 ) -> DigestTrade:
+    # M6-04: the four legacy journal kwargs now live in the generic ``journal`` mapping.
+    legacy = ("entry_model", "poi_type", "followed_plan", "emotion_before")
+    journal = {k: kw.pop(k) for k in legacy if k in kw}
     return DigestTrade(
         id=tid,
         account_id=account,
+        journal=journal,
         symbol=kw.pop("symbol", "XAUUSD"),
         close_time=when or utc(3, 2, 9),
         net_pnl=D(pnl),
@@ -412,7 +416,7 @@ def test_symbol_breakdown_groups_sorted_by_key() -> None:
 
 
 def test_entry_model_breakdown_has_a_none_group_last_and_coverage() -> None:
-    b = breakdown(week(), "entry_model")
+    b = breakdown(week(), "entry_model", journal=True)
     assert [g.key for g in b.groups] == ["FVG", "OB", None]
     fvg, ob, empty = b.groups
     assert (fvg.trades, fvg.net_pnl, fvg.total_r, fvg.win_rate) == (2, D("200"), D("2"), D("50"))
@@ -434,7 +438,7 @@ def test_breakdown_of_booleans_hours_and_weekdays() -> None:
     by_hour = {g.key: g for g in breakdown(trades, "hour").groups}
     assert set(by_hour) == {9, 14, None}
     assert by_hour[9].net_pnl == D("5") and by_hour[9].trades == 2  # noqa: PT018
-    by_plan = {g.key: g for g in breakdown(trades, "followed_plan").groups}
+    by_plan = {g.key: g for g in breakdown(trades, "followed_plan", journal=True).groups}
     assert by_plan[True].net_pnl == D("30") and by_plan[False].net_pnl == D("-5")  # noqa: PT018
     assert by_plan[None].trades == 1
     assert (breakdown(trades, "weekday").filled, breakdown(trades, "weekday").total) == (3, 4)
@@ -442,8 +446,8 @@ def test_breakdown_of_booleans_hours_and_weekdays() -> None:
 
 def test_breakdowns_covers_every_field_and_rejects_unknown_ones() -> None:
     result = breakdowns(week())
-    assert tuple(result) == BREAKDOWN_FIELDS
-    assert all(result[f].total == 8 for f in BREAKDOWN_FIELDS)
+    assert tuple(result) == TRADE_BREAKDOWN_FIELDS
+    assert all(result[f].total == 8 for f in TRADE_BREAKDOWN_FIELDS)
     with pytest.raises(ValueError):  # noqa: PT011
         breakdown(week(), "net_pnl")
 
