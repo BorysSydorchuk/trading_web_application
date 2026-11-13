@@ -103,7 +103,8 @@ def open_position(session: Session, account: Account, **kw: Any) -> Trade:
 def dashboard(client: TestClient) -> dict[str, Any]:
     response = client.get("/api/dashboard")
     assert response.status_code == 200, response.text
-    return response.json()
+    body: dict[str, Any] = response.json()
+    return body
 
 
 def by_name(data: dict[str, Any], name: str) -> dict[str, Any]:
