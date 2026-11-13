@@ -1102,22 +1102,47 @@ def test_saving_any_review_field_removes_the_suggestion(
     assert weekly_of(client) is None
 
 
-def test_oldest_unreviewed_week_is_suggested_first_then_the_next(
+def test_three_unreviewed_past_weeks_suggest_only_the_latest(
+    client: TestClient, session: Session, set_now: Callable[..., None]
+) -> None:
+    # PM 2026-11-13: the reminder never walks back through older periods.
+    trade_on(session, "2026-10-05")
+    trade_on(session, "2026-10-13")
+    trade_on(session, "2026-10-20")
+    set_now(datetime(2026, 10, 23, 15, 0, tzinfo=UTC))  # Fri 16:00 Brussels (CEST ended Oct 25)
+
+    assert weekly_of(client) == "2026-10-19"
+
+
+def test_latest_reviewed_means_no_reminder_and_older_unreviewed_show_in_the_list(
     client: TestClient, session: Session, set_now: Callable[..., None]
 ) -> None:
     trade_on(session, "2026-10-05")
     trade_on(session, "2026-10-13")
     trade_on(session, "2026-10-20")
-    set_now(datetime(2026, 10, 23, 15, 0, tzinfo=UTC))  # Fri 16:00 Brussels (CEST ended Oct 25)
-    assert weekly_of(client) == "2026-10-05"
+    set_now(datetime(2026, 10, 23, 15, 0, tzinfo=UTC))
+    digest(client, "weekly", "2026-10-05")
+    digest(client, "weekly", "2026-10-12")
+    latest = digest(client, "weekly", "2026-10-19")
 
-    first = digest(client, "weekly", "2026-10-05")
-    client.patch(f"/api/digests/{first['id']}", json={"focus_next": "ok"})
-    assert weekly_of(client) == "2026-10-12"
+    client.patch(f"/api/digests/{latest['id']}", json={"focus_next": "ok"})
 
-    second = digest(client, "weekly", "2026-10-12")
-    client.patch(f"/api/digests/{second['id']}", json={"focus_next": "ok"})
-    assert weekly_of(client) == "2026-10-19"
+    assert weekly_of(client) is None
+    items = client.get("/api/digests?kind=weekly").json()["items"]
+    reviewed = {item["period_start"]: item["reviewed"] for item in items}
+    assert reviewed == {"2026-10-19": True, "2026-10-12": False, "2026-10-05": False}
+
+
+def test_a_new_week_replaces_an_unreviewed_older_week_in_the_reminder(
+    client: TestClient, session: Session, set_now: Callable[..., None]
+) -> None:
+    trade_on(session, "2026-11-02")
+    set_now(datetime(2026, 11, 10, 9, 0, tzinfo=UTC))  # Tuesday: week of Nov 9 not due yet
+    assert weekly_of(client) == "2026-11-02"
+
+    set_now(datetime(2026, 11, 13, 15, 0, tzinfo=UTC))  # Fri Nov 13 16:00 Brussels
+
+    assert weekly_of(client) == "2026-11-09"
 
 
 def test_nothing_is_suggested_for_periods_before_the_first_closed_trade(
@@ -1163,7 +1188,7 @@ def test_monthly_last_weekday_skips_the_weekend_at_month_end(
     assert suggestion(client)["monthly"] is None
     set_now(datetime(2026, 10, 30, 15, 0, tzinfo=UTC))  # Friday 16:00 (CET again)
     assert suggestion(client)["monthly"] == {"period_start": "2026-10-01"}
-    assert weekly_of(client) == "2026-10-05"  # oldest unreviewed week, not the current one
+    assert weekly_of(client) == "2026-10-26"  # latest due week, never an older one
 
 
 def test_monthly_persists_into_the_next_month_until_reviewed(
