@@ -19,13 +19,12 @@ from tests.test_digests_api import (  # noqa: F401  (fixtures are used by name)
     WEEK,
     _clean,
     accounts,
-    add_account,
     closed,
     digest,
     session,
     set_now,
 )
-from tests.test_trades_api import add_trade
+from tests.test_trades_api import add_account, add_trade
 
 VIRTUAL_KEYS = {
     "id", "kind", "period_start", "period_end", "generated_at", "trades", "net_pnl",

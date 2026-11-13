@@ -81,7 +81,7 @@ def test_upgrade_backfills_reviewed_at_only_for_non_empty_reviews(db_engine: Eng
         command.upgrade(cfg, "head")
 
         with db_engine.connect() as conn:
-            rows = dict(
+            rows: dict[int, datetime | None] = dict(
                 conn.execute(
                     text("SELECT extract(day FROM period_start)::int, reviewed_at FROM digests")
                 ).all()
