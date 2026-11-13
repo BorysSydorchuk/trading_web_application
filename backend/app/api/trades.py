@@ -21,11 +21,12 @@ from app.domain.sessions import DEFAULT_TZ
 from app.domain.trade_builder import next_status
 from app.errors import ApiError, config_error
 from app.models import Account, RuleViolation, SymbolSpec, Trade
-from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
+from app.models.enums import Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
 from app.services.bias_alignment import alignment_settings, lookup_for, trade_bias
 from app.services.fx_values import stored_spec_tick_values
+from app.services.inbox import count_inbox
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
@@ -33,8 +34,6 @@ from app.services.trade_rules import recompute_rules_for_trade
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["trades"])
-
-INBOX_STATUSES = (TradeStatus.NEEDS_SL, TradeStatus.NEEDS_DESCRIPTION, TradeStatus.DRAFT)
 
 _ROW_EXTRA = {"account_name", "violations", "bias_alignment"}
 _DETAIL_EXTRA = _ROW_EXTRA | {
@@ -373,18 +372,4 @@ def put_journal(
 @router.get("/inbox/counts", response_model=schemas.InboxCounts)
 def inbox_counts(db: Session = Depends(get_db)) -> schemas.InboxCounts:
     """Trades waiting for the user, on accounts that are not archived."""
-    rows = db.execute(
-        select(Trade.status, func.count())
-        .join(Account, Account.id == Trade.account_id)
-        .where(
-            Account.status != AccountStatus.ARCHIVED.value,
-            Trade.status.in_([s.value for s in INBOX_STATUSES]),
-        )
-        .group_by(Trade.status)
-    )
-    counts: dict[str, int] = {row[0]: row[1] for row in rows}
-    return schemas.InboxCounts(
-        needs_sl=counts.get(TradeStatus.NEEDS_SL.value, 0),
-        needs_description=counts.get(TradeStatus.NEEDS_DESCRIPTION.value, 0),
-        draft=counts.get(TradeStatus.DRAFT.value, 0),
-    )
+    return count_inbox(db)

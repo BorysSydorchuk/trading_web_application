@@ -26,13 +26,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.config_files.rules import RulesConfig
-from app.domain.sessions import OUTSIDE, to_local
+from app.domain.period_pnl import PeriodExtremes, local_day, period_extremes, week_start
+from app.domain.sessions import OUTSIDE
 
-HUNDRED = Decimal(100)
 PCT_Q = Decimal("0.01")
 
 
@@ -74,24 +74,15 @@ def _fmt(value: Decimal) -> str:
 
 
 def _local_day(dt: datetime, tz: str) -> date:
-    return to_local(dt, tz).date()
+    return local_day(dt, tz)
 
 
 def _week_start(dt: datetime, tz: str) -> date:
-    day = _local_day(dt, tz)
-    return day - timedelta(days=day.weekday())
+    return week_start(dt, tz)
 
 
 def _others(trade: RuleTradeInput, context: Iterable[RuleTradeInput]) -> list[RuleTradeInput]:
     return [t for t in context if t.key != trade.key and t.account_id == trade.account_id]
-
-
-@dataclass(frozen=True)
-class _PeriodExtremes:
-    low_pnl: Decimal
-    low_pct: Decimal
-    high_pnl: Decimal
-    high_pct: Decimal
 
 
 def _period_stop(
@@ -99,35 +90,20 @@ def _period_stop(
     others: list[RuleTradeInput],
     tz: str,
     weekly: bool,
-) -> _PeriodExtremes | None:
+) -> PeriodExtremes | None:
     """Lowest/highest running closed P&L of the period before entry (sticky stops).
 
     Trades closed in the period before this entry are replayed in (close_time, key) order;
     the running P&L is taken as % of the entering trade's account size.
     """
-    size = trade.account_size
-    if size is None or not size.is_finite() or size <= 0:
-        return None
-    period = _week_start if weekly else _local_day
-    start_key = period(trade.open_time, tz)
-    closed = sorted(
-        (
-            t
-            for t in others
-            if t.close_time is not None
-            and t.net_pnl is not None
-            and t.close_time < trade.open_time
-            and period(t.close_time, tz) == start_key
-        ),
-        key=lambda t: (t.close_time, t.key),
+    period = week_start if weekly else local_day
+
+    def key_fn(dt: datetime) -> date:
+        return period(dt, tz)
+
+    return period_extremes(
+        others, key_fn, key_fn(trade.open_time), trade.account_size, before=trade.open_time
     )
-    pnls = [t.net_pnl for t in closed if t.net_pnl is not None]
-    running = low = high = Decimal(0)
-    for pnl in pnls:
-        running += pnl
-        low = min(low, running)
-        high = max(high, running)
-    return _PeriodExtremes(low, low / size * HUNDRED, high, high / size * HUNDRED)
 
 
 def _near(a: Decimal, b: Decimal, tick: Decimal | None) -> bool:

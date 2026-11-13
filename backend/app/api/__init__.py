@@ -9,6 +9,7 @@ from app.api import (
     bias,
     calculator,
     config_files,
+    dashboard,
     health,
     sync_status,
     trades,
@@ -24,5 +25,6 @@ api_router.include_router(ai.router)
 api_router.include_router(audio.router)
 api_router.include_router(bias.router)
 api_router.include_router(calculator.router)
+api_router.include_router(dashboard.router)
 
 __all__ = ["api_router"]
