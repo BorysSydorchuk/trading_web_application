@@ -381,19 +381,22 @@ def _next_start(kind: dm.PeriodKind, start: date) -> date:
     return dm.period_end(kind, start) + timedelta(days=1)
 
 
-def _oldest_unreviewed(
+def _latest_unreviewed(
     kind: dm.PeriodKind, first: date, now: datetime, reviewed: set[tuple[str, date]]
 ) -> schemas.PeriodRef | None:
+    """The latest due period, if it has no review; older periods never come back (PM)."""
     start = dm.period_start(kind, first)
+    latest: date | None = None
     while now >= _due(kind, start):
-        if (kind, start) not in reviewed:
-            return schemas.PeriodRef(period_start=start)
+        latest = start
         start = _next_start(kind, start)
-    return None
+    if latest is None or (kind, latest) in reviewed:
+        return None
+    return schemas.PeriodRef(period_start=latest)
 
 
 def suggestion(db: Session, now: datetime) -> schemas.DigestSuggestion:
-    """Oldest due period of each kind (from the first closed trade on) without a review."""
+    """Latest due period of each kind (from the first closed trade on) when it has no review."""
     first_close = db.scalar(
         select(func.min(Trade.close_time))
         .join(Account, Account.id == Trade.account_id)
@@ -412,6 +415,6 @@ def suggestion(db: Session, now: datetime) -> schemas.DigestSuggestion:
     }
     first = dm.brussels_date(first_close)
     return schemas.DigestSuggestion(
-        weekly=_oldest_unreviewed("weekly", first, now, reviewed),
-        monthly=_oldest_unreviewed("monthly", first, now, reviewed),
+        weekly=_latest_unreviewed("weekly", first, now, reviewed),
+        monthly=_latest_unreviewed("monthly", first, now, reviewed),
     )
