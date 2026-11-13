@@ -13,7 +13,7 @@ const TD = 'px-3 py-1 whitespace-nowrap'
 const NUM = `${TD} num text-right`
 
 /** Violations per rule with their signed P&L cost, plus the distinct-trades total line. */
-export function RulesTable({ rules }: { rules: RulesSection }) {
+export function RulesTable({ rules, currency }: { rules: RulesSection; currency: string | null }) {
   const ruleLabel = useViolationLabel()
   return (
     <section aria-labelledby="digest-rules" className="flex flex-col gap-2">
@@ -28,7 +28,7 @@ export function RulesTable({ rules }: { rules: RulesSection }) {
                 <th scope="col" className={`${TH} text-left`}>{r.rule}</th>
                 <th scope="col" className={`${TH} text-right`}>{r.violations}</th>
                 <th scope="col" className={`${TH} text-right`}>{r.trades}</th>
-                <th scope="col" className={`${TH} text-right`}>{r.pnl}</th>
+                <th scope="col" className={`${TH} text-right`}>{uk.digests.withCurrency(r.pnl, currency)}</th>
               </tr>
             </thead>
             <tbody>
@@ -55,21 +55,21 @@ export function RulesTable({ rules }: { rules: RulesSection }) {
 }
 
 /** Daily / weekly / monthly bias: accuracy of the marked entries and aligned vs counter trades. */
-export function BiasSummary({ bias }: { bias: Partial<Record<BiasScopeName, BiasScope>> }) {
+export function BiasSummary({ bias, currency }: { bias: Partial<Record<BiasScopeName, BiasScope>>; currency: string | null }) {
   return (
     <section aria-labelledby="digest-bias" className="flex flex-col gap-2">
       <h2 id="digest-bias" className="text-sm font-semibold">{bi.title}</h2>
       <div className="grid gap-3 md:grid-cols-3">
         {BIAS_SCOPES.map((scope) => {
           const data = bias[scope]
-          return data ? <BiasScopeCard key={scope} title={bi.scopes[scope]} scope={data} /> : null
+          return data ? <BiasScopeCard key={scope} title={bi.scopes[scope]} scope={data} currency={currency} /> : null
         })}
       </div>
     </section>
   )
 }
 
-function BiasScopeCard({ title, scope }: { title: string; scope: BiasScope }) {
+function BiasScopeCard({ title, scope, currency }: { title: string; scope: BiasScope; currency: string | null }) {
   const { accuracy } = scope
   return (
     <article aria-label={title} className="flex flex-col gap-2 rounded-lg border p-3">
@@ -84,7 +84,7 @@ function BiasScopeCard({ title, scope }: { title: string; scope: BiasScope }) {
           <tr>
             <th scope="col" className={`${TH} pl-0 text-left`}>{bi.side}</th>
             <th scope="col" className={`${TH} text-right`}>{bi.trades}</th>
-            <th scope="col" className={`${TH} text-right`}>{bi.netPnl}</th>
+            <th scope="col" className={`${TH} text-right`}>{uk.digests.withCurrency(bi.netPnl, currency)}</th>
             <th scope="col" className={`${TH} pr-0 text-right`}>{bi.totalR}</th>
           </tr>
         </thead>

@@ -43,6 +43,7 @@ export function fixtureDigest(overrides: Partial<Digest> = {}): Digest {
     focus_next: null,
     ai_summary: null,
     reviewed: false,
+    reviewed_at: null,
     next_bias_note_id: null,
     metrics: {
       currency: 'USD',

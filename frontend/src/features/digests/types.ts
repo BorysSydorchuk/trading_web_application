@@ -164,6 +164,8 @@ export interface Digest {
   focus_next: string | null
   ai_summary: string | null
   reviewed: boolean
+  /** UTC ISO or null. */
+  reviewed_at: string | null
   next_bias_note_id: number | null
   metrics: DigestSnapshot
 }

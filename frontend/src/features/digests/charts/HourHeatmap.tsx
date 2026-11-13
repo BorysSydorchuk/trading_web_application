@@ -12,9 +12,27 @@ const TOP = 16
 const WORKDAYS = [0, 1, 2, 3, 4]
 const MIN_OPACITY = 0.15
 
+function cellText(cell: HeatCell): string {
+  return c.cell(weekdayLabel(cell.weekday), String(cell.hour).padStart(2, '0'), cell.trades, formatSignedMoney(cell.net_pnl))
+}
+
+/** Best and worst cell by P&L (geometry-grade comparison; the texts use the API strings). */
+function extremes(cells: readonly HeatCell[]): { best: HeatCell; worst: HeatCell } | null {
+  const [first, ...rest] = cells
+  if (!first) return null
+  let best = first
+  let worst = first
+  for (const cell of rest) {
+    if (Number(cell.net_pnl) > Number(best.net_pnl)) best = cell
+    if (Number(cell.net_pnl) < Number(worst.net_pnl)) worst = cell
+  }
+  return { best, worst }
+}
+
 /** Weekday × Brussels hour of open: trade count in the cell, colour by P&L sign and size. */
 export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
-  if (cells.length === 0) return <ChartEmpty title={c.heatmap} />
+  const ends = extremes(cells)
+  if (!ends) return <ChartEmpty title={c.heatmap} />
   const weekdays = [...new Set([...WORKDAYS, ...cells.map((cell) => cell.weekday)])].sort((a, b) => a - b)
   const hourValues = cells.map((cell) => cell.hour)
   const minHour = Math.min(...hourValues)
@@ -28,7 +46,7 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
         <span className="font-medium">{c.heatmap}</span>
         <span className="text-muted-foreground">{c.timeZoneNote}</span>
       </figcaption>
-      <svg role="img" aria-label={c.heatmap} viewBox={`0 0 ${width} ${height}`} className="w-full max-w-xl rounded-md border bg-muted/10">
+      <svg role="img" aria-label={c.heatmapSummary(cellText(ends.best), cellText(ends.worst))} viewBox={`0 0 ${width} ${height}`} className="w-full max-w-xl rounded-md border bg-muted/10">
         {hours.map((hour, i) => (
           <text key={hour} x={LEFT + i * CELL + CELL / 2} y={TOP - 4} textAnchor="middle" className="num fill-muted-foreground text-[9px]">
             {String(hour).padStart(2, '0')}
@@ -44,10 +62,9 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
           const col = cell.hour - minHour
           const sign = decimalSign(cell.net_pnl)
           const opacity = MIN_OPACITY + (1 - MIN_OPACITY) * (Math.abs(Number(cell.net_pnl)) / maxAbs)
-          const hour = String(cell.hour).padStart(2, '0')
           return (
             <g key={`${cell.weekday}-${cell.hour}`} data-cell={`${cell.weekday}-${cell.hour}`}>
-              <title>{c.cell(weekdayLabel(cell.weekday), hour, cell.trades, formatSignedMoney(cell.net_pnl))}</title>
+              <title>{cellText(cell)}</title>
               <rect
                 x={LEFT + col * CELL + 1}
                 y={TOP + row * CELL + 1}

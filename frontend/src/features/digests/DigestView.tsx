@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
@@ -6,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
 import { DigestCharts } from './charts/DigestCharts'
-import { formatPeriod } from './format'
+import { formatDateBrussels, formatPeriod } from './format'
 import { MetricBlockCard } from './MetricBlockCard'
 import { NextPeriodBias } from './NextPeriodBias'
 import { ReviewForm } from './ReviewForm'
@@ -18,6 +19,7 @@ const p = uk.digests.page
 /** The full digest: header, metric blocks, breakdowns, rules, bias, charts, review and next-period bias. */
 export function DigestView({ digest }: { digest: Digest }) {
   const snapshot = digest.metrics
+  const [reviewDirty, setReviewDirty] = useState(false)
   return (
     <div className="flex flex-col gap-6">
       <DigestHeader digest={digest} />
@@ -28,21 +30,26 @@ export function DigestView({ digest }: { digest: Digest }) {
         </section>
       )}
       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-        <MetricBlockCard title={uk.digests.blocks.combined} block={snapshot.combined} />
+        <MetricBlockCard title={uk.digests.blocks.combined} block={snapshot.combined} currency={snapshot.currency} />
         {snapshot.by_account.map((block) => (
-          <MetricBlockCard key={block.account_id} title={block.account_name} block={block} />
+          <MetricBlockCard key={block.account_id} title={block.account_name} block={block} currency={snapshot.currency} />
         ))}
       </div>
       <DigestCharts snapshot={snapshot} />
-      <BreakdownTables breakdowns={snapshot.breakdowns} />
+      <BreakdownTables breakdowns={snapshot.breakdowns} currency={snapshot.currency} />
       <div className="grid gap-6 xl:grid-cols-2">
-        <RulesTable rules={snapshot.rules} />
-        <BiasSummary bias={snapshot.bias} />
+        <RulesTable rules={snapshot.rules} currency={snapshot.currency} />
+        <BiasSummary bias={snapshot.bias} currency={snapshot.currency} />
       </div>
-      <ReviewForm key={digest.id} digest={digest} />
-      <NextPeriodBias digest={digest} />
+      <ReviewForm key={digest.id} digest={digest} onDirtyChange={setReviewDirty} />
+      <NextPeriodBias digest={digest} reviewDirty={reviewDirty} />
     </div>
   )
+}
+
+function reviewedText(digest: Digest): string {
+  if (!digest.reviewed) return p.notReviewed
+  return digest.reviewed_at ? p.reviewedOn(formatDateBrussels(digest.reviewed_at)) : p.reviewed
 }
 
 function DigestHeader({ digest }: { digest: Digest }) {
@@ -56,7 +63,7 @@ function DigestHeader({ digest }: { digest: Digest }) {
           digest.reviewed ? 'text-muted-foreground' : 'border-primary/50 text-foreground',
         )}
       >
-        {digest.reviewed ? p.reviewed : p.notReviewed}
+        {reviewedText(digest)}
       </span>
       {digest.generated_at && (
         <span className="num text-xs text-muted-foreground">{p.generatedAt(formatDateTimeBrussels(digest.generated_at))}</span>

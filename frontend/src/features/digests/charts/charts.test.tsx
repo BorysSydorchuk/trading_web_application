@@ -10,10 +10,10 @@ const [, , , , , SATURDAY = '', SUNDAY = ''] = uk.trades.weekdays
 
 describe('digest SVG charts', () => {
   it('draws the equity line from 0 through every point', () => {
-    render(<EquityChart title="Крива" points={[{ time: '2026-11-10T10:00:00Z', cum_pnl: '100.00' }, { time: '2026-11-10T12:00:00Z', cum_pnl: '-50.00' }]} />)
-    expect(screen.getByRole('img', { name: 'Крива' })).toBeInTheDocument()
+    render(<EquityChart title="Крива" points={[{ time: '2026-11-10T10:00:00Z', cum_pnl: '100.00' }, { time: '2026-11-10T12:00:00Z', cum_pnl: '-50.00' }]} currency="USD" />)
+    expect(screen.getByRole('img', { name: c.equitySummary('Крива', '−50.00 USD', 2) })).toBeInTheDocument()
     expect(screen.getByTestId('equity-line').getAttribute('points')?.split(' ')).toHaveLength(3)
-    expect(screen.getByText(c.equityEnd('−50.00'))).toBeInTheDocument()
+    expect(screen.getByText(c.equityEnd('−50.00 USD'))).toBeInTheDocument()
   })
 
   it('labels the R edge buckets «≤ −2.5» and «≥ 3»', () => {
@@ -30,6 +30,7 @@ describe('digest SVG charts', () => {
     expect(screen.getByText('≥ 3')).toBeInTheDocument()
     expect(screen.getByText('0.50…1.00')).toBeInTheDocument()
     expect(container.querySelectorAll('rect')).toHaveLength(3)
+    expect(screen.getByRole('img', { name: c.rSummary('≤ −2.5: 1; 0.50…1.00: 4; ≥ 3: 2') })).toBeInTheDocument()
   })
 
   it('draws heatmap cells with a weekend row only when present', () => {
@@ -37,6 +38,9 @@ describe('digest SVG charts', () => {
       <HourHeatmap cells={[{ weekday: 0, hour: 9, trades: 2, net_pnl: '100.00' }, { weekday: 5, hour: 11, trades: 1, net_pnl: '-20.00' }]} />,
     )
     expect(container.querySelectorAll('[data-cell]')).toHaveLength(2)
+    const best = c.cell(uk.trades.weekdays[0] ?? '', '09', 2, '+100.00')
+    const worst = c.cell(SATURDAY, '11', 1, '−20.00')
+    expect(screen.getByRole('img', { name: c.heatmapSummary(best, worst) })).toBeInTheDocument()
     expect(screen.getByText(SATURDAY)).toBeInTheDocument()
     expect(screen.queryByText(SUNDAY)).not.toBeInTheDocument()
     expect(container.querySelector('[data-cell="0-9"] rect')).toHaveClass('fill-profit')

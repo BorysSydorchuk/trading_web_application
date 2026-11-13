@@ -17,10 +17,11 @@ export function RDistributionChart({ buckets }: { buckets: readonly RBucket[] })
   const max = Math.max(1, ...buckets.map((b) => b.count))
   const width = buckets.length * (BAR + GAP) + GAP
   const height = TOP + PLOT + LABEL
+  const summary = c.rSummary(buckets.map((b) => c.bucket(rBucketLabel(b), b.count)).join('; '))
   return (
     <figure className="flex flex-col gap-1">
       <figcaption className="text-xs font-medium">{c.rDistribution}</figcaption>
-      <svg role="img" aria-label={c.rDistribution} viewBox={`0 0 ${width} ${height}`} className="h-40 w-full rounded-md border bg-muted/10">
+      <svg role="img" aria-label={summary} viewBox={`0 0 ${width} ${height}`} className="h-40 w-full rounded-md border bg-muted/10">
         {buckets.map((bucket, i) => {
           const label = rBucketLabel(bucket)
           const h = (bucket.count / max) * PLOT

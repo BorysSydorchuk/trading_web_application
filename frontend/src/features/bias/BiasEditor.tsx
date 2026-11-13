@@ -31,7 +31,12 @@ export interface BiasEditorProps {
    * Embedded in another screen (digest page): the period is fixed and shown as `title`
    * instead of the kind/date fields; save and delete stay on that screen.
    */
-  embedded?: EmbeddedBiasCallbacks & { title: ReactNode }
+  embedded?: EmbeddedBiasCallbacks & {
+    title: ReactNode
+    /** Unsaved edits elsewhere on the host screen, guarded by this editor's (single) blocker. */
+    extraDirty?: boolean
+    unsavedDescription?: string
+  }
 }
 
 /** Bias note editor (PRD 6.6): kind + date, text and voice, "Заповнити з тексту", one card per symbol. */
@@ -80,9 +85,9 @@ export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: B
       <SaveBar form={form} actions={actions} />
       {/* A recording that only exists in the browser is lost on leaving, like unsaved edits. */}
       <UnsavedChangesGuard
-        dirty={form.dirty || unsentRecording}
+        dirty={form.dirty || unsentRecording || (embedded?.extraDirty ?? false)}
         allowLeaveRef={actions.allowLeaveRef}
-        description={e.unsaved}
+        description={embedded?.unsavedDescription ?? e.unsaved}
       />
     </div>
   )

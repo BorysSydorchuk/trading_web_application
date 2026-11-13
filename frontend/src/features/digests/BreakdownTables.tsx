@@ -40,7 +40,7 @@ function journalKeyLabel(field: JournalField | undefined, key: Exclude<GroupKey,
 }
 
 /** Breakdown tables in the snapshot order (trade fields, then analytics journal fields). */
-export function BreakdownTables({ breakdowns }: { breakdowns: Record<string, Breakdown> }) {
+export function BreakdownTables({ breakdowns, currency }: { breakdowns: Record<string, Breakdown>; currency: string | null }) {
   const { data } = useJournalFields()
   const fields = useMemo(() => new Map((data?.fields ?? []).map((f) => [f.key, f])), [data])
   const entries = Object.entries(breakdowns)
@@ -49,7 +49,7 @@ export function BreakdownTables({ breakdowns }: { breakdowns: Record<string, Bre
       <h2 id="digest-breakdowns" className="text-sm font-semibold">{t.title}</h2>
       <div className="grid gap-3 lg:grid-cols-2">
         {entries.map(([name, breakdown]) => (
-          <BreakdownTable key={name} name={name} breakdown={breakdown} field={fields.get(name)} />
+          <BreakdownTable key={name} name={name} breakdown={breakdown} field={fields.get(name)} currency={currency} />
         ))}
       </div>
     </section>
@@ -60,9 +60,10 @@ interface BreakdownTableProps {
   name: string
   breakdown: Breakdown
   field: JournalField | undefined
+  currency: string | null
 }
 
-function BreakdownTable({ name, breakdown, field }: BreakdownTableProps) {
+function BreakdownTable({ name, breakdown, field, currency }: BreakdownTableProps) {
   const isTradeField = Object.hasOwn(TRADE_FIELD_LABELS, name)
   const title = (isTradeField ? TRADE_FIELD_LABELS[name] : field?.label) ?? name
   const label = (key: GroupKey) => {
@@ -84,7 +85,7 @@ function BreakdownTable({ name, breakdown, field }: BreakdownTableProps) {
           <tr>
             <th scope="col" className={`${TH} text-left`}>{t.key}</th>
             <th scope="col" className={`${TH} text-right`}>{t.trades}</th>
-            <th scope="col" className={`${TH} text-right`}>{t.netPnl}</th>
+            <th scope="col" className={`${TH} text-right`}>{uk.digests.withCurrency(t.netPnl, currency)}</th>
             <th scope="col" className={`${TH} text-right`}>{t.totalR}</th>
             <th scope="col" className={`${TH} text-right`}>{t.winRate}</th>
           </tr>

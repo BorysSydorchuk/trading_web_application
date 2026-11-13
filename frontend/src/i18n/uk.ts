@@ -993,6 +993,8 @@ export const uk = {
   },
   digests: {
     kinds: { weekly: 'Тижневі', monthly: 'Місячні' },
+    unsaved: 'Огляд періоду або біас наступного періоду мають незбережені зміни. Якщо піти зі сторінки, їх буде втрачено.',
+    withCurrency: (label: string, currency: string | null) => (currency ? `${label}, ${currency}` : label),
     kindsLabel: 'Тип дайджесту',
     list: {
       loading: 'Завантаження дайджестів…',
@@ -1024,6 +1026,7 @@ export const uk = {
       regenerating: 'Оновлення…',
       regenerated: 'Дайджест оновлено.',
       reviewed: 'переглянуто',
+      reviewedOn: (date: string) => `переглянуто · ${date}`,
       notReviewed: 'не переглянуто',
       aiSummary: 'Підсумок ШІ',
     },
@@ -1091,8 +1094,11 @@ export const uk = {
     },
     charts: {
       title: 'Графіки',
-      equity: 'Крива P&L',
       equityCombined: 'Усі рахунки',
+      equityOf: (name: string) => `Крива P&L: ${name}`,
+      equitySummary: (title: string, end: string, trades: number) => `${title}. Підсумок ${end} після ${trades} угод.`,
+      rSummary: (parts: string) => `Розподіл R: ${parts}.`,
+      heatmapSummary: (best: string, worst: string) => `Години × дні. Найкраща клітинка: ${best}. Найгірша: ${worst}.`,
       rDistribution: 'Розподіл R',
       heatmap: 'Години × дні (P&L)',
       empty: 'Немає даних для графіка.',

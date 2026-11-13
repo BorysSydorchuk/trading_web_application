@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,13 +16,21 @@ function initialReview(digest: Digest): ReviewInput {
   }
 }
 
+interface ReviewFormProps {
+  digest: Digest
+  /** Unsaved edits, for the screen's unsaved-changes guard. */
+  onDirtyChange: (dirty: boolean) => void
+}
+
 /** What worked / what to fix / focus next (all optional; any non-empty field = reviewed). PATCH on save. */
-export function ReviewForm({ digest }: { digest: Digest }) {
+export function ReviewForm({ digest, onDirtyChange }: ReviewFormProps) {
   const id = useId()
   const [values, setValues] = useState<ReviewInput>(() => initialReview(digest))
   const [saved, setSaved] = useState<ReviewInput>(() => initialReview(digest))
   const save = useSaveReview(digest.id)
   const dirty = REVIEW_FIELDS.some((field) => values[field] !== saved[field])
+
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
 
   function setField(field: ReviewField, value: string) {
     setValues((current) => ({ ...current, [field]: value }))
