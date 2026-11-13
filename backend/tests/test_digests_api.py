@@ -302,8 +302,8 @@ def test_regenerate_keeps_review_and_ai_summary_and_refreshes_the_numbers(
         json={"what_worked": "plan", "what_to_fix": "risk", "focus_next": "patience"},
     )
     assert patched.status_code == 200
-    with session.bind.begin() as conn:  # type: ignore[union-attr]
-        conn.execute(text("UPDATE digests SET ai_summary = 'AI text'"))
+    session.execute(text("UPDATE digests SET ai_summary = 'AI text'"))
+    session.commit()
     a = session.get(Account, fixture_week["t1"].account_id)
     assert a is not None
     closed(session, a, datetime(2026, 11, 13, 12, tzinfo=UTC), "50.00", "1.0")
@@ -715,8 +715,8 @@ def test_history_of_nineteen_trading_days_gives_no_norm_at_all(
 ) -> None:
     a, _ = accounts(session)
     seed_history(session, a, weeks=4)  # Mon Oct 5 .. Fri Oct 30 would be exactly 20 weekdays
-    with session.bind.begin() as conn:  # type: ignore[union-attr]
-        conn.execute(text("DELETE FROM trades WHERE close_time < '2026-10-06'"))
+    session.execute(text("DELETE FROM trades WHERE close_time < '2026-10-06'"))
+    session.commit()
     closed(session, a, datetime(2026, 11, 3, 10, tzinfo=UTC), "-100.00", "-1.0")
 
     block = digest(client, day="2026-11-02")["metrics"]["combined"]

@@ -37,3 +37,9 @@ rules:
   entry_session:         { enabled: true }                # entries only in sessions with entries_allowed
   qm_not_in_ny:          { enabled: true, entry_model: qm_m5, session: ny }  # entry_model = option value in journal_fields.yaml
   no_breakeven:          { enabled: true }                # SL moved to entry price (within 1 tick)
+
+# Digests (PRD 6.7): a metric is highlighted red/green when it is beyond
+# norm mean +- deviation_sigma x standard deviation of the previous periods.
+# Optional section, default 1.0. To change it, uncomment (value must be > 0):
+# digest:
+#   deviation_sigma: 1.0

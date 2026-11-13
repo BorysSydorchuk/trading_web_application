@@ -10,6 +10,7 @@ from app.api import (
     calculator,
     config_files,
     dashboard,
+    digests,
     health,
     sync_status,
     trades,
@@ -26,5 +27,6 @@ api_router.include_router(audio.router)
 api_router.include_router(bias.router)
 api_router.include_router(calculator.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(digests.router)
 
 __all__ = ["api_router"]
