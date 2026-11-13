@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -38,6 +38,7 @@ from app.config_files.loader import CONFIG_DIR_ENV
 from app.db import make_session_factory
 from app.models import Account, Trade
 from app.models.enums import AccountStatus
+from app.schemas.dashboard import money_str, pct_str
 from tests.test_trades_api import add_account, add_trade
 
 D = Decimal
@@ -344,6 +345,31 @@ def test_account_without_a_usable_size_has_no_stop(client: TestClient, session: 
     alpha = by_name(data, "Alpha")
     assert alpha["today_state"] == "ok"
     assert data["stop"]["today"] is False
+    zeros = {
+        "pnl": "0.00",
+        "pct": "0.0000",
+        "low_pnl": "0.00",
+        "low_pct": "0.0000",
+        "high_pnl": "0.00",
+        "high_pct": "0.0000",
+    }
+    assert alpha["today"] == zeros
+    assert alpha["week"] == zeros
+
+
+@pytest.mark.parametrize(
+    ("func", "value", "expected"),
+    [
+        (pct_str, D("-0.00004"), "0.0000"),
+        (pct_str, D("-0.00005"), "-0.0001"),
+        (money_str, D("-0.004"), "0.00"),
+        (money_str, D("2.005"), "2.01"),
+    ],
+)
+def test_rounding_at_the_edge_never_shows_negative_zero(
+    func: Callable[[D], str], value: D, expected: str
+) -> None:
+    assert func(value) == expected
 
 
 # --- broken config ---------------------------------------------------------------------------

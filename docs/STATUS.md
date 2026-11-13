@@ -226,7 +226,7 @@ Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-rev
 
 - [x] M6-01 [S] plan, API contract, decisions (orchestrator), branch m6/plan
 - [x] M6-02 [L] (python-reviewer APPROVE; code-reviewer APPROVE after fix batch: HIGH monthly norm window aligned to period start; 81 tests, 100 % cov; make check 2851+1 skip / 413) digest metrics domain (pure) app/domain/digest_metrics.py, branch m6/digest-metrics. Notes for M6-04: dict(...) the MappingProxyType results before the JSONB snapshot; pass the normalised period start to norm_window_trades; `digest.deviation_sigma` config here
-- [ ] M6-03 [L] dashboard API: today/week P&L per account vs limits, shared sticky-extremes function with the rules engine, stop flags, open positions, inbox (tdd-guide, backend-dev), branch m6/dashboard-api
+- [x] M6-03 [L] (code-reviewer + python-reviewer APPROVE, LOW fixes: no "-0.0000", zero-block asserts; make check 2899+1 skip / 413) dashboard API GET /api/dashboard, shared app/domain/period_pnl.py used by the rules engine, services/inbox.count_inbox, branch m6/dashboard-api
 - [ ] M6-04 [L] digests API: generate/regenerate, list, get, by-period, review PATCH, suggestion, next_bias_note_id (backend-dev; database-reviewer only if a migration appears), branch m6/digests-api
 - [ ] M6-05 [M] Home dashboard UI: limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
 - [ ] M6-06 [M] Digests UI: list, digest page (metrics with red/green, breakdowns, rules, bias, SVG charts), review form + next-period bias note on one screen (frontend-dev), branch m6/digests-ui
@@ -347,7 +347,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02 DONE and merged. NEXT: M6-03 dashboard API on m6/dashboard-api (tdd-guide tests first: shared sticky-extremes function with rules engine, today/week per account vs limits, stop flags, open positions, inbox).
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02, M6-03 DONE and merged. NEXT: M6-04 digests API on m6/digests-api (tdd-guide tests first; deviation_sigma config; dict() the read-only mappings before JSONB).
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 

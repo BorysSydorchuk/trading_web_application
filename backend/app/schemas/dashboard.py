@@ -21,11 +21,12 @@ PCT_Q = Decimal("0.0001")
 
 
 def money_str(value: Decimal) -> str:
-    return format(value.quantize(MONEY_Q, rounding=ROUND_HALF_UP), "f")
+    # `+ 0` turns a rounded "-0.00" into "0.00".
+    return format(value.quantize(MONEY_Q, rounding=ROUND_HALF_UP) + 0, "f")
 
 
 def pct_str(value: Decimal) -> str:
-    return format(value.quantize(PCT_Q, rounding=ROUND_HALF_UP), "f")
+    return format(value.quantize(PCT_Q, rounding=ROUND_HALF_UP) + 0, "f")
 
 
 Money = Annotated[Decimal, PlainSerializer(money_str, return_type=str)]
