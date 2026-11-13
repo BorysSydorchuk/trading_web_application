@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useBiasStatus } from '@/features/bias/api'
 import { CalculatorPanel } from '@/features/calculator/CalculatorPanel'
+import { DashboardOverview } from '@/features/dashboard/DashboardOverview'
 import { BIAS_KINDS } from '@/features/bias/types'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
@@ -14,6 +15,7 @@ export function HomePage() {
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold tracking-tight">{uk.pages.home.title}</h1>
+      <DashboardOverview />
       <h2 className="text-sm font-semibold">{t.title}</h2>
       {query.isPending && <p role="status" className="text-sm text-muted-foreground">{t.loading}</p>}
       {query.isError && (
