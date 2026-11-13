@@ -215,7 +215,10 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
         start=start,
         currency=currency,
         sigma=sigma,
-        sizes={a.id: a.reference_balance for a in accounts.values()},
+        # a non-finite size (NUMERIC NaN) is left out, so its % is null instead of a 500
+        sizes={
+            a.id: a.reference_balance for a in accounts.values() if a.reference_balance.is_finite()
+        },
         account_names={a.id: a.name for a in accounts.values()},
         combined=_scope(period, window, min(firsts.values(), default=None), start),
         by_account=by_account,
@@ -311,7 +314,8 @@ def update_review(db: Session, digest_id: int, patch: schemas.DigestPatch) -> sc
     digest = _get_or_404(db, digest_id)
     for name in schemas.REVIEW_FIELDS:
         if name in patch.model_fields_set:
-            setattr(digest, name, getattr(patch, name) or None)
+            value = getattr(patch, name)
+            setattr(digest, name, value if value and value.strip() else None)
     db.commit()
     return _out(db, digest)
 

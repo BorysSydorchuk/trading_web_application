@@ -900,11 +900,76 @@ def test_patch_cannot_change_snapshot_or_ai_summary(
 ) -> None:
     created = digest(client)
 
-    client.patch(f"/api/digests/{created['id']}", json={"ai_summary": "forged", "metrics": {}})
+    response = client.patch(
+        f"/api/digests/{created['id']}", json={"ai_summary": "forged", "metrics": {}}
+    )
     after = client.get(f"/api/digests/{created['id']}").json()
 
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
     assert after["ai_summary"] is None
     assert after["metrics"] == created["metrics"]
+
+
+def test_patch_with_a_misspelled_key_is_rejected_not_silently_ignored(
+    client: TestClient, fixture_week: dict[str, Trade], set_now: Callable[..., None]
+) -> None:
+    created = digest(client)
+
+    response = client.patch(f"/api/digests/{created['id']}", json={"focus_next_period": "x"})
+
+    assert response.status_code == 422
+    assert client.get(f"/api/digests/{created['id']}").json()["reviewed"] is False
+
+
+def test_whitespace_only_review_is_cleared_and_not_reviewed(
+    client: TestClient, fixture_week: dict[str, Trade], set_now: Callable[..., None]
+) -> None:
+    created = digest(client)
+
+    body = client.patch(f"/api/digests/{created['id']}", json={"what_worked": "  \t "}).json()
+
+    assert body["what_worked"] is None
+    assert body["reviewed"] is False
+
+
+def test_account_with_a_nan_size_gives_null_percent_not_a_500(
+    client: TestClient,
+    session: Session,
+    fixture_week: dict[str, Trade],
+    set_now: Callable[..., None],
+) -> None:
+    session.execute(text("UPDATE accounts SET reference_balance = 'NaN'"))
+    session.commit()
+
+    response = client.post("/api/digests", json={"kind": "weekly", "date": WEEK})
+
+    assert response.status_code in (200, 201), response.text
+    assert combined(response.json())["net_pnl_pct"]["value"] is None
+
+
+@pytest.mark.parametrize("name", ["rules.yaml", "journal_fields.yaml"])
+def test_broken_config_is_a_config_error(
+    client: TestClient,
+    fixture_week: dict[str, Trade],
+    set_now: Callable[..., None],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+) -> None:
+    config = tmp_path / "config"
+    shutil.copytree(REPO_ROOT / "config", config)
+    (config / name).write_text("broken: [", encoding="utf-8")
+    monkeypatch.setenv(CONFIG_DIR_ENV, str(config))
+    reload_config()
+    try:
+        response = client.post("/api/digests", json={"kind": "weekly", "date": WEEK})
+    finally:
+        monkeypatch.delenv(CONFIG_DIR_ENV)
+        reload_config()
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "config_error"
 
 
 def test_review_text_keeps_unicode_and_special_characters(

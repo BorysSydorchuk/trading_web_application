@@ -24,9 +24,12 @@ class DigestCreate(BaseModel):
 
 
 class DigestPatch(BaseModel):
-    """Review texts; omitted = unchanged, ``""`` or null = cleared. Other keys are ignored."""
+    """Review texts; omitted = unchanged; ``""``, whitespace or null = cleared.
 
-    model_config = ConfigDict(extra="ignore")
+    Unknown keys (also ``ai_summary`` / ``metrics``) are a 422, so a misspelled key never
+    looks saved while the digest stays unreviewed."""
+
+    model_config = ConfigDict(extra="forbid")
 
     what_worked: str | None = Field(default=None, max_length=REVIEW_TEXT_MAX)
     what_to_fix: str | None = Field(default=None, max_length=REVIEW_TEXT_MAX)
