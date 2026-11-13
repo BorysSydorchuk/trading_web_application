@@ -230,7 +230,7 @@ Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-rev
 - [x] M6-04 [M] (code-reviewer APPROVE; MEDIUM fixes: PATCH extra=forbid, NaN size; LOWs: whitespace review, config_error tests; final make check 3013+1 skip / 413) digests API + domain extensions, branch m6/digests-api. PM ACCEPTED 2026-11-13
 - [x] M6-04b [S] (code-reviewer APPROVE; make check 3015+1 skip / 413) PM: suggestion = only the latest due period without review, never older ones; older unreviewed -> list badge «не переглянуто» (orchestrator), branch m6/suggestion-latest
 - [x] M6-05 [M] (Borys Home check OK, PM ACCEPTED 2026-11-13; code-reviewer APPROVE; fixes: silent polls, stale/suggestion error tests, U+2212 minus; final make check 3015+1 skip / 427; owner click check pending) Home dashboard UI (percent 2 dp in UI, `-0.42%`): limits + «СТОП на сьогодні/тиждень» banner, inbox, open positions, sync per account, quick links, digest suggestion (frontend-dev), branch m6/dashboard-ui
-- [ ] M6-06a [L] (migration) digests list virtual rows for past periods with closed trades and no digest, `digests.reviewed_at` + backfill, PATCH sets/clears it; fix test comment ~1112 (tdd-guide tests, backend-dev, database-reviewer + code-reviewer; pre-migration backup before the dev DB upgrade), branch m6/digests-list
+- [x] M6-06a [L] (database-reviewer + code-reviewer APPROVE; final make check 3039+1 skip / 427; dev DB migrated 2026-11-13 15:14 UTC to cdb0477c3b70, backup backups/pre-migration-cdb0477c3b70-20261113T151410Z.dump, 0 digests) (migration) digests list virtual rows for past periods with closed trades and no digest, `digests.reviewed_at` + backfill, PATCH sets/clears it; fix test comment ~1112 (tdd-guide tests, backend-dev, database-reviewer + code-reviewer; pre-migration backup before the dev DB upgrade), branch m6/digests-list
 - [ ] M6-06 [M] Digests UI (percent 2 dp in UI, `-0.42%`): list, digest page (metrics with red/green, breakdowns, rules, bias, SVG charts), review form + next-period bias note on one screen (frontend-dev), branch m6/digests-ui PM 2026-11-13: list shows virtual rows (M6-06a). Fix test comment test_digests_api.py ~1112 (17:00 CEST, not 16:00). Must open the period from `/digests?kind=&date=` (Home suggestion link).
 - [ ] M6-07 [M] AI summary: `POST /api/digests/{id}/ai-summary` + button (backend-dev, frontend-dev), branch m6/digest-ai
 - [ ] M6-08 [L] QA: fixture week hand-calculated (win rate, total R, P&L, PF, DD), deviation fixture, browser check; owner check on one real week + docs/reports/M6.md
@@ -349,7 +349,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..05 DONE and merged (M6-05 PM ACCEPTED). NOW: M6-06a backend list + reviewed_at migration on m6/digests-list; then M6-06 Digests UI.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..05, M6-06a DONE and merged. NOW: M6-06b Digests UI in worktree ../WEB_application_m6ui branch m6/digests-ui (commit 2955177): merge main in, full check, code-reviewer, merge; then Borys click check.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
