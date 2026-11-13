@@ -14,13 +14,17 @@ Conventions (DECISIONS 2026-11-12):
 - Max drawdown = largest peak-to-trough fall of the running net P&L from 0 in
   (close_time, id) order.
 - Norm = mean and population SD of the per-period values; < 3 periods -> no norm.
+- Norm availability: >= 20 weekdays (Mon-Fri) from the Brussels date of the first trade of
+  the scope to the period start (DECISIONS 2026-11-13).
+- Journal breakdowns read ``DigestTrade.journal`` (keys from journal_fields.yaml); a missing
+  key and None both mean "not filled".
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_FLOOR, Decimal
 from types import MappingProxyType
@@ -36,22 +40,24 @@ R_CLAMP = Decimal(3)
 MIN_NORM_PERIODS = 3
 NORM_WINDOW_WEEKDAYS = 60
 SATURDAY = 5
+NORM_MIN_TRADING_DAYS = 20
 type PeriodKind = Literal["weekly", "monthly"]
 PERIOD_KINDS: tuple[str, ...] = get_args(PeriodKind.__value__)
 
 type GroupKey = str | int | bool | None
+type JournalValue = str | int | bool | None
 type Deviation = Literal["worse", "better"]
+type BiasScope = Literal["daily", "weekly", "monthly"]
 
-BREAKDOWN_FIELDS: tuple[str, ...] = (
-    "symbol",
-    "session",
-    "hour",
-    "weekday",
-    "entry_model",
-    "poi_type",
-    "bias_alignment",
-    "followed_plan",
-    "emotion_before",
+TRADE_BREAKDOWN_FIELDS: tuple[str, ...] = ("symbol", "session", "hour", "weekday", "bias_alignment")
+BIAS_SCOPES: tuple[str, ...] = get_args(BiasScope.__value__)
+# Trade attribute that holds the alignment of each bias scope.
+_BIAS_ATTRS: Mapping[str, str] = MappingProxyType(
+    {
+        "daily": "bias_alignment",
+        "weekly": "bias_alignment_weekly",
+        "monthly": "bias_alignment_monthly",
+    }
 )
 
 HIGHER_IS_BETTER: frozenset[str] = frozenset(
@@ -86,11 +92,10 @@ class DigestTrade:
     session: str | None = None
     hour: int | None = None
     weekday: int | None = None
-    entry_model: str | None = None
-    poi_type: str | None = None
-    bias_alignment: str | None = None
-    followed_plan: bool | None = None
-    emotion_before: str | None = None
+    bias_alignment: str | None = None  # effective daily value (override ?? auto)
+    bias_alignment_weekly: str | None = None
+    bias_alignment_monthly: str | None = None
+    journal: Mapping[str, JournalValue] = field(default_factory=lambda: MappingProxyType({}))
     violations: tuple[str, ...] = ()
 
 
@@ -337,8 +342,10 @@ def compute_metrics(
 # --- breakdowns ------------------------------------------------------------------------------
 
 
-def _field_value(t: DigestTrade, field: str) -> GroupKey:
-    value: GroupKey = getattr(t, field)
+def _field_value(t: DigestTrade, name: str, journal: bool) -> GroupKey:
+    if journal:
+        return t.journal.get(name)
+    value: GroupKey = getattr(t, name)
     return value
 
 
@@ -366,21 +373,29 @@ def _group(key: GroupKey, members: Sequence[DigestTrade]) -> BreakdownGroup:
     )
 
 
-def breakdown(trades: Iterable[DigestTrade], field: str) -> Breakdown:
-    if field not in BREAKDOWN_FIELDS:
+def breakdown(trades: Iterable[DigestTrade], field: str, *, journal: bool = False) -> Breakdown:
+    """Group by a trade field, or with ``journal=True`` by any key of ``trade.journal``."""
+    if not journal and field not in TRADE_BREAKDOWN_FIELDS:
         raise ValueError(f"unknown breakdown field: {field!r}")
     items = tuple(trades)
     by_key: dict[GroupKey, list[DigestTrade]] = {}
     for t in items:
-        by_key.setdefault(_field_value(t, field), []).append(t)
+        by_key.setdefault(_field_value(t, field, journal), []).append(t)
     groups = tuple(_group(k, by_key[k]) for k in _sorted_keys(list(by_key)))
-    filled = sum(1 for t in items if _field_value(t, field) is not None)
+    filled = sum(1 for t in items if _field_value(t, field, journal) is not None)
     return Breakdown(field=field, groups=groups, filled=filled, total=len(items))
 
 
-def breakdowns(trades: Iterable[DigestTrade]) -> Mapping[str, Breakdown]:
+def breakdowns(
+    trades: Iterable[DigestTrade], journal_fields: Sequence[str] = ()
+) -> Mapping[str, Breakdown]:
+    """Trade fields first, then ``journal_fields`` in order (a trade-field key is skipped)."""
     items = tuple(trades)
-    return MappingProxyType({f: breakdown(items, f) for f in BREAKDOWN_FIELDS})
+    result = {f: breakdown(items, f) for f in TRADE_BREAKDOWN_FIELDS}
+    for key in journal_fields:
+        if key not in result:
+            result[key] = breakdown(items, key, journal=True)
+    return MappingProxyType(result)
 
 
 # --- rules and bias --------------------------------------------------------------------------
@@ -408,8 +423,8 @@ def rule_section(trades: Iterable[DigestTrade]) -> RuleSection:
     )
 
 
-def _side(trades: Sequence[DigestTrade], alignment: str) -> SideStats:
-    members = [t for t in trades if t.bias_alignment == alignment]
+def _side(trades: Sequence[DigestTrade], attr: str, alignment: str) -> SideStats:
+    members = [t for t in trades if getattr(t, attr) == alignment]
     return SideStats(
         trades=len(members),
         net_pnl=sum((t.net_pnl for t in members), ZERO),
@@ -417,7 +432,13 @@ def _side(trades: Sequence[DigestTrade], alignment: str) -> SideStats:
     )
 
 
-def bias_section(trades: Iterable[DigestTrade], was_correct: Iterable[bool | None]) -> BiasSection:
+def bias_section(
+    trades: Iterable[DigestTrade], was_correct: Iterable[bool | None], scope: str = "daily"
+) -> BiasSection:
+    """Accuracy of the scope's entries; aligned/counter by the scope's trade alignment."""
+    attr = _BIAS_ATTRS.get(scope)
+    if attr is None:
+        raise ValueError(f"unknown bias scope: {scope!r}")
     items = tuple(trades)
     marks = tuple(was_correct)
     marked = [m for m in marks if m is not None]
@@ -426,8 +447,18 @@ def bias_section(trades: Iterable[DigestTrade], was_correct: Iterable[bool | Non
         accuracy=Decimal(correct) * HUNDRED / len(marked) if marked else None,
         marked=len(marked),
         total=len(marks),
-        aligned=_side(items, "aligned"),
-        counter=_side(items, "counter"),
+        aligned=_side(items, attr, "aligned"),
+        counter=_side(items, attr, "counter"),
+    )
+
+
+def bias_sections(
+    trades: Iterable[DigestTrade], marks: Mapping[str, Iterable[bool | None]]
+) -> Mapping[str, BiasSection]:
+    """All three scopes; a scope missing from ``marks`` has no entries."""
+    items = tuple(trades)
+    return MappingProxyType(
+        {scope: bias_section(items, marks.get(scope, ()), scope) for scope in BIAS_SCOPES}
     )
 
 
@@ -513,6 +544,25 @@ def norm_window_start(kind: PeriodKind, start: date) -> date:
         if day.weekday() < SATURDAY:
             counted += 1
     return period_start(kind, day)
+
+
+def weekdays_between(first: date, start: date) -> int:
+    """Weekdays (Mon-Fri) from ``first`` (inclusive) to ``start`` (exclusive); 0 if not before."""
+    if first >= start:
+        return 0
+    full_weeks, rest = divmod((start - first).days, 7)
+    tail = sum(1 for i in range(rest) if (first + timedelta(days=i)).weekday() < SATURDAY)
+    return full_weeks * 5 + tail
+
+
+def trading_days_of_history(trades: Iterable[DigestTrade], start: date) -> int:
+    """Weekdays from the Brussels date of the first trade to ``start``; 0 without trades."""
+    first = min((brussels_date(t.close_time) for t in trades), default=None)
+    return 0 if first is None else weekdays_between(first, start)
+
+
+def norm_available(trades: Iterable[DigestTrade], start: date) -> bool:
+    return trading_days_of_history(trades, start) >= NORM_MIN_TRADING_DAYS
 
 
 def norm_window_trades(

@@ -166,12 +166,20 @@ class RulesSet(_Strict):
 RULE_KEYS: tuple[str, ...] = tuple(RulesSet.model_fields)
 
 
+class DigestConfig(_Strict):
+    """Digest settings (docs/api.md "Norm and deviation"); the whole section is optional."""
+
+    # Highlight a digest metric beyond mean +- k x population SD of its norm periods.
+    deviation_sigma: Decimal = Field(default=Decimal("1.0"), gt=0)
+
+
 class RulesConfig(_Strict):
     timezone: str
     sessions: tuple[SessionWindow, ...]
     sync: SyncConfig
     broker_time: Literal["ny_close"]
     rules: RulesSet
+    digest: DigestConfig = DigestConfig()
 
     @field_validator("timezone")
     @classmethod
