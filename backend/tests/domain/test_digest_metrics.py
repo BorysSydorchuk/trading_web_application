@@ -43,15 +43,19 @@ Rules and bias
   ``SideStats(trades, net_pnl, total_r)`` over effective alignment "aligned" / "counter".
 
 Norm and deviation
-- ``HIGHER_IS_BETTER``, ``LOWER_IS_BETTER`` frozensets of metric names; "trades" is in neither.
+- ``HIGHER_IS_BETTER``, ``LOWER_IS_BETTER`` frozensets of metric names (exactly the contract
+  lists, see test); "trades" is in neither. ``PeriodKind = Literal["weekly", "monthly"]``.
+- ``EquityCurves.by_account`` and the result of ``breakdowns()`` are read-only mappings
+  (item assignment raises TypeError, e.g. ``types.MappingProxyType``).
 - ``norm_deviation(metric, value, history, k=Decimal(1)) -> NormResult(value, norm_mean,
   norm_sd, deviation)``; history = per-period values; population SD; < 3 history values ->
   mean/sd None, deviation None; SD 0 or value None -> deviation None; "worse" / "better" only
   strictly beyond k x SD; unknown metric -> ValueError.
 - ``metric_series(trades, kind, account_sizes, metric) -> tuple[Decimal, ...]``: metric per
   period that has >= 1 trade (oldest first), None values dropped.
-- ``norm_window_start(period_start) -> date`` = start of the 60 weekdays before period_start;
-  ``norm_window_trades(trades, period_start)`` = trades with Brussels close date in
+- ``norm_window_start(kind, period_start) -> date`` = ``period_start(kind, <the day 60 weekdays
+  before period_start>)`` (aligned to the Monday / 1st of that day, so no partial first period);
+  ``norm_window_trades(trades, kind, period_start)`` = trades with Brussels close date in
   [window_start, period_start).
 
 Charts
@@ -68,7 +72,7 @@ Charts
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -205,9 +209,9 @@ def test_period_start_and_end_weekly_and_monthly() -> None:
 
 def test_unknown_period_kind_is_rejected() -> None:
     with pytest.raises(ValueError):  # noqa: PT011
-        period_start("daily", date(2026, 3, 2))
+        period_start("daily", date(2026, 3, 2))  # type: ignore[arg-type]
     with pytest.raises(ValueError):  # noqa: PT011
-        trades_in_period([], "yearly", date(2026, 3, 2))
+        trades_in_period([], "yearly", date(2026, 3, 2))  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -550,8 +554,17 @@ def test_every_lower_is_better_metric(metric: str) -> None:
 def test_metric_sets_are_disjoint_and_trades_is_never_highlighted() -> None:
     assert not HIGHER_IS_BETTER & LOWER_IS_BETTER
     assert "trades" not in HIGHER_IS_BETTER | LOWER_IS_BETTER
-    assert {"win_rate", "total_r", "net_pnl", "profit_factor"} <= HIGHER_IS_BETTER
-    assert {"max_drawdown", "max_drawdown_pct", "violations"} <= LOWER_IS_BETTER
+    assert {
+        "net_pnl",
+        "net_pnl_pct",
+        "total_r",
+        "win_rate",
+        "avg_win_r",
+        "avg_loss_r",
+        "expectancy_r",
+        "profit_factor",
+    } == HIGHER_IS_BETTER
+    assert {"max_drawdown", "max_drawdown_pct", "violations"} == LOWER_IS_BETTER
     r = norm_deviation("trades", D("1000"), HIST)
     assert r.deviation is None and r.norm_mean == D("50")  # noqa: PT018
 
@@ -583,12 +596,14 @@ def test_metric_series_is_per_period_with_trades_oldest_first() -> None:
     assert metric_series([], "weekly", SIZES, "net_pnl") == ()
 
 
-def test_norm_window_is_sixty_weekdays_before_the_period() -> None:
-    # 60 weekdays = 12 weeks = 84 days when the period starts on a weekday.
-    assert norm_window_start(date(2026, 3, 2)) == date(2025, 12, 8)
-    assert norm_window_start(date(2026, 4, 1)) == date(2026, 1, 7)
-    # Sat 2026-08-01: weekdays back from Fri 07-31; the 60th is Mon 2026-05-11.
-    assert norm_window_start(date(2026, 8, 1)) == date(2026, 5, 11)
+def test_norm_window_is_sixty_weekdays_before_the_period_aligned_to_its_kind() -> None:
+    # 60 weekdays = 12 weeks = 84 days when the period starts on a weekday (a Monday: aligned).
+    assert norm_window_start("weekly", date(2026, 3, 2)) == date(2025, 12, 8)
+    # Wed 2026-04-01: 60 weekdays back is Wed 01-07 -> monthly window starts on Thu 2026-01-01.
+    assert norm_window_start("monthly", date(2026, 4, 1)) == date(2026, 1, 1)
+    # Sat 2026-08-01: weekdays back from Fri 07-31; the 60th is Mon 05-11 -> month start 05-01.
+    assert norm_window_start("monthly", date(2026, 8, 1)) == date(2026, 5, 1)
+    assert norm_window_start("weekly", date(2026, 8, 3)) == date(2026, 5, 11)  # Mon, 84 days back
 
 
 def test_norm_window_trades_are_inside_window_and_before_the_period() -> None:
@@ -599,7 +614,62 @@ def test_norm_window_trades_are_inside_window_and_before_the_period() -> None:
         trade(3, "1", when=utc(3, 1, 22, 59)),  # Sun 03-01 23:59: last before the period
         trade(4, "1", when=utc(3, 1, 23, 0)),  # Mon 03-02 00:00: in the period itself
     ]
-    assert [t.id for t in norm_window_trades(trades, start)] == [2, 3]
+    assert [t.id for t in norm_window_trades(trades, "weekly", start)] == [2, 3]
+
+
+def test_monthly_norm_window_keeps_the_whole_first_month() -> None:
+    trades = [
+        trade(1, "10", "1", utc(12, 31, 12, y=2025)),  # before the window (Dec)
+        trade(2, "20", "1", utc(1, 2, 12)),  # Jan 2..6 are before the old Jan 7 cut-off
+        trade(3, "-5", "-1", utc(1, 6, 12)),
+        trade(4, "7", "1", utc(2, 10, 12)),
+        trade(5, "8", "1", utc(3, 10, 12)),
+        trade(6, "99", "1", utc(4, 1, 12)),  # the period itself
+    ]
+    window = norm_window_trades(trades, "monthly", date(2026, 4, 1))
+    assert [t.id for t in window] == [2, 3, 4, 5]
+    # Jan 20 - 5 = 15, Feb 7, Mar 8 -> 3 full months
+    assert metric_series(window, "monthly", SIZES, "net_pnl") == (D("15"), D("7"), D("8"))
+
+
+def week_of(first_day: int, rows: list[tuple[str, str]]) -> list[DigestTrade]:
+    """Four trades Mon..Thu of the March 2026 week starting on day `first_day` (pnl, R)."""
+    base = first_day * 10
+    return [
+        trade(base + i, pnl, r, utc(3, first_day, 9) + timedelta(days=i))
+        for i, (pnl, r) in enumerate(rows)
+    ]
+
+
+def test_end_to_end_norm_from_trade_history_flags_worse_win_rate_and_better_total_r() -> None:
+    win, loss = ("100", "1"), ("-100", "-1")
+    history = [
+        *week_of(2, [win, win, loss, loss]),  # win rate 50, total R 0
+        *week_of(9, [win, win, win, loss]),  # 75, R 1 + 1 + 1 - 1 = 2
+        *week_of(16, [win, loss, win, loss]),  # 50, R 0
+        *week_of(23, [win, win, loss, win]),  # 75, R 2
+    ]
+    # The week under test: 1 win of 4 = 25 % (worse), but R +5 - 0.5 x 3 = 3.5 (better).
+    current = week_of(30, [("500", "5"), ("-10", "-0.5"), ("-10", "-0.5"), ("-10", "-0.5")])
+    old = trade(900, "1000", "9", utc(10, 1, 9, y=2025))  # outside the 60-weekday window
+    everything = [old, *history, *current]
+    start = date(2026, 3, 30)
+
+    window = norm_window_trades(everything, "weekly", start)
+    assert [t.id for t in window] == [t.id for t in history]  # old and current are excluded
+    cur = compute_metrics(trades_in_period(everything, "weekly", start), SIZES)
+
+    wr_history = metric_series(window, "weekly", SIZES, "win_rate")
+    assert wr_history == (D("50"), D("75"), D("50"), D("75"))
+    # mean 62.5, deviations +-12.5 -> population SD 12.5, band 50..75; 25 < 50 -> worse
+    wr = norm_deviation("win_rate", cur.win_rate, wr_history)
+    assert (wr.norm_mean, wr.norm_sd, wr.deviation) == (D("62.5"), D("12.5"), "worse")
+
+    r_history = metric_series(window, "weekly", SIZES, "total_r")
+    assert r_history == (D("0"), D("2"), D("0"), D("2"))
+    # mean 1, SD 1, band 0..2; 3.5 > 2 -> better
+    tr = norm_deviation("total_r", cur.total_r, r_history)
+    assert (tr.norm_mean, tr.norm_sd, tr.deviation) == (D("1"), D("1"), "better")
 
 
 # --- charts ----------------------------------------------------------------------------------
@@ -628,6 +698,18 @@ def test_equity_origin_follows_brussels_midnight_in_summer_time() -> None:
     c = equity_curves([trade(1, "5", when=utc(4, 7, 9))], date(2026, 4, 6))
     assert c.combined[0].time == utc(4, 5, 22)  # Mon 00:00 CEST (+2)
     assert c.combined[0].cum_pnl == D("0")
+
+
+def test_equity_by_account_is_read_only() -> None:
+    c = equity_curves(week(), START)
+    with pytest.raises(TypeError):
+        c.by_account[3] = ()  # type: ignore[index]
+
+
+def test_breakdowns_result_is_read_only() -> None:
+    result = breakdowns(week())
+    with pytest.raises(TypeError):
+        result["symbol"] = result["hour"]  # type: ignore[index]
 
 
 def test_equity_sorts_unordered_input_and_ties_by_id() -> None:
