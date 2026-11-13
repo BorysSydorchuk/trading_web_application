@@ -531,7 +531,7 @@ Problem: for GER30 at FundedNext (profit currency EUR, account USD) MT5 `trade_t
 
 ## M6 - Dashboard and digests (contract, 2026-11-12)
 
-PRD 6.7, 6.9, 6.10; ROADMAP M6. All percentages are of the account size (`accounts.reference_balance`, PRD 6.8/6.9), never of the current or period-start balance. Symbols are canonical names (`trades.symbol`, M5-08). Periods are Brussels calendar dates (DECISIONS 2026-10-31): week = Monday..Sunday, month = calendar month. Money and R as strings (plain notation, 2 dp money, 4 dp percent/R, ROUND_HALF_UP at the API edge only; Decimal everywhere inside).
+PRD 6.7, 6.9, 6.10; ROADMAP M6. All percentages are of the account size (`accounts.reference_balance`, PRD 6.8/6.9), never of the current or period-start balance. Symbols are canonical names (`trades.symbol`, M5-08). Periods are Brussels calendar dates (DECISIONS 2026-10-31): week = Monday..Sunday, month = calendar month. Money and R as strings (plain notation, 2 dp money, 4 dp percent/R, ROUND_HALF_UP at the API edge only; Decimal everywhere inside). The UI shows percentages with 2 decimals, format `-0.42%`, on every M6 screen (dashboard and digests); 4 decimals only in the API (PM 2026-11-13). R display in the UI is decided in M6-06.
 
 ### Which trades
 - Period trades = **closed** trades (`close_time` not null, `net_pnl` not null) whose Brussels close date is inside the period, all accounts that are not archived. Open trades are never in metrics.
@@ -558,7 +558,7 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - Norm per account and combined (PM 2026-11-13): the digest has `combined` and `by_account[]` metric blocks, each with its own norm from that account's (or all accounts') history. Breakdowns, rules and bias sections are combined.
 - The window is cut into periods of the same kind (weeks or months, only periods that have ≥ 1 trade); each metric is computed per period; norm = mean and population standard deviation over those periods.
 - Highlight when the period value is worse than mean − k × σ (red) or better than mean + k × σ (green), k = `digest.deviation_sigma` in `config/rules.yaml` (default 1.0). "Better" = higher for net_pnl, net_pnl_pct, total_r, win_rate, avg_win_r, avg_loss_r, expectancy_r, profit_factor; lower for max_drawdown (money and %), and violations count. `trades` is not highlighted.
-- Fewer than 20 trading days of history (weekdays from the first closed trade of that scope to `period_start`) → no highlight, block flag `norm_available: false`, UI «замало історії для норми» (PM 2026-11-13). Also no highlight with < 3 norm periods or σ = 0 (`deviation: null`).
+- Fewer than 20 trading days of history → no highlight, block flag `norm_available: false`, UI «замало історії для норми» (PM 2026-11-13). Trading days are weekdays counted from the first closed trade of that scope to `period_start` (DECISIONS 2026-11-13). Also no highlight with < 3 norm periods or σ = 0, `deviation: null` (technical guard, DECISIONS 2026-11-13).
 - Each metric: `{value, norm_mean, norm_sd, deviation: "worse" | "better" | null}`.
 
 ### Charts data
@@ -574,7 +574,7 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - `GET /api/digests/{id}` → full digest; `GET /api/digests/by-period?kind=&date=` → digest or 404.
 - `PATCH /api/digests/{id} {what_worked?, what_to_fix?, focus_next?}` (text, max 10 000 chars, `""` → null).
 - Next-period bias: the digest page embeds the existing bias note form (`POST/PUT /api/bias/notes`, kind weekly/monthly, date = next period start). The digest response has `next_bias_note_id` (null if none yet).
-- `GET /api/digests/suggestion` → `{weekly: {period_start} | null, monthly: {period_start} | null}`: weekly from Friday 16:00 Brussels; monthly from 16:00 on the last trading day (last weekday Mon–Fri) of the month. A suggestion stays until that period's digest has a saved review (any of what_worked / what_to_fix / focus_next non-empty), also after the period ended, not just on that day (PM 2026-11-13); when several periods are unreviewed, the oldest unreviewed period of each kind is returned. Only periods from the first closed trade on are suggested. Shown on «Головна» and «Дайджести».
+- `GET /api/digests/suggestion` → `{weekly: {period_start} | null, monthly: {period_start} | null}`: weekly from Friday 16:00 Brussels; monthly from 16:00 on the last trading day (last weekday Mon–Fri) of the month. A suggestion stays until that period's digest has a saved review (any of what_worked / what_to_fix / focus_next non-empty), also after the period ended, not just on that day (PM 2026-11-13). When several periods are unreviewed, the oldest unreviewed period of each kind is returned (DECISIONS 2026-11-13). Only periods from the first closed trade on are suggested. Shown on «Головна» and «Дайджести».
 - `POST /api/digests/{id}/ai-summary` (task M6-07, only on button press): one Claude call on `ANTHROPIC_MODEL_SUMMARY` (existing client and usage log, purpose `digest_summary`), input = the snapshot numbers + journal texts (mistakes, lesson, raw text) of the period's trades; output = 3–7 short factual observations in Ukrainian, no advice, no moralising; stored in `ai_summary`. Errors as M2 (`ai_not_configured` / `ai_error`), visible in UI and logs.
 
 ### Dashboard API (PRD 6.10)
@@ -583,7 +583,6 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - `stop.today` = any account's today_state ≠ ok → banner «СТОП на сьогодні»; `stop.week` → «СТОП на тиждень».
 - Open positions: `{trade_id, account_name, symbol, direction, volume, entry_price, open_time, initial_sl, risk_amount, risk_pct}`.
 - M6-03 details (2026-11-13): `today`/`week` = `{pnl, pct, low_pnl, low_pct, high_pnl, high_pct}` (money 2 dp, % 4 dp strings). `limits` values are 4 dp strings (`"-3.0000"`); a stop rule disabled in rules.yaml → that limit is `null` and never stops. An account without a usable size (not finite or ≤ 0) → zero blocks, state `ok`. Open positions sorted by `open_time` ascending (then trade_id); `open_time` ISO UTC; `risk_amount`/`risk_pct` null without SL. `inbox` = `GET /api/inbox/counts` (archived accounts excluded). The endpoint takes `now` via `Depends(utc_now)`.
-- UI shows percentages with 2 decimals (e.g. «−0.42 %»); 4 decimals only in the API (PM 2026-11-13).
 - Home page: bias status (exists), limits per account with the banner, inbox counts with links, open positions, sync status per account (existing endpoint), links to calculator and describe, digest suggestion.
 
 ### Acceptance (ROADMAP M6)
