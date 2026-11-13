@@ -27,6 +27,7 @@ from app.errors import ApiError, config_error
 from app.models import Account, BiasEntry, BiasNote, Digest, Trade
 from app.models.enums import AccountStatus, BiasKind, DigestKind
 from app.schemas import digests as schemas
+from app.schemas.dashboard import money_str
 from app.services.digest_snapshot import Json, Scope, SnapshotInput, build_snapshot
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,6 @@ FRIDAY = 4
 _NON_SCALAR_TYPES = frozenset({"multi_enum", "links"})
 _DAILY_BIAS_KINDS = (BiasKind.PRE_LONDON.value, BiasKind.PRE_NY.value)
 _KINDS: tuple[dm.PeriodKind, ...] = ("weekly", "monthly")
-_CENT = Decimal("0.01")
 
 
 # --- time helpers ----------------------------------------------------------------------------
@@ -413,7 +413,7 @@ def _virtual_items(
             period_end=dm.period_end(kind, start),
             generated_at=None,
             trades=count,
-            net_pnl=str(net.quantize(_CENT)),
+            net_pnl=money_str(net),
             net_pnl_pct=None,
             total_r=None,
             win_rate=None,
