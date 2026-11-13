@@ -347,7 +347,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02: tests committed RED (5861fa0) on m6/digest-metrics, backend-dev implementing app/domain/digest_metrics.py; then make check, code-reviewer + python-reviewer, merge.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02: tests committed RED (5861fa0) on m6/digest-metrics, implemented 8200def (77 tests, 100 % cov, make check 2847+1/413). python-reviewer APPROVE (MEDIUM: Literal kind, read-only mappings, param shadowing); code-reviewer CHANGES REQUESTED (HIGH: monthly norm partial first month -> align window to period start; exact direction sets; end-to-end norm test). Fix batch: tdd-guide tests, then backend-dev, re-review, merge.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
