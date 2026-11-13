@@ -547,17 +547,18 @@ PRD 6.7, 6.9, 6.10; ROADMAP M6. All percentages are of the account size (`accoun
 - Empty period: counts 0, sums "0.00", ratios null.
 
 ### Breakdowns
-By `symbol`, `session`, `hour` (Brussels hour of open), `weekday`, `entry_model`, `poi_type`, `bias_alignment` (effective = override ?? auto), `followed_plan`, `emotion_before`. Each group: `{key, trades, net_pnl, total_r, win_rate}`; trades with an empty field go to key `null` («не заповнено»). Every journal-field breakdown has `coverage: {filled, total}` (DECISIONS 2026-11-04).
+Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour of open), `weekday`, `bias_alignment` (effective = override ?? auto). Journal fields: every field with `analytics: true` in `config/journal_fields.yaml` (in file order; columns and `extra` storage alike), so a new analytic field needs no code change (PM 2026-11-13; replaces the fixed list entry_model, poi_type, followed_plan, emotion_before). Each group: `{key, trades, net_pnl, total_r, win_rate}`; trades with an empty field go to key `null` («не заповнено»). Every journal-field breakdown has `coverage: {filled, total}` (DECISIONS 2026-11-04), shown as «заповнено 34/50».
 
 ### Rules and bias sections
 - Rules: per `rule_key` `{rule_key, violations, trades, pnl}`; `pnl` = sum of net_pnl of the trades with that violation (signed; a trade with two violations counts in both). Total line: distinct trades with any violation and their net_pnl.
-- Bias: `accuracy` = bias entries of the period with `was_correct = true` / entries marked (true or false) × 100, `{value, marked, total}`; P&L and R of `aligned` vs `counter` trades (effective alignment).
+- Bias, separately for `daily` (pre_london + pre_ny entries; trade alignment = effective `bias_alignment`), `weekly` (`bias_alignment_weekly`) and `monthly` (`bias_alignment_monthly`) (PM 2026-11-13): `accuracy` = entries of that kind in the period with `was_correct = true` / entries marked (true or false) × 100, `{value, marked, total}`; P&L, R and trade count of `aligned` vs `counter` trades.
 
 ### Norm and deviation
-- Norm window: closed trades in the 60 weekdays (Mon–Fri, Brussels) before `period_start`; fewer than 60 weekdays of history → all history before the period.
+- Norm window: closed trades in the 60 trading days (weekdays Mon–Fri, Brussels) before `period_start`, aligned to the start of its period kind (DECISIONS 2026-11-13); fewer than 60 trading days of history → all history before the period.
+- Norm per account and combined (PM 2026-11-13): the digest has `combined` and `by_account[]` metric blocks, each with its own norm from that account's (or all accounts') history. Breakdowns, rules and bias sections are combined.
 - The window is cut into periods of the same kind (weeks or months, only periods that have ≥ 1 trade); each metric is computed per period; norm = mean and population standard deviation over those periods.
 - Highlight when the period value is worse than mean − k × σ (red) or better than mean + k × σ (green), k = `digest.deviation_sigma` in `config/rules.yaml` (default 1.0). "Better" = higher for net_pnl, net_pnl_pct, total_r, win_rate, avg_win_r, avg_loss_r, expectancy_r, profit_factor; lower for max_drawdown (money and %), and violations count. `trades` is not highlighted.
-- Fewer than 3 norm periods, or σ = 0 → no highlight, `deviation: null`, UI «замало історії для норми».
+- Fewer than 20 trading days of history (weekdays from the first closed trade of that scope to `period_start`) → no highlight, block flag `norm_available: false`, UI «замало історії для норми» (PM 2026-11-13). Also no highlight with < 3 norm periods or σ = 0 (`deviation: null`).
 - Each metric: `{value, norm_mean, norm_sd, deviation: "worse" | "better" | null}`.
 
 ### Charts data
@@ -573,8 +574,8 @@ By `symbol`, `session`, `hour` (Brussels hour of open), `weekday`, `entry_model`
 - `GET /api/digests/{id}` → full digest; `GET /api/digests/by-period?kind=&date=` → digest or 404.
 - `PATCH /api/digests/{id} {what_worked?, what_to_fix?, focus_next?}` (text, max 10 000 chars, `""` → null).
 - Next-period bias: the digest page embeds the existing bias note form (`POST/PUT /api/bias/notes`, kind weekly/monthly, date = next period start). The digest response has `next_bias_note_id` (null if none yet).
-- `GET /api/digests/suggestion` → `{weekly: {period_start} | null, monthly: {period_start} | null}`: weekly from Friday 16:00 Brussels until the end of Sunday when that week has no digest; monthly from 16:00 on the last weekday (Mon–Fri) of the month until the end of the month when that month has none. Shown on «Головна» and «Дайджести».
-- `POST /api/digests/{id}/ai-summary`: one Claude call (existing client, model and usage log, purpose `digest_summary`), input = the snapshot numbers + journal texts (mistakes, lesson, raw text) of the period's trades; output = 3–7 short factual observations in Ukrainian, no advice, no moralising; stored in `ai_summary`. Errors as M2 (`ai_not_configured` / `ai_error`), visible in UI and logs.
+- `GET /api/digests/suggestion` → `{weekly: {period_start} | null, monthly: {period_start} | null}`: weekly from Friday 16:00 Brussels; monthly from 16:00 on the last trading day (last weekday Mon–Fri) of the month. A suggestion stays until that period's digest has a saved review (any of what_worked / what_to_fix / focus_next non-empty), also after the period ended, not just on that day (PM 2026-11-13); when several periods are unreviewed, the oldest unreviewed period of each kind is returned. Only periods from the first closed trade on are suggested. Shown on «Головна» and «Дайджести».
+- `POST /api/digests/{id}/ai-summary` (task M6-07, only on button press): one Claude call on `ANTHROPIC_MODEL_SUMMARY` (existing client and usage log, purpose `digest_summary`), input = the snapshot numbers + journal texts (mistakes, lesson, raw text) of the period's trades; output = 3–7 short factual observations in Ukrainian, no advice, no moralising; stored in `ai_summary`. Errors as M2 (`ai_not_configured` / `ai_error`), visible in UI and logs.
 
 ### Dashboard API (PRD 6.10)
 - `GET /api/dashboard` → `{now, accounts: [...], stop: {today: bool, week: bool}, open_positions: [...], inbox: {needs_sl, needs_description, draft}}`.
@@ -582,6 +583,7 @@ By `symbol`, `session`, `hour` (Brussels hour of open), `weekday`, `entry_model`
 - `stop.today` = any account's today_state ≠ ok → banner «СТОП на сьогодні»; `stop.week` → «СТОП на тиждень».
 - Open positions: `{trade_id, account_name, symbol, direction, volume, entry_price, open_time, initial_sl, risk_amount, risk_pct}`.
 - M6-03 details (2026-11-13): `today`/`week` = `{pnl, pct, low_pnl, low_pct, high_pnl, high_pct}` (money 2 dp, % 4 dp strings). `limits` values are 4 dp strings (`"-3.0000"`); a stop rule disabled in rules.yaml → that limit is `null` and never stops. An account without a usable size (not finite or ≤ 0) → zero blocks, state `ok`. Open positions sorted by `open_time` ascending (then trade_id); `open_time` ISO UTC; `risk_amount`/`risk_pct` null without SL. `inbox` = `GET /api/inbox/counts` (archived accounts excluded). The endpoint takes `now` via `Depends(utc_now)`.
+- UI shows percentages with 2 decimals (e.g. «−0.42 %»); 4 decimals only in the API (PM 2026-11-13).
 - Home page: bias status (exists), limits per account with the banner, inbox counts with links, open positions, sync status per account (existing endpoint), links to calculator and describe, digest suggestion.
 
 ### Acceptance (ROADMAP M6)
