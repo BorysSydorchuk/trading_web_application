@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DescriptionInput } from '@/features/describe/DescriptionInput'
@@ -12,7 +12,7 @@ import { BiasEntryCard } from './BiasEntryCard'
 import { BiasPeriodFields } from './BiasPeriodFields'
 import { DeleteBiasDialog } from './DeleteBiasDialog'
 import type { BiasKind, BiasNote } from './types'
-import { useBiasActions, type BiasActions } from './useBiasActions'
+import { useBiasActions, type BiasActions, type EmbeddedBiasCallbacks } from './useBiasActions'
 import { useBiasForm, type BiasForm } from './useBiasForm'
 
 const e = uk.bias.editor
@@ -27,15 +27,25 @@ export interface BiasEditorProps {
   date: string
   /** The editor created its note (voice upload or a save that stays): the page keeps this editor. */
   onCreated: (note: BiasNote) => void
+  /**
+   * Embedded in another screen (digest page): the period is fixed and shown as `title`
+   * instead of the kind/date fields; save and delete stay on that screen.
+   */
+  embedded?: EmbeddedBiasCallbacks & {
+    title: ReactNode
+    /** Unsaved edits elsewhere on the host screen, guarded by this editor's (single) blocker. */
+    extraDirty?: boolean
+    unsavedDescription?: string
+  }
 }
 
 /** Bias note editor (PRD 6.6): kind + date, text and voice, "Заповнити з тексту", one card per symbol. */
-export function BiasEditor({ symbols, note, kind, date, onCreated }: BiasEditorProps) {
+export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: BiasEditorProps) {
   const form = useBiasForm({ symbols, note, kind, date })
   const [unsentRecording, setUnsentRecordingState] = useState(false)
   // Read when a save lands (after this render), so a ref next to the state.
   const unsentRecordingRef = useRef(false)
-  const actions = useBiasActions({ form, initialNoteId: note?.id ?? null, unsentRecordingRef, onCreated })
+  const actions = useBiasActions({ form, initialNoteId: note?.id ?? null, unsentRecordingRef, onCreated, embedded })
   const upload = useUploadBiasAudio(actions.ensureNoteId)
 
   function setUnsentRecording(unsent: boolean) {
@@ -46,7 +56,7 @@ export function BiasEditor({ symbols, note, kind, date, onCreated }: BiasEditorP
   return (
     <div data-bias-editor className="flex flex-col gap-4">
       <section aria-label={e.period} className="flex flex-col gap-3 rounded-lg border p-4">
-        <BiasPeriodFields form={form} noteId={actions.noteId} />
+        {embedded ? embedded.title : <BiasPeriodFields form={form} noteId={actions.noteId} />}
       </section>
       <div className="flex flex-col gap-4 rounded-lg border p-4">
         <DescriptionInput
@@ -75,9 +85,9 @@ export function BiasEditor({ symbols, note, kind, date, onCreated }: BiasEditorP
       <SaveBar form={form} actions={actions} />
       {/* A recording that only exists in the browser is lost on leaving, like unsaved edits. */}
       <UnsavedChangesGuard
-        dirty={form.dirty || unsentRecording}
+        dirty={form.dirty || unsentRecording || (embedded?.extraDirty ?? false)}
         allowLeaveRef={actions.allowLeaveRef}
-        description={e.unsaved}
+        description={embedded?.unsavedDescription ?? e.unsaved}
       />
     </div>
   )
