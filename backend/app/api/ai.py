@@ -115,23 +115,23 @@ def extract(
             config=config,
             number_words=number_words,
             client=client,
-            settings=_extraction_settings(),
+            settings=extraction_settings(),
             usage_log=usage_log,
             scope=scope,
         )
     except ExtractionFailed as exc:
-        raise _ai_error(exc, key_tracker) from None
+        raise ai_call_error(exc, key_tracker) from None
     return _to_result(outcome)
 
 
-def _ai_error(exc: ExtractionFailed, key_tracker: KeyStatusTracker) -> ApiError:
+def ai_call_error(exc: ExtractionFailed, key_tracker: KeyStatusTracker) -> ApiError:
     """502 ai_error; an auth error also marks the key invalid (M3-17)."""
     if exc.kind == "auth":
         key_tracker.mark_invalid(exc.message)
     return ApiError(502, "ai_error", f"AI call failed: {exc.message}", {"kind": exc.kind})
 
 
-def _extraction_settings() -> ExtractionSettings:
+def extraction_settings() -> ExtractionSettings:
     settings = get_settings()
     return ExtractionSettings(
         primary_model=settings.anthropic_model_extraction,
@@ -177,11 +177,11 @@ def extract_bias(
             config=config,
             number_words=number_words,
             client=client,
-            settings=_extraction_settings(),
+            settings=extraction_settings(),
             usage_log=usage_log,
         )
     except ExtractionFailed as exc:
-        raise _ai_error(exc, key_tracker) from None
+        raise ai_call_error(exc, key_tracker) from None
     return _bias_result(outcome)
 
 
