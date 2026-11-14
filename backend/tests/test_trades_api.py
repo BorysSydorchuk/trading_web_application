@@ -664,3 +664,36 @@ def test_same_currency_user_sl_still_uses_tick_value(
     session.commit()
 
     assert patch_sl(client, trade, "2645")["risk_amount"] == "250.00"  # 5 / 0.01 * 1.00 * 0.5
+
+
+# --- missing_r filter (Borys/PM 2026-11-14: «Сума R» n/N link from digests) -------------------
+
+
+def test_missing_r_lists_only_closed_trades_without_r(client: TestClient, session: Session) -> None:
+    a = add_account(session, "Alpha", 1)
+    with_r = add_trade(session, a, r_multiple=Decimal("1.5"))
+    no_r = add_trade(session, a, r_multiple=None)
+    add_trade(session, a, status="open", close_time=None, net_pnl=None, gross_pnl=None)
+
+    response = client.get("/api/trades", params={"missing_r": "true"})
+
+    assert ids(response) == [no_r.id]
+    assert response.json()["total"] == 1
+    assert with_r.id in ids(client.get("/api/trades", params={"missing_r": "false"}))
+
+
+def test_missing_r_combines_with_account_and_dates(client: TestClient, session: Session) -> None:
+    a = add_account(session, "Alpha", 1)
+    b = add_account(session, "Beta", 2)
+    keep = add_trade(session, a, r_multiple=None)
+    add_trade(session, a, r_multiple=Decimal("1.0"))  # same account and day, has R
+    add_trade(session, b, r_multiple=None)
+    add_trade(session, a, r_multiple=None, open_time=T0 - timedelta(days=10),
+              close_time=T0 - timedelta(days=10) + timedelta(minutes=30))  # fmt: skip
+    day = T0.date().isoformat()
+
+    response = client.get(
+        "/api/trades", params={"missing_r": "true", "account_id": a.id, "from": day, "to": day}
+    )
+
+    assert ids(response) == [keep.id]

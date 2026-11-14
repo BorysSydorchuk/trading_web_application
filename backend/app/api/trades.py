@@ -250,11 +250,15 @@ def list_trades(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     missing_new_fields: bool = Query(default=False),
+    # Closed trades without an R multiple (digest «Сума R» n/N link, PM 2026-11-14).
+    missing_r: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
     if missing_new_fields:
         conditions.append(missing_new_fields_condition(*journal_context(db)))
+    if missing_r:
+        conditions.extend((Trade.close_time.is_not(None), Trade.r_multiple.is_(None)))
     total = db.scalar(select(func.count()).select_from(Trade).where(*conditions)) or 0
 
     column = getattr(Trade, sort)

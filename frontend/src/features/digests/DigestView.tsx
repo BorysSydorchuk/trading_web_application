@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
 import { DigestCharts } from './charts/DigestCharts'
-import { formatDateBrussels, formatPeriod } from './format'
+import { formatDateBrussels, formatPeriod, missingRPath } from './format'
 import { MetricBlockCard } from './MetricBlockCard'
 import { NextPeriodBias } from './NextPeriodBias'
 import { ReviewForm } from './ReviewForm'
@@ -30,9 +30,20 @@ export function DigestView({ digest }: { digest: Digest }) {
         </section>
       )}
       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-        <MetricBlockCard title={uk.digests.blocks.combined} block={snapshot.combined} currency={snapshot.currency} />
+        <MetricBlockCard
+          title={uk.digests.blocks.combined}
+          block={snapshot.combined}
+          currency={snapshot.currency}
+          missingRHref={missingRPath(digest)}
+        />
         {snapshot.by_account.map((block) => (
-          <MetricBlockCard key={block.account_id} title={block.account_name} block={block} currency={snapshot.currency} />
+          <MetricBlockCard
+            key={block.account_id}
+            title={block.account_name}
+            block={block}
+            currency={snapshot.currency}
+            missingRHref={missingRPath(digest, block.account_id)}
+          />
         ))}
       </div>
       <DigestCharts snapshot={snapshot} />

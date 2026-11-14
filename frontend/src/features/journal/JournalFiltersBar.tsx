@@ -113,6 +113,22 @@ export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps)
         />
         {j.filters.missingNewFields}
       </label>
+      <label
+        htmlFor={`${id}-missing-r`}
+        className={cn(
+          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
+          filters.missingR ? 'border-ring' : 'text-muted-foreground',
+        )}
+      >
+        <input
+          id={`${id}-missing-r`}
+          type="checkbox"
+          className="size-3.5 accent-primary"
+          checked={filters.missingR}
+          onChange={(e) => update({ missingR: e.target.checked })}
+        />
+        {j.filters.missingR}
+      </label>
       {hasActiveFilters(filters) && (
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onChange(clearedFilters(filters))}>
           {j.resetFilters}

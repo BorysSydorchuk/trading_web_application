@@ -38,6 +38,15 @@ describe('missing_new_fields filter', () => {
     expect(parseFilters(params)).toEqual(filters)
   })
 
+  it('round-trips missing_r and counts it as an active filter', () => {
+    const f = parse('missing_r=true&period=custom&from=2026-11-09&to=2026-11-15&account=2')
+    expect(f.missingR).toBe(true)
+    expect(hasActiveFilters(f)).toBe(true)
+    expect(filtersToParams(f).get('missing_r')).toBe('true')
+    expect(toTradeQuery(f, '2026-11-14')).toMatchObject({ missing_r: true, from: '2026-11-09', to: '2026-11-15', account_id: [2] })
+    expect(clearedFilters(f).missingR).toBe(false)
+  })
+
   it('is cleared by "reset filters"', () => {
     expect(clearedFilters(parse('missing_new_fields=true&page=2'))).toMatchObject({
       missingNewFields: false,
