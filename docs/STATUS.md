@@ -10,9 +10,9 @@ Current milestone: **M7 Hardening — plan ACCEPTED; M7-01 [L] only authorized**
 
 ### M7-01 [L] implementation — owner codex
 
-- Branch `m7/backups`; RED checkpoint `7f85548` (missing service import); legacy pre-migration protection RED 2 tests, CLI RED missing import; gitignored destination guard RED then GREEN. GREEN focused backup/CLI/migration/UTF-8 regressions: 65 PASS; ruff and focused strict mypy green (final full gate still required).
+- Branch `m7/backups`; RED checkpoint `7f85548` (missing service import); legacy pre-migration protection RED 2 tests, CLI RED missing import; gitignored destination guard RED then GREEN. Docker cluster identity review fix RED 3/GREEN; focused backup/CLI/migration/UTF-8 regressions: 68 PASS. First full gate e1d53ff PASS; final post-review gate required on replacement commit.
 - Verified scoped store, atomic archive+manifest directory publication, full pg_restore read/TOC inspection, SHA-256 checks, exclusive scope lock, explicit union retention; manual/pre-migration never auto-pruned. One-shot CLI, no scheduler/UI/API changes.
-- Synthetic isolated restore PASS: source `tj_backup_src_20261114204037_test`, restore `tj_backup_restore_20261114204037_test`; 17 tables, 95 constraints, migration cdb0477c3b70, row counts and Decimal/Unicode/UTC probe values match. Earlier diagnostic drill DBs and existing QA DBs preserved. No real DB migrations/resets, MT5 or paid AI/Whisper calls.
+- Synthetic isolated restore PASS on final cluster-guard code: source `tj_backup_src_20261114205024_test`, restore `tj_backup_restore_20261114205024_test`; 17 tables, 95 constraints, migration cdb0477c3b70, row counts and Decimal/Unicode/UTC probe values match. Earlier diagnostic drill DBs and existing QA DBs preserved. No real DB migrations/resets, MT5 or paid AI/Whisper calls.
 - Detailed evidence, changed files, owner checks and limitations: `docs/reports/M7-01.md`. Final-commit make check and PRD/general/Python/database/security self-review results belong in the merge message. Stop for PM acceptance before M7-02.
 
 ## Environment notes (dev laptop)

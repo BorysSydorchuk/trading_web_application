@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.services import backups as b
+from app.tools.migrate import parse_target
 
 URL = "postgresql+psycopg://journal:fake-secret@127.0.0.1:5432/synthetic_test"
 NOW = datetime(2026, 11, 14, 18, tzinfo=UTC)
@@ -280,3 +281,24 @@ def test_in_repo_destination_must_stay_gitignored() -> None:
 
     with pytest.raises(b.BackupFailure, match="gitignored"):
         service(REPO_ROOT / "frontend" / "backup-output")
+
+
+@pytest.mark.parametrize("docker_id", [b"12345\n", b"99999\n", b"not-an-id\n"])
+def test_docker_fallback_requires_same_cluster(
+    monkeypatch: pytest.MonkeyPatch, docker_id: bytes
+) -> None:
+    import subprocess
+
+    monkeypatch.setattr(
+        b.PostgresTools, "_cluster_id", staticmethod(lambda url: "12345"), raising=False
+    )
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 0, stdout=docker_id),
+    )
+    target = parse_target(URL)
+    if docker_id == b"12345\n":
+        b.PostgresTools._confirm_compose(URL, target)
+    else:
+        with pytest.raises(b.BackupFailure, match="cluster"):
+            b.PostgresTools._confirm_compose(URL, target)

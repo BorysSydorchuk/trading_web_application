@@ -119,7 +119,53 @@ class PostgresTools:
         plan = dump_plan(
             target, path, which=shutil.which, compose_dir=REPO_ROOT, compose_port=self.compose_port
         )
+        if plan.to_stdout:
+            self._confirm_compose(url, target)
         run_dump(plan, path, subprocess_runner)
+
+    @staticmethod
+    def _cluster_id(url: str) -> str:
+        from sqlalchemy import create_engine, text
+
+        engine = create_engine(url, connect_args={"connect_timeout": 5})
+        try:
+            with engine.connect() as conn:
+                return str(conn.scalar(text("SELECT system_identifier FROM pg_control_system()")))
+        finally:
+            engine.dispose()
+
+    @staticmethod
+    def _confirm_compose(url: str, target: DbTarget) -> None:
+        """Never assume a local native server is the compose cluster with the same DB name."""
+        expected = PostgresTools._cluster_id(url)
+        result = subprocess.run(  # noqa: S603 - fixed argv, no shell, no password in argv
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "db",
+                "psql",
+                "-X",
+                "-A",
+                "-t",
+                "-U",
+                target.user,
+                "-d",
+                target.database,
+                "-c",
+                "SELECT system_identifier FROM pg_control_system()",
+            ],
+            cwd=REPO_ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+        actual = result.stdout.decode("ascii", errors="replace").strip()
+        if result.returncode or not expected.isdecimal() or actual != expected:
+            raise BackupFailure("Docker backup cluster identity mismatch")
 
     @staticmethod
     def _confirm_target(url: str, target: DbTarget) -> None:
