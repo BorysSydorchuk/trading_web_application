@@ -34,7 +34,7 @@ export function DigestView({ digest }: { digest: Digest }) {
           title={uk.digests.blocks.combined}
           block={snapshot.combined}
           currency={snapshot.currency}
-          missingRHref={missingRPath(digest)}
+          missingRHref={missingRPath(digest, snapshot.by_account.map((block) => block.account_id))}
         />
         {snapshot.by_account.map((block) => (
           <MetricBlockCard
@@ -42,7 +42,7 @@ export function DigestView({ digest }: { digest: Digest }) {
             title={block.account_name}
             block={block}
             currency={snapshot.currency}
-            missingRHref={missingRPath(digest, block.account_id)}
+            missingRHref={missingRPath(digest, [block.account_id])}
           />
         ))}
       </div>

@@ -35,10 +35,11 @@ describe('«Сума R» coverage link (PM 2026-11-14)', () => {
     expect(screen.queryByRole('link', { name: /без R/ })).not.toBeInTheDocument()
   })
 
-  it('builds the journal path for the period and one account', () => {
+  it('builds the journal path for the period and the digest accounts', () => {
     const digest = { period_start: '2026-11-09', period_end: '2026-11-15' }
 
-    expect(missingRPath(digest)).toBe(HREF)
-    expect(missingRPath(digest, 2)).toBe(`${HREF}&account=2`)
+    expect(missingRPath(digest, [])).toBe(HREF)
+    expect(missingRPath(digest, [2])).toBe(`${HREF}&account=2`)
+    expect(missingRPath(digest, [1, 2])).toBe(`${HREF}&account=1&account=2`)
   })
 })

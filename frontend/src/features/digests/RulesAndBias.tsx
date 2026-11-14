@@ -82,18 +82,18 @@ function BiasScopeCard({ title, scope, currency }: { title: string; scope: BiasS
       <p className="num text-right text-xs text-muted-foreground">{bi.marked(accuracy.marked, accuracy.total)}</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-        <thead className="text-xs text-muted-foreground">
-          <tr>
-            <th scope="col" className={`${TH} pl-0 text-left`}>{bi.side}</th>
-            <th scope="col" className={`${TH} text-right`}>{bi.trades}</th>
-            <th scope="col" className={`${TH} text-right`}>{uk.digests.withCurrency(bi.netPnl, currency)}</th>
-            <th scope="col" className={`${TH} pr-0 text-right`}>{bi.totalR}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <SideRow label={bi.aligned} side={scope.aligned} />
-          <SideRow label={bi.counter} side={scope.counter} />
-        </tbody>
+          <thead className="text-xs text-muted-foreground">
+            <tr>
+              <th scope="col" className={`${TH} pl-0 text-left`}>{bi.side}</th>
+              <th scope="col" className={`${TH} text-right`}>{bi.trades}</th>
+              <th scope="col" className={`${TH} text-right`}>{uk.digests.withCurrency(bi.netPnl, currency)}</th>
+              <th scope="col" className={`${TH} pr-0 text-right`}>{bi.totalR}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <SideRow label={bi.aligned} side={scope.aligned} />
+            <SideRow label={bi.counter} side={scope.counter} />
+          </tbody>
         </table>
       </div>
     </article>

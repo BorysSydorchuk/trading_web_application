@@ -102,9 +102,12 @@ function trimR(value: string): string {
   return trimDecimal(roundDecimal(value, 2))
 }
 
-/** Journal: closed trades without R in the digest period (Brussels close dates), optionally one account. */
-export function missingRPath(digest: Pick<Digest, 'period_start' | 'period_end'>, accountId?: number): string {
+/**
+ * Journal: closed trades without R in the digest period (Brussels close dates) of the given accounts
+ * (the digest's accounts, so archived accounts' trades are not listed and the count matches).
+ */
+export function missingRPath(digest: Pick<Digest, 'period_start' | 'period_end'>, accountIds: readonly number[]): string {
   const params = new URLSearchParams({ period: 'custom', from: digest.period_start, to: digest.period_end, missing_r: 'true' })
-  if (accountId !== undefined) params.append('account', String(accountId))
+  for (const id of accountIds) params.append('account', String(id))
   return `/journal?${params.toString()}`
 }
