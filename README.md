@@ -88,11 +88,24 @@ Without make: `python scripts/dev.py [--no-browser | --ensure-db | --stop]`.
 apply migrations through `python -m app.tools.migrate`: when a migration is pending on the
 dev DB it first runs `pg_dump -Fc` (host `pg_dump`, or `docker compose exec db pg_dump` for a
 local Docker DB) to `backups/pre-migration-<revision>-<UTC time>.dump`, prints the path and
-keeps the 10 newest. If the backup fails, the migration is not applied. Databases ending in
-`_test` are not backed up. Restore: `pg_restore -c -d trading_journal <file>` (add `-h/-U`
-as needed), or with Docker
-`docker compose exec -T db pg_restore -c -U journal -d trading_journal < <file>`. A raw
+never automatically prunes pre-migration archives (M7 PM decision). If the backup fails,
+the migration is not applied. Databases ending in `_test` are not backed up.
+Restore drills must target a newly created isolated database, never the dev database
+or existing QA data; verify schema and data before considering recovery. Local backups
+do not protect against physical disk failure. A raw
 `alembic upgrade head` bypasses the backup.
+
+**Verified one-shot backup (M7-01).** From normal PowerShell in the repo root:
+`uv run --project backend python -m app.tools.backup` creates a manual backup of the
+configured application DB. Optional `--root "D:\JournalBackups"` changes the destination
+(default `backups/`, gitignored; keep external folders private and outside version control).
+Manual and pre-migration archives are never automatically deleted. Explicit `--kind daily`
+creates a daily archive and then retains the union of 14 daily, 8 weekly and 6 monthly
+verified representatives, selected by Europe/Brussels periods. No automatic scheduler
+is installed in M7-01. Publication includes `archive.dump` and checksum `manifest.json`
+in a target-hashed folder; PostgreSQL TOC/data inspection and SHA-256 detect damage.
+A scope `.lock` left after a crash requires confirming no backup process is active
+before an owner removes that lock; never remove a live process's lock.
 
 ## Using native PostgreSQL instead of Docker
 

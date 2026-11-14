@@ -303,7 +303,7 @@ def _stamp(i: int) -> str:
     return f"202611{i + 1:02d}T120000Z"
 
 
-def test_rotation_keeps_ten_newest_and_ignores_other_files(env: Env) -> None:
+def test_pre_migration_backups_are_never_automatically_pruned(env: Env) -> None:
     env.backups.mkdir()
     old = [env.backups / f"pre-migration-rev{i}-{_stamp(i)}.dump" for i in range(12)]
     for path in old:
@@ -321,10 +321,10 @@ def test_rotation_keeps_ten_newest_and_ignores_other_files(env: Env) -> None:
 
     assert code == 0, err
     kept = sorted(p.name for p in env.backups.glob("pre-migration-*-*T*Z.dump"))
-    expected = sorted([EXPECTED_NAME, *(p.name for p in old[-9:])])
+    expected = sorted([EXPECTED_NAME, *(p.name for p in old)])
     assert kept == expected
     assert all(p.exists() for p in others)
-    assert "Видалено старих резервних копій: 3" in out
+    assert "Видалено старих резервних копій" not in out
 
 
 def test_rotate_backups_noop_when_ten_or_fewer(tmp_path: Path) -> None:
@@ -439,7 +439,7 @@ def test_cannot_open_partial_reports_io_error(env: Env, monkeypatch: pytest.Monk
     assert env.upgrade.calls == []
 
 
-def test_rotation_unlink_failure_warns_and_continues(
+def test_pre_migration_retention_never_attempts_unlink(
     env: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env.backups.mkdir()
@@ -458,10 +458,10 @@ def test_rotation_unlink_failure_warns_and_continues(
     code, _, err = env.run()
 
     assert code == 0, err
-    assert ROTATE_FAILED in err
+    assert ROTATE_FAILED not in err
     assert locked.exists()
     assert (env.backups / EXPECTED_NAME).exists()
-    assert not (env.backups / f"pre-migration-rev1-{_stamp(1)}.dump").exists()
+    assert (env.backups / f"pre-migration-rev1-{_stamp(1)}.dump").exists()
     assert len(env.upgrade.calls) == 1
 
 

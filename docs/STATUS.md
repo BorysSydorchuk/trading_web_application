@@ -8,6 +8,13 @@ Current milestone: **M7 Hardening — plan ACCEPTED; M7-01 [L] only authorized**
 - Proposed M7-01..08 scopes, tiers, acceptance, tests, owner checks, dependencies and risks: `docs/reports/M7-plan.md`.
 - Plan accepted; final decisions recorded in DECISIONS.md. Documentation gate evidence will be in merge message. Next: M7-01 [L] owner codex, branch `m7/backups`, tests first, isolated synthetic restore, specialist/security self-review and final-commit full gate. M7-02 blocked on PM acceptance of M7-01. No QA deletion, real-data destruction or paid AI calls.
 
+### M7-01 [L] implementation — owner codex
+
+- Branch `m7/backups`; RED checkpoint `7f85548` (missing service import); legacy pre-migration protection RED 2 tests, CLI RED missing import; gitignored destination guard RED then GREEN. GREEN focused backup/CLI/migration/UTF-8 regressions: 65 PASS; ruff and focused strict mypy green (final full gate still required).
+- Verified scoped store, atomic archive+manifest directory publication, full pg_restore read/TOC inspection, SHA-256 checks, exclusive scope lock, explicit union retention; manual/pre-migration never auto-pruned. One-shot CLI, no scheduler/UI/API changes.
+- Synthetic isolated restore PASS: source `tj_backup_src_20261114204037_test`, restore `tj_backup_restore_20261114204037_test`; 17 tables, 95 constraints, migration cdb0477c3b70, row counts and Decimal/Unicode/UTC probe values match. Earlier diagnostic drill DBs and existing QA DBs preserved. No real DB migrations/resets, MT5 or paid AI/Whisper calls.
+- Detailed evidence, changed files, owner checks and limitations: `docs/reports/M7-01.md`. Final-commit make check and PRD/general/Python/database/security self-review results belong in the merge message. Stop for PM acceptance before M7-02.
+
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
 - Installed for this project: `uv` 0.13.1 (`pip install --user uv`), GNU make 4.4.1 (`winget install ezwinports.make`).
