@@ -106,6 +106,7 @@ The investor password is never sent through the API. It lives in `.env` under `M
 
 - `GET /api/trades` → `{ "items": TradeRow[], "total": 123 }`
   Query: `account_id` (repeatable), `symbol` (repeatable), `status` (repeatable), `from`, `to` (ISO date or datetime; filter on `close_time`, open trades on `open_time`), `sort` (any TradeRow field among: `open_time`, `close_time`, `symbol`, `net_pnl`, `r_multiple`, `risk_pct`, `volume`, `session`, `status`; default `close_time`), `order` (`asc|desc`, default `desc`), `limit` (1–500, default 100), `offset`.
+- `GET /api/trades?missing_r=true` (2026-11-14): only closed trades with `r_multiple` null; combines with the other filters (the digest «Сума R» n/N link uses it with account and from/to of the period).
 - `GET /api/trades/{id}` → `TradeDetail`
 - `PATCH /api/trades/{id}` body `{ "initial_sl": "2650.50" }` → `TradeDetail`. Accepts only `initial_sl` (and only when status is `needs_sl`, or to correct it later). Recomputes risk/R/planned RR/violations; `needs_sl` → `needs_description`. Journal fields are saved with `PUT /api/trades/{id}/journal` (M2).
 - `GET /api/inbox/counts` → `{ "needs_sl": 0, "needs_description": 3, "draft": 1 }`

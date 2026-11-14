@@ -125,6 +125,8 @@ export interface TradeQuery {
   to?: string
   /** M3: only closed trades with a non-empty `missing_new_fields`. Absent = no filter. */
   missing_new_fields?: boolean
+  /** Only closed trades without an R multiple (digest «Сума R» n/N link). Absent = no filter. */
+  missing_r?: boolean
   sort?: TradeSort
   order?: SortOrder
   limit?: number

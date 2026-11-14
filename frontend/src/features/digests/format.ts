@@ -7,7 +7,7 @@ import { formatR, formatRatio, formatSignedMoney } from '@/features/trades/forma
 import { uk } from '@/i18n/uk'
 import { formatDecimal, roundDecimal, trimDecimal } from '@/lib/decimal'
 import { addDays, APP_TIME_ZONE, startOfMonth, startOfWeek } from '@/lib/time'
-import type { DigestKind, MetricName, MetricValue, RBucket } from './types'
+import type { Digest, DigestKind, MetricName, MetricValue, RBucket } from './types'
 
 const EMPTY = uk.common.empty
 const c = uk.digests.charts
@@ -100,4 +100,14 @@ export function rBucketLabel(bucket: RBucket): string {
 /** "-2.5000" → "-2.5", "3.0000" → "3". */
 function trimR(value: string): string {
   return trimDecimal(roundDecimal(value, 2))
+}
+
+/**
+ * Journal: closed trades without R in the digest period (Brussels close dates) of the given accounts
+ * (the digest's accounts, so archived accounts' trades are not listed and the count matches).
+ */
+export function missingRPath(digest: Pick<Digest, 'period_start' | 'period_end'>, accountIds: readonly number[]): string {
+  const params = new URLSearchParams({ period: 'custom', from: digest.period_start, to: digest.period_end, missing_r: 'true' })
+  for (const id of accountIds) params.append('account', String(id))
+  return `/journal?${params.toString()}`
 }

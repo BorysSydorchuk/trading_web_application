@@ -26,6 +26,7 @@ const j = uk.journal
 
 function emptyText(filters: JournalFilters): string {
   if (filters.missingNewFields) return j.emptyMissingNewFields
+  if (filters.missingR) return j.emptyMissingR
   return hasActiveFilters(filters) ? j.empty : j.emptyNoFilters
 }
 

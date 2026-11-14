@@ -377,6 +377,7 @@ export const uk = {
     empty: 'Немає угод за цими фільтрами',
     emptyNoFilters: 'Ще немає угод. Вони зʼявляться після синхронізації з MT5.',
     emptyMissingNewFields: 'Немає угод, у яких не заповнені нові обовʼязкові поля.',
+    emptyMissingR: 'Немає закритих угод без R за цими фільтрами.',
     loadError: 'Не вдалося завантажити угоди.',
     resetFilters: 'Скинути фільтри',
     firstPage: 'На першу сторінку',
@@ -394,6 +395,7 @@ export const uk = {
       noOptions: 'Немає варіантів',
       clear: 'Очистити',
       missingNewFields: 'Неповні за новими полями',
+      missingR: 'Без R',
     },
     periods: {
       today: 'сьогодні',
@@ -1037,6 +1039,7 @@ export const uk = {
       worse: 'гірше норми',
       better: 'краще норми',
       rOf: (n: number, total: number) => `за ${n}/${total} угод`,
+      rMissingLink: (missing: number) => `показати ${missing} угод без R у журналі`,
       bestTrade: 'Найкраща угода',
       worstTrade: 'Найгірша угода',
       metric: 'Показник',
