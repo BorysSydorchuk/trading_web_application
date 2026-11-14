@@ -233,7 +233,7 @@ Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-rev
 - [x] M6-06a [L] (database-reviewer + code-reviewer APPROVE; final make check 3039+1 skip / 427; dev DB migrated 2026-11-13 15:14 UTC to cdb0477c3b70, backup backups/pre-migration-cdb0477c3b70-20261113T151410Z.dump, 0 digests) (migration) digests list virtual rows for past periods with closed trades and no digest, `digests.reviewed_at` + backfill, PATCH sets/clears it; fix test comment ~1112 (tdd-guide tests, backend-dev, database-reviewer + code-reviewer; pre-migration backup before the dev DB upgrade), branch m6/digests-list
 - [x] M6-06 [M] (Borys digest check OK, PM ACCEPTED after M6-06c; M6-06b UI: code-reviewer APPROVE after fix batch (HIGH: audio notes of an existing next-period note; MEDIUM: unsaved-review guard); final make check 3039+1 skip / 454; Borys click check pending) Digests UI (percent 2 dp in UI, `-0.42%`): list, digest page (metrics with red/green, breakdowns, rules, bias, SVG charts), review form + next-period bias note on one screen (frontend-dev), branch m6/digests-ui PM 2026-11-13: list shows virtual rows (M6-06a). Fix test comment test_digests_api.py ~1112 (17:00 CEST, not 16:00). Must open the period from `/digests?kind=&date=` (Home suggestion link).
 - [x] M6-06c [S] owner/PM follow-ups 2026-11-14: bias cards layout (browser-checked 1280/1440/1920), breakeven |R| < breakeven_r_threshold 0.1 (option A), «Сума R» n/N link + Journal «Без R» filter (code-reviewer APPROVE; final make check 3065+1 skip / 458). PM: M6-06 ACCEPTED after these, branch m6/digest-fixes
-- [ ] M6-07 [M] AI summary: `POST /api/digests/{id}/ai-summary` + button (backend-dev, frontend-dev), branch m6/digest-ai
+- [x] M6-07 [M] (code-reviewer APPROVE; fixes: prompt treats journal texts as data, guard tests; final make check 3077+1 skip / 465; no live AI call yet — needs Borys's OK) AI summary: `POST /api/digests/{id}/ai-summary` + button (backend-dev, frontend-dev), branch m6/digest-ai
 - [ ] M6-08 [L] QA: fixture week hand-calculated (win rate, total R, P&L, PF, DD), deviation fixture, browser check; owner check on one real week + docs/reports/M6.md
 
 ## M5 tasks
@@ -350,7 +350,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..06 DONE and merged, M6-06 PM ACCEPTED 2026-11-14. NEXT: M6-07 AI summary (tier M, button only, ANTHROPIC_MODEL_SUMMARY, facts only); then M6-08 QA + docs/reports/M6.md.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..07 DONE and merged. NEXT: one live AI summary call (Borys OK pending), then M6-08 QA + owner real-week check + docs/reports/M6.md.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
