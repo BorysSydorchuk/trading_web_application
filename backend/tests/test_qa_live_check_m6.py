@@ -252,8 +252,11 @@ def test_api_child_pins_the_clock_and_binds_localhost(qa: ModuleType) -> None:
 
 def test_vite_ports_come_from_the_launcher_env() -> None:
     text = (REPO_ROOT / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
-    assert "process.env.TJ_WEB_PORT ?? 5173" in text
-    assert "process.env.TJ_API_PORT ?? 8000" in text
+    assert "portFromEnv(process.env.TJ_WEB_PORT, 5173)" in text
+    assert "portFromEnv(process.env.TJ_API_PORT, 8000)" in text
+    # empty or invalid values fall back to the defaults
+    assert "Number(value || fallback)" in text
+    assert "Number.isInteger(port)" in text
 
 
 def test_config_copy_is_byte_identical_and_keeps_data(qa: ModuleType, tmp_path: Path) -> None:
@@ -361,15 +364,99 @@ def test_fixture_server_times_follow_ny_close() -> None:
 
 
 class _FakeHttp:
-    def __init__(self, notes: list[Any]) -> None:
+    def __init__(self, notes: list[Any], accounts: list[Any] | None = None) -> None:
         self.notes = notes
+        self.accounts = accounts or []
         self.calls: list[tuple[str, str]] = []
 
     def __call__(self, method: str, path: str, body: Any = None) -> tuple[int, Any]:
         self.calls.append((method, path))
         if method == "GET" and path == "/api/bias/notes":
             return 200, {"items": self.notes}
+        if method == "GET" and path == "/api/accounts":
+            return 200, {"items": self.accounts}
         raise AssertionError(f"unexpected {method} {path}")
+
+
+def test_api_seed_on_an_empty_database_asks_for_seed(qa: ModuleType) -> None:
+    http = _FakeHttp(notes=[], accounts=[])
+    with pytest.raises(qa.QaError, match="--seed"):
+        qa.seed_api(http, qa.load_fixture())
+    assert ("POST", "/api/bias/notes") not in http.calls
+
+
+class _FakeProc:
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
+
+    def poll(self) -> int | None:
+        return None
+
+
+def _fake_dev(killed: list[int]) -> SimpleNamespace:
+    return SimpleNamespace(
+        make_record=lambda role, pid: SimpleNamespace(
+            role=role, pid=pid, create_time=1, cmdline=f"{role} cmd"
+        ),
+        kill_process_tree=lambda pid: killed.append(pid),
+        RUN_FILE_VERSION=1,
+    )
+
+
+def test_failed_second_start_kills_and_recorded_the_first(
+    qa: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """npm failing must not leave a lone API: it is recorded at once and killed on exit."""
+    killed: list[int] = []
+    monkeypatch.setattr(qa, "load_dev", lambda: _fake_dev(killed))
+    monkeypatch.setattr(qa.shutil, "which", lambda name: name)
+    started: list[int] = []
+
+    def start(cmd: list[str], cwd: Path, env: dict[str, str]) -> _FakeProc:
+        if started:
+            raise OSError("npm failed")
+        started.append(101)
+        return _FakeProc(101)
+
+    written: list[list[int]] = []
+    real_write = qa.write_run_file
+    monkeypatch.setattr(qa, "_start", start)
+    monkeypatch.setattr(
+        qa,
+        "write_run_file",
+        lambda path, records: _record(written, [r.pid for r in records], real_write(path, records)),
+    )
+    env = qa.qa_env(tmp_path, tmp_path / "config", qa.QA_DATABASE_URL, environ={})
+    with pytest.raises(OSError, match="npm failed"):
+        qa.start_servers(env, tmp_path)
+    assert killed == [101]
+    assert any(101 in pids for pids in written)
+
+
+def test_run_file_names_the_qa_ports_and_reads_back(qa: ModuleType, tmp_path: Path) -> None:
+    dev = qa.load_dev()
+    record = dev.RunRecord("api", 4242, 7, "uv run api")
+    path = tmp_path / qa.RUN_FILE
+    qa.write_run_file(path, [record])
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["ports"] == [qa.API_PORT, qa.WEB_PORT]
+    assert dev.read_run_file(path) == [record]
+
+
+def test_start_closes_its_log_handle(
+    qa: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handles: list[Any] = []
+
+    def popen(cmd: list[str], **kwargs: Any) -> SimpleNamespace:
+        handles.append(kwargs["stdout"])
+        return SimpleNamespace(pid=1)
+
+    monkeypatch.setattr(qa.subprocess, "Popen", popen)
+    (tmp_path / "logs").mkdir()
+    qa._start(["x"], tmp_path / "backend", {"LOG_DIR": str(tmp_path / "logs")})
+    (handle,) = handles
+    assert handle.closed
 
 
 def test_api_seed_is_skipped_when_already_seeded(qa: ModuleType) -> None:

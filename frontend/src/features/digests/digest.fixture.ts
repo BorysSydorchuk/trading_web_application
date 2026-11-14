@@ -75,10 +75,11 @@ export function fixtureDigest(overrides: Partial<Digest> = {}): Digest {
       charts: {
         equity: {
           combined: [
+            { time: '2026-11-08T23:00:00Z', cum_pnl: '0' },
             { time: '2026-11-10T13:30:00Z', cum_pnl: '250.00' },
             { time: '2026-11-11T09:00:00Z', cum_pnl: '100.00' },
           ],
-          by_account: [{ account_id: 1, points: [{ time: '2026-11-10T13:30:00Z', cum_pnl: '250.00' }] }],
+          by_account: [{ account_id: 1, points: [{ time: '2026-11-08T23:00:00Z', cum_pnl: '0' }, { time: '2026-11-10T13:30:00Z', cum_pnl: '250.00' }] }],
         },
         r_distribution: [
           { lower: '-3.0000', upper: '-2.5000', count: 1 },

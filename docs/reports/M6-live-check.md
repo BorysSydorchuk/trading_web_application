@@ -1,7 +1,9 @@
-# M6 live check: dashboard and digests (M6-08 plan, draft 2026-11-14)
+# M6 live check: dashboard and digests (M6-08, 2026-11-14)
 
-Status: **plan only**. Nothing below has been run yet. M6-08 starts after the PM review of
-the first live AI summary (Borys, week 9–15 Nov). No AI calls in QA (`ANTHROPIC_API_KEY=""`).
+Status: plan (PM-accepted 2026-11-14) + **[QA] results 2026-11-14** + **[ROOT] Chrome checks**
+(two rounds, below); [OWNER] items pending. No AI calls in QA (`ANTHROPIC_API_KEY=""`).
+The hand calculation was committed together with the results (ddedd6d); there is no separate
+pre-run commit, so "written before the run" rests on the QA agent's process, not on git history.
 
 Two kinds of evidence, never mixed:
 
@@ -14,8 +16,8 @@ ROADMAP M6 acceptance criteria and where each is proven:
 | AC | Evidence | Status |
 |---|---|---|
 | Digest for a week with real trades matches hand-calculated win rate, total R and P&L | [OWNER] week 9–15 Nov and October, checked by the PM from screenshots 2026-11-14 | done (record in M6.md) |
-| Deviations highlighted | [QA] history fixture (real history < 20 trading days, so the real app correctly shows «замало історії для норми») | to do |
-| Review + next week's bias saved from one screen | [OWNER] item 6 below; [QA] item Q7 | to do |
+| Deviations highlighted | [QA] history fixture (real history < 20 trading days, so the real app correctly shows «замало історії для норми») | done: [QA] Q3 (API) + [ROOT] Chrome round 1 Q3 (red/green) and round 2 (no norm on week 12–18 Oct) |
+| Review + next week's bias saved from one screen | [OWNER] item 6 below; [QA] item Q7 | [QA] done: Q7 (API) + [ROOT] Chrome round 2 (saved from the page); [OWNER] item 6 pending |
 
 ## [QA] plan (qa-tester, root runs the gate)
 
@@ -217,7 +219,7 @@ No AI call (key empty), no Whisper, no MT5 terminal.
 | Q7 (API) | PATCH → reviewed, `reviewed_at` 2026-11-13T15:00:00Z; list row reviewed; weekly bias 11-16 201 and `next_bias_note_id`; snapshot unchanged | identical (note id 6) | PASS |
 | Q8 | 15:59:59 Brussels → weekly 11-02, monthly 10-01; 16:00 → weekly 11-09; after review → weekly null, monthly 10-01 | identical | PASS |
 | Q9 (API) | A today −270.00 / low −315.00 (−3.15 %) → `stop_loss`, week ok; B ok; stop.today true, week false; 1 open position (GBPUSD sell, risk 180.00); inbox 1 / 35 / 3 | identical | PASS |
-| Q10 | AI summary → 503 `ai_not_configured`, ai_summary stays null; broken QA-copy rules.yaml → 500 `config_error` (dashboard and digest create, message names the file and line) and logged in `logs/api.log`; restored → 200, stored digest unchanged | identical | PASS |
+| Q10 | AI summary → 503 `ai_not_configured`, ai_summary stays null; broken QA-copy rules.yaml → 500 `config_error` (dashboard and digest create, message names the file and line) and logged in `logs/api.log`; restored → 200, stored digest unchanged | identical | API PASS (UI: [ROOT] round 2) |
 | Q11, UI parts of Q3/Q5/Q7 | layout at 1280 px, colours/texts, Journal «Без R» page, unsaved-text prompt | not run by qa-tester | for the root's Chrome check |
 
 How the clock is pinned (Q8): the launcher starts the normal `app.main:app` with
@@ -246,3 +248,19 @@ Notes:
 
 Cosmetic (not blocking): at 1280 px the Home limit table wraps «−270.00 USD» onto two lines inside the account card (no page scroll). BACKLOG.
 QA app stopped with `python scripts/qa_live_check_m6.py --stop`; Borys's app on 8000/5173 untouched.
+
+## [ROOT] Chrome check round 2 (2026-11-14, after the code-reviewer's evidence findings)
+
+The first round checked layout and some UI parts; these UI parts had been checked through the API
+only and are now checked on screen (QA app 5183, clock Fri 2026-11-13 16:00 Brussels):
+
+| # | Check | Result |
+|---|---|---|
+| Q10 (UI) | Week 9–15 Nov, «Підсумок від ШІ» without key | PASS: inline «ШІ не налаштовано (немає ANTHROPIC_API_KEY у .env). Дайджест доступний без підсумку.» + the same toast; no AI call (key empty) |
+| Q3 (UI) | Week 12–18 Oct (< 20 trading days of history) | PASS: all three blocks show «замало історії для норми», no red/green |
+| Q4 (UI) | Breakdowns on week 9–15 Nov | PASS: journal-field tables show «заповнено N/M» (e.g. «заповнено 3/9») |
+| Q6 (UI) | Charts on week 9–15 Nov | PASS: equity combined +400.50, A +94.50, B +306.00 (match Q2); R distribution with «≤ −2.5»; heatmap best Fri 15:00 +720.00, worst Fri 13:00 −315.00. **Bug found and fixed:** the equity chart drew its own 0 point in front of the API origin and its screen-reader label counted the origin as a trade («після 10 угод» for 9). Fixed in EquityChart.tsx with tests (origin drawn once, count = points − 1, origin-only curve = empty state) |
+| Q7 (UI) | Week 2–8 Nov: review typed and saved with «Зберегти огляд», then next-week bias (from 09.11) edited and saved with «Зберегти» on the same page | PASS: toasts «Огляд збережено.» and «Біас збережено»; API: reviewed true, reviewed_at 2026-11-13T15:00:00Z (pinned clock), next_bias_note_id 2 (weekly, 2026-11-09) contains the text |
+
+Not exercised: Q1 "weeks without trades are not listed" (the fixture has no empty week; covered by
+unit tests). QA app stopped with `--stop`; Borys's app untouched.

@@ -315,6 +315,10 @@ def seed_api(http: Http, data: Mapping[str, Any]) -> bool:
     _expect(status, 200, "GET /api/bias/notes")
     if notes["items"]:
         return False
+    status, accounts = http("GET", "/api/accounts", None)
+    _expect(status, 200, "GET /api/accounts")
+    if not accounts["items"]:
+        raise QaError("QA-база порожня: спершу запустіть --seed.")
     seed = data["api_seed"]
     _seed_bias(http, seed["bias_notes"])
     ids = _trade_ids(http)
@@ -329,8 +333,6 @@ def seed_api(http: Http, data: Mapping[str, Any]) -> bool:
         }
         status, _ = http("PUT", f"/api/trades/{ids[pids[item['label']]]}/journal", body)
         _expect(status, 200, "PUT journal")
-    status, accounts = http("GET", "/api/accounts", None)
-    _expect(status, 200, "GET /api/accounts")
     by_login = {int(a["login"]): int(a["id"]) for a in accounts["items"]}
     for account in data["accounts"]:
         if account["archive"]:
@@ -344,11 +346,31 @@ def seed_api(http: Http, data: Mapping[str, Any]) -> bool:
 
 def _start(cmd: Sequence[str], cwd: Path, env: Mapping[str, str]) -> subprocess.Popen[bytes]:
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
-    log = (Path(env["LOG_DIR"]) / f"qa-m6-{Path(cwd).name}.out").open("ab")
-    return subprocess.Popen(
-        list(cmd), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL, stdout=log,
-        stderr=subprocess.STDOUT, creationflags=flags,
-    )  # fmt: skip
+    # The child keeps its own copy of the handle; ours is closed right after the start.
+    with (Path(env["LOG_DIR"]) / f"qa-m6-{Path(cwd).name}.out").open("ab") as log:
+        return subprocess.Popen(
+            list(cmd), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL, stdout=log,
+            stderr=subprocess.STDOUT, creationflags=flags,
+        )  # fmt: skip
+
+
+def write_run_file(path: Path, records: Sequence[Any]) -> None:
+    """dev.py's run-file format (so dev.read_run_file / alive_records verify it), QA ports."""
+    dev = load_dev()
+    data = {
+        "version": dev.RUN_FILE_VERSION,
+        "root": str(ROOT),
+        "started_at": datetime.now(UTC).isoformat(),
+        "ports": [API_PORT, WEB_PORT],
+        "processes": [
+            {"role": r.role, "pid": r.pid, "create_time": r.create_time, "cmdline": r.cmdline}
+            for r in records
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _wait_ready(procs: Sequence[subprocess.Popen[bytes]]) -> None:
@@ -382,16 +404,19 @@ def start_servers(env: Mapping[str, str], base: Path) -> int:
     if not npm:
         raise QaError("Не знайдено npm у PATH.")
     Path(env["LOG_DIR"]).mkdir(parents=True, exist_ok=True)
-    procs = [
-        _start([_uv(), "run", "python", "-c", API_SCRIPT, str(API_PORT)], BACKEND, env),
-        _start([npm, "run", "dev"], FRONTEND, env),
-    ]
+    children = (
+        ("api", [_uv(), "run", "python", "-c", API_SCRIPT, str(API_PORT)], BACKEND),
+        ("web", [npm, "run", "dev"], FRONTEND),
+    )
+    procs: list[subprocess.Popen[bytes]] = []
+    records = [dev.make_record("launcher", os.getpid())]
     try:
-        records = [dev.make_record("launcher", os.getpid())]
-        records += [
-            dev.make_record(role, p.pid) for role, p in zip(("api", "web"), procs, strict=True)
-        ]
-        dev.write_run_file(base / RUN_FILE, [r for r in records if r is not None])
+        for role, cmd, cwd in children:
+            # Recorded right after each start: --stop finds a lone API if the UI fails.
+            proc = _start(cmd, cwd, env)
+            procs.append(proc)
+            records.append(dev.make_record(role, proc.pid))
+            write_run_file(base / RUN_FILE, [r for r in records if r is not None])
         _wait_ready(procs)
         if seed_api(http_json, load_fixture()):
             common.say("Біас-нотатки, чернетки журналу й архів рахунку C додано через API.")

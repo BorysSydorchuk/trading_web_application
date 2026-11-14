@@ -187,7 +187,8 @@ Used by `scripts/qa_live_check_m6.py`; hand calculation in docs/reports/M6-live-
 
 A wrapper (`format` "digest_qa/1"), not one `FixtureMt5Source` file: `accounts[i].fixture` is a
 format-1 fixture per login (A 51234581 size 10 000, B 51234582 size 20 000, C 51234583
-archived; `QA-Synthetic-Server`, USD, no ticks), step 0 = sync pass 1, step 1 = pass 2
-(`sync_passes`). `tests.fixtures.mt5.digest_qa_seed` syncs them with the real `sync_account`;
+archived; `QA-Synthetic-Server`, USD, no ticks): the top level (step 0) = sync pass 1,
+`steps[0]` (step 1) = pass 2 (`sync_passes`). `tests.fixtures.mt5.digest_qa_seed` syncs them
+with the real `sync_account`;
 `api_seed` (bias notes, draft journals) goes through the API. `tests/test_qa_live_check_m6.py`
 checks the file matches the generator.

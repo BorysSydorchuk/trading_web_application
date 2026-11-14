@@ -13,6 +13,8 @@ const PAD = 6
 
 /**
  * Running closed P&L after each trade of the period (plain SVG, DECISIONS: no chart library).
+ * The API curve already starts with a 0 point at the period start, so it is drawn as given
+ * and the trade count is the points after that origin.
  * Floats are used only for the geometry; the shown total is the API string.
  */
 interface EquityChartProps {
@@ -22,8 +24,8 @@ interface EquityChartProps {
 }
 
 export function EquityChart({ title, points, currency }: EquityChartProps) {
-  if (points.length === 0) return <ChartEmpty title={title} />
-  const values = [0, ...points.map((p) => Number(p.cum_pnl))]
+  if (points.length <= 1) return <ChartEmpty title={title} />
+  const values = points.map((p) => Number(p.cum_pnl))
   const y = linearScale(Math.min(...values), Math.max(...values), HEIGHT - PAD, PAD)
   const x = (i: number) => PAD + (values.length === 1 ? 0 : (i / (values.length - 1)) * (WIDTH - 2 * PAD))
   const path = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
@@ -36,7 +38,7 @@ export function EquityChart({ title, points, currency }: EquityChartProps) {
         <span className="font-medium">{title}</span>
         <span className="num text-muted-foreground">{c.equityEnd(end)}</span>
       </figcaption>
-      <svg role="img" aria-label={c.equitySummary(title, end, points.length)} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-32 w-full rounded-md border bg-muted/10">
+      <svg role="img" aria-label={c.equitySummary(title, end, points.length - 1)} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-32 w-full rounded-md border bg-muted/10">
         <line x1={PAD} x2={WIDTH - PAD} y1={y(0)} y2={y(0)} className="stroke-border" strokeDasharray="3 3" />
         <polyline
           data-testid="equity-line"
