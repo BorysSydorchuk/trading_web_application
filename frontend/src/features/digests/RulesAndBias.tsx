@@ -59,7 +59,8 @@ export function BiasSummary({ bias, currency }: { bias: Partial<Record<BiasScope
   return (
     <section aria-labelledby="digest-bias" className="flex flex-col gap-2">
       <h2 id="digest-bias" className="text-sm font-semibold">{bi.title}</h2>
-      <div className="grid gap-3 md:grid-cols-3">
+      {/* Cards wrap below ~18rem each instead of squeezing their tables. */}
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
         {BIAS_SCOPES.map((scope) => {
           const data = bias[scope]
           return data ? <BiasScopeCard key={scope} title={bi.scopes[scope]} scope={data} currency={currency} /> : null
@@ -72,14 +73,15 @@ export function BiasSummary({ bias, currency }: { bias: Partial<Record<BiasScope
 function BiasScopeCard({ title, scope, currency }: { title: string; scope: BiasScope; currency: string | null }) {
   const { accuracy } = scope
   return (
-    <article aria-label={title} className="flex flex-col gap-2 rounded-lg border p-3">
+    <article aria-label={title} className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
       <h3 className="text-xs font-semibold">{title}</h3>
       <p className="flex items-baseline justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{bi.accuracy}</span>
         <span className="num font-medium">{accuracy.value === null ? EMPTY : formatPct(accuracy.value)}</span>
       </p>
       <p className="num text-right text-xs text-muted-foreground">{bi.marked(accuracy.marked, accuracy.total)}</p>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
         <thead className="text-xs text-muted-foreground">
           <tr>
             <th scope="col" className={`${TH} pl-0 text-left`}>{bi.side}</th>
@@ -92,7 +94,8 @@ function BiasScopeCard({ title, scope, currency }: { title: string; scope: BiasS
           <SideRow label={bi.aligned} side={scope.aligned} />
           <SideRow label={bi.counter} side={scope.counter} />
         </tbody>
-      </table>
+        </table>
+      </div>
     </article>
   )
 }

@@ -48,7 +48,8 @@ export function DigestView({ digest }: { digest: Digest }) {
       </div>
       <DigestCharts snapshot={snapshot} />
       <BreakdownTables breakdowns={snapshot.breakdowns} currency={snapshot.currency} />
-      <div className="grid gap-6 xl:grid-cols-2">
+      {/* Rules and bias stacked: the three bias cards need the full width (PM 2026-11-14). */}
+      <div className="flex min-w-0 flex-col gap-6">
         <RulesTable rules={snapshot.rules} currency={snapshot.currency} />
         <BiasSummary bias={snapshot.bias} currency={snapshot.currency} />
       </div>
