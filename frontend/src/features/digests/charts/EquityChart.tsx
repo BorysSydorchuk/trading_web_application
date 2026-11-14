@@ -27,7 +27,7 @@ export function EquityChart({ title, points, currency }: EquityChartProps) {
   if (points.length <= 1) return <ChartEmpty title={title} />
   const values = points.map((p) => Number(p.cum_pnl))
   const y = linearScale(Math.min(...values), Math.max(...values), HEIGHT - PAD, PAD)
-  const x = (i: number) => PAD + (values.length === 1 ? 0 : (i / (values.length - 1)) * (WIDTH - 2 * PAD))
+  const x = (i: number) => PAD + (i / (values.length - 1)) * (WIDTH - 2 * PAD)
   const path = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   const last = points[points.length - 1]?.cum_pnl ?? '0'
   const sign = decimalSign(last)
