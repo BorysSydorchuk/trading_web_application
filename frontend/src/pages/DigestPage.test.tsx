@@ -38,6 +38,10 @@ function metricRow(block: HTMLElement, label: string): HTMLElement {
   return row
 }
 
+function aiSection(): HTMLElement {
+  return screen.getByRole('region', { name: uk.digests.page.aiSummary })
+}
+
 function render(url = URL) {
   return renderWithProviders(<DigestPage />, { path: '/digests/:kind/:date', url })
 }
@@ -185,9 +189,71 @@ describe('DigestPage', () => {
     expect(within(alert).getByText(uk.errors[code])).toBeInTheDocument()
   })
 
-  it('shows the AI summary text when present', async () => {
+  it('shows the AI summary text when present, with «Оновити підсумок»', async () => {
     serveDigest(fixtureDigest({ ai_summary: 'Три збиткові угоди після 15:00.' }))
     render()
     expect(await screen.findByText('Три збиткові угоди після 15:00.')).toBeInTheDocument()
+    const section = aiSection()
+    expect(within(section).getByRole('button', { name: uk.digests.ai.refresh })).toBeInTheDocument()
+    expect(within(section).queryByRole('button', { name: uk.digests.ai.generate })).not.toBeInTheDocument()
+  })
+
+  it('never calls the AI on page load and shows the empty state', async () => {
+    let posts = 0
+    serveDigest()
+    mockApi(
+      http.post('/api/digests/:id/ai-summary', () => {
+        posts += 1
+        return HttpResponse.json(fixtureDigest())
+      }),
+    )
+    render()
+    await screen.findByRole('heading', { name: 'Тиждень 9–15 лист. 2026' })
+    const section = aiSection()
+    expect(within(section).getByText(uk.digests.ai.empty)).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: uk.digests.ai.generate })).toBeEnabled()
+    expect(posts).toBe(0)
+  })
+
+  it('posts once on «Підсумок від ШІ» and renders the returned summary', async () => {
+    const posted: string[] = []
+    serveDigest()
+    mockApi(
+      http.post('/api/digests/:id/ai-summary', ({ params }) => {
+        posted.push(String(params.id))
+        return HttpResponse.json(fixtureDigest({ ai_summary: 'Рядок 1.\nРядок 2.' }))
+      }),
+      http.get('/api/digests', () => HttpResponse.json({ items: [] })),
+      http.get('/api/digests/suggestion', () => HttpResponse.json({ weekly: null, monthly: null })),
+    )
+    const { user } = render()
+    await user.click(await screen.findByRole('button', { name: uk.digests.ai.generate }))
+    const section = aiSection()
+    const text = await within(section).findByText(/Рядок 1\./)
+    expect(text).toHaveClass('whitespace-pre-line')
+    expect(within(section).getByRole('button', { name: uk.digests.ai.refresh })).toBeEnabled()
+    expect(within(section).queryByText(uk.digests.ai.empty)).not.toBeInTheDocument()
+    expect(posted).toEqual([String(fixtureDigest().id)])
+  })
+
+  it.each([
+    ['ai_not_configured', 503, undefined, uk.digests.ai.notConfigured],
+    ['ai_error', 502, { kind: 'rate_limit' }, uk.errors.ai_error_kinds.rate_limit],
+    ['ai_error', 502, undefined, uk.digests.ai.error],
+    ['ai_error', 502, { kind: 'refusal' }, uk.digests.ai.refusal],
+    ['ai_error', 502, { kind: 'invalid_output' }, uk.digests.ai.invalidOutput],
+  ] as const)('shows %s inline and as a toast (%#)', async (code, status, details, message) => {
+    serveDigest()
+    mockApi(
+      http.post('/api/digests/:id/ai-summary', () =>
+        HttpResponse.json({ error: { code, message: code, details } }, { status }),
+      ),
+    )
+    const { user } = render()
+    await user.click(await screen.findByRole('button', { name: uk.digests.ai.generate }))
+    const section = aiSection()
+    expect(await within(section).findByRole('alert')).toHaveTextContent(message)
+    await waitFor(() => expect(screen.getAllByText(message)).toHaveLength(2))
+    expect(within(section).getByRole('button', { name: uk.digests.ai.generate })).toBeEnabled()
   })
 })

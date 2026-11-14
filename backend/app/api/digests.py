@@ -2,15 +2,33 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import replace
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.ai import (
+    ai_call_error,
+    extraction_settings,
+    get_key_tracker,
+    get_model_client,
+    get_usage_log,
+)
 from app.clock import utc_now
+from app.config import get_settings
 from app.db import get_db
+from app.errors import ApiError
 from app.schemas import digests as schemas
 from app.services import digests as service
+from app.services.ai.client import ModelClient
+from app.services.ai.digest_summary import summarise_digest
+from app.services.ai.extraction import ExtractionFailed
+from app.services.ai.key_status import KeyStatusTracker
+from app.services.ai.usage_log import UsageLog
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/digests", tags=["digests"])
 
@@ -65,3 +83,30 @@ def patch_digest(
     now: datetime = Depends(utc_now),
 ) -> schemas.DigestOut:
     return service.update_review(db, digest_id, body, now)
+
+
+@router.post("/{digest_id}/ai-summary", response_model=schemas.DigestOut)
+def create_ai_summary(
+    digest_id: int,
+    db: Session = Depends(get_db),
+    client: ModelClient | None = Depends(get_model_client),
+    usage_log: UsageLog = Depends(get_usage_log),
+    key_tracker: KeyStatusTracker = Depends(get_key_tracker),
+) -> schemas.DigestOut:
+    """One AI call on ANTHROPIC_MODEL_SUMMARY; stores and returns the digest with ai_summary.
+
+    Order: 404 → 503 ai_not_configured → AI call (502 ai_error leaves ai_summary unchanged).
+    """
+    summary_input = service.ai_summary_input(db, digest_id)
+    db.rollback()  # no transaction stays open during the (slow) AI call
+    if client is None:
+        logger.warning("AI digest summary %s: ANTHROPIC_API_KEY is not set", digest_id)
+        raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
+    settings = replace(extraction_settings(), primary_model=get_settings().anthropic_model_summary)
+    try:
+        outcome = summarise_digest(
+            summary_input, client=client, settings=settings, usage_log=usage_log
+        )
+    except ExtractionFailed as exc:
+        raise ai_call_error(exc, key_tracker) from None
+    return service.store_ai_summary(db, digest_id, outcome.text)

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { AiSummarySection } from './AiSummarySection'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
 import { DigestCharts } from './charts/DigestCharts'
@@ -23,12 +24,7 @@ export function DigestView({ digest }: { digest: Digest }) {
   return (
     <div className="flex flex-col gap-6">
       <DigestHeader digest={digest} />
-      {digest.ai_summary && (
-        <section aria-labelledby="digest-ai" className="flex flex-col gap-1 rounded-lg border p-4">
-          <h2 id="digest-ai" className="text-sm font-semibold">{p.aiSummary}</h2>
-          <p className="text-sm whitespace-pre-line">{digest.ai_summary}</p>
-        </section>
-      )}
+      <AiSummarySection digest={digest} />
       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         <MetricBlockCard
           title={uk.digests.blocks.combined}

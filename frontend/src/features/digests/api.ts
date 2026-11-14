@@ -1,7 +1,8 @@
 /** Digests API hooks (docs/api.md "Digests API"). */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { apiGet, apiRequest, isApiError } from '@/api/client'
+import { ApiError, apiGet, apiRequest, isApiError } from '@/api/client'
+import { aiKeys } from '@/features/ai/api'
 import { dashboardKeys } from '@/features/dashboard/api'
 import { uk } from '@/i18n/uk'
 import { showErrorToast } from '@/lib/errors'
@@ -9,6 +10,8 @@ import type { Digest, DigestKind, DigestListItem, ReviewInput } from './types'
 
 /** Generating a snapshot reads the period and the norm window; allow more than the default 10 s. */
 const GENERATE_TIMEOUT_MS = 30_000
+/** One Claude call on the server (with its own timeout); leave room for the network. */
+const AI_SUMMARY_TIMEOUT_MS = 60_000
 
 export const digestKeys = {
   lists: ['digests', 'list'] as const,
@@ -83,5 +86,29 @@ export function useSaveReview(id: number) {
       return afterWrite(queryClient, digest)
     },
     onError: showErrorToast,
+  })
+}
+
+/** A client-side timeout is shown as the AI timeout, not as "server unavailable" (as in M2 extraction). */
+async function requestAiSummary(id: number): Promise<Digest> {
+  try {
+    return await apiRequest<Digest>(`/digests/${id}/ai-summary`, { method: 'POST', timeoutMs: AI_SUMMARY_TIMEOUT_MS })
+  } catch (error) {
+    if (isApiError(error) && error.code === 'timeout') {
+      throw new ApiError('ai_error', error.message, 0, { kind: 'timeout' })
+    }
+    throw error
+  }
+}
+
+/** «Підсумок від ШІ»: only on button press; the returned digest replaces the cached one. */
+export function useAiSummary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (digest: Digest) => requestAiSummary(digest.id),
+    // The section shows the error inline and raises its own toast with the summary-specific text.
+    meta: { silentError: true },
+    onSuccess: (digest) => afterWrite(queryClient, digest),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: aiKeys.usage }),
   })
 }

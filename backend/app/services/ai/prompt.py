@@ -21,6 +21,7 @@ FIELDS_PLACEHOLDER = "{{JOURNAL_FIELDS}}"
 EXTRACT_BIAS_PROMPT = "extract_bias.md"
 SYMBOLS_PLACEHOLDER = "{{SYMBOLS}}"
 KIND_PLACEHOLDER = "{{KIND}}"
+DIGEST_SUMMARY_PROMPT = "digest_summary.md"
 
 
 class PromptError(RuntimeError):
@@ -58,3 +59,8 @@ def extract_bias_system_prompt(
         SYMBOLS_PLACEHOLDER, render_symbol_catalogue(config)
     )
     return rendered.strip() + "\n"
+
+
+def digest_summary_system_prompt(prompts_dir: Path = PROMPTS_DIR) -> str:
+    """The digest summary system prompt (no placeholders; byte-stable)."""
+    return load_prompt(DIGEST_SUMMARY_PROMPT, prompts_dir).strip() + "\n"

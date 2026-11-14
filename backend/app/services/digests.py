@@ -28,6 +28,7 @@ from app.models import Account, BiasEntry, BiasNote, Digest, Trade
 from app.models.enums import AccountStatus, BiasKind, DigestKind
 from app.schemas import digests as schemas
 from app.schemas.dashboard import money_str
+from app.services.ai.digest_summary import SummaryInput, TradeTexts
 from app.services.digest_snapshot import Json, Scope, SnapshotInput, build_snapshot
 
 logger = logging.getLogger(__name__)
@@ -345,6 +346,56 @@ def update_review(
         digest.reviewed_at = None
     elif after != before:
         digest.reviewed_at = now
+    db.commit()
+    return _out(db, digest)
+
+
+def _snapshot_trade_ids(metrics: Mapping[str, Any]) -> list[int]:
+    ids = metrics.get("trade_ids")
+    if not isinstance(ids, list):
+        return []
+    return [i for i in ids if isinstance(i, int) and not isinstance(i, bool)]
+
+
+def ai_summary_input(db: Session, digest_id: int) -> SummaryInput:
+    """The stored snapshot and the journal texts of its ``trade_ids`` (404 for an unknown id).
+
+    Only the snapshot's trades: a trade closed after the snapshot was generated is not in the
+    numbers either, so it stays out of the texts too.
+    """
+    digest = _get_or_404(db, digest_id)
+    metrics: Mapping[str, Any] = digest.metrics if isinstance(digest.metrics, Mapping) else {}
+    ids = _snapshot_trade_ids(metrics)
+    rows = (
+        db.execute(
+            select(
+                Trade.id,
+                Trade.symbol,
+                Trade.net_pnl,
+                Trade.r_multiple,
+                Trade.mistakes,
+                Trade.lesson,
+                Trade.raw_text,
+            )
+            .where(Trade.id.in_(ids))
+            .order_by(Trade.close_time, Trade.id)
+        ).all()
+        if ids
+        else []
+    )
+    return SummaryInput(
+        kind=digest.kind,
+        period_start=digest.period_start,
+        period_end=digest.period_end,
+        snapshot=metrics,
+        trades=[TradeTexts(*row) for row in rows],
+    )
+
+
+def store_ai_summary(db: Session, digest_id: int, summary: str) -> schemas.DigestOut:
+    """Save the AI summary (snapshot and review texts untouched); 404 if deleted meanwhile."""
+    digest = _get_or_404(db, digest_id)
+    digest.ai_summary = summary
     db.commit()
     return _out(db, digest)
 
