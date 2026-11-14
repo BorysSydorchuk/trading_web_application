@@ -6,7 +6,7 @@ Used by `make migrate`, `make db-ensure`, `make dev` and `start.bat` (scripts/de
 Steps: read the DB revision and the script head; nothing pending -> exit 0 without a backup.
 A database whose name ends with `_test` is upgraded without a backup. Otherwise the DB is
 dumped (custom format) to `<repo>/backups/pre-migration-<head>-<UTC timestamp>.dump`, only
-the newest `KEEP_BACKUPS` such files are kept, and then `alembic upgrade head` runs. Any
+all pre-migration files are kept (PM M7: never auto-prune), then `alembic upgrade head` runs. Any
 backup failure stops here with exit code 1: the upgrade is NOT run.
 
 `pg_dump` on PATH is preferred (password via PGPASSWORD in the child environment only).
@@ -374,27 +374,8 @@ def make_backup(
 def rotate_backups(
     backups_dir: Path, keep: int = KEEP_BACKUPS, err: TextIO | None = None
 ) -> list[Path]:
-    """Delete all but the newest `keep` pre-migration-*.dump (by name timestamp).
-
-    Files that do not match the exact name pattern are never touched. Returns the deleted
-    paths; a file that cannot be deleted is logged and skipped (the new backup exists)."""
-    dated = [
-        (match["ts"], path.name, path)
-        for path in backups_dir.glob(f"{BACKUP_PREFIX}*{BACKUP_SUFFIX}")
-        if path.is_file() and (match := BACKUP_RE.match(path.name))
-    ]
-    dated.sort(reverse=True)
-    deleted: list[Path] = []
-    for _, _, path in dated[keep:]:
-        try:
-            path.unlink()
-        except OSError as exc:
-            logger.warning("could not delete old backup %s: %s", path, exc)
-            text = MSG["rotate_failed"].format(path=path, error=exc)
-            print(PREFIX + text, file=err or sys.stderr, flush=True)
-            continue
-        deleted.append(path)
-    return deleted
+    """Compatibility no-op: PM M7 forbids automatic pre-migration deletion."""
+    return []
 
 
 # --- CLI --------------------------------------------------------------------------------
