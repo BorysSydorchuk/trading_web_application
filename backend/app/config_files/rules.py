@@ -180,6 +180,8 @@ class RulesConfig(_Strict):
     broker_time: Literal["ny_close"]
     rules: RulesSet
     digest: DigestConfig = DigestConfig()
+    # |R| below this counts as breakeven («в нуль») in digests (Borys/PM 2026-11-14).
+    breakeven_r_threshold: Decimal = Field(default=Decimal("0.1"), ge=0)
 
     @field_validator("timezone")
     @classmethod

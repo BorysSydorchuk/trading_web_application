@@ -43,3 +43,7 @@ rules:
 # Optional section, default 1.0. To change it, uncomment (value must be > 0):
 # digest:
 #   deviation_sigma: 1.0
+
+# A closed trade with |R| below this counts as breakeven («в нуль») in digests: not a win,
+# not a loss (Borys/PM 2026-11-14). 0 = only an exact 0 P&L is breakeven.
+breakeven_r_threshold: 0.1

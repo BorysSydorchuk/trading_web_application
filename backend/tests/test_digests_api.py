@@ -1209,3 +1209,20 @@ def test_suggestion_is_not_shadowed_by_the_id_route(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert set(response.json()) == {"weekly", "monthly"}
+
+
+# --- breakeven by R threshold (Borys/PM 2026-11-14) -------------------------------------------
+
+
+def test_small_r_trade_counts_as_breakeven_in_the_digest(
+    client: TestClient, session: Session, set_now: Callable[..., None]
+) -> None:
+    a, _ = accounts(session)
+    closed(session, a, datetime(2026, 11, 9, 9, tzinfo=UTC), "100.00", "1.0")
+    closed(session, a, datetime(2026, 11, 10, 9, tzinfo=UTC), "-4.00", "-0.04")  # |R| < 0.1
+
+    m = combined(digest(client))
+
+    assert (m["wins"]["value"], m["losses"]["value"], m["breakeven"]["value"]) == (1, 0, 1)
+    assert m["win_rate"]["value"] == "50.0000"
+    assert m["avg_loss_r"]["value"] is None

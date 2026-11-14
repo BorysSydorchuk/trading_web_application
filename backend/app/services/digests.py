@@ -82,7 +82,9 @@ def _journal_value(value: Any) -> dm.JournalValue:
     return str(value)  # e.g. a float or list typed into `extra` by hand
 
 
-def _to_digest_trade(trade: Trade, specs: Sequence[JournalField]) -> dm.DigestTrade:
+def _to_digest_trade(
+    trade: Trade, specs: Sequence[JournalField], breakeven_r: Decimal
+) -> dm.DigestTrade:
     extra = trade.extra or {}
     journal = {
         f.key: _journal_value(extra.get(f.key) if f.storage == "extra" else getattr(trade, f.key))
@@ -106,11 +108,16 @@ def _to_digest_trade(trade: Trade, specs: Sequence[JournalField]) -> dm.DigestTr
         bias_alignment_monthly=trade.bias_alignment_monthly,
         journal=journal,
         violations=tuple(v.rule_key for v in trade.rule_violations),
+        breakeven_r_threshold=breakeven_r,
     )
 
 
 def _load_trades(
-    db: Session, since: date, until: date, specs: Sequence[JournalField]
+    db: Session,
+    since: date,
+    until: date,
+    specs: Sequence[JournalField],
+    breakeven_r: Decimal,
 ) -> list[dm.DigestTrade]:
     """Closed trades of non-archived accounts with a Brussels close date in [since, until]."""
     rows = db.scalars(
@@ -125,7 +132,7 @@ def _load_trades(
         .options(selectinload(Trade.rule_violations))
         .order_by(Trade.close_time, Trade.id)
     ).all()
-    return [_to_digest_trade(t, specs) for t in rows]
+    return [_to_digest_trade(t, specs, breakeven_r) for t in rows]
 
 
 def _first_close_by_account(db: Session) -> dict[int, date]:
@@ -193,12 +200,14 @@ def _scope(
 
 def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
     try:
-        sigma = get_rules().digest.deviation_sigma
+        rules = get_rules()
+        sigma = rules.digest.deviation_sigma
+        breakeven_r = rules.breakeven_r_threshold
         specs = _journal_specs()
     except ConfigError as exc:
         raise config_error(exc) from exc
     accounts = {a.id: a for a in db.scalars(select(Account).where(_not_archived()))}
-    trades = _load_trades(db, dm.norm_window_start(kind, start), end, specs)
+    trades = _load_trades(db, dm.norm_window_start(kind, start), end, specs, breakeven_r)
     period = dm.trades_in_period(trades, kind, start)
     window = dm.norm_window_trades(trades, kind, start)
     currency = _currency(period, accounts)

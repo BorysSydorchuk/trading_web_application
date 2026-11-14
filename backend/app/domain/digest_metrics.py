@@ -7,7 +7,9 @@ are never mutated or reordered.
 Conventions (DECISIONS 2026-11-12):
 - Periods are Brussels calendar dates: week = Monday..Sunday, month = calendar month; a trade
   belongs to the period of its Brussels close date.
-- Win = net_pnl > 0, loss < 0, breakeven = 0; win rate = wins / all trades x 100.
+- Outcome (Borys/PM 2026-11-14): a trade with R and |R| < ``breakeven_r_threshold`` is
+  breakeven; otherwise net_pnl > 0 win, < 0 loss, 0 breakeven. Win rate = wins / all trades
+  x 100. Profit factor stays money-based (net_pnl sign).
 - R metrics only over trades with ``r_multiple``; ``r_n`` = trades used.
 - Percent base = sum of the sizes of the accounts that have a trade; None when any of them has
   no positive size.
@@ -97,6 +99,8 @@ class DigestTrade:
     bias_alignment_monthly: str | None = None
     journal: Mapping[str, JournalValue] = field(default_factory=lambda: MappingProxyType({}))
     violations: tuple[str, ...] = ()
+    # |R| below this is breakeven (rules.yaml breakeven_r_threshold); 0 = P&L sign only.
+    breakeven_r_threshold: Decimal = ZERO
 
 
 # --- results ---------------------------------------------------------------------------------
@@ -253,10 +257,26 @@ def _mean(values: Sequence[Decimal]) -> Decimal | None:
     return sum(values, ZERO) / len(values) if values else None
 
 
+type Outcome = Literal["win", "loss", "breakeven"]
+
+
+def outcome(t: DigestTrade) -> Outcome:
+    """Breakeven when |R| < the trade's threshold, else the sign of net P&L."""
+    if t.r_multiple is not None and abs(t.r_multiple) < t.breakeven_r_threshold:
+        return "breakeven"
+    if t.net_pnl > 0:
+        return "win"
+    return "loss" if t.net_pnl < 0 else "breakeven"
+
+
+def _count(trades: Iterable[DigestTrade], kind: Outcome) -> int:
+    return sum(1 for t in trades if outcome(t) == kind)
+
+
 def _win_rate(trades: Sequence[DigestTrade]) -> Decimal | None:
     if not trades:
         return None
-    wins = sum(1 for t in trades if t.net_pnl > 0)
+    wins = _count(trades, "win")
     return Decimal(wins) * HUNDRED / len(trades)
 
 
@@ -311,17 +331,17 @@ def compute_metrics(
 ) -> DigestMetrics:
     items = tuple(trades)
     with_r = [t for t in items if t.r_multiple is not None]
-    win_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and t.net_pnl > 0]
-    loss_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and t.net_pnl < 0]
+    win_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and outcome(t) == "win"]
+    loss_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and outcome(t) == "loss"]
     total_r = _total_r(with_r)
     net_pnl = sum((t.net_pnl for t in items), ZERO)
     base = _percent_base(items, account_sizes)
     max_dd = _max_drawdown(items)
     return DigestMetrics(
         trades=len(items),
-        wins=sum(1 for t in items if t.net_pnl > 0),
-        losses=sum(1 for t in items if t.net_pnl < 0),
-        breakeven=sum(1 for t in items if t.net_pnl == 0),
+        wins=_count(items, "win"),
+        losses=_count(items, "loss"),
+        breakeven=_count(items, "breakeven"),
         violations=sum(1 for t in items if t.violations),
         net_pnl=net_pnl,
         net_pnl_pct=_pct(net_pnl, base),
