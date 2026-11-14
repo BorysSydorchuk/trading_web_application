@@ -222,6 +222,8 @@ Each task: implement → `make check` → code-reviewer APPROVE → commit.
 
 ## M6 tasks
 
+- [x] M6-handoff [S] owner codex: temporary sole-lead rules recorded in AGENTS.md / CLAUDE.md / DECISIONS.md; branch `m6/codex-lead-handoff` from `9758e4d`. Integration requires full `make check` on the final commit and PRD/checklist self-review APPROVE; gate results belong in the merge commit message (no post-gate file edits). Owner reports usage 80+%; no other agents. M6 acceptance and M7 gate unchanged.
+
 Git: one branch per topic `m6/<topic>` from main, merge `--no-ff` after code-reviewer APPROVE + green `make check`. Never push. Contract: docs/api.md "## M6". All % of account size, canonical symbols.
 
 - [x] M6-01 [S] plan, API contract, decisions (orchestrator), branch m6/plan

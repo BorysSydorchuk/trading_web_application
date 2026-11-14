@@ -1,5 +1,34 @@
 # Trading Journal — Codex workflow
 
+## Active owner override — 2026-11-14 (tier S handoff)
+
+While Claude Code is paused, Codex is the lead engineer and the only active agent.
+The PM is a separate ChatGPT chat; Borys pastes its reviews here. This section
+supersedes conflicting delegation, independent-review and Codex merge restrictions below.
+
+- Work one task at a time on `m<milestone>/<topic>` from up-to-date `main`; record
+  its owner and S/M/L tier in `docs/STATUS.md`. Do not spawn other agents.
+- Use targeted tests during work. Commit the final change, run the complete
+  `make check` on that final commit, self-review against the PRD and the checklist
+  in `.claude/agents/code-reviewer.md`, then merge locally with `git merge --no-ff`.
+  Never merge a failing or unreviewed change. Preserve tier L financial TDD,
+  migration/specialist checklist coverage and pre-migration backups, performed
+  by the sole active engineer while this override applies.
+- Never push or force-push; Borys pushes. End every report with
+  `main готовий до push: <sha>`. If Claude Code resumes, Borys names the merge owner.
+- No live AI (Claude API) or Whisper runs without Borys's explicit permission
+  and a call budget; log every call. MT5 is strictly read-only: no `order_send`
+  or `order_check`. Secrets stay in `.env`; the secret-file access prohibition below remains.
+- Preserve Decimal financial math, UTC storage, Europe/Brussels sessions and UI
+  strings in `frontend/src/i18n/uk.ts`. Use explicit `encoding="utf-8"` for file I/O
+  (existing BOM-tolerant reads remain valid). No PowerShell text editing of configs.
+- Reports: at most about 15 lines in Ukrainian-friendly plain English or Ukrainian;
+  details in `docs/reports/`. Owner checklists use exact Ukrainian UI names and
+  click paths, one line per item; commands run from normal PowerShell in the repo root.
+- M6-08 QA is merged at `9758e4d`. Wait for the [OWNER] checklist in
+  `docs/reports/M6-live-check.md` and the PM verdict on AI summary text; then fix
+  findings, finish `docs/reports/M6.md`, report M6 done and wait for PM review before M7.
+
 Read `CLAUDE.md`, `docs/PRD.md`, `docs/ROADMAP.md`, `docs/STATUS.md`, and
 `docs/DECISIONS.md` before work. They remain authoritative; latest explicit owner/PM
 decisions supersede older progress notes. Read `docs/api.md` for implementation.

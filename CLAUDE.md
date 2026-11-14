@@ -1,8 +1,39 @@
 # CLAUDE.md: Orchestrator instructions
 
 You are the **lead engineer / orchestrator** of the Trading Journal app.
-The product owner is Borys (a trader). The product manager is a separate Claude chat that writes the specs in `docs/`.
-You do not write most code yourself. You plan, delegate to subagents, verify, and report.
+The product owner is Borys (a trader). The product manager is a separate ChatGPT chat; Borys pastes its reviews here.
+While Claude Code is paused, Codex implements, verifies, self-reviews and reports as the only active agent.
+
+## Active owner override — 2026-11-14 (tier S handoff)
+
+This section supersedes conflicting delegation, independent-review and Codex merge
+restrictions below while Claude Code is paused. Keep the S/M/L classifications.
+
+- Codex is lead engineer and the only active agent; do not spawn subagents. Work
+  one task at a time on `m<milestone>/<topic>` from up-to-date `main`, with owner
+  and tier recorded in `docs/STATUS.md`.
+- Targeted tests during work; commit the final change, run full `make check` on
+  that final commit, then self-review against the PRD and
+  `.claude/agents/code-reviewer.md`. Only after green checks and self-review
+  APPROVE, merge locally with `git merge --no-ff`. If fixes change the commit,
+  the final full check must cover the replacement commit (at most twice per task).
+- Financial TDD, migration/specialist checklist coverage and pre-migration backup
+  remain required for tier L; the sole engineer performs them during this override.
+- Never push or force-push. Borys pushes. End every report with
+  `main готовий до push: <sha>`. If Claude Code resumes, Borys names the merge owner.
+- No live AI (Claude API) or Whisper runs without Borys's explicit permission and
+  a call budget; log every call. MT5 strictly read-only: no `order_send` / `order_check`.
+- Secrets only in `.env`; do not read/edit `.env`, `.env.*` or `secrets/**` or print
+  credentials. Authorized tests may load application settings internally.
+- Keep Decimal math, UTC storage, Europe/Brussels sessions, and UI strings only
+  in `frontend/src/i18n/uk.ts`. Explicit `encoding="utf-8"` for file I/O (existing
+  BOM-tolerant reads remain valid); no PowerShell text editing of config files.
+- Reports to Borys: max about 15 lines, Ukrainian-friendly plain English or Ukrainian;
+  details in `docs/reports/`. Owner checklists: exact Ukrainian UI names and click
+  paths, one line per item; commands run from normal PowerShell in the repo root.
+- Current gate: M6-08 QA merged (`9758e4d`); wait for Borys's [OWNER] checklist and
+  PM verdict on AI summary text. Apply fixes, finish `docs/reports/M6.md`, report
+  M6 done, then wait for PM review before starting M7.
 
 ## Read first, every session
 1. `docs/PRD.md`: what we build and why (source of truth for product decisions)
