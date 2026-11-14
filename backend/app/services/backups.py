@@ -138,9 +138,12 @@ class PostgresTools:
     def _confirm_compose(url: str, target: DbTarget) -> None:
         """Never assume a local native server is the compose cluster with the same DB name."""
         expected = PostgresTools._cluster_id(url)
+        docker = shutil.which("docker")
+        if not docker:
+            raise BackupFailure("Docker backup cluster tool unavailable")
         result = subprocess.run(  # noqa: S603 - fixed argv, no shell, no password in argv
             [
-                "docker",
+                docker,
                 "compose",
                 "exec",
                 "-T",

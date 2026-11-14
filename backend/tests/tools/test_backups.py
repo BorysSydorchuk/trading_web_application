@@ -292,6 +292,7 @@ def test_docker_fallback_requires_same_cluster(
     monkeypatch.setattr(
         b.PostgresTools, "_cluster_id", staticmethod(lambda url: "12345"), raising=False
     )
+    monkeypatch.setattr("shutil.which", lambda name: "docker")
     monkeypatch.setattr(
         "subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess([], 0, stdout=docker_id),
