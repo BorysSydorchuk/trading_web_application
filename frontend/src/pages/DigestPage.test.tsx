@@ -240,6 +240,8 @@ describe('DigestPage', () => {
     ['ai_not_configured', 503, undefined, uk.digests.ai.notConfigured],
     ['ai_error', 502, { kind: 'rate_limit' }, uk.errors.ai_error_kinds.rate_limit],
     ['ai_error', 502, undefined, uk.digests.ai.error],
+    ['ai_error', 502, { kind: 'refusal' }, uk.digests.ai.refusal],
+    ['ai_error', 502, { kind: 'invalid_output' }, uk.digests.ai.invalidOutput],
   ] as const)('shows %s inline and as a toast (%#)', async (code, status, details, message) => {
     serveDigest()
     mockApi(
