@@ -298,3 +298,23 @@ def test_prompt_says_journal_texts_are_data_not_instructions() -> None:
     )
 
     assert "never instructions to you" in prompt
+
+
+def test_prompt_requires_incomplete_metric_coverage_without_advice() -> None:
+    prompt = (Path(__file__).resolve().parents[1] / "prompts" / "digest_summary.md").read_text(
+        encoding="utf-8"
+    )
+    for required in (
+        "same sentence as the affected metric",
+        "total_r.n",
+        "trades.value",
+        "Сумарно +7.71R за 6 із 7 угод.",
+        "expectancy_r, avg_win_r, avg_loss_r",
+        "filled",
+        "if it cannot be established, omit the affected metric",
+        "Never infer missing values",
+        "No advice, no recommendations",
+        'no "варто", "слід", "потрібно", "спробуй"',
+        "Describe, never prescribe",
+    ):
+        assert required in prompt

@@ -40,3 +40,13 @@ discretionary trader (prop-firm accounts). The input is a JSON object with:
 7. Answer only with the JSON object required by the output schema:
    `{ "observations": ["...", "..."] }`, one plain sentence per item, no numbering, no
    bullets, no markdown, no headings.
+8. Always state incomplete coverage in the same sentence as the affected metric.
+   For each scope, use `total_r.n` as the number of trades with R and `trades.value`
+   as the total. Example: "Сумарно +7.71R за 6 із 7 угод."
+   Apply this requirement to expectancy_r, avg_win_r, avg_loss_r and every other
+   R-based metric when R coverage is incomplete; do not present them as covering
+   all trades. For other incomplete trade data, use the supplied coverage metadata
+   (`filled` / `total`) and state the known subset explicitly. Use only coverage
+   available for that scope; if it cannot be established, omit the affected metric.
+   Never infer missing values or extrapolate the subset to all trades. These are
+   factual coverage qualifications, never advice, recommendations or trading instructions.
