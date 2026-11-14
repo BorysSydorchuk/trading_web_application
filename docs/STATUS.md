@@ -350,7 +350,7 @@ M5-03 done on `m5/calculator-data`, merged locally into `main` with `--no-ff` (n
 
 ### RESUME FROM HERE
 
-2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..07 DONE and merged. NEXT: one live AI summary call (Borys OK pending), then M6-08 QA + owner real-week check + docs/reports/M6.md.
+2026-11-12: M5 merged (2f48604). M6 planned (M6-01, contract docs/api.md "## M6"). M6-02..07 DONE and merged. Borys ran the AI summary for week 9-15 Nov (1 call) and sends text + time to the PM. WAIT for the PM review before M6-08. Prepared (branch m6/qa-plan, not merged): docs/reports/M6-live-check.md (QA plan Q1-Q11 + owner checklist) and docs/reports/M6.md skeleton. No AI calls.
 
 2026-11-12: M5 ACCEPTED by PM (all 4 symbols). Login 11459118 = «FN Stellar Funded» (closed; both funded accounts in the app). M5-12 closing report + real-spec tests on m5/close-report. NEXT: merge, then M6 dashboard and digests (PRD 6.7, 6.10): all % of account size, canonical symbol names.
 
