@@ -6,6 +6,15 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
+// Defaults 5173/8000 (scripts/dev.py). A QA launcher may run a second app on other ports
+// (TJ_WEB_PORT / TJ_API_PORT, scripts/qa_live_check_m6.py) next to the normal one; an empty or
+// invalid value falls back to the default. `preview` below stays on 8000 (not used by the QA).
+function portFromEnv(value: string | undefined, fallback: number): number {
+  const port = Number(value || fallback)
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : fallback
+}
+const webPort = portFromEnv(process.env.TJ_WEB_PORT, 5173)
+const apiTarget = `http://127.0.0.1:${portFromEnv(process.env.TJ_API_PORT, 8000)}`
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -28,10 +37,10 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 5173,
+    port: webPort,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false },
+      '/api': { target: apiTarget, changeOrigin: false },
     },
   },
   test: {

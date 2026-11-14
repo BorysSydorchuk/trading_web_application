@@ -9,11 +9,22 @@ const c = uk.digests.charts
 const [, , , , , SATURDAY = '', SUNDAY = ''] = uk.trades.weekdays
 
 describe('digest SVG charts', () => {
-  it('draws the equity line from 0 through every point', () => {
-    render(<EquityChart title="Крива" points={[{ time: '2026-11-10T10:00:00Z', cum_pnl: '100.00' }, { time: '2026-11-10T12:00:00Z', cum_pnl: '-50.00' }]} currency="USD" />)
+  // The API curve starts with its own 0 point at the period start (docs/api.md "Charts data").
+  it('draws the API curve as given (origin included) and counts trades without the origin', () => {
+    const points = [
+      { time: '2026-11-08T23:00:00Z', cum_pnl: '0' },
+      { time: '2026-11-10T10:00:00Z', cum_pnl: '100.00' },
+      { time: '2026-11-10T12:00:00Z', cum_pnl: '-50.00' },
+    ]
+    render(<EquityChart title="Крива" points={points} currency="USD" />)
     expect(screen.getByRole('img', { name: c.equitySummary('Крива', '−50.00 USD', 2) })).toBeInTheDocument()
     expect(screen.getByTestId('equity-line').getAttribute('points')?.split(' ')).toHaveLength(3)
     expect(screen.getByText(c.equityEnd('−50.00 USD'))).toBeInTheDocument()
+  })
+
+  it('shows the empty state for a curve that is only the origin', () => {
+    render(<EquityChart title="Крива" points={[{ time: '2026-11-08T23:00:00Z', cum_pnl: '0' }]} currency="USD" />)
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
   it('labels the R edge buckets «≤ −2.5» and «≥ 3»', () => {

@@ -539,10 +539,10 @@ PRD 6.7, 6.9, 6.10; ROADMAP M6. All percentages are of the account size (`accoun
 - R metrics use only trades with `r_multiple` not null; every R metric returns `{value, n}` with `n` = trades used (UI shows «за 8/10 угод»).
 
 ### Metrics (pure, `app/domain/digest_metrics.py`)
-- `trades` (count), `wins` (net_pnl > 0), `losses` (< 0), `breakeven` (= 0).
+- `trades` (count), `wins`, `losses`, `breakeven`: a trade with R and |R| < `breakeven_r_threshold` (config/rules.yaml, default 0.1) is breakeven; otherwise net_pnl > 0 win, < 0 loss, = 0 breakeven (Borys/PM 2026-11-14, DECISIONS). `profit_factor` stays money-based (positive vs negative net_pnl, a breakeven trade's small P&L included).
 - `net_pnl` (sum, account currency; all accounts USD today, a mixed-currency set → 409 `mixed_currency`), `net_pnl_pct` = net_pnl / sum of account sizes of the accounts with a trade in the period × 100 (one account: its size).
 - `total_r` (sum), `win_rate` = wins / trades × 100 (breakeven is not a win), `avg_win_r` (mean R of wins), `avg_loss_r` (mean R of losses, negative), `expectancy_r` = total_r / n.
-- `profit_factor` = sum of winning net_pnl / |sum of losing net_pnl|; null when there is no loss.
+- `profit_factor` = sum of positive net_pnl / |sum of negative net_pnl| (money-based, a breakeven-by-R trade's P&L included); null when there is no negative net_pnl.
 - `max_drawdown` = largest peak-to-trough fall of running closed net P&L in (close_time, id) order, starting at 0, money and % (same base as net_pnl_pct); 0 when it never falls.
 - `best_trade` / `worst_trade`: by net_pnl (ties: earlier close), `{trade_id, symbol, net_pnl, r_multiple, close_time}`.
 - Empty period: counts 0, sums "0.00", ratios null.
