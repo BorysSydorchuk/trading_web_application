@@ -1,6 +1,12 @@
 # STATUS
 
-Current milestone: **M6 Dashboard and digests** (from 2026-11-12). M5 accepted 2026-11-12. M4 PM-approved 2026-11-07 with deferred checks. M3 accepted 2026-11-05, M2 accepted 2026-11-04, M1 accepted 2026-11-03, M0 accepted 2026-11-01.
+Current milestone: **M7 Hardening — plan ACCEPTED; M7-01 [L] only authorized**. M6 officially ACCEPTED by pasted PM review at `1a194a9`; all owner checks and coverage fix verified. M5 accepted 2026-11-12. Earlier acceptance history below remains historical.
+
+## Current resume point — M7 planning
+
+- Owner codex, tier S documentation task, branch `m7/hardening-plan` from clean/up-to-date `main` `1a194a9`; session Git history matches prior work.
+- Proposed M7-01..08 scopes, tiers, acceptance, tests, owner checks, dependencies and risks: `docs/reports/M7-plan.md`.
+- Plan accepted; final decisions recorded in DECISIONS.md. Documentation gate evidence will be in merge message. Next: M7-01 [L] owner codex, branch `m7/backups`, tests first, isolated synthetic restore, specialist/security self-review and final-commit full gate. M7-02 blocked on PM acceptance of M7-01. No QA deletion, real-data destruction or paid AI calls.
 
 ## Environment notes (dev laptop)
 - Python 3.12.9, Node 24, npm 10, Docker Desktop 29, git.
