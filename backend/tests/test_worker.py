@@ -60,6 +60,8 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
         WARMUP_DAILY_JOB_ID,
         TRANSCRIPTION_JOB_ID,
         REQUIREMENTS_JOB_ID,
+        "daily_backup",
+        "backup_recovery",
     ]
     sync = scheduler.get_job(SYNC_JOB_ID)
     assert sync is not None

@@ -45,7 +45,9 @@ def test_cli_manual_default_and_configurable_root(
         backup,
         "get_settings",
         lambda: Settings(
-            _env_file=None, database_url="postgresql+psycopg://u:p@localhost/synthetic_test"
+            _env_file=None,
+            database_url="postgresql+psycopg://u:p@localhost/synthetic_test",
+            backup_dir=tmp_path,
         ),
     )
     assert backup.main(["--root", str(tmp_path)]) == 0
@@ -53,3 +55,6 @@ def test_cli_manual_default_and_configurable_root(
     calls.clear()
     assert backup.main(["--root", str(tmp_path), "--kind", "daily"]) == 0
     assert calls == [(tmp_path, 5432), "daily", "prune"]
+    calls.clear()
+    assert backup.main([]) == 0
+    assert calls == [(tmp_path, 5432), "manual"]

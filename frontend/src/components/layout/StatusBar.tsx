@@ -1,5 +1,6 @@
 import { useHealth } from '@/api/health'
 import { AiKeyChip } from '@/features/ai/AiKeyChip'
+import { BackupChip } from '@/features/backups/BackupChip'
 import { NotificationPrompt } from '@/features/inbox/NotificationPrompt'
 import { SyncChips } from '@/features/sync/SyncChips'
 import { uk } from '@/i18n/uk'
@@ -43,7 +44,7 @@ export function StatusBar() {
   return (
     <footer
       aria-label={uk.statusBar.label}
-      className="flex h-7 shrink-0 items-center gap-4 border-t border-sidebar-border bg-sidebar px-3 text-xs text-muted-foreground"
+      className="flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-sidebar-border bg-sidebar px-3 text-xs text-muted-foreground"
     >
       {/* Only the server/DB state is announced; sync chips and the clock would be noise every poll. */}
       <span role="status" aria-live="polite" className="flex shrink-0 items-center gap-2">
@@ -51,6 +52,7 @@ export function StatusBar() {
         <span className={cn(tone === 'down' && 'text-loss')}>{text}</span>
       </span>
       <AiKeyChip state={aiState} />
+      <BackupChip status={!isError ? data?.backups : null} />
       <SyncChips />
       <span className="ml-auto flex shrink-0 items-center gap-4">
         <NotificationPrompt />

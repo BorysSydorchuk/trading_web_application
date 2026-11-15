@@ -1,6 +1,21 @@
 # STATUS
 
-Current milestone: **M7 Hardening — plan ACCEPTED; M7-01 [L] only authorized**. M6 officially ACCEPTED by pasted PM review at `1a194a9`; all owner checks and coverage fix verified. M5 accepted 2026-11-12. Earlier acceptance history below remains historical.
+Current milestone: **M7 Hardening — M7-01 ACCEPTED; M7-02 [L] implementation complete, final gate/owner acceptance pending**. M0–M6 accepted. Latest PM resume instruction supersedes historical gates below.
+
+## M7-02 recovery — 2026-11-15, owner codex, tier L
+
+- Recovered branch `m7/backup-schedule`, HEAD/main/origin/main `4dc0ac5`; no task commits, staged changes, stash or unfinished Git operation. Three historical worktrees preserved.
+- Only recovered file: untracked `backend/tests/services/test_backup_schedule.py` (11 parametrized scenarios). No implementation/API/UI/report existed. Confirmed RED: missing `app.services.backup_schedule`, collection error; no database operations.
+- No active Python/Node/make/pg_dump/pg_restore processes found. Existing logs belong to M7-01. Owner reports full usage allowance.
+- Continue saved tests, implement remaining M7-02 only; preserve all QA databases, no real-data experiments, migration, MT5/AI/Whisper calls or push. Final commit full gate and sole-engineer specialist self-review before local no-ff merge.
+
+### M7-02 completion evidence and next gate
+
+- Saved RED checkpoint `5dcf135`; completed schedule/journal, health gate, independent executor, backup status API and Ukrainian status-bar UI. Exact recovery/new-work split, crash behavior, configuration and owner checklist: `docs/reports/M7-02.md`.
+- Focused 137 backend PASS; 18 UI PASS; targeted ruff/mypy, frontend lint/typecheck/build PASS. Actual synthetic process exits verify lock release and no duplicate after publication. All previous QA and three new synthetic DBs retained; no real-data experiment, migration, paid call or MT5 operation.
+- An initial coverage+DB run failed inside SQLAlchemy cache traversal (128 PASS / 3 fixture errors); uninstrumented focused run and expanded run pass. No library changes. Final Makefile gate uses normal repository configuration without coverage.
+- Final task commit requires complete make check, then general/PRD/Python/database/security self-review APPROVE and local no-ff merge. Exact SHA, totals and review evidence in merge message; logs `logs/m7-02-full-*.log`. No push.
+- RESUME FROM HERE: inspect Git and the M7-02 merge message. If not merged, finish the final-commit gate/review only; preserve existing test DBs and never repeat a real dump. Once merged, STOP for Borys's owner checklist and PM review. M7-03..08 remain unauthorized.
 
 ## Current resume point — M7 planning
 

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     log_dir: Path = Path("logs")
     # Runtime data (audio notes, worker state files). Relative = against the repo root.
     data_dir: Path = Path("data")
+    backup_dir: Path = REPO_ROOT / "backups"
     log_level: LogLevel = "INFO"
     api_host: str = "127.0.0.1"
     api_port: int = 8000
@@ -95,6 +96,13 @@ class Settings(BaseSettings):
         """LOG_DIR resolved against the repo root (not the CWD) when relative."""
         path = self.log_dir.expanduser()
         return path if path.is_absolute() else REPO_ROOT / path
+
+    @field_validator("backup_dir")
+    @classmethod
+    def _absolute_backup_dir(cls, value: Path) -> Path:
+        path = value.expanduser()
+        # Preserve links for BackupStore's fail-closed path validation.
+        return Path(os.path.abspath(path if path.is_absolute() else REPO_ROOT / path))
 
     @field_validator("data_dir")
     @classmethod

@@ -15,6 +15,20 @@ export interface HealthResponse {
   db: { ok: boolean; latency_ms: number | null; error: string | null }
   /** AI key state (M3). Missing on an older backend: the UI shows nothing for it. */
   ai?: AiKeyStatus | null
+  backups?: BackupStatus | null
+}
+
+export interface BackupStatus {
+  state: string
+  last_success_at: string | null
+  last_failure_at: string | null
+  error_code: string | null
+  last_error_code: string | null
+  overdue: boolean
+  attempts: number
+  failed_attempts: number
+  next_due_at: string
+  retry_at: string | null
 }
 
 export const HEALTH_POLL_MS = 15_000

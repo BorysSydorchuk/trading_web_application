@@ -107,6 +107,36 @@ in a target-hashed folder; PostgreSQL TOC/data inspection and SHA-256 detect dam
 A scope `.lock` left after a crash requires confirming no backup process is active
 before an owner removes that lock; never remove a live process's lock.
 
+**Daily scheduling and status (M7-02).** The normal worker runs one verified daily
+backup at **18:00 Europe/Brussels**, following both DST changes. API and PostgreSQL
+must be healthy; optional AI/MT5 availability does not prevent a backup. A dedicated
+executor keeps dumping separate from MT5 synchronization. With the app/laptop off,
+no backup runs. On startup/wake, one latest missed slot is caught up after health is
+confirmed; older missed dates are not replayed and the next 18:00 slot is preserved.
+Failures have at most three attempts per due slot, at least five minutes between
+attempt starts; recovery is checked every 15 seconds. The next daily slot gets a new
+budget. Successful publication is reconciled across restarts without another dump.
+
+`BACKUP_DIR` configures a private local destination for worker, API and CLI (default
+repo `backups/`; CLI `--root` still overrides it). Use the same stable configuration
+for API and worker. Change it only with the app stopped; it owns both archives and
+the per-target scheduler journal, so a new empty directory starts new schedule history.
+Do not remove/edit `schedule.json` or move archives during normal operation.
+The permanent `.schedule.lock` is an OS lock file, not a stale lock to delete.
+M7-01's separate `.lock` may survive a hard crash during pg_dump: the UI explains the
+block, and retries never forcibly unlock it. Stop the app and have the engineer verify
+the associated dump/restore processes before resolving that lock. Corrupt state or
+archive also requires inspection; never delete it just to make the warning disappear.
+
+Every page → bottom status bar → **«Резервні копії»** shows last successful copy,
+failed attempts, overdue state, next schedule/retry and actionable Ukrainian errors.
+The API offers read-only `/api/backups/status`, also included in `/api/health`.
+Status polling does not hash archives. Timestamps show Brussels time in the UI;
+the journal stores UTC. Retention failures retain success and show a warning; retention
+is tried again after the next successful daily backup. Local disk and sudden-power-loss
+limitations from M7-01 still apply. See `docs/reports/M7-02.md` for synthetic evidence
+and the owner checks requiring a real scheduled backup.
+
 ## Using native PostgreSQL instead of Docker
 
 1. Install PostgreSQL 16 (`winget install PostgreSQL.PostgreSQL.16`) and remember the

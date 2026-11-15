@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from types import FrameType
 from zoneinfo import ZoneInfo
 
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -49,6 +50,7 @@ from app.services.ai.warmup import (
 from app.services.journal_requirements import sync_requirements
 from app.services.risk_base import recompute_all
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
+from app.worker.backup_job import BACKUP_JOB_ID, BACKUP_POLL_SECONDS, BackupJob
 from app.worker.margin_job import (
     MARGIN_JOB_ID,
     MARGIN_JOB_INTERVAL_S,
@@ -198,6 +200,7 @@ def build_scheduler(
     requirements_job: Callable[[], None] | None = None,
     margin_job: Callable[[], None] | None = None,
     mt5: SharedMt5 | None = None,
+    backup_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -205,6 +208,7 @@ def build_scheduler(
     shared = mt5 if mt5 is not None else default_mt5(settings)
     scheduler = BackgroundScheduler(
         timezone=UTC,
+        executors={"default": ThreadPoolExecutor(10), "backups": ThreadPoolExecutor(1)},
         job_defaults={
             "coalesce": True,  # after a sleep/hibernate run a missed job once, not N times
             "max_instances": 1,
@@ -282,6 +286,27 @@ def build_scheduler(
         id=REQUIREMENTS_JOB_ID,
         name=REQUIREMENTS_JOB_ID,
         next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(BACKUP_JOB_ID, backup_job or BackupJob(settings)),
+        trigger=CronTrigger(hour=18, minute=0, timezone=ZoneInfo(DEFAULT_TZ)),
+        id=BACKUP_JOB_ID,
+        name=BACKUP_JOB_ID,
+        executor="backups",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(UTC),
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(BACKUP_JOB_ID, backup_job or BackupJob(settings)),
+        trigger=IntervalTrigger(seconds=BACKUP_POLL_SECONDS, timezone=UTC),
+        id="backup_recovery",
+        name="backup_recovery",
+        executor="backups",
+        max_instances=1,
+        coalesce=True,
         replace_existing=True,
     )
     return scheduler
