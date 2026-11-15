@@ -8,6 +8,7 @@ Current milestone: **M7 Hardening — M7-02 ACCEPTED; M7-03 [M] AUTHORIZED, in p
 - Audit existing 5 MiB / five-archive logs; implement safe concurrent rotation, UTF-8/UTC, redaction, synthetic rollover/restart/Windows-lock tests. Protect ai_usage.jsonl, audio, backups and unrelated files. No paid calls, DB changes/deletion or push. M7-04 unauthorized.
 - RED checkpoint `4930023`; focused rotation/config/AI usage regression 85 PASS, including real Windows sharing denial and three synthetic writer processes. UTF-8 byte-bound regression observed RED then fixed. Owner reports 96% usage allowance.
 - Implementation/report: `docs/reports/M7-03.md`. Final task commit requires full make check then general/PRD/security self-review APPROVE before no-ff merge; exact final gate and merge evidence will be in merge commit message. RESUME FROM HERE: inspect Git and final gate evidence, finish M7-03 only; once merged STOP for owner/PM acceptance.
+- First full gate `d08fa10` PASS (3241 backend + one expected Whisper skip / 478 frontend). Self-review fixed quoted-space credential redaction (three RED cases) and Windows embedded-newline accounting; focused now 89 PASS. Replacement commit requires second/final full gate; do not merge on the earlier result.
 
 ## M7-02 recovery — 2026-11-15, owner codex, tier L
 

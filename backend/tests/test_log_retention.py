@@ -187,3 +187,23 @@ def test_rotation_limit_counts_utf8_bytes(tmp_path: Path) -> None:
         for _ in range(20):
             emit(target, "я" * 35)
     assert max(p.stat().st_size for p in tmp_path.glob("worker.log*") if p.suffix != ".lock") <= 200
+
+
+def test_rotation_counts_windows_newlines_inside_tracebacks(tmp_path: Path) -> None:
+    path = tmp_path / "worker.log"
+    with handler(path, 200, 5) as target:
+        for _ in range(20):
+            emit(target, "x\n" * 22)
+    assert max(p.stat().st_size for p in tmp_path.glob("worker.log*") if p.suffix != ".lock") <= 200
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["password='two secret words'", 'token="two secret words"', "{'api_key': 'two secret words'}"],
+)
+def test_redaction_covers_quoted_credentials_with_spaces(value: str) -> None:
+    record = logging.LogRecord("test", 40, "", 1, value, (), None)
+    output = UTCFormatter("%(message)s").format(record)
+    assert "two" not in output
+    assert "secret words" not in output
+    assert "[REDACTED]" in output

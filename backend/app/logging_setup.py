@@ -54,6 +54,11 @@ class UTCFormatter(logging.Formatter):
         rendered = re.sub(r"(?i)([a-z][a-z0-9+.-]*://)[^\s/@]+@", r"\1[REDACTED]@", rendered)
         rendered = re.sub(r"(?i)(bearer\s+)[^\s,'\"}]+", r"\1[REDACTED]", rendered)
         rendered = re.sub(
+            r"(?is)((?:password|passwd|pwd|api[_-]?key|token|secret)\s*['\"]?\s*[:=]\s*)(['\"])(.*?)\2",
+            r"\1\2[REDACTED]\2",
+            rendered,
+        )
+        rendered = re.sub(
             r"(?i)((?:password|passwd|pwd|api[_-]?key|token|secret)\s*['\"]?\s*[:=]\s*['\"]?)[^\s,'\"}]+",
             r"\1[REDACTED]",
             rendered,

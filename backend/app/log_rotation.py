@@ -64,7 +64,8 @@ class ProcessRotatingHandler(RotatingFileHandler):
             self.stream = self._open()
         self.stream.seek(0, os.SEEK_END)
         size = self.stream.tell()
-        message = self.format(record) + os.linesep
+        # TextIO translates every newline, including embedded traceback lines.
+        message = (self.format(record) + "\n").replace("\n", os.linesep)
         return (
             self.maxBytes > 0
             and size > 0
