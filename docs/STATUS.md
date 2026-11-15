@@ -1,6 +1,11 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-05 ACCEPTED; M7-06 [S] authorized, in progress**. M0–M6 and M7-01..05 accepted. M7-07 unauthorized. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-06 ACCEPTED; M7-07 [L] authorized, in progress**. M0–M6 and M7-01..06 accepted. M7-08 unauthorized. Latest PM decision supersedes historical gates below.
+
+## M7-07 — owner codex, tier L
+
+- Branch `m7/hardening-qa` from clean main `3ede8b2`; Git matches accepted M7-06. All three M7-06 owner checks PASS; no further installation changes. Owner reports 58% allowance before audit/restore/gates.
+- Security/safety audit + integrated fixture/mocked regression, brand-new synthetic source/restore databases, archive integrity/schema/constraints/data verification, targeted security tests and final-commit full gate. Sole engineer performs PRD/Python/database/security review. Preserve all existing data/QA/resources; no live MT5, AI/Whisper, new financial/schema changes, M7-08 or push.
 
 ## M7-06 — owner codex, tier S
 
