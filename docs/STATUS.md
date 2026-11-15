@@ -1,8 +1,19 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-06 ACCEPTED; M7-07 [L] authorized, in progress**. M0–M6 and M7-01..06 accepted. M7-08 unauthorized. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 technical milestone CLOSED by owner/PM decision; M8 — UX & Functional Improvements, awaiting actual owner feedback and PM scope**. M0–M6 and M7-01..07 accepted. M7-08 preparation accepted, live plan SUPERSEDED; five-day live validation transferred to M8 at **0/5**, not passed. No M8 implementation authorized. Latest explicit owner/PM decision supersedes historical plans/checkpoints below.
+
+## M7 closure documentation — owner codex, tier S
+
+- PM verdict 2026-11-16: technical M7 CLOSED; M7-01..07 fully accepted, no unresolved blocking findings. M7-08 preparation accepted but the prior five-day M7 closure gate is SUPERSEDED; actual real-day evidence remains 0/5, no live-acceptance PASS claimed. M8 is UX & Functional Improvements; scope must come from real owner feedback and separate PM authorization.
+- Recovery: clean `m7/trading-week` at `8b6ade539e930524d0fed28c2cb8b70c4c38be3a`; main/origin/main `c9dc7c2`, no uncommitted/staged changes or stashes. Three historical worktrees preserved. Returned to main, then created `m7/closure-docs` from main; never merged the old preparation branch.
+- Scope: exactly `docs/ROADMAP.md`, `docs/STATUS.md`, `docs/DECISIONS.md`; no app/schema/money/MT5/AI or runtime-data changes. Preserve `m7/trading-week` at `8b6ade5` permanently unless the owner decides otherwise; do not merge/delete it or its checklist.
+- Template reference: `docs/reports/M7-08.md` exists in preserved commit `8b6ade5`, not on main. Repository-root PowerShell: `git show 8b6ade5:docs/reports/M7-08.md`. Reuse its A–F workflow/report fields for future M8 live-use feedback without importing its superseded M7 closure gate or fabricating dates/results. No new feedback/defects or completed day reported yet.
+- Verification: focused documentation consistency/preserved Git-object checks, then complete make check on the final documentation commit, Tier S PRD/general self-review, local no-ff merge only if green. Exact final SHA, full gate totals/log and review verdict belong in the merge message without changing the tested commit. Existing M7-07 gate is historical evidence, not this task's gate.
+- RESUME FROM HERE: finish this docs-only final gate/review/merge; keep old preparation commit outside main ancestry and its template unchanged. Afterward wait for actual owner feedback and PM M8 scope/implementation authorization. Five real days are still 0/5; M7 closure is the owner/PM decision, not completed live validation. No push, no M8 fixes, no database/log/backup/audit cleanup or real service calls.
 
 ## M7-07 — owner codex, tier L
+
+- CLOSED / ACCEPTED: all five owner checks PASS; security/integrated QA and synthetic restore verified, no unresolved blocker. Merge `c9dc7c2` records full make check on `53c3707` (3317 backend PASS / one intentional Whisper skip, 482 frontend PASS, lint/typecheck PASS) and Tier L self-review APPROVE. The latest PM decision closes technical M7 and supersedes the historical M7-08 authorization/closure gates below.
 
 - Branch `m7/hardening-qa` from clean main `3ede8b2`; Git matches accepted M7-06. All three M7-06 owner checks PASS; no further installation changes. Owner reports 58% allowance before audit/restore/gates.
 - Security/safety audit + integrated fixture/mocked regression, brand-new synthetic source/restore databases, archive integrity/schema/constraints/data verification, targeted security tests and final-commit full gate. Sole engineer performs PRD/Python/database/security review. Preserve all existing data/QA/resources; no live MT5, AI/Whisper, new financial/schema changes, M7-08 or push.
