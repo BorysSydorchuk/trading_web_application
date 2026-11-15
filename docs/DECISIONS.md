@@ -2,6 +2,9 @@
 
 One line per decision: date, decision, reason. Product decisions live in PRD.md.
 
+- 2026-11-15 (PM): M7-04 ACCEPTED, three owner checks PASS; authorize M7-05 [M] only, isolated reproducible performance measurement and bounded nonfinancial fixes. No M7-06, existing QA deletion, real MT5/AI/Whisper or push. Money/schema/MT5 fixes require separate authorization/tier reassessment.
+- 2026-11-15 (M7-05): keep performance assertions out of ordinary tests; retain raw samples, median/nearest-rank p95/max and every strict-target breach; distinguish serial API, document load, cached sidebar navigation, warm startup and cold-container/offline fresh install. Final document journal fails (2/20, p95 329.1 ms); no speculative production fix, PM disposition required. Reason: PRD limits must not be hidden by cache conditions or correctness-test success.
+
 - 2026-11-15 (PM): M7-03 ACCEPTED, all three owner checks PASS; authorize M7-04 [M] only. Preserve dev/QA databases; no schema changes, live MT5/AI/Whisper tests or push. M7-05 waits for PM acceptance.
 - 2026-11-15 (M7-04): keep stdlib launcher and existing ownership/Docker recovery; require Python 3.12.x and Vite's local engine range (^20.19 or >=22.12), executable npm/uv, backend preflight for YAML/settings, disposable directory write probes, SQL database identity and pg_dump/pg_restore version availability. Before non-test migration, reconfirm target/compose cluster, inspect archive TOC and all data before publication/upgrade. Worker acknowledges scheduler startup through a per-launch token in its private stdout pipe; readiness requires current healthy API/DB, worker acknowledgement and Vite response. Optional AI/MT5 are never probed by preflight. Reason: fail clearly before unsafe migration or false readiness, without adding a schema/dependency or interfering with foreign processes.
 
