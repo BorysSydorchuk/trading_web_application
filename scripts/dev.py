@@ -1,6 +1,6 @@
 """Dev launcher for the Trading Journal app (used by `start.bat`, `stop.bat` and `make dev`).
 
-Stdlib only, Python 3.12+. Steps:
+Stdlib only, Python 3.12.x. Steps:
   1. stops a previous run of this app (recorded in `logs/dev-run.json`, or an orphaned
      API/UI process of this checkout still holding port 8000/5173),
   2. prerequisite checks (Python, Node/npm, uv),
@@ -52,6 +52,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
@@ -84,6 +85,7 @@ BACKEND_STAMP = BACKEND / ".venv" / ".dev-sync-stamp"
 FRONTEND_STAMP = FRONTEND / "node_modules" / ".dev-install-stamp"
 
 IS_WINDOWS = sys.platform == "win32"
+STARTUP_TOKEN = uuid4().hex
 
 # --------------------------------------------------------------------------- messages
 # Every user-facing console message of the launcher (Ukrainian). `{...}` are str.format fields.
@@ -97,7 +99,10 @@ DB_URL_ERROR = (
 
 MSG: dict[str, str] = {
     # prerequisites
-    "python_old": "Потрібен Python 3.12+, знайдено {found}. Див. README (Prerequisites).",
+    "python_old": "Потрібен Python 3.12.x, знайдено {found}. Див. README (Prerequisites).",
+    "preflight": "Перевіряю БД, backup tools, каталоги та конфігурацію",
+    "ready_missing_worker": "воркера (перевірте logs/worker.log)",
+    "npm_failed": "Не вдалося виконати npm --version. Перевстановіть Node.js LTS/npm.",
     "uv_missing": (
         "Не знайдено uv. Встановіть його (PowerShell): "
         'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" '
@@ -222,7 +227,7 @@ class LauncherError(Exception):
     """A readable, expected failure: printed without a traceback, exit code 1."""
 
 
-class StopRequested(Exception):  # noqa: N818 - a signal, not an error
+class StopRequested(Exception):  # noqa: N818 - control-flow signal, not an error
     """Another launcher (`--stop` or a new start) asked this one to stop."""
 
 
@@ -358,7 +363,10 @@ if sys.platform == "win32":
     _k32.CloseHandle.restype = wintypes.BOOL
     _k32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
     _k32.GetExitCodeProcess.restype = wintypes.BOOL
-    _k32.GetProcessTimes.argtypes = (wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4))
+    _k32.GetProcessTimes.argtypes = (
+        wintypes.HANDLE,
+        *([ctypes.POINTER(wintypes.FILETIME)] * 4),
+    )
     _k32.GetProcessTimes.restype = wintypes.BOOL
     _k32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
     _k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
@@ -406,7 +414,11 @@ if sys.platform == "win32":
             buf = ctypes.create_string_buffer(size)
             needed = wintypes.ULONG(0)
             status = _ntdll.NtQueryInformationProcess(
-                handle, _PROCESS_COMMAND_LINE_INFORMATION, buf, size, ctypes.byref(needed)
+                handle,
+                _PROCESS_COMMAND_LINE_INFORMATION,
+                buf,
+                size,
+                ctypes.byref(needed),
             )
             if status == 0:
                 text = _UnicodeString.from_buffer(buf)
@@ -702,7 +714,8 @@ def request_launcher_stop(record: RunRecord) -> bool:
     try:
         STOP_REQUEST_FILE.parent.mkdir(parents=True, exist_ok=True)
         STOP_REQUEST_FILE.write_text(
-            json.dumps({"pid": record.pid, "create_time": record.create_time}), encoding="utf-8"
+            json.dumps({"pid": record.pid, "create_time": record.create_time}),
+            encoding="utf-8",
         )
     except OSError:
         return False
@@ -906,6 +919,7 @@ def child_env() -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+    env["TJ_STARTUP_TOKEN"] = STARTUP_TOKEN
     # An activated foreign venv makes `uv run` warn; the backend has its own .venv.
     env.pop("VIRTUAL_ENV", None)
     return env
@@ -915,15 +929,13 @@ def child_env() -> dict[str, str]:
 
 
 def check_python() -> None:
-    if sys.version_info < (3, 12):  # noqa: UP036 - the launcher may run on an old python
+    if sys.version_info[:2] != (3, 12):
         raise LauncherError(MSG["python_old"].format(found=sys.version.split()[0]))
 
 
 def find_uv() -> list[str]:
     exe = shutil.which("uv")
-    if exe:
-        return [exe]
-    fallback = [sys.executable, "-m", "uv"]
+    fallback = [exe] if exe else [sys.executable, "-m", "uv"]
     try:
         ok = (
             subprocess.run(
@@ -954,12 +966,18 @@ def find_npm() -> str:
             check=True,
         ).stdout
         version = parse_node_version(out)
-    except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        raise LauncherError(MSG["node_version_failed"].format(error=exc)) from exc
-    if version < MIN_NODE:
+    except (OSError, subprocess.SubprocessError, ValueError):
         raise LauncherError(
-            MSG["node_old"].format(need=f"{MIN_NODE[0]}.{MIN_NODE[1]}", found=out.strip())
+            MSG["node_version_failed"].format(error="перевірте Node.js LTS")
+        ) from None
+    if not ((version[0] == 20 and version >= (20, 19)) or version >= (22, 12)):
+        raise LauncherError(
+            MSG["node_old"].format(need="20.19.x або 22.12", found=f"{version[0]}.{version[1]}")
         )
+    try:
+        subprocess.run([npm, "--version"], capture_output=True, timeout=20, check=True)
+    except (OSError, subprocess.SubprocessError):
+        raise LauncherError(MSG["npm_failed"]) from None
     return npm
 
 
@@ -984,7 +1002,10 @@ def ensure_dependencies(uv: Sequence[str], npm: str) -> None:
         BACKEND_STAMP.touch()
     if needs_install(FRONTEND_STAMP, [FRONTEND / "package-lock.json", FRONTEND / "package.json"]):
         run_step(
-            [npm, "install", "--no-audit", "--no-fund"], FRONTEND, MSG["step_npm_install"], 900
+            [npm, "install", "--no-audit", "--no-fund"],
+            FRONTEND,
+            MSG["step_npm_install"],
+            900,
         )
         FRONTEND_STAMP.touch()
 
@@ -1097,7 +1118,12 @@ def ensure_db(env: Mapping[str, str]) -> None:
         raise LauncherError(MSG["db_no_docker"].format(host=host, port=port))
 
     ensure_docker_daemon(docker, host, port)
-    run_step([docker, "compose", "up", "-d", "--wait", "db"], ROOT, MSG["step_compose_up"], 600)
+    run_step(
+        [docker, "compose", "up", "-d", "--wait", "db"],
+        ROOT,
+        MSG["step_compose_up"],
+        600,
+    )
     if not wait_tcp(host, port, DB_TCP_TIMEOUT_S):
         raise LauncherError(MSG["db_still_unreachable"].format(host=host, port=port))
     say(MSG["db_reachable"].format(host=host, port=port))
@@ -1105,7 +1131,12 @@ def ensure_db(env: Mapping[str, str]) -> None:
 
 def migrate(uv: Sequence[str]) -> None:
     # Backs up the dev DB with pg_dump before `alembic upgrade head` (app/tools/migrate.py).
-    run_step([*uv, "run", "python", "-m", "app.tools.migrate"], BACKEND, MSG["step_migrate"], 900)
+    run_step(
+        [*uv, "run", "python", "-m", "app.tools.migrate"],
+        BACKEND,
+        MSG["step_migrate"],
+        900,
+    )
 
 
 # --------------------------------------------------------------------------- child processes
@@ -1130,8 +1161,11 @@ class Child:
     name: str
     proc: subprocess.Popen[bytes]
     reader: threading.Thread = field(init=False)
+    ready: threading.Event = field(default_factory=threading.Event)
+    identity: RunRecord | None = field(init=False)
 
     def __post_init__(self) -> None:
+        self.identity = make_record(self.name, self.proc.pid)
         self.reader = threading.Thread(target=self._pump, name=f"pump-{self.name}", daemon=True)
         self.reader.start()
 
@@ -1142,6 +1176,12 @@ class Child:
         prefix = f"[{self.name}] "
         for raw in iter(stream.readline, b""):
             line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            marker = "TJ_WORKER_READY:" + STARTUP_TOKEN
+            if self.name == "worker" and marker in line:
+                self.ready.set()
+                line = line.replace(marker, "").strip()
+                if not line:
+                    continue
             with _print_lock:
                 print(prefix + line, flush=True)
 
@@ -1178,14 +1218,21 @@ def _signal_group(pid: int, sig_name: str) -> None:
 
 def kill_tree(child: Child) -> None:
     proc = child.proc
+    if proc.poll() is not None:
+        return  # Never taskkill a PID that could already belong to another process.
     if IS_WINDOWS:
         # Kill the whole tree while the root still exists (uv/npm spawn python/node children).
-        subprocess.run(
-            ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
+        if child.identity is None or not is_recorded_process(
+            child.identity, query_process(proc.pid)
+        ):
+            proc.terminate()  # Popen owns a stable Windows process handle, not a reused PID.
+        else:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
     else:
         _signal_group(proc.pid, "SIGTERM")
     try:
@@ -1223,7 +1270,7 @@ def check_children(children: Sequence[Child]) -> None:
 
 def http_get(url: str, timeout: float = 2.0) -> tuple[int, bytes] | None:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - local http
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - fixed loopback URLs
             status: int = resp.status
             return status, resp.read()
     except urllib.error.HTTPError as exc:
@@ -1261,6 +1308,9 @@ class Run:
         if stop_requested(self.own):
             raise StopRequested
 
+    def worker_ready(self) -> bool:
+        return any(child.name == "worker" and child.ready.is_set() for child in self.children)
+
     def close(self) -> None:
         stop_all(self.children)
         if self.own is not None and read_run_file(RUN_FILE)[:1] == [self.own]:
@@ -1274,17 +1324,20 @@ def wait_ready(run: Run) -> str:
     web_ok = False
     while time.monotonic() < deadline:
         run.check()
-        if health_status is None:
-            res = http_get(HEALTH_URL)
-            if res is not None and res[0] == 200:
-                try:
-                    health_status = str(json.loads(res[1]).get("status", "unknown"))
-                except (ValueError, AttributeError):
-                    health_status = "unknown"
+        health_status = None
+        res = http_get(HEALTH_URL)
+        if res is not None and res[0] == 200:
+            try:
+                body = json.loads(res[1])
+                if body.get("status") == "ok" and body.get("db", {}).get("ok") is True:
+                    health_status = "ok"
+            except (ValueError, AttributeError):
+                pass
         if not web_ok:
             res = http_get(WEB_URL)
             web_ok = res is not None and res[0] == 200
-        if health_status is not None and web_ok:
+        if health_status is not None and web_ok and run.worker_ready():
+            run.check()
             return health_status
         time.sleep(0.25)
     missing = []
@@ -1292,6 +1345,8 @@ def wait_ready(run: Run) -> str:
         missing.append(MSG["ready_missing_api"].format(url=HEALTH_URL))
     if not web_ok:
         missing.append(MSG["ready_missing_web"].format(url=WEB_URL))
+    if not run.worker_ready():
+        missing.append(MSG["ready_missing_worker"])
     raise LauncherError(
         MSG["ready_timeout"].format(
             seconds=f"{READY_TIMEOUT_S:.0f}", missing=MSG["ready_join"].join(missing)
@@ -1314,6 +1369,12 @@ def run_dev(open_browser: bool, started: float) -> int:
         # The frontend does not need the DB: start it first so it boots while we migrate.
         run.add(start_child("web", [npm, "run", "dev"], FRONTEND))
         ensure_db(load_env())
+        run_step(
+            [*uv, "run", "python", "-m", "app.tools.startup_check"],
+            BACKEND,
+            MSG["preflight"],
+            120,
+        )
         migrate(uv)
         run.check()
         api_cmd = [*uv, "run", "uvicorn", "app.main:app", "--host", API_HOST, "--port"]
@@ -1344,6 +1405,12 @@ def run_ensure_db() -> int:
     uv = find_uv()
     ensure_env_file()
     ensure_db(load_env())
+    run_step(
+        [*uv, "run", "python", "-m", "app.tools.startup_check"],
+        BACKEND,
+        MSG["preflight"],
+        120,
+    )
     migrate(uv)
     return 0
 

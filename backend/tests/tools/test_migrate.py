@@ -117,6 +117,8 @@ class Env:
             compose_dir=self.tmp_path,
             read_revisions=read,
             upgrade=self.upgrade,
+            verify_backup=lambda path: None,
+            confirm_target=lambda url, port: None,
         )
 
     def run(self, url: str = DEV_URL, compose_port: int = 5432) -> tuple[int, str, str]:
@@ -139,6 +141,80 @@ def env(tmp_path: Path) -> Env:
 def assert_no_secret(*texts: str) -> None:
     for text in texts:
         assert PASSWORD not in text
+
+
+def test_unverified_backup_never_allows_upgrade(env: Env) -> None:
+    def fail(path: Path) -> None:
+        raise OSError("secret-archive-error")
+
+    out, err = io.StringIO(), io.StringIO()
+    code = mig.main(
+        settings=make_settings(env.tmp_path),
+        deps=replace(env.deps(), verify_backup=fail),
+        out=out,
+        err=err,
+        configure_logging=False,
+    )
+    assert code == 1
+    assert not env.upgrade.calls
+    assert "secret-archive-error" not in err.getvalue()
+
+
+def test_archive_verification_precedes_publication_and_upgrade(env: Env) -> None:
+    events: list[str] = []
+
+    def verify(path: Path) -> None:
+        assert path.name.endswith(".partial")
+        assert path.read_bytes() == b"PGDMP-fake-dump"
+        events.append("verified")
+
+    def upgrade(cfg: Config) -> None:
+        assert (env.backups / EXPECTED_NAME).exists()
+        events.append("upgrade")
+
+    assert (
+        mig.main(
+            settings=make_settings(env.tmp_path),
+            deps=replace(env.deps(), verify_backup=verify, upgrade=upgrade),
+            out=io.StringIO(),
+            err=io.StringIO(),
+            configure_logging=False,
+        )
+        == 0
+    )
+    assert events == ["verified", "upgrade"]
+
+
+def test_wrong_dump_target_never_runs_backup_or_upgrade(env: Env) -> None:
+    def fail(url: str, port: int) -> None:
+        raise ValueError("secret-target-error")
+
+    out, err = io.StringIO(), io.StringIO()
+    code = mig.main(
+        settings=make_settings(env.tmp_path),
+        deps=replace(env.deps(), confirm_target=fail),
+        out=out,
+        err=err,
+        configure_logging=False,
+    )
+    assert code == 1
+    assert not env.runner.calls
+    assert not env.upgrade.calls
+    assert "secret-target-error" not in err.getvalue()
+
+
+@pytest.mark.parametrize("stage", ["connect", "dump", "upgrade"])
+def test_startup_migration_errors_never_echo_credentials(env: Env, stage: str) -> None:
+    if stage == "connect":
+        env.revisions = OperationalError("connect", {}, Exception(DEV_URL))
+    elif stage == "dump":
+        env.runner = FakeRunner(returncode=1, stderr="password='unknown private words' " + DEV_URL)
+    else:
+        env.upgrade = FakeUpgrade(raises=RuntimeError(DEV_URL))
+    code, out, err = env.run()
+    assert code == 1
+    assert PASSWORD not in out + err
+    assert "unknown private words" not in out + err
 
 
 def test_no_pending_migrations_skips_backup_and_upgrade(env: Env) -> None:

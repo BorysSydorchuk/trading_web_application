@@ -43,7 +43,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.config import REPO_ROOT, Settings, get_settings
-from app.logging_setup import setup_logging
+from app.logging_setup import UTCFormatter, setup_logging
 
 logger = logging.getLogger("app.tools.migrate")
 
@@ -361,6 +361,14 @@ def make_backup(
     logger.info("backup of %s via %s to %s", target.database, plan.tool, final)
     try:
         run_dump(plan, partial, deps.runner)
+        try:
+            deps.verify_backup(partial)
+        except Exception:
+            raise BackupError(
+                "Архів pg_dump не пройшов перевірку pg_restore; міграції не застосовано"
+            ) from None
+        with partial.open("r+b") as stream:
+            os.fsync(stream.fileno())
         partial.replace(final)
     except OSError as exc:
         partial.unlink(missing_ok=True)
@@ -381,6 +389,24 @@ def rotate_backups(
 # --- CLI --------------------------------------------------------------------------------
 
 
+def verify_backup(path: Path) -> None:
+    from app.services.backups import PostgresTools
+
+    PostgresTools.verify(path)
+
+
+def confirm_backup_target(url: str, port: int) -> None:
+    from app.services.backups import PostgresTools, target_key
+
+    target_key(url)
+    target = parse_target(url)
+    PostgresTools._confirm_target(url, target)
+    if not shutil.which("pg_dump"):
+        if not target.is_local or target.port != port:
+            raise BackupError("Docker не відповідає цільовій БД")
+        PostgresTools._confirm_compose(url, target)
+
+
 @dataclass(frozen=True)
 class Deps:
     runner: Runner = subprocess_runner
@@ -390,6 +416,8 @@ class Deps:
     compose_dir: Path = REPO_ROOT
     read_revisions: Callable[[Config], Revisions] = read_revisions
     upgrade: Callable[[Config], None] = upgrade_head
+    verify_backup: Callable[[Path], None] = verify_backup
+    confirm_target: Callable[[str, int], None] = confirm_backup_target
 
 
 def _say(out: TextIO, text: str) -> None:
@@ -446,13 +474,21 @@ def migrate(settings: Settings, deps: Deps, out: TextIO, err: TextIO) -> int:
     except MigrateError as exc:
         return _fail(err, str(exc))
     db = target.database
+
+    def fail(message: str) -> int:
+        formatter = UTCFormatter(
+            "%(message)s", secrets=(target.password,) if target.password else ()
+        )
+        record = logging.LogRecord(__name__, logging.ERROR, __file__, 0, message, (), None)
+        return _fail(err, formatter.format(record))
+
     cfg = alembic_config(settings.database_url)
     try:
         revs = deps.read_revisions(cfg)
     except SQLAlchemyError as exc:
-        return _fail(err, _connect_error(target, exc))
+        return fail(_connect_error(target, exc))
     if revs.unknown:
-        return _fail(err, MSG["unknown_revision"].format(db=db, revs=_rev_label(revs.unknown)))
+        return fail(MSG["unknown_revision"].format(db=db, revs=_rev_label(revs.unknown)))
     if not revs.pending:
         _say(out, MSG["no_pending"].format(db=db, rev=_rev_label(revs.current)))
         return 0
@@ -462,15 +498,21 @@ def migrate(settings: Settings, deps: Deps, out: TextIO, err: TextIO) -> int:
         _say(out, MSG["test_db_skip"].format(db=db))
     else:
         try:
+            deps.confirm_target(settings.database_url, settings.postgres_port)
             backup = _backup_step(target, revs, deps, (out, err), settings.postgres_port)
         except BackupError as exc:
-            return _fail(err, MSG["backup_failed"].format(db=db, reason=exc, log=log))
+            return fail(MSG["backup_failed"].format(db=db, reason=exc, log=log))
+        except Exception:
+            return fail(
+                "Не вдалося підтвердити ціль резервування; перевірте БД та Docker. "
+                "Міграції НЕ застосовано.",
+            )
 
     current, head = _rev_label(revs.current), _rev_label(revs.heads)
     _say(out, MSG["upgrading"].format(db=db, current=current, head=head))
     ok, text = _upgrade_step(cfg, db, revs, backup, deps, log)
     if not ok:
-        return _fail(err, text)
+        return fail(text)
     _say(out, text)
     return 0
 

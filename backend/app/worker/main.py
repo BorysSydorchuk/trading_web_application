@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
+import re
 import signal
+import sys
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -354,6 +357,10 @@ def main() -> int:
     scheduler = build_scheduler(settings)
     try:
         scheduler.start()
+        token = os.environ.get("TJ_STARTUP_TOKEN", "")
+        if re.fullmatch(r"[a-f0-9]{32}", token):
+            sys.stdout.write("TJ_WORKER_READY:" + token + "\n")
+            sys.stdout.flush()
         while not stop.wait(STOP_POLL_S):
             pass
     except KeyboardInterrupt:
