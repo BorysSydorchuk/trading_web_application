@@ -433,7 +433,7 @@ def test_api_start_checks_the_key_in_background(app: FastAPI) -> None:
     lookup = FakeLookup([None])
     tracker = KeyStatusTracker(settings_with, lambda _: lookup)
     app.state.ai_key = tracker
-    with TestClient(app, raise_server_exceptions=False) as api:
+    with TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False) as api:
         assert wait_for(lambda: tracker.status().state == "ok")
         assert api.get("/api/health").json()["ai"]["state"] == "ok"
     assert len(lookup.calls) == 1

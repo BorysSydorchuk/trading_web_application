@@ -255,7 +255,9 @@ def test_startup_check_logs_mojibake(cfg_dir: Path, caplog: pytest.LogCaptureFix
 def test_api_returns_config_error_with_reason(cfg_dir: Path) -> None:
     path = cfg_dir / "journal_fields.yaml"
     path.write_bytes(_powershell_resave(path.read_text(encoding="utf-8")))
-    with TestClient(create_app(), raise_server_exceptions=False) as api:
+    with TestClient(
+        create_app(), base_url="http://127.0.0.1", raise_server_exceptions=False
+    ) as api:
         response = api.get("/api/journal-fields")
     assert response.status_code == 500
     error = response.json()["error"]

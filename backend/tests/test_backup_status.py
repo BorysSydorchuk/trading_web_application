@@ -26,7 +26,7 @@ def test_status_reads_last_success_and_failure_without_exposing_paths(tmp_path: 
     job.tick(datetime.now(UTC))
     app = create_app()
     app.dependency_overrides[get_backup_schedule] = lambda: job
-    response = TestClient(app).get("/api/backups/status")
+    response = TestClient(app, base_url="http://127.0.0.1").get("/api/backups/status")
     assert response.status_code == 200
     data = response.json()
     assert data["state"] == "ok"
@@ -47,7 +47,7 @@ def test_status_corruption_returns_actionable_code(tmp_path: Path) -> None:
     job.state_path.write_text("secret-not-json", encoding="utf-8")
     app = create_app()
     app.dependency_overrides[get_backup_schedule] = lambda: job
-    response = TestClient(app).get("/api/backups/status")
+    response = TestClient(app, base_url="http://127.0.0.1").get("/api/backups/status")
     assert response.status_code == 200
     assert response.json()["error_code"] == "state_unavailable"
     assert "secret" not in response.text
@@ -60,7 +60,7 @@ def test_invalid_backup_directory_does_not_break_status(settings: Settings) -> N
             "backup_dir": Path(__file__).resolve().parents[2] / "config",
         }
     )
-    response = TestClient(app).get("/api/backups/status")
+    response = TestClient(app, base_url="http://127.0.0.1").get("/api/backups/status")
     assert response.status_code == 200
     assert response.json()["error_code"] == "state_unavailable"
 
@@ -78,7 +78,7 @@ def test_unsupported_backup_target_does_not_break_health(
     monkeypatch.setattr(
         "app.api.health.check_db", lambda db: DbHealth(ok=True, latency_ms=0, error=None)
     )
-    response = TestClient(app).get("/api/health")
+    response = TestClient(app, base_url="http://127.0.0.1").get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert response.json()["backups"]["error_code"] == "state_unavailable"

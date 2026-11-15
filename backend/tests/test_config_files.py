@@ -352,7 +352,9 @@ def test_check_config_files_logs_loudly(cfg_dir: Path, caplog: pytest.LogCapture
 
 @pytest.fixture
 def api() -> Iterator[TestClient]:
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(), base_url="http://127.0.0.1", raise_server_exceptions=False
+    ) as client:
         yield client
 
 
@@ -413,7 +415,9 @@ def test_api_starts_with_broken_config(
     application.dependency_overrides[app_db.get_db] = _get_db
     with (
         caplog.at_level(logging.ERROR, logger="app.config_files"),
-        TestClient(application, raise_server_exceptions=False) as client,
+        TestClient(
+            application, base_url="http://127.0.0.1", raise_server_exceptions=False
+        ) as client,
     ):
         health = client.get("/api/health")
         fields = client.get("/api/journal-fields")
