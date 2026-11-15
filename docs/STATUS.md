@@ -1,6 +1,12 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-02 ACCEPTED; M7-03 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-03 ACCEPTED; M7-04 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+
+## M7-04 — owner codex, tier M
+
+- Branch `m7/startup-checks` from clean main `85d6ac8`; Git matches previous handoff. PM accepted M7-03, all three owner checks PASS; closed without further changes.
+- Audit: existing launcher owns process/port recovery, dependency installation, Docker recovery and child cleanup. Gaps: Python upper bound/Node engine ranges, SQL identity vs TCP-only check, backup tool/config/directory preflight, explicit worker readiness and archive inspection before dev migration.
+- Complete M7-04 only, tests first, isolated synthetic smoke and final-commit full gate/self-review. No schema changes, real MT5/AI/Whisper, existing dev/QA DB mutation/deletion or push. M7-05 unauthorized.
 
 ## M7-03 — owner codex, tier M
 
