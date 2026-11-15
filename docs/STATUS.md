@@ -1,6 +1,11 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-01 ACCEPTED; M7-02 [L] implementation complete, final gate/owner acceptance pending**. M0–M6 accepted. Latest PM resume instruction supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-02 ACCEPTED; M7-03 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+
+## M7-03 — owner codex, tier M
+
+- Branch `m7/log-retention` from clean main `4896c86`; Git matches previous handoff. PM accepted all six M7-02 owner checks, including actual schedule, restart/catch-up and sync. M7-02 closed without further changes.
+- Audit existing 5 MiB / five-archive logs; implement safe concurrent rotation, UTF-8/UTC, redaction, synthetic rollover/restart/Windows-lock tests. Protect ai_usage.jsonl, audio, backups and unrelated files. No paid calls, DB changes/deletion or push. M7-04 unauthorized.
 
 ## M7-02 recovery — 2026-11-15, owner codex, tier L
 
