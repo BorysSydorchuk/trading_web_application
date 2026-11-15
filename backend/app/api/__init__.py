@@ -6,6 +6,7 @@ from app.api import (
     accounts,
     ai,
     audio,
+    backups,
     bias,
     calculator,
     config_files,
@@ -18,6 +19,7 @@ from app.api import (
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
+api_router.include_router(backups.router)
 api_router.include_router(accounts.router)
 api_router.include_router(config_files.router)
 api_router.include_router(sync_status.router)

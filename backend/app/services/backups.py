@@ -246,18 +246,31 @@ class BackupStore:
         finally:
             lock.unlink()
 
-    def create(self, url: str, *, kind: Kind = "daily", now: datetime | None = None) -> Archive:
+    def create(
+        self,
+        url: str,
+        *,
+        kind: Kind = "daily",
+        now: datetime | None = None,
+        archive_name: str | None = None,
+    ) -> Archive:
         """Dump, verify, fsync both files, then publish together without overwriting."""
         if kind not in KINDS:
             raise BackupFailure("Invalid backup kind")
         now = now or datetime.now(UTC)
         if now.tzinfo is None or now.utcoffset() is None:
             raise BackupFailure("Backup timestamp must be timezone-aware")
+        if archive_name is not None and not ENTRY.fullmatch(archive_name):
+            raise BackupFailure("Invalid archive name")
         try:
             with self._lock(url) as scope:
                 parent = scope / kind
                 _directory(parent)
-                name = now.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + uuid4().hex
+                name = archive_name or (
+                    now.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + uuid4().hex
+                )
+                if (parent / name).exists():
+                    raise BackupFailure("Archive already published")
                 staging = parent / (name + ".partial")
                 staging.mkdir(mode=0o700)
                 return self._publish(url, kind, now, staging, parent / name)

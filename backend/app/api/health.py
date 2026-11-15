@@ -16,9 +16,12 @@ from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.ai import get_key_tracker, key_out
+from app.api.backups import BackupStatus, backup_status
+from app.config import Settings, get_settings
 from app.db import get_db
 from app.schemas.ai import AiKeyOut
 from app.services.ai.key_status import KeyStatusTracker
+from app.services.backups import BackupFailure, target_key
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,8 @@ class HealthResponse(BaseModel):
     time_utc: str
     db: DbHealth
     ai: AiKeyOut
+    backup_target: str | None
+    backups: BackupStatus
 
 
 def app_version() -> str:
@@ -95,12 +100,20 @@ def check_db(db: Session) -> DbHealth:
 def health(
     db: Session = Depends(get_db),
     key_tracker: KeyStatusTracker = Depends(get_key_tracker),
+    settings: Settings = Depends(get_settings),
+    backups: BackupStatus = Depends(backup_status),
 ) -> HealthResponse:
     db_health = check_db(db)
+    try:
+        backup_target = target_key(settings.database_url)
+    except BackupFailure:
+        backup_target = None
     return HealthResponse(
         status="ok" if db_health.ok else "degraded",
         version=app_version(),
         time_utc=utc_now_iso(),
         db=db_health,
         ai=key_out(key_tracker.status()),
+        backup_target=backup_target,
+        backups=backups,
     )

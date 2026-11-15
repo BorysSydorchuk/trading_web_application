@@ -9,7 +9,7 @@ logs/*
 !logs/.gitkeep
 data/*
 !data/.gitkeep
-backups/
+/backups/
 
 # Python
 __pycache__/

@@ -39,6 +39,50 @@ Always `200` while the API process is up (status bar uses it; "API unreachable" 
 
 Status bar mapping: API reachable + `status=ok` → green; API reachable + `degraded` → red with "БД недоступна"; network error → red with "Сервер недоступний". Poll every 15 s.
 
+M7-02 adds `backup_target` (opaque SHA-256 database-scope identity, or null for an
+unsupported backup target) and `backups` (the status object below). The worker's
+loopback-only health probe checks `status`, `db.ok` and matching `backup_target` before
+each dump; it does not trigger AI or MT5. Backup failures do not change DB health.
+
+### GET /api/backups/status (M7-02)
+
+Read-only, no database query, archive scan, restore, manual dump or mutation.
+The same object is included in `/api/health` for the existing status-bar poll.
+
+```json
+{
+  "state": "ok",
+  "last_success_at": "2026-11-15T17:00:00Z",
+  "last_failure_at": null,
+  "last_error_code": null,
+  "error_code": null,
+  "overdue": false,
+  "attempts": 1,
+  "failed_attempts": 0,
+  "next_due_at": "2026-11-16T17:00:00Z",
+  "retry_at": null
+}
+```
+
+- `state`: `ok | running | failed | overdue`; `overdue` independently means the latest
+  Brussels 18:00 slot has not completed, including while a catch-up is running.
+- `last_success_at`: UTC creation time of the last successfully verified scheduled
+  archive; it appears only after publication/reconciliation, not when dumping starts.
+- `attempts`: attempts for the latest claimed slot (max 3); `failed_attempts`: persisted
+  cumulative failure events, including interrupted/retention/integrity failures.
+  Historical `last_failure_at` and `last_error_code` survive success.
+- `retry_at`: next allowed retry after a failed attempt; null after exhaustion or a
+  corruption/retention error requiring inspection. The worker checks every 15 seconds.
+- Error codes: `dependencies_unhealthy`, `backup_failed`, `interrupted`,
+  `state_unavailable`, `retention_failed`, `worker_unavailable`, `archive_invalid`,
+  `backup_locked`. Only allowlisted codes reach UI; no path, URL, credential or raw error.
+- Worker state becomes stale after 2 minutes without checks (35 minutes for a running
+  dump, allowing the existing dump and two inspection timeouts). The last known success
+  remains visible. Corrupt/inaccessible state returns a safe status object with
+  `state_unavailable`; it does not break normal API health.
+- All dates are UTC; frontend formats full date/time in Europe/Brussels. No writable
+  backup endpoint or new authentication model; existing localhost-only architecture.
+
 ## M1
 
 Conventions: list endpoints return `{ "items": [...] }` (plus `"total"` when paginated). Datetimes are UTC ISO with `Z`; the UI converts to Europe/Brussels. Decimal fields are strings or `null`.

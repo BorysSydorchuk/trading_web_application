@@ -8,19 +8,19 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.config import REPO_ROOT, get_settings
+from app.config import get_settings
 from app.services.backups import BackupStore, Kind
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=REPO_ROOT / "backups")
+    parser.add_argument("--root", type=Path, default=None)
     parser.add_argument("--kind", choices=("manual", "daily"), default="manual")
     args = parser.parse_args(argv)
     try:
         settings = get_settings()
         kind: Kind = args.kind
-        store = BackupStore(args.root, compose_port=settings.postgres_port)
+        store = BackupStore(args.root or settings.backup_dir, compose_port=settings.postgres_port)
         item = store.create(settings.database_url, kind=kind)
         print("Резервну копію перевірено: " + str(item.archive))
         if kind == "daily":
