@@ -11,6 +11,7 @@ Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] AUTHORIZED, in p
 - Final warm startup n=10 median/p95 7,648.761/7,834.631 ms (0 breaches); API n=20/case p95 1.868–70.264 ms (0 breaches); sidebar navigation p95 33.1–82.1 ms. Document journal p95 329.1 ms, 2/20 breaches, max 335 ms: performance partial FAIL, explicitly reported for PM disposition. Earlier harness startup tails ~12.5 s not reproduced in final series; no unproven speedup claim.
 - Report/methodology/owner checklist: `docs/reports/M7-05.md`; compact raw evidence `docs/reports/M7-05-results.json`. All generated databases, stopped synthetic containers and temp resources retained. Owner reports 29% usage before final gate.
 - RESUME FROM HERE: final task commit needs full `make check`, then PRD/general/Python/security self-review before local no-ff merge. Exact final SHA/totals/logs/verdict belong in merge message. Performance exceptions remain visible even with green correctness gates; stop for PM/owner decision after merge, no M7-06 or push.
+- First full gate `8c608a4`: 3,288 backend PASS / one intentional skip / encoding guard FAIL (four subprocess text decoders missing explicit UTF-8). Fixed all four and PowerShell checklist paths; replacement commit needs second/final full gate. Never merge on the first run.
 
 ## M7-04 — owner codex, tier M
 

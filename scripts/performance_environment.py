@@ -42,6 +42,7 @@ def container_sample() -> dict[str, Any]:
         [docker, "image", "inspect", "postgres:16", "--format", "{{.Id}}"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout.strip()
     name = "tj_m705_cold_" + uuid4().hex
@@ -74,6 +75,7 @@ def container_sample() -> dict[str, Any]:
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout.strip()
     try:
@@ -81,7 +83,11 @@ def container_sample() -> dict[str, Any]:
         while True:
             inspected = json.loads(
                 subprocess.run(
-                    [docker, "inspect", name], capture_output=True, text=True, check=True
+                    [docker, "inspect", name],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=True,
                 ).stdout
             )[0]
             if inspected["Id"] != created:

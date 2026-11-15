@@ -257,7 +257,10 @@ def execute(args: argparse.Namespace) -> Path:
     chrome = args.chrome or r"C:\Program Files\Google\Chrome\Application\chrome.exe"
     machine = environment()
     revision = subprocess.check_output(  # noqa: S603 - fixed local Git query
-        [shutil.which("git") or "git", "rev-parse", "main"], cwd=REPO_ROOT, text=True
+        [shutil.which("git") or "git", "rev-parse", "main"],
+        cwd=REPO_ROOT,
+        text=True,
+        encoding="utf-8",
     ).strip()
     browser = dev.start_child(
         "benchmark-browser",
