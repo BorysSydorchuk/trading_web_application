@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FIXTURE_FIELDS } from '@/features/describe/journalFields.fixture'
@@ -6,9 +6,34 @@ import { fixtureTrade } from '@/features/describe/trade.fixture'
 import { uk } from '@/i18n/uk'
 import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
+import { journalFieldKeys } from '@/features/trades/api'
 import { JournalPage } from './JournalPage'
 
 const j = uk.journal
+
+it('shares one early rule-label subscription across 50 rows and updates configured labels', async () => {
+  serveJournal()
+  let releaseTrades: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => { releaseTrades = resolve })
+  mockApi(http.get('/api/trades', async () => {
+    await gate
+    return HttpResponse.json({items: Array.from({length: 50}, (_, id) => fixtureTrade({
+      id: id + 1, status: 'complete', violations: ['max_risk_pct'],
+    })), total: 50})
+  }))
+  const {queryClient} = renderWithProviders(<JournalPage />, {path: '/journal'})
+  const earlyObservers = queryClient.getQueryCache().find({queryKey: journalFieldKeys.all})?.getObserversCount()
+  releaseTrades()
+  expect(await screen.findAllByRole('row', {name: j.openRow('EURUSD')})).toHaveLength(50)
+  expect(queryClient.getQueryCache().find({queryKey: journalFieldKeys.all})?.getObserversCount()).toBe(1)
+  expect(earlyObservers).toBe(1)
+  await act(async () => {
+    queryClient.setQueryData(journalFieldKeys.all, {fields: [{
+      key: 'rule_violations', options: [{value: 'max_risk_pct', label: 'Оновлена назва правила'}],
+    }]})
+  })
+  expect(screen.getAllByText('Оновлена назва правила')).toHaveLength(50)
+})
 
 afterEach(() => window.localStorage.clear())
 

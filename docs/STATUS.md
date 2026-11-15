@@ -2,6 +2,11 @@
 
 Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
 
+## M7-05 remediation — owner codex, tier M
+
+- PM CHANGES REQUESTED: existing benchmark/startup/API accepted, Journal document p95 329.1 ms rejected. New branch `m7/journal-performance` from clean main `fd41ee4`; preserve baseline and timing definition.
+- Profile API/network, React commits/table/columns/transforms and measurement overhead first; smallest evidenced nonfinancial fix with targeted regressions, then comparable >=30 before/after navigations, final-commit full gate and sole-engineer self-review/no-ff merge. No dev/QA mutation/deletion, real MT5/AI/Whisper, schema/money math, M7-06 or push.
+
 ## M7-05 — owner codex, tier M
 
 - Branch `m7/performance` from clean main `55be22b`; Git matches handoff. M7-04 closed by PM, all three owner checks PASS. No further changes required.
