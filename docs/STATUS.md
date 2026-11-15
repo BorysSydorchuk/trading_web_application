@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] fix provisionally accepted, final verification**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-05 [M] remediation complete, final commit gate/local merge then PM/owner review**. M0–M6 and M7-01..04 accepted. M7-06 unauthorized. Latest PM decision supersedes historical gates below.
 
 ## M7-05 remediation — owner codex, tier M
 
@@ -11,7 +11,8 @@ Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] fix provisionall
 
 - PM provisionally accepted the existing fix; no further optimization. Recovered branch/HEAD `m7/journal-performance` / `27e9be9`, main `fd41ee4`, expected eight modified files + one untracked result artifact; no staged/unexplained changes. Owner reports restored usage 100%.
 - Independently recomputed 78 raw-summary groups and matched compact before/after data to full source JSON. Journal n=30 median 278.9 → 262.15, p95 294.4 → 283.1, one >=300 ms each; after 300.3 ms retained. Original n=20 p95 329.1 uses the 19th sorted sample (two tails); new before n=30 uses 29th (one tail), ordinary run variance, not a pre-fix speedup. Explanation and owner checks in `docs/reports/M7-05.md`.
-- Recovery focused Journal/Describe/filters 23 PASS, benchmark/encoding 12 PASS; frontend lint/typecheck, benchmark ruff/format/strict mypy and Node syntax PASS. Next: final task commit, isolated full make check, final report evidence and Tier M self-review, then local no-ff merge. Historical shutdown checkpoint below is preserved; resume authorization supersedes its stop instruction. No more benchmark runs required; do not touch existing DBs, M7-06 or push.
+- Recovery focused Journal/Describe/filters 23 PASS, benchmark/encoding 12 PASS; frontend lint/typecheck, benchmark ruff/format/strict mypy and Node syntax PASS. Completed implementation `dc01d3b`; full remediation make check PASS: 3,289 backend + one intentional Whisper skip / 481 frontend, lint/format/typecheck PASS. Log `logs/m7-05-full-tj_m705_20261115204300_85979d_test.log`, new synthetic DB of the same name retained; existing databases unchanged. PRD/general/Python/security Tier M self-review APPROVE, no code fix or extra optimization required.
+- Final report/status now record actual remediation test results, review, exact Ukrainian owner checks, 78 raw-statistic verifications and remaining 300.3 ms sample/one-frame variance limits. RESUME FROM HERE: final documentation commit requires the second/final complete make check on that exact commit, then final self-review and local no-ff merge only if green. Exact final SHA/totals/log/verdict belong in merge message; no tracked edits after final gate. Once merged stop for PM/owner acceptance of M7-05. No further optimization/benchmark rerun, no M7-06/push/QA deletion. Historical shutdown checkpoint below is preserved and superseded by this explicit resume authorization.
 
 ### Safe shutdown checkpoint — 2026-11-15 20:28 UTC
 
