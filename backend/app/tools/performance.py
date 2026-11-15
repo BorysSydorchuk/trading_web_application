@@ -139,12 +139,18 @@ def create_dataset(runtime: Path) -> tuple[str, dict[str, Any]]:
 
 
 def browser_measure(
-    port: int, origin: str, repetitions: int, *, home_only: bool = False
+    port: int, origin: str, repetitions: int, *, home_only: bool = False, profile: bool = False
 ) -> dict[str, Any]:
     result = subprocess.run(  # noqa: S603 - fixed local script and generated ports
         [shutil.which("node") or "node", str(REPO_ROOT / "scripts/performance_browser.mjs")],
         input=json.dumps(
-            {"debugPort": port, "origin": origin, "repetitions": repetitions, "homeOnly": home_only}
+            {
+                "debugPort": port,
+                "origin": origin,
+                "repetitions": repetitions,
+                "homeOnly": home_only,
+                "profile": profile,
+            }
         ),
         text=True,
         encoding="utf-8",
@@ -385,7 +391,12 @@ def execute(args: argparse.Namespace) -> Path:
                     report["startup"].append(row)
                 if iteration == args.startup_repetitions:
                     report["api"] = api_measure(f"http://127.0.0.1:{api_port}", args.repetitions)
-                    report["browser"] = browser_measure(debug_port, origin, args.repetitions)
+                    report["browser"] = browser_measure(
+                        debug_port,
+                        origin,
+                        args.repetitions,
+                        profile=bool(getattr(args, "profile_browser", False)),
+                    )
             finally:
                 run.close()
         report["warm_startup"] = threshold_summary(
@@ -424,6 +435,11 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=20)
     parser.add_argument("--startup-repetitions", type=int, default=5)
     parser.add_argument("--chrome")
+    parser.add_argument(
+        "--profile-browser",
+        action="store_true",
+        help="Record CDP CPU/network evidence; exclude from normal timing comparison",
+    )
     args = parser.parse_args()
     if not 1 <= args.repetitions <= 100 or not 1 <= args.startup_repetitions <= 30:
         parser.error("page repetitions must be 1..100; startup repetitions 1..30")

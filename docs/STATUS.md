@@ -1,11 +1,26 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] fix provisionally accepted, final verification**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
 
 ## M7-05 remediation — owner codex, tier M
 
 - PM CHANGES REQUESTED: existing benchmark/startup/API accepted, Journal document p95 329.1 ms rejected. New branch `m7/journal-performance` from clean main `fd41ee4`; preserve baseline and timing definition.
 - Profile API/network, React commits/table/columns/transforms and measurement overhead first; smallest evidenced nonfinancial fix with targeted regressions, then comparable >=30 before/after navigations, final-commit full gate and sole-engineer self-review/no-ff merge. No dev/QA mutation/deletion, real MT5/AI/Whisper, schema/money math, M7-06 or push.
+
+### Resumed final verification — 2026-11-15
+
+- PM provisionally accepted the existing fix; no further optimization. Recovered branch/HEAD `m7/journal-performance` / `27e9be9`, main `fd41ee4`, expected eight modified files + one untracked result artifact; no staged/unexplained changes. Owner reports restored usage 100%.
+- Independently recomputed 78 raw-summary groups and matched compact before/after data to full source JSON. Journal n=30 median 278.9 → 262.15, p95 294.4 → 283.1, one >=300 ms each; after 300.3 ms retained. Original n=20 p95 329.1 uses the 19th sorted sample (two tails); new before n=30 uses 29th (one tail), ordinary run variance, not a pre-fix speedup. Explanation and owner checks in `docs/reports/M7-05.md`.
+- Recovery focused Journal/Describe/filters 23 PASS, benchmark/encoding 12 PASS; frontend lint/typecheck, benchmark ruff/format/strict mypy and Node syntax PASS. Next: final task commit, isolated full make check, final report evidence and Tier M self-review, then local no-ff merge. Historical shutdown checkpoint below is preserved; resume authorization supersedes its stop instruction. No more benchmark runs required; do not touch existing DBs, M7-06 or push.
+
+### Safe shutdown checkpoint — 2026-11-15 20:28 UTC
+
+- Owner reports 14% remaining five-hour allowance; preparing shutdown per AGENTS.md (<15%). No agents. Branch `m7/journal-performance`, HEAD `27e9be9` (verified RED); main remains `fd41ee4`. No merge/push. Implementation and reports intentionally remain uncommitted pending final verification/review.
+- Root cause: late rule-label lookup after table render and 50 per-row query observers. CDP before first label request begins 69–79 ms after trade body; after starts alongside trades and completes first. Existing label hook now called once at JournalPage and passed to cells. Money/R/schema/MT5/data untouched.
+- Normal matched 30 before/30 after: Journal median 278.9 → 262.15 ms (-6.006%); p95 294.4 → 283.1 ms (-3.838%). One >=300 ms each; after max 300.3 ms retained. p95 PM criterion PASS, unchanged strict-any-breach flag remains. Other page p95 <248 ms, one-frame shifts documented; API p95 maxima 54.42 → 57.401 ms, startup p95 8.005 → 8.105 s. Original baseline preserved.
+- Focused 23 PASS (Journal/Describe/filters), frontend lint/typecheck PASS; changed Python benchmark ruff/strict mypy PASS. Full make check NOT run for remediation, final Tier M self-review NOT complete; previous final gate does not count. No background benchmark/profile processes remain; all generated synthetic databases/temp resources and previous QA preserved, no paid AI/Whisper/real MT5.
+- Uncommitted: `backend/app/tools/performance.py` (opt-in profiling flag), `scripts/performance_browser.mjs` (CDP CPU/network evidence), `frontend/src/pages/JournalPage.tsx`, `frontend/src/features/journal/TradesTable.tsx`, `frontend/src/features/trades/TradeCell.tsx`, `frontend/src/pages/JournalPage.test.tsx`, this STATUS, `docs/reports/M7-05.md`, new `docs/reports/M7-05-remediation-results.json`. Reports contain root cause, comparisons, raw samples and exact owner checks. Session-only helpers/logs in ignored `logs/m705r_*` and `logs/m7-05r-*.log`; do not delete resources.
+- RESUME FROM HERE: inspect Git and this checkpoint; obtain reliable restored usage from owner before expensive operations. Preserve existing edits/RED checkpoint. Read remediation report, review diff and focused evidence; run targeted final checks if editing. Commit final task change, then run one complete isolated `make check` on that exact commit using existing `logs/m705_validate.py --full` (new generated DB, all previous DBs retained), perform PRD/general/Python/security self-review and only then merge locally `--no-ff`. No full gate has been spent for this remediation. Exact final check totals/verdict go in merge message. Do not repeat normal before/after benchmark or failed experimental React DevTools hook unless code changes require it. Keep every slow sample and original baseline. Next gate: PM review/owner acceptance of M7-05, never M7-06 or push. Do not auto-resume after allowance reset.
 
 ## M7-05 — owner codex, tier M
 

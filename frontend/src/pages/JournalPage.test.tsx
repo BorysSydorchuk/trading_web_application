@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FIXTURE_FIELDS } from '@/features/describe/journalFields.fixture'
@@ -32,7 +32,36 @@ it('shares one early rule-label subscription across 50 rows and updates configur
       key: 'rule_violations', options: [{value: 'max_risk_pct', label: 'Оновлена назва правила'}],
     }]})
   })
-  expect(screen.getAllByText('Оновлена назва правила')).toHaveLength(50)
+  expect(await screen.findAllByText('Оновлена назва правила')).toHaveLength(50)
+})
+
+it('keeps fallback/unknown rule labels when the early config request fails', async () => {
+  serveJournal()
+  mockApi(
+    http.get('/api/journal-fields', () => new HttpResponse(null, {status: 503})),
+    http.get('/api/trades', () => HttpResponse.json({items: [fixtureTrade({
+      violations: ['max_risk_pct', 'future_rule'],
+    })], total: 1})),
+  )
+  renderWithProviders(<JournalPage />, {path: '/journal'})
+  expect(await screen.findByText(uk.trades.rules.max_risk_pct)).toBeInTheDocument()
+  expect(screen.getByText('future_rule')).toBeInTheDocument()
+})
+
+it('preserves sorting, column choice, trade detail and the description link', async () => {
+  const queries = serveJournal()
+  mockApi(http.get('/api/trades/7', () => HttpResponse.json(fixtureTrade({status: 'complete'}))))
+  const {user} = renderWithProviders(<JournalPage />, {path: '/journal'})
+  await screen.findByRole('row', {name: j.openRow('EURUSD')})
+  await user.click(screen.getByTitle(j.sortBy(uk.trades.columns.net_pnl)))
+  await waitFor(() => expect(queries.at(-1)?.get('sort')).toBe('net_pnl'))
+  await user.click(screen.getByRole('button', {name: j.columnsButton}))
+  await user.click(screen.getByRole('checkbox', {name: uk.trades.columns.violations}))
+  await user.keyboard('{Escape}')
+  expect(screen.queryByRole('columnheader', {name: uk.trades.columns.violations})).not.toBeInTheDocument()
+  await user.click(screen.getByRole('row', {name: j.openRow('EURUSD')}))
+  const dialog = await screen.findByRole('dialog')
+  expect(await within(dialog).findByRole('link', {name: uk.tradeDetail.editDescription})).toHaveAttribute('href', '/trades/7/describe')
 })
 
 afterEach(() => window.localStorage.clear())

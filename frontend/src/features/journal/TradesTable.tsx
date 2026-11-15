@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { COLUMN_SORT, NUMERIC_COLUMNS, type ColumnKey } from './columns'
 
 interface TradesTableProps {
+  violationLabel: (key: string) => string
   trades: TradeRow[]
   columns: readonly ColumnKey[]
   sort: TradeSort
@@ -16,7 +17,7 @@ interface TradesTableProps {
   stale?: boolean
 }
 
-export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stale }: TradesTableProps) {
+export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stale, violationLabel }: TradesTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className={cn('w-full text-sm transition-opacity', stale && 'opacity-60')}>
@@ -84,7 +85,7 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                     key !== 'violations' && 'whitespace-nowrap',
                   )}
                 >
-                  <TradeCell trade={trade} column={key} />
+                  <TradeCell trade={trade} column={key} violationLabel={violationLabel} />
                 </td>
               ))}
             </tr>

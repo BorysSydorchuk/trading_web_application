@@ -9,8 +9,14 @@ await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = rejec
 let sequence = 0
 const pending = new Map()
 let receiver
+const network = []
 ws.onmessage = event => {
   const msg = JSON.parse(event.data)
+  if (input.profile && msg.method?.startsWith('Network.') && msg.params?.requestId) {
+    const p = msg.params
+    if (['Network.requestWillBeSent', 'Network.responseReceived', 'Network.loadingFinished'].includes(msg.method))
+      network.push({event:msg.method, id:p.requestId, timestamp:p.timestamp, url:p.request?.url ?? p.response?.url})
+  }
   if (msg.id) {
     const item = pending.get(msg.id)
     pending.delete(msg.id)
@@ -25,6 +31,11 @@ function call(method, params = {}) {
 }
 await call('Page.enable')
 await call('Runtime.enable')
+if (input.profile) {
+  await call('Profiler.enable')
+  await call('Profiler.setSamplingInterval', {interval:1000})
+  await call('Performance.enable')
+}
 await call('Network.enable')
 await call('Network.setBlockedURLs', { urls: ['https://*', 'http://*.anthropic.com/*'] })
 await call('Runtime.addBinding', { name: '__perfReport' })
@@ -78,12 +89,21 @@ setTimeout(() => {if (!finished) {finished=true; window.__perfReport(JSON.string
   failed:true, errors:window.__perfErrors, text:document.querySelector('main')?.innerText?.slice(0,300)}));}}, 15000);
 ` })
 async function visit(path) {
+  if (input.profile) await call('Profiler.start')
+  const metricsBefore = input.profile ? await call('Performance.getMetrics') : null
+  const networkStart = network.length
   const result = new Promise((resolve, reject) => {
     receiver = resolve
     setTimeout(() => reject(Error('browser measurement timeout')), 20000).unref()
   })
   await call('Page.navigate', { url: input.origin + path })
   const data = await result
+  if (input.profile) {
+    data.profile = (await call('Profiler.stop')).profile
+    data.metricsBefore = metricsBefore
+    data.metricsAfter = await call('Performance.getMetrics')
+    data.network = network.slice(networkStart)
+  }
   if (data.failed || data.errors.length) throw Error(JSON.stringify(data))
   return data
 }

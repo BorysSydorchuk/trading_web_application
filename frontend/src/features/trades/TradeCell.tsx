@@ -28,7 +28,11 @@ function Muted() {
 }
 
 /** One table cell value for a trade column. Numbers use `num` (tabular monospace). */
-export function TradeCell({ trade, column }: { trade: TradeRow; column: ColumnKey }) {
+export function TradeCell({ trade, column, violationLabel }: {
+  trade: TradeRow
+  column: ColumnKey
+  violationLabel?: (key: string) => string
+}) {
   switch (column) {
     case 'close_time':
       return trade.close_time ? (
@@ -99,13 +103,22 @@ export function TradeCell({ trade, column }: { trade: TradeRow; column: ColumnKe
     case 'status':
       return <span className="whitespace-nowrap">{statusLabel(trade.status)}</span>
     case 'violations':
-      return <ViolationBadges keys={trade.violations} />
+      return violationLabel
+        ? <LabeledViolationBadges keys={trade.violations} label={violationLabel} />
+        : <ViolationBadges keys={trade.violations} />
   }
 }
 
 /** Rule violations as small badges (red-tinted: a deviation). */
 export function ViolationBadges({ keys }: { keys: readonly string[] }) {
   const label = useViolationLabel()
+  return <LabeledViolationBadges keys={keys} label={label} />
+}
+
+function LabeledViolationBadges({ keys, label }: {
+  keys: readonly string[]
+  label: (key: string) => string
+}) {
   if (keys.length === 0) return <Muted />
   return (
     <span className="flex flex-wrap gap-1">
