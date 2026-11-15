@@ -60,11 +60,18 @@ AC: Borys checks 4 calculations (one per symbol) against MT5's own margin/risk a
 
 AC: digest for a week with real trades matches hand-calculated win rate, total R and P&L. Deviations highlighted. Review + next week's bias saved from one screen.
 
-## M7. Hardening
-- Daily pg_dump backups, log rotation, startup checks, performance pass, README for setup from zero.
-- Bug bash: Borys uses the app for one real trading week; fix everything found.
+## M7. Hardening — technical milestone CLOSED
 
-## M8. Optional: Notion export adapter (PRD 6.11)
+- Owner/PM decision, 2026-11-16: M7-01 through M7-07 fully ACCEPTED; the M7 technical milestone is CLOSED. Daily pg_dump backups, log rotation, startup checks, performance, installation documentation, security and integrated QA are accepted.
+- M7-08 preparation ACCEPTED; the previous M7-08 live-acceptance plan is **SUPERSEDED**. Actual five-day live validation remains **0/5**, has not passed, and is transferred to M8. Technical closure follows the explicit owner/PM decision, not a claim of five successful live days.
+- Preserve `m7/trading-week` at `8b6ade5` and its `docs/reports/M7-08.md` daily checklist. Do not merge or delete that branch/commit. The template is stored on that branch, not in main; view it from repository-root PowerShell with `git show 8b6ade5:docs/reports/M7-08.md`. Its historical closure conditions are superseded by this decision.
+
+## M8. UX & Functional Improvements — awaiting owner feedback and PM scope
+
+- Scope and priorities will be based on actual owner feedback from normal application use. No M8 fixes or implementation are authorized by the M7 closure decision.
+- Five distinct real trading days of owner-driven live validation transfer here, initially **0/5**. Reuse the preserved M7-08 A–F daily template where useful; record actual Brussels dates, account/trade/limit/backup/journal/bias/calculator/digest observations and defects. No weekends, market holidays, simulations, historical backfills or invented results.
+- PM reviews feedback and authorizes bounded tasks with appropriate S/M/L tiers and acceptance criteria before implementation. Preserve real/dev/QA data; MT5 remains strictly read-only, with no agent-initiated real operations or unapproved AI/Whisper calls.
+- The previous M8 placeholder for optional Notion export (PRD 6.11) is superseded by this milestone title. Notion export remains an optional deferred idea without an assigned implementation milestone or authorization.
 
 ## Backlog
 New ideas from Borys or agents go to `docs/BACKLOG.md`. PM decides when they enter a milestone.
