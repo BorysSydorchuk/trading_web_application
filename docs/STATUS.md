@@ -1,6 +1,15 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-05 [M] remediation complete, final commit gate/local merge then PM/owner review**. M0–M6 and M7-01..04 accepted. M7-06 unauthorized. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-05 ACCEPTED; M7-06 [S] authorized, in progress**. M0–M6 and M7-01..05 accepted. M7-07 unauthorized. Latest PM decision supersedes historical gates below.
+
+## M7-06 — owner codex, tier S
+
+- Branch `m7/setup-docs` from clean main `1042450`; no recovered/unexplained changes. PM closed M7-05, all three owner checks PASS, Journal p95 283.1 ms and startup p95 7.83 s accepted. No further M7-05 changes.
+- Documentation only: README audit + this STATUS + `docs/reports/M7-06.md` (three tracked files). Verify current commands, fresh isolated clone/install/unique synthetic Docker DB, fixture MT5/disabled AI, frontend/API readiness, Settings/Accounts navigation and owned shutdown. All helpers/evidence stay ignored under logs; preserve all dev/QA DBs/resources, no real MT5/AI/Whisper or push. Owner reports 81% allowance before isolated setup/final gate.
+- README now covers current supported versions, root PowerShell commands, guarded local env, Docker/native paths, real portable setup vs isolated fixture, offline/paid-service distinction, protected initial migration, separate backup roots, retention/status/recovery and safe troubleshooting. Removed weak password examples, obsolete MT5 placeholder and foreign-process force-kill advice. No application changes.
+- Fresh clone/install/own Compose project smoke PASS: `logs/m706-fresh-20261115214153_1c0392/evidence.json`; new DB `tj_m706_20261115214153_1c0392_synthetic`, own ports 52670/52671/52672. Verified pre-migration pg_dump before new schema initialization, migration cdb0477c3b70, API/worker/UI readiness, Chrome Settings/Accounts/new-account form/Home, actual stop.bat and repeated stop. Own container stopped, all DBs/volumes/archives/clone retained; owner env metadata unchanged, no real terminal/AI/model calls.
+- Focused docs checks PASS: 10 PowerShell blocks parsed, 4 local links and 5 command paths exist, backup/launcher --help valid. New dependencies used warm offline caches; native PostgreSQL/OS installers/remote clone auth/real MT5/default-port start.bat not run. Smoke used unmodified launcher with in-memory private port substitution; report states limits and exact owner checks.
+- RESUME FROM HERE: review the three-file diff/report, commit final documentation, run one complete make check on that exact commit using a fresh synthetic test target, sole-engineer Tier S self-review, local no-ff merge only if green. Record final SHA/totals/log/review in merge message without changing tested docs; no docs-only follow-up gate. Stop for M7-06 PM/owner acceptance; no M7-07 or push.
 
 ## M7-05 remediation — owner codex, tier M
 
