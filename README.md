@@ -183,6 +183,16 @@ UI status bar and in `logs/worker.log`.
 
 - `logs/api.log`, `logs/worker.log`: rotating log files (UTC timestamps). Errors shown in the
   UI are logged here with details.
+- Each name retains one active UTF-8 file up to 5 MiB and five numeric archives
+  (`.1` newest to `.5` oldest): 30 MiB per name, 60 MiB for API/worker together.
+  A permanent `.log.lock` serializes cooperating process writes and rotation; do not
+  delete it while the app runs. Files close between writes for Windows-safe rotation.
+  External exclusive file locks cause a sanitized stderr warning; close the external
+  handle to allow later writes to recover. Console errors remain visible.
+- Formatted messages/tracebacks redact configured secrets and recognized credential
+  syntax; records above 64 KiB receive a truncation marker. Never deliberately log
+  secrets. Historical files are preserved. `ai_usage.jsonl` is an unrotated audit file;
+  application rotation never cleans it, audio, backups or unrelated files.
 - The `start.bat` window shows the live output of all processes, prefixed `[api]`, `[worker]`,
   `[web]`, `[dev]`.
 

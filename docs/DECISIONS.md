@@ -2,6 +2,9 @@
 
 One line per decision: date, decision, reason. Product decisions live in PRD.md.
 
+- 2026-11-15 (PM): M7-02 ACCEPTED, all six owner checks PASS; authorize M7-03 [M] only. M7-04 waits for PM acceptance. Preserve AI usage audit, all dev/QA databases, no paid calls or push.
+- 2026-11-15 (M7-03): retain existing api.log/worker.log names and 5 MiB plus five numeric archives per name; serialize cooperating process appends/rotation with a permanent OS lock file, open/close the log inside that lock for Windows-safe renames. Count UTF-8 bytes, cap formatted records at 64 KiB plus truncation marker, sanitize both console and file output. No generic cleanup or audit-log rotation. Reason: bounded retention without PID-file accumulation or cross-process rollover races; external exclusive file locks report a sanitized stderr warning and later writes recover.
+
 - 2026-11-15 (PM): M7-01 ACCEPTED at `4dc0ac5`; M7-02 [L] AUTHORIZED. Resume the interrupted `m7/backup-schedule` branch and saved tests; no M7-03..08 implementation, no existing QA deletion, no real-data experiments or push. Reason: owner-pasted PM recovery instruction.
 - 2026-11-15 (M7-02): 18:00 Brussels cron plus 15 s recovery/heartbeat poll in a dedicated one-thread APScheduler executor, with a target-scoped kernel lock and atomic UTF-8/fsynced `schedule.json` under BACKUP_DIR. Persist the due slot and exact archive name before dumping, reconcile only that verified publication after a crash; three attempts per latest due slot, five-minute spacing, no missed-day replay. Preserve M7-01's fail-closed `.lock` after an interrupted dump because an orphan subprocess may still run. No schema/dependency changes. API health validates the matching database target; optional MT5/AI availability does not gate backups. Status is read-only and cheap, with Ukrainian messages in uk.ts. Reason: restart deduplication, bounded recovery and no contention with MT5 sync.
 
