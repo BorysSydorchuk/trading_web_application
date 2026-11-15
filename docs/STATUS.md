@@ -1,6 +1,12 @@
 # STATUS
 
-Current milestone: **M7 Hardening — M7-03 ACCEPTED; M7-04 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+Current milestone: **M7 Hardening — M7-04 ACCEPTED; M7-05 [M] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM decision supersedes historical gates below.
+
+## M7-05 — owner codex, tier M
+
+- Branch `m7/performance` from clean main `55be22b`; Git matches handoff. M7-04 closed by PM, all three owner checks PASS. No further changes required.
+- Establish baseline first: isolated synthetic one-year dataset; API HTTP times distinct from headless Chrome usable-page timing; warm startup; separate cold container and fresh dependency environment measurements. Record sample counts, median/p95, hardware/versions and cache conditions.
+- No existing dev/QA mutation/deletion, paid AI/Whisper or real MT5 operations, no flaky timing unit assertions. No money math/schema/MT5 fixes without separate PM authorization and tier reassessment. M7-06 unauthorized; never push.
 
 ## M7-04 — owner codex, tier M
 
