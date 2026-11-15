@@ -6,6 +6,8 @@ Current milestone: **M7 Hardening — M7-02 ACCEPTED; M7-03 [M] AUTHORIZED, in p
 
 - Branch `m7/log-retention` from clean main `4896c86`; Git matches previous handoff. PM accepted all six M7-02 owner checks, including actual schedule, restart/catch-up and sync. M7-02 closed without further changes.
 - Audit existing 5 MiB / five-archive logs; implement safe concurrent rotation, UTF-8/UTC, redaction, synthetic rollover/restart/Windows-lock tests. Protect ai_usage.jsonl, audio, backups and unrelated files. No paid calls, DB changes/deletion or push. M7-04 unauthorized.
+- RED checkpoint `4930023`; focused rotation/config/AI usage regression 85 PASS, including real Windows sharing denial and three synthetic writer processes. UTF-8 byte-bound regression observed RED then fixed. Owner reports 96% usage allowance.
+- Implementation/report: `docs/reports/M7-03.md`. Final task commit requires full make check then general/PRD/security self-review APPROVE before no-ff merge; exact final gate and merge evidence will be in merge commit message. RESUME FROM HERE: inspect Git and final gate evidence, finish M7-03 only; once merged STOP for owner/PM acceptance.
 
 ## M7-02 recovery — 2026-11-15, owner codex, tier L
 
