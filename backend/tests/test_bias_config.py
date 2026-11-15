@@ -270,7 +270,9 @@ def test_check_config_files_reports_bias(cfg_dir: Path, caplog: pytest.LogCaptur
 
 @pytest.fixture
 def api() -> Iterator[TestClient]:
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(), base_url="http://127.0.0.1", raise_server_exceptions=False
+    ) as client:
         yield client
 
 

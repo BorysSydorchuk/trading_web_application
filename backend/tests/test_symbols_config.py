@@ -377,7 +377,9 @@ def test_runtime_bias_edit_gives_500_config_error_in_the_api(cfg_dir: Path) -> N
     _write(bias, bias.read_text(encoding="utf-8").replace("symbol: GER40,", "symbol: GER30,"))
     _touch(bias)
 
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(), base_url="http://127.0.0.1", raise_server_exceptions=False
+    ) as client:
         response = client.get("/api/bias/config")
 
     assert response.status_code == 500

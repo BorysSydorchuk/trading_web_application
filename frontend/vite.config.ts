@@ -15,6 +15,11 @@ function portFromEnv(value: string | undefined, fallback: number): number {
 }
 const webPort = portFromEnv(process.env.TJ_WEB_PORT, 5173)
 const apiTarget = `http://127.0.0.1:${portFromEnv(process.env.TJ_API_PORT, 8000)}`
+const localHeaders = {
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+}
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -36,6 +41,7 @@ export default defineConfig({
     },
   },
   server: {
+    headers: localHeaders,
     host: '127.0.0.1',
     port: webPort,
     strictPort: true,
@@ -63,6 +69,7 @@ export default defineConfig({
     ],
   },
   preview: {
+    headers: localHeaders,
     host: '127.0.0.1',
     port: 4173,
     strictPort: true,

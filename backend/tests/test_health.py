@@ -48,7 +48,7 @@ def test_health_degraded_when_db_unreachable(app: FastAPI) -> None:
 
     app.dependency_overrides[app_db.get_db] = _bad_db
     try:
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False) as client:
             started = time.perf_counter()
             response = client.get("/api/health")
             elapsed = time.perf_counter() - started

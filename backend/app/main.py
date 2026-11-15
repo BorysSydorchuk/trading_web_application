@@ -14,6 +14,7 @@ from app.config import Settings, get_settings
 from app.config_files import check_config_files
 from app.db import dispose_engine
 from app.errors import install_error_handlers
+from app.local_boundary import LocalBoundaryMiddleware
 from app.logging_setup import setup_logging
 from app.services.ai.client import shared_client
 from app.services.ai.key_status import KeyStatusTracker
@@ -50,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         get_settings, lambda current: shared_client(current.anthropic_api_key)
     )
     install_error_handlers(app)
+    app.add_middleware(LocalBoundaryMiddleware)
     app.include_router(api_router)
     return app
 

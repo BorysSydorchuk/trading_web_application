@@ -174,5 +174,5 @@ def app(db_engine: Engine) -> Iterator[FastAPI]:
 
 @pytest.fixture
 def client(app: FastAPI) -> Iterator[TestClient]:
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1", raise_server_exceptions=False) as test_client:
         yield test_client
