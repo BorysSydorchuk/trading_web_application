@@ -1,0 +1,90 @@
+{
+  "result": "PASS",
+  "source": "tj_m707_src_20261115224550_ed671d_test",
+  "restored": "tj_m707_restore_20261115224550_ed671d_test",
+  "archive": "backups\\m7-07-drill\\d2faae721b977a7642c4a88cb549dee155cad718487efa9cf6270daeb419cbfd\\manual\\20261115T224554919386Z-a5ebfdf5ceed44068709d00c98ffc44e\\archive.dump",
+  "sha256": "1beb17c6b16238d1c39741101d07c03e06bb92dabac46acd40e90cbb6a6d1179",
+  "dataset": {
+    "label": "SYNTHETIC/1",
+    "accounts": 2,
+    "symbols": [
+      "EURUSD",
+      "GBPUSD",
+      "XAUUSD",
+      "GER40"
+    ],
+    "weekdays": 260,
+    "closed_trades": 1040,
+    "open_positions": 2,
+    "bias_notes": 585,
+    "bias_entries": 2340,
+    "weekly_digests": 52,
+    "monthly_digests": 13,
+    "from": "2025-11-17",
+    "through": "2026-11-13",
+    "clock_utc": "2026-11-13T17:00:00+00:00",
+    "journal": "95% complete; 5% inbox; Unicode texts/links; every 31st lacks R; every 10th has a violation",
+    "prices": "synthetic literals, not broker specifications or calculator correctness evidence"
+  },
+  "schema_tables": 17,
+  "constraint_count": 96,
+  "index_count": 43,
+  "counts": {
+    "accounts": 2,
+    "alembic_version": 1,
+    "audio_notes": 0,
+    "backup_probe": 2,
+    "bias_entries": 2340,
+    "bias_notes": 585,
+    "calculator_margin_requests": 0,
+    "chart_links": 1040,
+    "digests": 65,
+    "fx_rates": 0,
+    "journal_field_requirements": 0,
+    "journal_requirements_state": 1,
+    "rule_violations": 104,
+    "symbol_specs": 8,
+    "sync_log": 0,
+    "trade_exit_deals": 0,
+    "trades": 1042
+  },
+  "all_row_sha256": {
+    "accounts": "e26bd36b1edae8d8fa43a0d7f66dabf3f10df9b961ac43ae78fe534b1e21b1ca",
+    "alembic_version": "ffb96a883decd85d798d578a831c574567f9d80b95a5e8299952a3e4e271f542",
+    "audio_notes": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backup_probe": "a19ed157b7bda142d41179cf68039b07bb0d60e249e37080b35e9f9c1786c5a7",
+    "bias_entries": "02c4c386bcf92c09de8ad88fc4800a1728413e3d54b3a65effa3705a2f5987bb",
+    "bias_notes": "0842fd17941a4e2ce534258570b5c6a85e45929601143eaf4762c2293f351e85",
+    "calculator_margin_requests": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "chart_links": "3764fae6063a5bed94aa5c428cd1d58f107385854126f50adeaa54a8ceac61a8",
+    "digests": "43a5887b6e1ab18b26f7ee5a74c79696006c2c9046220c5073d665cfcfa054bf",
+    "fx_rates": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "journal_field_requirements": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "journal_requirements_state": "2560c8d4c27bdd487f0c0d4efc57b1bbc0c0b99503b5d22480597767afa02299",
+    "rule_violations": "621ffe6f005b509eba144d1089fb6ed07a3e043cf1932b110bec103e71f6bf7b",
+    "symbol_specs": "10349208534071a88e2c3200394a688400c54cb91f49d977830b04ace0133bd8",
+    "sync_log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "trade_exit_deals": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "trades": "e893266d36198be1db18a45014b4a8ee39d57837b44dfdacafa18f62e30ccfd2"
+  },
+  "probe": [
+    [
+      1,
+      "123.45",
+      "Синтетична перевірка",
+      "2026-10-25 01:30:00+00",
+      1
+    ],
+    [
+      2,
+      "999.01",
+      "Другий рядок",
+      "2026-11-14 18:00:00+00",
+      2
+    ]
+  ],
+  "revision": "cdb0477c3b70",
+  "restored_constraint_denials": 4,
+  "existing_databases_preserved": 233,
+  "no_existing_target_reset_or_deleted": true
+}
