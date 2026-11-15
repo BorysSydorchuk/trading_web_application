@@ -2,6 +2,9 @@
 
 One line per decision: date, decision, reason. Product decisions live in PRD.md.
 
+- 2026-11-15 (PM): M7-03 ACCEPTED, all three owner checks PASS; authorize M7-04 [M] only. Preserve dev/QA databases; no schema changes, live MT5/AI/Whisper tests or push. M7-05 waits for PM acceptance.
+- 2026-11-15 (M7-04): keep stdlib launcher and existing ownership/Docker recovery; require Python 3.12.x and Vite's local engine range (^20.19 or >=22.12), executable npm/uv, backend preflight for YAML/settings, disposable directory write probes, SQL database identity and pg_dump/pg_restore version availability. Before non-test migration, reconfirm target/compose cluster, inspect archive TOC and all data before publication/upgrade. Worker acknowledges scheduler startup through a per-launch token in its private stdout pipe; readiness requires current healthy API/DB, worker acknowledgement and Vite response. Optional AI/MT5 are never probed by preflight. Reason: fail clearly before unsafe migration or false readiness, without adding a schema/dependency or interfering with foreign processes.
+
 - 2026-11-15 (PM): M7-02 ACCEPTED, all six owner checks PASS; authorize M7-03 [M] only. M7-04 waits for PM acceptance. Preserve AI usage audit, all dev/QA databases, no paid calls or push.
 - 2026-11-15 (M7-03): retain existing api.log/worker.log names and 5 MiB plus five numeric archives per name; serialize cooperating process appends/rotation with a permanent OS lock file, open/close the log inside that lock for Windows-safe renames. Count UTF-8 bytes, cap formatted records at 64 KiB plus truncation marker, sanitize both console and file output. No generic cleanup or audit-log rotation. Reason: bounded retention without PID-file accumulation or cross-process rollover races; external exclusive file locks report a sanitized stderr warning and later writes recover.
 

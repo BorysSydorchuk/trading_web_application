@@ -38,9 +38,23 @@ double-click `start.bat` in Explorer. On the first run it:
 3. starts PostgreSQL in Docker if it is not reachable (Docker Desktop must be installed; if it
    is not running the launcher starts it and waits up to 60 s:
    `Docker Desktop не запущено — запускаю, чекаю до 60 с…`),
-4. applies DB migrations,
+4. checks YAML/settings, writable data/log/backup directories, SQL database identity and
+   PostgreSQL backup tools, then applies migrations only after a verified pre-migration dump,
 5. starts the API (`[api]`), the worker (`[worker]`) and the UI dev server (`[web]`) in one
-   window, waits until they respond and opens http://127.0.0.1:5173 in your browser.
+   window, waits for healthy API/DB, the worker's scheduler acknowledgement and the Vite
+   page, then opens http://127.0.0.1:5173 in your browser.
+
+Startup requires Python **3.12.x**, Node **20.19.x or >=22.12**, executable npm and uv.
+Backup preflight checks `pg_dump` and `pg_restore` (PostgreSQL 16 or newer) via local
+clients, or the existing local Docker db with verified cluster identity. A remote DB
+requires native clients. The check runs version commands, not a database dump. Invalid
+configuration, wrong/unreachable database, unwritable directories or missing backup
+tools stop startup with Ukrainian instructions and clean up this launcher's children.
+An occupied port belonging to another program is reported without terminating it.
+Preflight does not contact AI, MT5 or Whisper; missing optional services do not prevent
+manual/offline journal functionality. Directory checks create and remove only unique
+probe files. Migration backup inspection reads TOC and every data block with pg_restore
+without restoring anywhere; failure blocks the upgrade and leaves existing data intact.
 
 **What you should see:** the dark UI with the sidebar (Головна, Потрібен опис, Журнал, Біас,
 Дайджести, Калькулятор, Налаштування), empty pages, and a green status bar (backend and DB OK).
