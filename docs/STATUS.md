@@ -1,6 +1,13 @@
 # STATUS
 
-Current milestone: **M7 Hardening — plan ACCEPTED; M7-01 [L] only authorized**. M6 officially ACCEPTED by pasted PM review at `1a194a9`; all owner checks and coverage fix verified. M5 accepted 2026-11-12. Earlier acceptance history below remains historical.
+Current milestone: **M7 Hardening — M7-01 ACCEPTED; M7-02 [L] AUTHORIZED, in progress**. M0–M6 accepted. Latest PM resume instruction supersedes historical gates below.
+
+## M7-02 recovery — 2026-11-15, owner codex, tier L
+
+- Recovered branch `m7/backup-schedule`, HEAD/main/origin/main `4dc0ac5`; no task commits, staged changes, stash or unfinished Git operation. Three historical worktrees preserved.
+- Only recovered file: untracked `backend/tests/services/test_backup_schedule.py` (11 parametrized scenarios). No implementation/API/UI/report existed. Confirmed RED: missing `app.services.backup_schedule`, collection error; no database operations.
+- No active Python/Node/make/pg_dump/pg_restore processes found. Existing logs belong to M7-01. Owner reports full usage allowance.
+- Continue saved tests, implement remaining M7-02 only; preserve all QA databases, no real-data experiments, migration, MT5/AI/Whisper calls or push. Final commit full gate and sole-engineer specialist self-review before local no-ff merge.
 
 ## Current resume point — M7 planning
 
