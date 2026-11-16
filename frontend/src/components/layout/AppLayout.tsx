@@ -1,20 +1,24 @@
 import { useLayoutEffect, useRef } from 'react'
-import { Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation, useNavigationType } from 'react-router'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'
 
 export function AppLayout() {
   const mainRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
+  const navigationType = useNavigationType()
 
   // <main> is the only scroll container and it outlives route changes: start every page at the top.
+  // A replace keeps the same screen (e.g. /bias/new -> /bias/<id> after the first save, the editor
+  // stays mounted mid-edit), so it keeps the scroll position.
   useLayoutEffect(() => {
+    if (navigationType === 'REPLACE') return
     const main = mainRef.current
     if (main) {
       main.scrollTop = 0
       main.scrollLeft = 0
     }
-  }, [pathname])
+  }, [pathname, navigationType])
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

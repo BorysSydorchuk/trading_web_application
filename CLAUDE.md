@@ -49,7 +49,7 @@ Classify every task at the start and write the tier next to it in `docs/STATUS.m
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
 - **Start of every session:** run `git status` and `git log --all --oneline -20` and compare with `docs/STATUS.md`. Report anything unexplained (unknown commits, untracked files, code not described in STATUS) to Borys before building on it.
-- **Codex (OpenAI) and any other non-Claude-Code agent** also works on this repo (its instructions: `AGENTS.md`):
+- **Codex (OpenAI) and any other non-Claude-Code agent** (paused since 2026-11-16; works only when Borys asks; its instructions: `AGENTS.md`):
   - Works only on its own branch `codex/<topic>`, one task at a time; the task is listed in `docs/STATUS.md` with owner `codex`.
   - Never merges to `main`. The orchestrator reviews its branch like a subagent task: `make check`, `code-reviewer` (plus the required specialist reviewers), then `git merge --no-ff`.
 - **Pre-migration backup:** before any `alembic upgrade` on the dev database `trading_journal` (`make db-ensure`, `start.bat`, `make migrate`, anything), a `pg_dump` goes to `backups/pre-migration-<revision>-<timestamp>.dump` and its path is printed; keep the last 10. Tests on `trading_journal_test` do not need this.
@@ -73,6 +73,9 @@ Classify every task at the start and write the tier next to it in `docs/STATUS.m
 
 ## Hard rules
 - Secrets only in `.env` (gitignored). Never print tokens or passwords in logs or commits.
+- Do not read or edit `.env`, `.env.*` or `secrets/**`, and never print credentials. Authorized tests may load application settings internally.
+- Explicit `encoding="utf-8"` for all file I/O (existing BOM-tolerant reads remain valid). No PowerShell text editing of config files.
+- Owner checklists: exact Ukrainian UI names and click paths, one line per item; commands run from normal PowerShell in the repo root.
 - All timestamps stored in UTC. Convert to Europe/Brussels only in the UI and in session logic. MT5 server time is NOT UTC; convert explicitly (see PRD 6.3).
 - MT5 access is read-only. The app never opens, modifies or closes positions.
 - UI text is Ukrainian. Keep all strings in one i18n file (`frontend/src/i18n/uk.ts`), no hardcoded strings in components.
