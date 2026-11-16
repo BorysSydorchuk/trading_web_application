@@ -1,6 +1,11 @@
 # STATUS
 
-Current milestone: **M7 technical milestone CLOSED by owner/PM decision; M8 — UX & Functional Improvements, awaiting actual owner feedback and PM scope**. M0–M6 and M7-01..07 accepted. M7-08 preparation accepted, live plan SUPERSEDED; five-day live validation transferred to M8 at **0/5**, not passed. No M8 implementation authorized. Latest explicit owner/PM decision supersedes historical plans/checkpoints below.
+Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 with M8-11 only** (PM review 2026-11-16). M0–M7 technical closed; live validation 0/5 transferred to M8. Claude Code is lead engineer and sole merge owner; Codex paused. Backlog and order: `docs/M8_BACKLOG.md`.
+
+## M8 tasks
+
+- [ ] Role handover + M8 backlog (owner claude, tier S, docs only) — branch `m8/role-handover`. Session-start check 2026-11-16: main = origin/main = `8e22211`, clean, no stash; `m7/trading-week` `8b6ade5` kept unmerged; three historical `.claude/worktrees/` (m3/m4) and old `worktree-agent-*` / m3–m7 topic branches are known history; local `m5/calculator-plan` is 1 commit ahead of its origin copy (old, unexplained but harmless). M8-01..10 details pending PM handoff section 5.
+- [ ] M8-11 footer overscroll (owner claude, tier S) — branch `m8/footer-overscroll`. Root cause confirmed in headless Chrome on the dev app: `.sr-only` elements (position absolute) inside the non-positioned `<main>` take the initial containing block, escape main's overflow clip and stretch the document (Home 1302 px vs 702 px viewport; Settings 1632 px wide). The document then scrolls (wheel chaining at main's end, focus), the whole `h-dvh` layout moves up and the footer floats with blank space below. Fix plan: `relative` on `<main>`, lock html/body/#root to the viewport, reset main scroll on route change, Playwright regression (dependency pending Borys OK).
 
 ## M7 closure documentation — owner codex, tier S
 
