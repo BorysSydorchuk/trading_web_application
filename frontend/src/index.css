@@ -113,6 +113,14 @@
   html {
     color-scheme: dark;
   }
+  /* The app shell fills the viewport and scrolls only inside <main>; the document itself never
+     scrolls, so the status bar cannot float above a blank area (M8-11). */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
   body {
     @apply bg-background text-foreground text-sm antialiased;
   }

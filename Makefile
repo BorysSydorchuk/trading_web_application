@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend trade-check ai-eval whisper-bench
+.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend e2e trade-check ai-eval whisper-bench
 
 install:
 	cd backend && uv sync
@@ -51,6 +51,10 @@ test-backend: db-up
 
 test-frontend:
 	cd frontend && npm test
+
+# Browser layout regressions (Playwright, installed Chrome, mocked API; not part of check): make e2e
+e2e:
+	cd frontend && npm run e2e
 
 # Compare the last N closed trades with MT5 (read-only): make trade-check ACCOUNT="FN P1" N=5
 # Optional: OUT=docs/reports/M1_trade_check.md, SOURCE=fixture:<path> (default: MT5_SOURCE / real).

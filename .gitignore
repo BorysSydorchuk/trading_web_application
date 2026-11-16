@@ -41,3 +41,7 @@ Thumbs.db
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/
