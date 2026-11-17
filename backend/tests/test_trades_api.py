@@ -353,7 +353,9 @@ def test_detail(client: TestClient, session: Session, seed: Seed) -> None:
         "commission": "-1.75",
         "swap": "0.00",
         "reason": "tp",
+        "reason_code": None,  # stored before M8-09
     }
+    assert data["exit_reason_source"] is None
     assert data["rule_violations"] == [
         {"rule_key": "max_risk_pct", "source": "user", "details": "x"},
         {"rule_key": "min_planned_rr", "source": "auto", "details": "x"},

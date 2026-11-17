@@ -46,6 +46,7 @@ export function fixtureTrade(overrides: Partial<TradeDetail> = {}): TradeDetail 
     bias_note_ids: { daily: null, weekly: null, monthly: null },
     violations: [],
     initial_sl_source: 'mt5',
+    exit_reason_source: null,
     exit_deals: [],
     rule_violations: [],
     journal: emptyJournal(),

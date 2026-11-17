@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.config_files.journal_fields import JournalFieldsConfig
 from app.domain.chart_links import duplicate_link_indexes, preview_url
+from app.domain.exit_reason import source_after_owner_save
 from app.domain.journal import (
     RULE_VIOLATIONS_KEY,
     JournalKey,
@@ -182,7 +183,12 @@ def save_journal(
     if errors:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": errors})
     old_status = trade.status
+    old_exit_reason = trade.exit_reason
     _apply_values(trade, config, values)
+    # M8-09: a changed or cleared exit reason is the owner's; the sync never touches it again.
+    trade.exit_reason_source = source_after_owner_save(
+        old_exit_reason, trade.exit_reason, trade.exit_reason_source
+    )
     trade.raw_text = data.raw_text
     trade.ai_filled_fields = filter_ai_filled(data.ai_filled_fields, values)
     trade.chart_links = [ChartLink(url=link.url, kind=link.kind) for link in data.chart_links]

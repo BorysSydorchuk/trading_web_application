@@ -113,6 +113,7 @@ function FormSection({ trade, fields, form, newFields }: FormSectionProps) {
         stored={form.stored}
         journal={trade.journal}
         aiFilled={form.aiFilled}
+        mt5Filled={form.mt5Filled}
         missing={form.showMissing ? form.missing : EMPTY_SET}
         errors={form.fieldErrors}
         autoViolations={autoViolations}

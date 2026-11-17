@@ -61,7 +61,16 @@ def test_to_deal_converts_server_time_to_utc_and_rounds_price() -> None:
     assert deal.type is DealType.BUY
     assert deal.entry is DealEntry.IN
     assert deal.reason == "sl"
+    assert deal.reason_code == 4
     assert deal.commission == Decimal("-3")
+
+
+@pytest.mark.parametrize(
+    ("code", "key"), [(None, None), (0, "client"), (6, "so"), (42, "unknown_42")]
+)
+def test_to_deal_keeps_the_raw_reason_code(code: int | None, key: str | None) -> None:
+    deal = to_deal(raw_deal(reason=code), NY, {"EURUSD": 5})
+    assert (deal.reason, deal.reason_code) == (key, code)
 
 
 def test_to_deal_without_digits_keeps_price() -> None:

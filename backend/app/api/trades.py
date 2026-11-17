@@ -189,6 +189,7 @@ def to_detail(
                     "commission": d.commission,
                     "swap": d.swap,
                     "reason": d.reason,
+                    "reason_code": d.reason_code,
                 }
                 for d in trade.exit_deals
             ],

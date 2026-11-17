@@ -89,8 +89,13 @@ def deal_entry_from_mt5(code: int) -> DealEntry:
     return _MT5_DEAL_ENTRIES[code]
 
 
-def deal_reason_from_mt5(code: int) -> str:
-    """Lowercase DEAL_REASON key; unknown codes become ``unknown_<code>`` (never fail)."""
+def deal_reason_from_mt5(code: int | None) -> str | None:
+    """Lowercase DEAL_REASON key; unknown codes become ``unknown_<code>`` (never fail).
+
+    None (MT5 did not report a reason) stays None.
+    """
+    if code is None:
+        return None
     return _MT5_DEAL_REASONS[code] if 0 <= code < len(_MT5_DEAL_REASONS) else f"unknown_{code}"
 
 
@@ -115,6 +120,7 @@ class Deal:
     sl: Decimal | None = None
     tp: Decimal | None = None
     magic: int = 0
+    reason_code: int | None = None  # raw MT5 DEAL_REASON
 
 
 @dataclass(frozen=True)
@@ -144,6 +150,7 @@ class ExitDeal:
     commission: Decimal  # includes fee
     swap: Decimal
     reason: str | None
+    reason_code: int | None = None  # raw MT5 DEAL_REASON
 
 
 @dataclass(frozen=True)
@@ -224,7 +231,15 @@ class _Acc:
             return
         self.exits.append(
             ExitDeal(
-                deal.ticket, deal.time, deal.price, volume, profit, commission, swap, deal.reason
+                deal.ticket,
+                deal.time,
+                deal.price,
+                volume,
+                profit,
+                commission,
+                swap,
+                deal.reason,
+                deal.reason_code,
             )
         )
         self.net -= volume

@@ -103,7 +103,8 @@ class RawDeal:
     profit: Decimal
     symbol: str
     time_msc: int = 0
-    reason: int = 0  # ENUM_DEAL_REASON
+    # ENUM_DEAL_REASON; None = not reported (old fixture / terminal build), never "client".
+    reason: int | None = None
     magic: int = 0
     commission: Decimal = ZERO
     swap: Decimal = ZERO
