@@ -2,6 +2,7 @@
 
 One line per decision: date, decision, reason. Product decisions live in PRD.md.
 
+- 2026-11-17 (PM, gate rule): a docs-only merge (no code, config, tests or migrations changed) may skip the full make check; every other change still needs the full make check on the final commit before merge. Reason: PM review 2026-11-17 (M8-11 acceptance).
 - 2026-11-16 (owner/PM, role handover): Claude Code resumes as lead engineer/orchestrator, the only active agent and the sole owner of merges to main; Codex is paused and may work only on `codex/<topic>` branches when Borys asks, never merging. Borys pushes; every report ends with «main готовий до push: <sha>». S/M/L tiers, full make check on the final commit, pre-migration backup, MT5 read-only and no AI/Whisper calls without permission stay. Reason: PM review 2026-11-16.
 - 2026-11-16 (M8-11, Borys approved the dependency): `@playwright/test` dev dependency for browser layout regressions, `make e2e` / `npm run e2e`, separate from `make check` (needs a browser and a Vite server). Uses the installed Chrome (`channel: 'chrome'`, no browser download), its own Vite port 5197 and a fully mocked `/api` (no backend, no real data). Reason: jsdom cannot measure layout; PM asked for a Playwright regression.
 - 2026-11-16 (owner/PM, M8 order): M8-11 -> M8-09 -> M8-01 -> M8-02+M8-03 -> M8-04..M8-08 (one taxonomy batch, one migration) -> M8-10 (after the owner picks a design direction). Only M8-11 is authorized now. Reason: PM review 2026-11-16.
