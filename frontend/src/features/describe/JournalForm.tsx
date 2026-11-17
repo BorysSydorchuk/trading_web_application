@@ -11,6 +11,7 @@ import type { JournalField, JournalValue } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { FieldShell, Segmented } from './FieldControls'
+import type { Mt5FillSource } from './mt5Prefill'
 import {
   fieldDomId,
   MAX_TEXT_LENGTH,
@@ -34,6 +35,8 @@ export interface JournalFormProps {
   stored: FormValues
   journal: Readonly<Record<string, JournalValue>>
   aiFilled: ReadonlySet<string>
+  /** M8-09: fields prefilled from MT5 (exit_reason). */
+  mt5Filled?: ReadonlyMap<string, Mt5FillSource>
   missing: ReadonlySet<string>
   errors: Readonly<Record<string, string>>
   autoViolations: ReadonlySet<string>
@@ -53,7 +56,7 @@ export function JournalForm(props: JournalFormProps) {
 type FieldProps = JournalFormProps & { field: JournalField }
 
 function FieldBlock(props: FieldProps) {
-  const { field, values, stored, aiFilled, missing, errors } = props
+  const { field, values, stored, aiFilled, mt5Filled, missing, errors } = props
   const group = field.type !== 'text' && field.type !== 'int' && !(field.type === 'enum' && enumUsesSelect(field, stored))
   return (
     <>
@@ -62,6 +65,7 @@ function FieldBlock(props: FieldProps) {
         label={field.label}
         required={field.required === true}
         aiFilled={aiFilled.has(field.key)}
+        mt5Fill={mt5Filled?.get(field.key) ?? null}
         missing={missing.has(field.key)}
         error={errors[field.key] ?? null}
         hint={field.type === 'auto' ? f.autoHint : undefined}

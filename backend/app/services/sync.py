@@ -75,6 +75,7 @@ from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.source import Mt5Source, connected
 from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
 from app.services.bias_alignment import recompute_after_sync
+from app.services.exit_reason import prefill_exit_reason
 from app.services.fx_sync import FxFetched, fetch_fx, write_fx
 from app.services.fx_values import NO_VALUES, tick_values
 from app.services.trade_rules import recompute_rules
@@ -437,6 +438,7 @@ def _upsert_exit_deals(
                 "commission": e.commission,
                 "swap": e.swap,
                 "reason": e.reason,
+                "reason_code": e.reason_code,
             }
             row = existing.get(e.ticket)
             if row is None:
@@ -444,6 +446,21 @@ def _upsert_exit_deals(
                 changed.add(pid)
             elif _assign(row, values):
                 changed.add(pid)
+    return changed
+
+
+def _prefill_exit_reasons(
+    session: Session,
+    trades: dict[int, tuple[Trade, BuiltTrade]],
+    specs: Mapping[str, RawSymbolSpec],
+) -> set[int]:
+    """M8-09: exit_reason from the final closing deal; returns position ids changed."""
+    changed: set[int] = set()
+    for pid, (trade, built) in trades.items():
+        spec = specs.get(built.symbol)
+        tick = spec.tick_size if spec is not None else None
+        if prefill_exit_reason(session, trade, built.exit_deals, tick) is not None:
+            changed.add(pid)
     return changed
 
 
@@ -533,6 +550,7 @@ def write(
 
     created = {pid for pid in touched if pid not in existing}
     updated |= _upsert_exit_deals(session, account.id, touched) - created
+    updated |= _prefill_exit_reasons(session, touched, fetched.specs) - created
     counters.trades_updated = len(updated)
 
     if result.trades:

@@ -35,6 +35,7 @@ from app.models.base import (
 from app.models.enums import (
     BiasAlignment,
     Direction,
+    ExitReasonSource,
     InitialSlSource,
     TradeStatus,
     TradingSession,
@@ -62,6 +63,7 @@ class Trade(TimestampMixin, Base):
         enum_check("bias_alignment_weekly", BiasAlignment, "bias_alignment_weekly_valid"),
         enum_check("bias_alignment_monthly", BiasAlignment, "bias_alignment_monthly_valid"),
         enum_check("bias_alignment_override", BiasAlignment, "bias_alignment_override_valid"),
+        enum_check("exit_reason_source", ExitReasonSource, "exit_reason_source_valid"),
         CheckConstraint("weekday BETWEEN 0 AND 6", name="weekday_range"),
         CheckConstraint("hour BETWEEN 0 AND 23", name="hour_range"),
         CheckConstraint("quality_rating BETWEEN 1 AND 5", name="quality_rating_range"),
@@ -118,6 +120,10 @@ class Trade(TimestampMixin, Base):
     fvg_kind: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     entry_model: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     exit_reason: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
+    # Who set exit_reason (M8-09): mt5_reason / price_match = prefilled by the sync (UI marks
+    # it), owner = entered/changed/cleared by the owner (sync never touches it); NULL = set
+    # before M8-09 or empty.
+    exit_reason_source: Mapped[str | None] = mapped_column(String(20))
     # Auto-computed daily alignment (PRD 6.6); the effective value is override ?? auto.
     bias_alignment: Mapped[str | None] = mapped_column(String(20))
     bias_alignment_weekly: Mapped[str | None] = mapped_column(String(20))
@@ -179,6 +185,9 @@ class TradeExitDeal(TimestampMixin, Base):
     # MT5 DEAL_REASON as lowercase key (client, mobile, web, expert, sl, tp, so, rollover,
     # vmargin, split). No CHECK: an unexpected broker value must not break the sync.
     reason: Mapped[str | None] = mapped_column(String(20))
+    # Raw MT5 DEAL_REASON code (M8-09); NULL when MT5 reported none or the deal was
+    # stored before M8-09.
+    reason_code: Mapped[int | None] = mapped_column(Integer)
 
     trade: Mapped[Trade] = relationship(back_populates="exit_deals")
 

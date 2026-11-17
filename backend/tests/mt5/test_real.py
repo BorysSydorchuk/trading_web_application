@@ -300,6 +300,15 @@ def test_deals_raw_conversion_and_sorting(fake: FakeMt5, terminal: Path) -> None
     assert deals[1].profit == Decimal("12.5")
 
 
+def test_deal_reason_is_kept_raw_and_missing_stays_none(fake: FakeMt5, terminal: Path) -> None:
+    without = deal_obj(ticket=2)
+    del without.reason  # an old terminal build without the field
+    fake.deal_results = [(deal_obj(ticket=1, reason=4), without)]
+    src, _ = make_source(fake)
+    connect(src, terminal)
+    assert [d.reason for d in src.deals(0, 1)] == [4, None]
+
+
 def test_deals_for_position_uses_position_filter(fake: FakeMt5, terminal: Path) -> None:
     fake.deal_results = [(deal_obj(),)]
     src, _ = make_source(fake)

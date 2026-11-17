@@ -80,6 +80,7 @@ def to_deal(raw: RawDeal, conversion: Conversion, digits: Mapping[str, int] | No
         sl=_opt_price(raw.sl, sym_digits),
         tp=_opt_price(raw.tp, sym_digits),
         magic=raw.magic,
+        reason_code=raw.reason,
     )
 
 

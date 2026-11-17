@@ -126,6 +126,11 @@ def _int(obj: object, name: str, default: int = 0) -> int:
     return default if value is None else int(value)
 
 
+def _opt_int(obj: object, name: str) -> int | None:
+    value = getattr(obj, name, None)
+    return None if value is None else int(value)
+
+
 def _dec(obj: object, name: str) -> Any:
     return to_decimal(getattr(obj, name, 0) or 0)
 
@@ -176,7 +181,7 @@ def deal_from_mt5(obj: object) -> RawDeal:
         time_msc=_int(obj, "time_msc"),
         type=_int(obj, "type"),
         entry=_int(obj, "entry"),
-        reason=_int(obj, "reason"),
+        reason=_opt_int(obj, "reason"),
         magic=_int(obj, "magic"),
         volume=_dec(obj, "volume"),
         price=_dec(obj, "price"),

@@ -1,6 +1,7 @@
 /** Small building blocks of the journal form. */
 import type { ReactNode } from 'react'
 import { Sparkles } from 'lucide-react'
+import type { Mt5FillSource } from './mt5Prefill'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { fieldDomId } from './formModel'
@@ -20,11 +21,25 @@ export function AiBadge() {
   )
 }
 
+/** "MT5" marker on a field prefilled from MT5 (M8-09) the user has not touched yet. */
+export function Mt5Badge({ source }: { source: Mt5FillSource }) {
+  return (
+    <span
+      title={f.mt5FilledHint[source]}
+      className="inline-flex items-center rounded border border-ai/40 bg-ai/10 px-1 py-px text-[10px] font-medium text-ai"
+    >
+      {f.mt5Badge}
+    </span>
+  )
+}
+
 interface FieldShellProps {
   fieldKey: string
   label: string
   required: boolean
   aiFilled: boolean
+  /** M8-09: prefilled from MT5 (null = not). */
+  mt5Fill?: Mt5FillSource | null
   missing: boolean
   error: string | null
   hint?: string
@@ -34,7 +49,7 @@ interface FieldShellProps {
 }
 
 /** Label row (required mark, AI marker, error) + control. Missing required → red edge and label. */
-export function FieldShell({ fieldKey, label, required, aiFilled, missing, error, hint, group, children }: FieldShellProps) {
+export function FieldShell({ fieldKey, label, required, aiFilled, mt5Fill, missing, error, hint, group, children }: FieldShellProps) {
   const id = fieldDomId(fieldKey)
   const labelClass = cn('text-xs font-medium', missing ? 'text-destructive' : 'text-muted-foreground')
   const labelContent = (
@@ -51,7 +66,7 @@ export function FieldShell({ fieldKey, label, required, aiFilled, missing, error
     <div
       className={cn(
         'flex flex-col gap-1.5 border-l-2 py-1 pl-3',
-        missing ? 'border-destructive' : aiFilled ? 'border-ai/60' : 'border-transparent',
+        missing ? 'border-destructive' : aiFilled || mt5Fill ? 'border-ai/60' : 'border-transparent',
       )}
       role={group ? 'group' : undefined}
       aria-labelledby={group ? `${id}-label` : undefined}
@@ -67,6 +82,7 @@ export function FieldShell({ fieldKey, label, required, aiFilled, missing, error
           </label>
         )}
         {aiFilled && <AiBadge />}
+        {mt5Fill && <Mt5Badge source={mt5Fill} />}
         {missing && <span className="text-[11px] text-destructive">{f.missing}</span>}
       </div>
       {children}

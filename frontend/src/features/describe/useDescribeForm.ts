@@ -4,6 +4,7 @@ import type { JournalField, JournalValue, TradeDetail } from '@/features/trades/
 import { appendTranscript } from '@/features/voice/notesModel'
 import { mergeExtraction } from './aiMerge'
 import { filledLinks, isLinkKind, linkErrors, newLinkRow, type LinkDraft } from './chartLinks'
+import { initialMt5Filled, withoutMt5Mark, type Mt5FillSource } from './mt5Prefill'
 import {
   aiFilledForSave,
   buildFields,
@@ -19,6 +20,8 @@ import { useSaveErrors, type SaveContext } from './useSaveErrors'
 interface EditState {
   values: FormValues
   aiFilled: ReadonlySet<string>
+  /** M8-09: fields prefilled from MT5 the user has not touched yet. */
+  mt5Filled: ReadonlyMap<string, Mt5FillSource>
   /** Keys filled by the last extraction (null before the first one). */
   lastApplied: number | null
 }
@@ -44,15 +47,17 @@ function useJournalValues(trade: TradeDetail, fields: readonly JournalField[]) {
   const [edit, setEdit] = useState<EditState>(() => ({
     values: stored,
     aiFilled: new Set(trade.ai_filled_fields),
+    mt5Filled: initialMt5Filled(trade),
     lastApplied: null,
   }))
 
-  /** Editing a field removes its AI marker. */
+  /** Editing a field removes its AI and MT5 markers. */
   function setValue(key: string, value: JournalValue) {
     setEdit((prev) => ({
       ...prev,
       values: { ...prev.values, [key]: value },
       aiFilled: prev.aiFilled.has(key) ? new Set([...prev.aiFilled].filter((k) => k !== key)) : prev.aiFilled,
+      mt5Filled: withoutMt5Mark(prev.mt5Filled, key),
     }))
   }
 
@@ -60,7 +65,8 @@ function useJournalValues(trade: TradeDetail, fields: readonly JournalField[]) {
   function mergeResult(result: ExtractResult) {
     setEdit((prev) => {
       const merged = mergeExtraction(fields, prev.values, prev.aiFilled, result)
-      return { values: merged.values, aiFilled: merged.aiFilled, lastApplied: merged.applied.length }
+      // AI fills only empty or AI-filled fields, so an MT5-prefilled value is never replaced.
+      return { ...prev, values: merged.values, aiFilled: merged.aiFilled, lastApplied: merged.applied.length }
     })
   }
 
@@ -101,6 +107,7 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
     stored: journal.stored,
     values,
     aiFilled,
+    mt5Filled: journal.mt5Filled,
     lastApplied: journal.lastApplied,
     links,
     rawText,

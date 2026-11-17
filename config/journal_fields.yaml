@@ -74,6 +74,7 @@ fields:
       - { value: point_b, label: "ціль: точка B" }
       - { value: sl, label: "SL" }
       - { value: tp, label: "TP" }
+      - { value: stop_out, label: "стоп-аут" }
       - { value: manual, label: "вручну" }
       - { value: other, label: "інше" }
     required: true

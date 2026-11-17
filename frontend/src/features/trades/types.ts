@@ -67,6 +67,9 @@ export interface TradeList {
   total: number
 }
 
+/** M8-09: who set trades.exit_reason (docs/api.md M8-09). */
+export type ExitReasonSource = 'mt5_reason' | 'price_match' | 'owner'
+
 export interface ExitDeal {
   ticket: number
   time: string
@@ -75,7 +78,10 @@ export interface ExitDeal {
   profit: string
   commission: string
   swap: string
+  /** Lowercase MT5 DEAL_REASON key (sl, tp, so, client, ...). */
   reason: string | null
+  /** M8-09: raw MT5 DEAL_REASON code; null for deals stored before M8-09. */
+  reason_code: number | null
 }
 
 export interface RuleViolation {
@@ -99,6 +105,8 @@ export type JournalValue = string | number | boolean | string[] | null
 export interface TradeDetail extends TradeRow {
   bias_note_ids: { daily: number | null; weekly: number | null; monthly: number | null }
   initial_sl_source: string | null
+  /** M8-09: who set journal.exit_reason; mt5_reason / price_match = prefilled from MT5 (marked in the form). */
+  exit_reason_source: ExitReasonSource | null
   exit_deals: ExitDeal[]
   rule_violations: RuleViolation[]
   journal: Record<string, JournalValue>

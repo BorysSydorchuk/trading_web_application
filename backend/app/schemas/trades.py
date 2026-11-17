@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.chart_links import MAX_LINKS, MAX_URL_LENGTH, is_valid_chart_url
-from app.models.enums import InitialSlSource
+from app.models.enums import ExitReasonSource, InitialSlSource
 from app.schemas.audio import AudioNoteOut
 from app.schemas.common import DecimalIn, UtcDatetime
 
@@ -84,7 +84,8 @@ class ExitDeal(BaseModel):
     profit: Decimal
     commission: Decimal
     swap: Decimal
-    reason: str | None
+    reason: str | None  # lowercase DEAL_REASON key
+    reason_code: int | None  # raw MT5 DEAL_REASON (M8-09); None before M8-09 / not reported
 
 
 class RuleViolationOut(BaseModel):
@@ -112,6 +113,9 @@ class TradeDetail(TradeRow):
     """M2 shape (docs/api.md "TradeDetail in M2"): journal values live in `journal`."""
 
     initial_sl_source: InitialSlSource | None
+    # Who set journal.exit_reason (M8-09): mt5_reason / price_match = prefilled from MT5
+    # (the UI marks it until the owner changes it), owner, or None.
+    exit_reason_source: ExitReasonSource | None
     exit_deals: list[ExitDeal]
     rule_violations: list[RuleViolationOut]
     # Every YAML key except links fields (config/journal_fields.yaml), None when empty.
