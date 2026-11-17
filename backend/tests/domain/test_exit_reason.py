@@ -60,14 +60,19 @@ def test_manual_close_is_left_for_the_owner(reason: str) -> None:
     assert suggest(deal("1.16200", reason)) is None
 
 
+def test_missing_reason_falls_back_to_price_within_one_tick() -> None:
+    assert suggest(deal("1.16201", None)) == ExitReasonSuggestion("sl", PRICE)
+    assert suggest(deal("1.16199", None)) == ExitReasonSuggestion("sl", PRICE)
+    assert suggest(deal("1.16999", None)) == ExitReasonSuggestion("tp", PRICE)
+    assert suggest(deal("1.17000", None)) == ExitReasonSuggestion("tp", PRICE)
+
+
 @pytest.mark.parametrize(
-    "reason", [None, "unknown_42", "rollover", "vmargin", "split", "corporate_action"]
+    "reason", ["unknown_42", "rollover", "vmargin", "split", "corporate_action"]
 )
-def test_missing_reason_falls_back_to_price_within_one_tick(reason: str | None) -> None:
-    assert suggest(deal("1.16201", reason)) == ExitReasonSuggestion("sl", PRICE)
-    assert suggest(deal("1.16199", reason)) == ExitReasonSuggestion("sl", PRICE)
-    assert suggest(deal("1.16999", reason)) == ExitReasonSuggestion("tp", PRICE)
-    assert suggest(deal("1.17000", reason)) == ExitReasonSuggestion("tp", PRICE)
+def test_other_reported_reason_never_uses_the_price_fallback(reason: str) -> None:
+    # PM: fallback only when the deal reason is missing.
+    assert suggest(deal("1.16200", reason)) is None
 
 
 def test_missing_reason_without_price_match_stays_empty() -> None:
@@ -143,7 +148,9 @@ def test_prefilled_value_follows_the_deals() -> None:
         "sl",
         "mt5_reason",
     )
-    assert resolve_prefill("sl", "mt5_reason", None) == (None, None)
+    # Never cleared: a later sync without the symbol spec must not erase a price match.
+    assert resolve_prefill("sl", "price_match", None) is None
+    assert resolve_prefill("sl", "mt5_reason", None) is None
     assert resolve_prefill("sl", "mt5_reason", ExitReasonSuggestion("sl", MT5)) == (
         "sl",
         "mt5_reason",

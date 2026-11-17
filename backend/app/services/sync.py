@@ -450,14 +450,16 @@ def _upsert_exit_deals(
 
 
 def _prefill_exit_reasons(
-    trades: dict[int, tuple[Trade, BuiltTrade]], specs: Mapping[str, RawSymbolSpec]
+    session: Session,
+    trades: dict[int, tuple[Trade, BuiltTrade]],
+    specs: Mapping[str, RawSymbolSpec],
 ) -> set[int]:
     """M8-09: exit_reason from the final closing deal; returns position ids changed."""
     changed: set[int] = set()
     for pid, (trade, built) in trades.items():
         spec = specs.get(built.symbol)
         tick = spec.tick_size if spec is not None else None
-        if prefill_exit_reason(trade, built.exit_deals, tick) is not None:
+        if prefill_exit_reason(session, trade, built.exit_deals, tick) is not None:
             changed.add(pid)
     return changed
 
@@ -548,7 +550,7 @@ def write(
 
     created = {pid for pid in touched if pid not in existing}
     updated |= _upsert_exit_deals(session, account.id, touched) - created
-    updated |= _prefill_exit_reasons(touched, fetched.specs) - created
+    updated |= _prefill_exit_reasons(session, touched, fetched.specs) - created
     counters.trades_updated = len(updated)
 
     if result.trades:

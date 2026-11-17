@@ -7,6 +7,7 @@ tick 0.00001). Server time = UTC+3 (summer), like basic_week.json.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -19,6 +20,7 @@ from app.config_files.rules import RulesConfig
 from app.db import make_session_factory
 from app.models import Trade, TradeExitDeal
 from app.mt5.fixture import FixtureMt5Source
+from app.services.exit_reason import prefill_exit_reason
 from app.tools.backfill_exit_reason import backfill
 from tests.test_sync import WEEK_LOGIN, WEEK_NOW, add_account, run, trades_by_pid
 
@@ -179,17 +181,28 @@ def test_sync_stores_raw_and_mapped_reason_per_deal(session: Session, rules: Rul
     assert (missing.reason, missing.reason_code) == (None, None)
 
 
-def save(client: TestClient, trade: Trade, exit_reason: str | None) -> dict[str, Any]:
-    response = client.put(
+def put_journal(
+    client: TestClient,
+    trade: Trade,
+    exit_reason: str | None,
+    *,
+    complete: bool = False,
+    ai_filled: list[str] | None = None,
+) -> Any:
+    return client.put(
         f"/api/trades/{trade.id}/journal",
         json={
             "fields": {"exit_reason": exit_reason},
             "chart_links": [],
             "raw_text": None,
-            "ai_filled_fields": [],
-            "complete": False,
+            "ai_filled_fields": ai_filled or [],
+            "complete": complete,
         },
     )
+
+
+def save(client: TestClient, trade: Trade, exit_reason: str | None) -> dict[str, Any]:
+    response = put_journal(client, trade, exit_reason)
     assert response.status_code == 200, response.text
     data: dict[str, Any] = response.json()
     return data
@@ -264,3 +277,54 @@ def test_backfill_fills_only_empty_reasons(session: Session, rules: RulesConfig)
     assert reason_of(after[MANUAL_PID]) == (None, None)
     again = backfill(session, apply=True)
     assert again.filled == {}
+
+
+def test_owner_value_saved_meanwhile_wins(
+    db_engine: Engine, session: Session, rules: RulesConfig
+) -> None:
+    """Sync/backfill read an empty reason, the owner saves one before they write: kept."""
+    _, trades = synced(session, rules)
+    trade_id = trades[SL_PID].id
+    session.execute(
+        update(Trade).where(Trade.id == trade_id).values(exit_reason=None, exit_reason_source=None)
+    )
+    session.commit()
+    stale = session.get(Trade, trade_id)
+    assert stale is not None
+    assert stale.exit_reason is None
+    deals = list(stale.exit_deals)
+
+    with make_session_factory(db_engine)() as owner:  # another connection commits first
+        owner.execute(
+            update(Trade)
+            .where(Trade.id == trade_id)
+            .values(exit_reason="fractal_update", exit_reason_source="owner")
+        )
+        owner.commit()
+
+    assert prefill_exit_reason(session, stale, deals, Decimal("0.00001")) is None
+    session.commit()
+    after = trades_by_pid(session, stale.account_id)
+    assert reason_of(after[SL_PID]) == ("fractal_update", "owner")
+
+
+def test_rejected_complete_save_keeps_the_prefill(
+    client: TestClient, session: Session, rules: RulesConfig
+) -> None:
+    _, trades = synced(session, rules)
+    response = put_journal(client, trades[SL_PID], "fractal_update", complete=True)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "journal_incomplete"
+    data = client.get(f"/api/trades/{trades[SL_PID].id}").json()
+    assert data["journal"]["exit_reason"] == "sl"
+    assert data["exit_reason_source"] == "mt5_reason"
+
+
+def test_ai_filled_exit_reason_saved_by_the_owner_is_owner(
+    client: TestClient, session: Session, rules: RulesConfig
+) -> None:
+    _, trades = synced(session, rules)
+    response = put_journal(client, trades[MANUAL_PID], "point_b", ai_filled=["exit_reason"])
+    assert response.status_code == 200, response.text
+    assert response.json()["exit_reason_source"] == "owner"
+    assert response.json()["ai_filled_fields"] == ["exit_reason"]

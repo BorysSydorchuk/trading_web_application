@@ -8,6 +8,7 @@ Only closed trades whose exit_reason is empty and has no source are touched, wit
 rule as the sync (`app.domain.exit_reason`). Reads the stored exit deals and symbol specs;
 no MT5 call. Deals stored before M8-09 already carry the mapped DEAL_REASON key. Prints how
 many trades were filled and by which source. Dry run (default) changes nothing.
+Before ``--apply`` on the real database take a backup: ``python -m app.tools.backup``.
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ def backfill(session: Session, *, apply: bool) -> BackfillResult:
     filled: Counter[str] = Counter()
     for trade in trades:
         tick = ticks.get((trade.account_id, trade.broker_symbol))
-        source = prefill_exit_reason(trade, trade.exit_deals, tick)
+        source = prefill_exit_reason(session, trade, trade.exit_deals, tick)
         if source is not None:
             filled[source] += 1
     if apply:

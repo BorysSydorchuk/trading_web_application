@@ -2,9 +2,9 @@
 
 Primary source is the MT5 DEAL_REASON of the trade's final closing deal: SL -> ``sl``,
 TP -> ``tp``, stop-out -> ``stop_out``. A manual close (client / mobile / web / expert) is
-left for the owner: it may be a fractal update or the point B target. Only when the deal
-reason is missing (or not a closing reason, e.g. ``unknown_<n>``) is the final deal's price
-compared with the initial SL / TP, within one tick. Anything else stays empty.
+left for the owner: it may be a fractal update or the point B target. Only when MT5 reported
+no deal reason at all is the final deal's price compared with the initial SL / TP, within
+one tick. Any other reason (rollover, split, ``unknown_<n>``, ...) and no match stay empty.
 
 A value the owner entered, changed or cleared is never overwritten; neither is a value
 that existed before M8-09 (no source recorded).
@@ -27,7 +27,6 @@ EXIT_STOP_OUT = "stop_out"
 
 # Lowercase DEAL_REASON keys (app.domain.trade_builder) -> exit_reason option.
 _BY_DEAL_REASON = {"sl": EXIT_SL, "tp": EXIT_TP, "so": EXIT_STOP_OUT}
-MANUAL_DEAL_REASONS = frozenset({"client", "mobile", "web", "expert"})
 AUTO_SOURCES = frozenset({ExitReasonSource.MT5_REASON.value, ExitReasonSource.PRICE_MATCH.value})
 
 
@@ -89,7 +88,7 @@ def suggest_exit_reason(
     reason = last.reason
     if reason in _BY_DEAL_REASON:
         return ExitReasonSuggestion(_BY_DEAL_REASON[reason], ExitReasonSource.MT5_REASON)
-    if reason in MANUAL_DEAL_REASONS:
+    if reason is not None:  # manual close or another reported reason: the owner decides
         return None
     matched = _price_match(last.price, initial_sl, tp, tick_size)
     if matched is None:
@@ -104,14 +103,15 @@ def resolve_prefill(
 ) -> tuple[str | None, str | None] | None:
     """New (exit_reason, exit_reason_source) the sync may write; None = leave unchanged.
 
-    A prefilled value follows the deals (also cleared when they no longer give one); an
-    empty value without source is filled; owner values and pre-M8-09 values stay.
+    A prefilled value follows a new suggestion but is never cleared (a later sync without
+    the symbol spec must not erase a price match); an empty value without source is
+    filled; owner values and pre-M8-09 values stay.
     """
+    if suggestion is None:
+        return None
     if current_source in AUTO_SOURCES:
-        if suggestion is None:
-            return None, None
         return suggestion.value, suggestion.source.value
-    if current_source is None and current_value is None and suggestion is not None:
+    if current_source is None and current_value is None:
         return suggestion.value, suggestion.source.value
     return None
 
