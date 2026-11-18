@@ -62,11 +62,13 @@ from app.mt5.types import (
     DIRECTIONS,
     Direction,
     RawAccountInfo,
+    RawBar,
     RawDeal,
     RawOrder,
     RawPosition,
     RawQuote,
     RawSymbolSpec,
+    RawTick,
     from_json_dict,
     to_decimal,
 )
@@ -86,6 +88,8 @@ METHODS = frozenset(
         "calc_margin",
         "quote",
         "calc_profit",
+        "rates_m1",
+        "ticks",
     }
 )
 _REPLACE_KEYS = (
@@ -99,6 +103,10 @@ _REPLACE_KEYS = (
     "quotes",
     "profit_per_tick",
     "failures",
+    # M8-16 price history: {symbol: [{"time", "high", "low", "spread"}]} (server epochs) and
+    # {symbol: [{"time_msc", "bid", "ask"}]} (server epoch milliseconds).
+    "m1_rates",
+    "tick_history",
 )
 _STEP_KEYS = frozenset({*_REPLACE_KEYS, "add_deals", "add_orders", "name"})
 _TOP_KEYS = frozenset({*_REPLACE_KEYS, "format", "description", "steps"})
@@ -182,6 +190,14 @@ class _Snapshot:
         self.margins = _parse_margins(data.get("margins", {}))
         self.quotes = _parse_quotes(data.get("quotes", {}))
         self.profit_per_tick = _parse_profit_per_tick(data.get("profit_per_tick", {}))
+        self.m1_rates: dict[str, list[RawBar]] = {
+            str(sym): [from_json_dict(RawBar, b) for b in bars]
+            for sym, bars in data.get("m1_rates", {}).items()
+        }
+        self.tick_history: dict[str, list[RawTick]] = {
+            str(sym): [from_json_dict(RawTick, t) for t in ticks]
+            for sym, ticks in data.get("tick_history", {}).items()
+        }
         failures: Mapping[str, Mapping[str, Any]] = data.get("failures", {})
         unknown = sorted(set(failures) - METHODS)
         if unknown:
@@ -316,6 +332,20 @@ class FixtureMt5Source:
         self._enter("deals_for_position")
         found = [d for d in self._snap.deals if d.position_id == position_id]
         return sorted(found, key=lambda d: (d.time, d.ticket))
+
+    def rates_m1(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawBar]:
+        self._enter("rates_m1")
+        bars = self._snap.m1_rates.get(symbol, [])
+        return sorted(
+            (b for b in bars if from_server_epoch <= b.time <= to_server_epoch),
+            key=lambda b: b.time,
+        )
+
+    def ticks(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawTick]:
+        self._enter("ticks")
+        lo, hi = from_server_epoch * 1000, to_server_epoch * 1000 + 999
+        found = self._snap.tick_history.get(symbol, [])
+        return sorted((t for t in found if lo <= t.time_msc <= hi), key=lambda t: t.time_msc)
 
     def opening_order(self, order_ticket: int) -> RawOrder | None:
         self._enter("opening_order")

@@ -89,6 +89,26 @@ class RawQuote:
 
 
 @dataclass(frozen=True)
+class RawBar:
+    """copy_rates_range() M1 bar (M8-16): ``time`` = server wall epoch of the bar start,
+    bid-based high/low, ``spread`` in points."""
+
+    time: int
+    high: Decimal
+    low: Decimal
+    spread: int
+
+
+@dataclass(frozen=True)
+class RawTick:
+    """copy_ticks_range() tick (M8-16): ``time_msc`` = server wall epoch in milliseconds."""
+
+    time_msc: int
+    bid: Decimal
+    ask: Decimal
+
+
+@dataclass(frozen=True)
 class RawDeal:
     """history_deals_get() TradeDeal. ``time``/``time_msc``: server wall clock epoch."""
 
@@ -149,7 +169,9 @@ class RawPosition:
     swap: Decimal = ZERO
 
 
-type RawRecord = RawAccountInfo | RawSymbolSpec | RawQuote | RawDeal | RawOrder | RawPosition
+type RawRecord = (
+    RawAccountInfo | RawSymbolSpec | RawQuote | RawDeal | RawOrder | RawPosition | RawBar | RawTick
+)
 
 
 def to_json_dict(record: RawRecord) -> dict[str, Any]:

@@ -15,7 +15,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from pydantic import SecretStr
 
@@ -25,11 +25,13 @@ from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.types import (
     Direction,
     RawAccountInfo,
+    RawBar,
     RawDeal,
     RawOrder,
     RawPosition,
     RawQuote,
     RawSymbolSpec,
+    RawTick,
 )
 
 DEFAULT_CONNECT_TIMEOUT_S = 60.0
@@ -106,6 +108,20 @@ class Mt5Source(Protocol):
         Only calculates (MT5 ``order_calc_profit``); never places or checks an order.
         ``ValueError`` for an unknown direction, `Mt5Error` otherwise.
         """
+        ...
+
+
+@runtime_checkable
+class PriceHistory(Protocol):
+    """M8-16: read-only price history (MAE/MFE). Real and fixture sources have it; a source
+    without it (test fakes) simply gets no excursions."""
+
+    def rates_m1(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawBar]:
+        """M1 bars starting in [from, to] (server epochs), oldest first."""
+        ...
+
+    def ticks(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawTick]:
+        """All ticks in [from, to] (server epochs), oldest first."""
         ...
 
 
