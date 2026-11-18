@@ -12,8 +12,10 @@ Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 wit
 - [x] M8-01 exclude a trade from strategy statistics (owner claude, **tier L**) — merged `69b3239` (commits f2a3a19, 6ba0c6b, 55eabba). Reviews: database APPROVE, python APPROVE, code CHANGES REQUESTED -> fixed -> APPROVE. Final make check on 55eabba PASS (3383 backend / 1 skipped, 498 frontend, lint/typecheck). Two earlier full runs failed only on two pre-existing digest/bias UI tests timing out under load right after the backend run (pass alone 3x); 55eabba gives them explicit wait budgets (test-only). Dev DB migrated to e4a7c2f9b315 by the app start at 12:06 UTC with backup `backups/pre-migration-e4a7c2f9b315-20261118T120614Z.dump` (26 trades, 0 excluded). Report `docs/reports/M8-01.md`. Owner check + PM review pending.
 - [x] M8-01 owner check PASS, PM ACCEPTED (2026-11-18). PM answer -> M8-01b (auto-recompute saved digests). Flaky UI tests -> BACKLOG. Handoff file committed.
 - [x] M8-02 + M8-03 open-trade description + before/after chart links (owner claude, **tier L**, no migration) — merged `5a05b6a` (f1cfba5, feeb3f3, e6b1d26, 77a660b, b723667). Final make check on b723667 PASS (3415 backend / 1 skipped, 504 frontend). Reviews: python APPROVE; code CHANGES REQUESTED (HIGH form_open) -> fixed -> APPROVE. Report `docs/reports/M8-02.md`. App restart needed (journal_fields.yaml phase). Owner check + PM review pending.
-- [ ] M8-01b saved digests follow exclude/include (owner claude, tier M) — after M8-02/03 on its own branch.
-- RESUME FROM HERE (2026-11-18): M8-02+M8-03 merged; waiting for the owner check and PM review (2 deviations to confirm). Next candidate: M8-01b (authorized). M8-09 owner check still pending.
+- [x] M8-02 + M8-03 TECHNICAL ACCEPTED (PM 2026-11-18); both deviations confirmed; owner check pending.
+- [ ] M8-01b saved digests follow exclude/include (owner claude, tier M) — branch `m8/digest-recompute`.
+- [ ] M8-15 Home «Потрібен опис» list + Journal filter open with/without description (owner claude, tier S).
+- RESUME FROM HERE (2026-11-18): M8-01b in progress, then M8-15; then M8-12 -> M8-16 -> M8-13 -> M8-14 (prompt from Borys). M8-09 and M8-02 owner checks pending.
 
 ## M7 closure documentation — owner codex, tier S
 
