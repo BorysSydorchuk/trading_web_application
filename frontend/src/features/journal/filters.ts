@@ -27,6 +27,10 @@ const MISSING_R_PARAM = 'missing_r'
 /** M8-01: `excluded=hide` hides trades excluded from statistics (default: shown). */
 const EXCLUDED_PARAM = 'excluded'
 const EXCLUDED_HIDE = 'hide'
+/** M8-15 «Опис»: `described=yes|no` (absent = all). */
+const DESCRIBED_PARAM = 'described'
+export const DESCRIBED_FILTERS = ['all', 'yes', 'no'] as const
+export type DescribedFilter = (typeof DESCRIBED_FILTERS)[number]
 
 export interface JournalFilters {
   accounts: number[]
@@ -42,6 +46,8 @@ export interface JournalFilters {
   missingR: boolean
   /** M8-01 «Показати виключені»: default on, nothing disappears silently. */
   showExcluded: boolean
+  /** M8-15: with / without a saved description (e.g. open trades «з описом» / «без опису»). */
+  described: DescribedFilter
   sort: TradeSort
   order: SortOrder
   /** 1-based. */
@@ -76,6 +82,7 @@ export function parseFilters(params: URLSearchParams): JournalFilters {
     missingNewFields: params.get(MISSING_NEW_FIELDS_PARAM) === 'true',
     missingR: params.get(MISSING_R_PARAM) === 'true',
     showExcluded: params.get(EXCLUDED_PARAM) !== EXCLUDED_HIDE,
+    described: oneOf(DESCRIBED_FILTERS, params.get(DESCRIBED_PARAM), 'all'),
     sort: oneOf(TRADE_SORT_FIELDS, params.get('sort'), DEFAULT_SORT),
     order: oneOf(['asc', 'desc'] as const, params.get('order'), DEFAULT_ORDER),
     page: positiveInt(params.get('page')) ?? 1,
@@ -98,6 +105,7 @@ export function filtersToParams(f: JournalFilters): URLSearchParams {
   if (f.missingNewFields) params.set(MISSING_NEW_FIELDS_PARAM, 'true')
   if (f.missingR) params.set(MISSING_R_PARAM, 'true')
   if (!f.showExcluded) params.set(EXCLUDED_PARAM, EXCLUDED_HIDE)
+  if (f.described !== 'all') params.set(DESCRIBED_PARAM, f.described)
   if (f.sort !== DEFAULT_SORT) params.set('sort', f.sort)
   if (f.order !== DEFAULT_ORDER) params.set('order', f.order)
   if (f.page > 1) params.set('page', String(f.page))
@@ -132,6 +140,7 @@ export function toTradeQuery(f: JournalFilters, today: string = brusselsToday())
     ...(f.missingNewFields ? { missing_new_fields: true } : {}),
     ...(f.missingR ? { missing_r: true } : {}),
     ...(f.showExcluded ? {} : { excluded: false }),
+    ...(f.described === 'all' ? {} : { described: f.described === 'yes' }),
     sort: f.sort,
     order: f.order,
     limit: f.limit,
@@ -147,7 +156,8 @@ export function hasActiveFilters(f: JournalFilters): boolean {
     f.period !== DEFAULT_PERIOD ||
     f.missingNewFields ||
     f.missingR ||
-    !f.showExcluded
+    !f.showExcluded ||
+    f.described !== 'all'
   )
 }
 
@@ -164,6 +174,7 @@ export function clearedFilters(f: JournalFilters): JournalFilters {
     missingNewFields: false,
     missingR: false,
     showExcluded: true,
+    described: 'all',
     page: 1,
   }
 }

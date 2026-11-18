@@ -6,6 +6,7 @@ import { AccountLimitsCard } from './AccountLimitsCard'
 import { useDashboard } from './api'
 import { DigestSuggestionCard } from './DigestSuggestionCard'
 import { InboxSummary } from './InboxSummary'
+import { NeedsDescriptionList } from './NeedsDescriptionList'
 import { OpenPositionsTable } from './OpenPositionsTable'
 import { StopBanner } from './StopBanner'
 import { SyncSummary } from './SyncSummary'
@@ -40,6 +41,7 @@ function DashboardData({ data }: { data: Dashboard }) {
         <SyncSummary />
       </div>
       <OpenPositionsTable positions={data.open_positions} />
+      <NeedsDescriptionList />
     </>
   )
 }

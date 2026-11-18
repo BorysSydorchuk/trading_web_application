@@ -264,11 +264,17 @@ def list_trades(
     missing_r: bool = Query(default=False),
     # M8-01: true = only excluded from statistics, false = only counted, absent = all.
     excluded: bool | None = Query(default=None),
+    # M8-15: true = the owner saved a journal (described_at set, open trades too), false = not.
+    described: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
     if excluded is not None:
         conditions.append(Trade.excluded_from_stats.is_(excluded))
+    if described is not None:
+        conditions.append(
+            Trade.described_at.is_not(None) if described else Trade.described_at.is_(None)
+        )
     if missing_new_fields:
         conditions.append(missing_new_fields_condition(*journal_context(db)))
     if missing_r:

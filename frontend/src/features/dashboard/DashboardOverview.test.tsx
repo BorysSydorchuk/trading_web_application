@@ -30,7 +30,12 @@ function serve(dashboard: Dashboard, suggestion: DigestSuggestion = { weekly: nu
 }
 
 describe('DashboardOverview', () => {
-  beforeEach(() => mockApi(http.get('/api/sync/status', () => HttpResponse.json({ items: [syncRow()] }))))
+  beforeEach(() =>
+    mockApi(
+      http.get('/api/sync/status', () => HttpResponse.json({ items: [syncRow()] })),
+      http.get('/api/trades', () => HttpResponse.json({ items: [], total: 0 })),
+    ),
+  )
 
   it('shows the stop banner only when a stop is hit', async () => {
     serve(emptyDashboard({ accounts: [dashboardAccount({ today_state: 'stop_loss' })], stop: { today: true, week: false } }))

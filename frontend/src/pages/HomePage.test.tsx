@@ -29,6 +29,7 @@ beforeEach(() => mockApi(
   http.get('/api/dashboard', () => HttpResponse.json(emptyDashboard())),
   http.get('/api/digests/suggestion', () => HttpResponse.json({ weekly: null, monthly: null })),
   http.get('/api/sync/status', () => HttpResponse.json({ items: [] })),
+  http.get('/api/trades', () => HttpResponse.json({ items: [], total: 0 })),
 ))
 
 function serveSidebar() {
