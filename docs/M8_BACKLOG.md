@@ -10,7 +10,7 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 
 | ID | Topic | Priority | Tier | Depends on | Status |
 |----|-------|----------|------|------------|--------|
-| M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | **authorized 2026-11-18**, in progress |
+| M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | merged `69b3239` 2026-11-18, owner check + PM review pending |
 | M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L (likely) | M8-01 | planned |
 | M8-03 | Before/after chart link defaults | 4th (with M8-02) | S/M | M8-02 | planned |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | planned |
@@ -23,6 +23,8 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-11 | Footer overscroll | 1st | S | — | accepted (owner PASS, PM 2026-11-17) |
 
 ## M8-01 — Exclude specific trades from strategy statistics (HIGH)
+
+Status 2026-11-18: merged `69b3239`, dev DB at e4a7c2f9b315, report `docs/reports/M8-01.md`. Owner check and PM review pending.
 
 - **Owner wording:** a gold/XAUUSD trade opened on the 11th only to check whether a newly funded account could trade; it should not distort strategy/performance statistics or require a normal strategy journal description. Per-trade action «Не враховувати у статистиці» with a **mandatory written reason**. Owner should be able to identify/read the excluded trade later.
 - **Decision:** excluded trade leaves strategy statistics (win rate, R, expectancy, breakdowns, digests, «Потрібен опис») but stays in all real-money/risk numbers (account P&L, balances, daily/weekly stops, 10 trades/week limit, risk rule checks). Reversible, mandatory reason, raw MT5 data never changed, survives re-sync.
