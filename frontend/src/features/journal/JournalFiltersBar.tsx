@@ -9,7 +9,15 @@ import { statusLabel } from '@/features/trades/format'
 import { TRADE_STATUSES } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
-import { PERIOD_PRESETS, clearedFilters, hasActiveFilters, type JournalFilters, type PeriodPreset } from './filters'
+import {
+  DESCRIBED_FILTERS,
+  PERIOD_PRESETS,
+  clearedFilters,
+  hasActiveFilters,
+  type DescribedFilter,
+  type JournalFilters,
+  type PeriodPreset,
+} from './filters'
 
 const j = uk.journal
 
@@ -54,6 +62,23 @@ export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps)
         selected={filters.statuses}
         onChange={(values) => update({ statuses: values })}
       />
+      <label htmlFor={`${id}-described`} className="sr-only">
+        {j.filters.described}
+      </label>
+      <div className="w-36">
+        <NativeSelect
+          id={`${id}-described`}
+          className="h-8 text-xs"
+          value={filters.described}
+          onChange={(e) => update({ described: e.target.value as DescribedFilter })}
+        >
+          {DESCRIBED_FILTERS.map((value) => (
+            <option key={value} value={value}>
+              {j.describedFilter[value]}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
       <label htmlFor={`${id}-period`} className="sr-only">
         {j.filters.period}
       </label>

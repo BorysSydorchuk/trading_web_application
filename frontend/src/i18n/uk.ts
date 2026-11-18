@@ -448,8 +448,14 @@ export const uk = {
       missingNewFields: 'Неповні за новими полями',
       missingR: 'Без R',
       showExcluded: 'Показати виключені',
+      described: 'Опис',
     },
     actionsColumn: 'Дії',
+    describedFilter: {
+      all: 'Опис: усі',
+      yes: 'З описом',
+      no: 'Без опису',
+    },
     periods: {
       today: 'сьогодні',
       week: 'цей тиждень',
@@ -1022,6 +1028,22 @@ export const uk = {
       needs_sl: 'Без початкового SL',
       needs_description: 'Без опису',
       draft: 'Чернетки',
+    },
+    needsDescription: {
+      title: 'Потрібен опис',
+      empty: 'Усі закриті угоди описано.',
+      loading: 'Завантаження угод без опису…',
+      error: 'Не вдалося завантажити угоди без опису.',
+      all: (n: number) => `Усі ${n} у журналі`,
+      describe: 'Описати',
+      describeLabel: (symbol: string, closed: string) => `Описати угоду ${symbol} ${closed}`.trim(),
+      columns: {
+        account: 'Рахунок',
+        symbol: 'Символ',
+        closeTime: 'Закрито',
+        pnl: 'P&L',
+        actions: 'Дії',
+      },
     },
     positions: {
       title: 'Відкриті позиції',

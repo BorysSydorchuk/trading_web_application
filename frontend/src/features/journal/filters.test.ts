@@ -74,3 +74,23 @@ describe('M8-01 «Показати виключені» filter', () => {
     expect(clearedFilters(filters).showExcluded).toBe(true)
   })
 })
+
+describe('M8-15 «Опис» filter', () => {
+  it('is «усі» by default: no URL param, no API param', () => {
+    const filters = parse('')
+    expect(filters.described).toBe('all')
+    expect(toTradeQuery(filters, TODAY)).not.toHaveProperty('described')
+    expect(hasActiveFilters(filters)).toBe(false)
+  })
+
+  it('open trades «з описом» / «без опису» round-trip and reach the API', () => {
+    const withText = parse('status=open&described=yes')
+    expect(toTradeQuery(withText, TODAY)).toMatchObject({ status: ['open'], described: true })
+    expect(parseFilters(filtersToParams(withText))).toEqual(withText)
+    const without = parse('status=open&described=no')
+    expect(toTradeQuery(without, TODAY).described).toBe(false)
+    expect(hasActiveFilters(without)).toBe(true)
+    expect(clearedFilters(without).described).toBe('all')
+    expect(parse('described=maybe').described).toBe('all')
+  })
+})
