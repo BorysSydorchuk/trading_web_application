@@ -7,10 +7,13 @@ object so tests can pass a fake. On non-Windows platforms ``native()`` returns N
 from __future__ import annotations
 
 import ctypes
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 SW_HIDE = 0
 SW_SHOW = 5
@@ -67,16 +70,53 @@ if sys.platform == "win32":
             ("szExeFile", ctypes.c_wchar * 260),
         ]
 
-    _k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-    _k32.OpenProcess.restype = wintypes.HANDLE
     _EnumProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    _ENTRY_PTR = ctypes.POINTER(_ProcessEntry)
+    _FILETIME_PTR = ctypes.POINTER(wintypes.FILETIME)
+    _DWORD_PTR = ctypes.POINTER(wintypes.DWORD)
+
+    def _proto(fn: Any, restype: Any, *argtypes: Any) -> None:
+        """Full prototypes: 64-bit HANDLE/HWND values are never truncated to a C int."""
+        fn.restype = restype
+        fn.argtypes = argtypes
+
+    _proto(_k32.CreateToolhelp32Snapshot, wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD)
+    _proto(_k32.Process32FirstW, wintypes.BOOL, wintypes.HANDLE, _ENTRY_PTR)
+    _proto(_k32.Process32NextW, wintypes.BOOL, wintypes.HANDLE, _ENTRY_PTR)
+    _proto(_k32.OpenProcess, wintypes.HANDLE, wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _proto(_k32.CloseHandle, wintypes.BOOL, wintypes.HANDLE)
+    _proto(_k32.GetExitCodeProcess, wintypes.BOOL, wintypes.HANDLE, _DWORD_PTR)
+    _proto(
+        _k32.GetProcessTimes,
+        wintypes.BOOL,
+        wintypes.HANDLE,
+        _FILETIME_PTR,
+        _FILETIME_PTR,
+        _FILETIME_PTR,
+        _FILETIME_PTR,
+    )
+    _proto(
+        _k32.QueryFullProcessImageNameW,
+        wintypes.BOOL,
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        _DWORD_PTR,
+    )
+    _proto(_u32.EnumWindows, wintypes.BOOL, _EnumProc, wintypes.LPARAM)
+    _proto(_u32.GetWindowThreadProcessId, wintypes.DWORD, wintypes.HWND, _DWORD_PTR)
+    _proto(_u32.GetWindow, wintypes.HWND, wintypes.HWND, wintypes.UINT)
+    _proto(_u32.IsWindowVisible, wintypes.BOOL, wintypes.HWND)
+    _proto(_u32.ShowWindow, wintypes.BOOL, wintypes.HWND, ctypes.c_int)
+    _INVALID_HANDLE = wintypes.HANDLE(-1).value
 
     class NativeWin32:
         """The real Win32 implementation (read process list, hide/show top-level windows)."""
 
         def _pids_named(self, name: str) -> list[int]:
             snap = _k32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
-            if snap in (None, wintypes.HANDLE(-1).value):
+            if snap in (None, _INVALID_HANDLE):
+                logger.warning("Process list unavailable (error %s)", ctypes.get_last_error())
                 return []
             pids: list[int] = []
             try:
@@ -130,11 +170,17 @@ if sys.platform == "win32":
             """Top-level, unowned windows of ``pid`` (the terminal's main window)."""
             found: list[int] = []
 
-            def collect(hwnd: int, _: int) -> bool:
-                owner = wintypes.DWORD(0)
-                _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
-                if owner.value == pid and not _u32.GetWindow(hwnd, _GW_OWNER):
-                    found.append(int(hwnd))
+            def collect(hwnd: int | None, _: int) -> bool:
+                try:  # an exception inside a ctypes callback would be lost silently
+                    if not hwnd:
+                        return True
+                    owner = wintypes.DWORD(0)
+                    _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+                    if owner.value == pid and not _u32.GetWindow(hwnd, _GW_OWNER):
+                        found.append(int(hwnd))
+                except Exception:
+                    logger.exception("Window enumeration failed")
+                    return False
                 return True
 
             _u32.EnumWindows(_EnumProc(collect), 0)

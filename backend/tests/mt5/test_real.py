@@ -593,3 +593,19 @@ def test_a_failed_login_still_reports_the_started_terminal(fake: FakeMt5, termin
         connect(src, terminal)
 
     assert [e for e, _ in windows.events] == ["snapshot", "started"]
+
+
+def test_a_timed_out_initialize_still_reports_the_started_terminal(
+    fake: FakeMt5, terminal: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    windows = RecordingWindows()
+    src, _ = make_source(fake, windows=windows)
+
+    def timeout(name: str, *args: Any, **kwargs: Any) -> Any:
+        raise Mt5Error(Mt5ErrorCode.TIMEOUT, f"{name} timed out")
+
+    monkeypatch.setattr(src, "_call", timeout)
+    with pytest.raises(Mt5Error):
+        connect(src, terminal)
+
+    assert [e for e, _ in windows.events] == ["snapshot", "started"]

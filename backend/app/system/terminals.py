@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,10 +54,16 @@ def _read_json(path: Path) -> object:
 
 
 def _write_json(path: Path, data: object) -> None:
+    """Atomic write; a unique temp name, so two processes never share one temp file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
+    fd, tmp = tempfile.mkstemp(prefix=path.stem, suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(data, ensure_ascii=False))
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def load_owned(data_dir: Path) -> list[OwnedTerminal]:
@@ -157,18 +165,18 @@ class TerminalWindows:
     def snapshot(self, exe: Path) -> set[ProcessId]:
         try:
             return self._win.processes_of(exe)
-        except OSError as exc:
-            logger.warning("MT5 terminal list failed (%s); its window may stay visible", exc)
+        except Exception:  # best effort: never break a sync
+            logger.warning("MT5 terminal list failed; its window may stay visible", exc_info=True)
             return set()
 
     def started(self, exe: Path, before: set[ProcessId]) -> None:
         try:
             mark_started(self._win, self._data_dir, exe, before)
-        except OSError as exc:
-            logger.warning("MT5 terminal could not be hidden: %s", exc)
+        except Exception:  # best effort: never break a sync
+            logger.warning("MT5 terminal could not be hidden", exc_info=True)
 
     def apply(self) -> None:
         try:
             apply_visibility(self._win, self._data_dir)
-        except OSError as exc:
-            logger.warning("MT5 terminal windows not updated: %s", exc)
+        except Exception:  # best effort: the next round tries again
+            logger.warning("MT5 terminal windows not updated", exc_info=True)

@@ -391,11 +391,13 @@ class RealMt5Source:
             )
 
         try:
-            ok, last_error = self._call(
-                "initialize", init, timeout_s + CONNECT_GRACE_S, secrets=(secret,)
-            )
-            if self._windows is not None:  # also after a failed login: it may have started one
-                self._windows.started(exe, before)
+            try:
+                ok, last_error = self._call(
+                    "initialize", init, timeout_s + CONNECT_GRACE_S, secrets=(secret,)
+                )
+            finally:  # also after a failed login or a timeout: it may have started one
+                if self._windows is not None:
+                    self._windows.started(exe, before)
             if not ok:
                 code_msg = last_error if last_error is not None else (RES_E_FAIL, "failed")
                 raise error_from_last_error(code_msg, during="initialize", secrets=(secret,))

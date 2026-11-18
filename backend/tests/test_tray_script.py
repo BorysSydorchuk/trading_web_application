@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -46,12 +45,62 @@ def test_rotate_log_keeps_one_previous_copy(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows console flags")
-def test_children_get_a_new_console_that_is_never_shown() -> None:
-    kwargs = tray.hidden_console()
-    assert kwargs["creationflags"] == tray.CREATE_NEW_CONSOLE
-    info: subprocess.STARTUPINFO = kwargs["startupinfo"]
-    assert info.dwFlags & tray.STARTF_USESHOWWINDOW
-    assert info.wShowWindow == tray.SW_HIDE
+def test_children_get_a_console_without_a_window() -> None:
+    # CREATE_NO_WINDOW: no window even with Windows Terminal as the default terminal.
+    assert tray.hidden_console() == {"creationflags": tray.CREATE_NO_WINDOW}
+
+
+def test_a_locked_log_is_not_rotated_but_does_not_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log = tmp_path / "tray.log"
+    log.write_bytes(b"x" * 20)
+
+    def locked(self: Path, target: Path) -> Path:
+        raise PermissionError("used by another process")
+
+    monkeypatch.setattr(Path, "replace", locked)
+    tray.rotate_log(log, max_bytes=10)  # logged, not raised
+    assert log.exists()
+
+
+def tick(**kw: object) -> object:
+    base: dict[str, object] = {
+        "exit_code": None,
+        "stop_requested": False,
+        "ready": False,
+        "up": False,
+        "waited_s": 1.0,
+        "timeout_reported": False,
+    }
+    return tray.Tick(**(base | kw))
+
+
+@pytest.mark.parametrize(
+    ("kw", "action"),
+    [
+        ({}, "wait"),
+        ({"up": True}, "ready"),
+        ({"ready": True, "up": True}, "wait"),
+        ({"exit_code": 0}, "quit"),
+        ({"exit_code": 1}, "failed"),
+        # «Стоп» that had to force-kill the launcher: still a stop, never a crash
+        ({"exit_code": 1, "stop_requested": True}, "quit"),
+        ({"stop_requested": True}, "quit"),
+        ({"waited_s": 601.0}, "timeout"),
+        ({"waited_s": 601.0, "timeout_reported": True}, "wait"),
+    ],
+)
+def test_watch_decisions(kw: dict[str, object], action: str) -> None:
+    assert tray.decide(tick(**kw)).value == action
+
+
+def test_the_stop_flag_is_taken_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tray, "STOP_FLAG", tmp_path / "tray_stop.flag")
+    assert tray.take_tray_stop() is False
+    tray.request_tray_stop()
+    assert tray.take_tray_stop() is True
+    assert tray.take_tray_stop() is False
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows shortcuts")
