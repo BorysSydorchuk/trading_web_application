@@ -10,7 +10,10 @@ Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 wit
 - [x] M8-09 exit reason from MT5 (owner claude, tier L) — merged `eb6e690` (commits e73e698, 9a74f18). Dev DB migrated to b8d2e4f61a09 with pre-migration backup; backfill dry run: 1 empty (manual close), 0 to fill. Report `docs/reports/M8-09.md`. Owner check pending.
 - [x] M8 backlog fill from PM handoff §5 (owner claude, docs only) — merged `b8d3553`. Handoff file itself left untracked in `docs/handoff/` (Borys decides whether to commit it).
 - [x] M8-01 exclude a trade from strategy statistics (owner claude, **tier L**) — merged `69b3239` (commits f2a3a19, 6ba0c6b, 55eabba). Reviews: database APPROVE, python APPROVE, code CHANGES REQUESTED -> fixed -> APPROVE. Final make check on 55eabba PASS (3383 backend / 1 skipped, 498 frontend, lint/typecheck). Two earlier full runs failed only on two pre-existing digest/bias UI tests timing out under load right after the backend run (pass alone 3x); 55eabba gives them explicit wait budgets (test-only). Dev DB migrated to e4a7c2f9b315 by the app start at 12:06 UTC with backup `backups/pre-migration-e4a7c2f9b315-20261118T120614Z.dump` (26 trades, 0 excluded). Report `docs/reports/M8-01.md`. Owner check + PM review pending.
-- RESUME FROM HERE (2026-11-18): M8-01 merged, waiting for Borys's owner check and the PM review. M8-09 owner check still pending. Do not start M8-02 without PM authorization.
+- [x] M8-01 owner check PASS, PM ACCEPTED (2026-11-18). PM answer -> M8-01b (auto-recompute saved digests). Flaky UI tests -> BACKLOG. Handoff file committed.
+- [ ] M8-02 + M8-03 open-trade description + before/after chart links (owner claude, **tier L**) — branch `m8/open-trade-description`. Authorized 2026-11-18.
+- [ ] M8-01b saved digests follow exclude/include (owner claude, tier M) — after M8-02/03 on its own branch.
+- RESUME FROM HERE (2026-11-18): M8-02+M8-03 starting (exploration). M8-09 owner check still pending.
 
 ## M7 closure documentation — owner codex, tier S
 
