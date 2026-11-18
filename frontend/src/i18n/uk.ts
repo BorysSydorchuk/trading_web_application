@@ -323,6 +323,8 @@ export const uk = {
       risk_pct: 'Ризик, %',
       r_multiple: 'R',
       planned_rr: 'План. RR',
+      mae_r: 'MAE, R',
+      mfe_r: 'MFE, R',
       is_reentry: 'Перезахід',
       position_id: 'Позиція',
       status: 'Статус',
@@ -393,6 +395,15 @@ export const uk = {
       seconds: (n: number) => `${n} с`,
     },
     yes: 'так',
+    excursion: {
+      running: 'поточні',
+      unavailable: 'немає даних MT5',
+      notYet: 'ще не пораховано (після закриття, на наступній синхронізації)',
+      noSl: 'без SL: лише пункти',
+      value: (r: string, points: string, price: string, time: string) => `${r} · ${points} п. · ${price} · ${time}`,
+      points: (points: string, price: string, time: string) => `${points} п. · ${price} · ${time}`,
+      hint: 'Довга позиція — за bid, коротка — за ask. MFE: найдальше в мій бік, MAE: найдальше проти мене, від входу до закриття.',
+    },
     no: 'ні',
     rSuffix: 'R',
     percentSuffix: '%',
@@ -488,6 +499,11 @@ export const uk = {
       result: 'Результат і ризик',
       exitDeals: 'Закриття (exit deals)',
       violations: 'Порушення правил',
+      excursion: 'MAE / MFE',
+    },
+    excursion: {
+      mfe: 'MFE (найдальше в мій бік)',
+      mae: 'MAE (найдальше проти мене)',
     },
     slSourceLabel: 'джерело',
     deals: {
@@ -1094,6 +1110,14 @@ export const uk = {
     months: ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'],
   },
   digests: {
+    excursions: {
+      title: 'MFE: як далеко ціна йшла в мій бік',
+      empty: 'Ще немає угод з MAE/MFE за цей період.',
+      winners: (n: number) => `Середній MFE прибуткових (${n})`,
+      losers: (n: number) => `Середній MFE збиткових (${n})`,
+      reached: 'Збиткові, що спершу дійшли до +1R',
+      hint: 'Лише закриті угоди з початковим SL і порахованим MFE; виключені угоди не входять.',
+    },
     excluded: {
       title: 'Виключені угоди',
       summary: (n: number, pnl: string) => `Виключені угоди: ${n}, P&L ${pnl}`,

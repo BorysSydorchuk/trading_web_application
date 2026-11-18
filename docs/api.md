@@ -705,7 +705,7 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 `mfe_price`, `mae_price` (PRICE), `mfe_time`, `mae_time` (timestamptz), `mfe_points`, `mae_points` (NUMERIC(14,1)), `mfe_r`, `mae_r` (RATIO), `excursion_status` (`final` | `running` | `unavailable`, CHECK), `excursion_source` (`ticks` | `m1_ticks`), `excursion_at` (timestamptz). MT5 raw data and the trade's other columns are never changed by it.
 
 ### When it runs
-- In each account sync, after the trades are written, inside the same MT5 connection, with a time budget (20 s per account): closed trades of the last 7 days without a final value (oldest first, up to 5 per sync) and open trades whose running value is older than 15 min (status `running`, shown «поточні»). A failure is logged and never fails the sync. MT5 without history for the range -> `unavailable` (not retried by the worker).
+- In each account sync, inside the same MT5 connection (targets are read from the DB before it connects, so a trade is measured on the sync after the one that saw it close), stored after the sync committed, with a time budget (20 s per account): closed trades of the last 7 days without a final value (oldest first, up to 5 per sync) and open trades whose running value is older than 15 min (status `running`, shown «поточні»). A failure is logged and never fails the sync. MT5 without history for the range -> `unavailable` (not retried by the worker).
 - Backfill: `python -m app.tools.backfill_excursions [--apply] [--account ID] [--retry-unavailable]` (dry run by default: computes and prints per trade and totals, writes nothing). Connects to MT5 read-only like `trade_check`; refuses while the worker is running (recent heartbeat).
 
 ### API / UI
