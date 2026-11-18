@@ -295,6 +295,7 @@ def _out(db: Session, digest: Digest) -> schemas.DigestOut:
         what_to_fix=digest.what_to_fix,
         focus_next=digest.focus_next,
         ai_summary=digest.ai_summary,
+        ai_summary_stale_at=digest.ai_summary_stale_at,
         reviewed=_is_reviewed(digest.what_worked, digest.what_to_fix, digest.focus_next),
         reviewed_at=digest.reviewed_at,
         next_bias_note_id=_next_bias_note_id(db, digest),
@@ -337,6 +338,36 @@ def generate(
     db.commit()
     logger.info("Digest %s %s %s", kind, start, "created" if created else "regenerated")
     return _out(db, digest), created
+
+
+def recompute_for_trade(db: Session, close_time: datetime | None, now: datetime) -> list[int]:
+    """M8-01b: after an exclude / include, recompute the saved weekly and monthly digests of
+    the trade's close date (one row holds the combined and the per-account blocks).
+
+    Numbers only: review texts and the AI summary text stay; a saved summary is marked stale
+    when the numbers changed. No digest is created. An open trade touches none. Flushes,
+    never commits (same transaction as the exclusion, so a failure leaves both unchanged).
+    Returns the ids of the recomputed digests.
+    """
+    if close_time is None:
+        return []
+    day = dm.brussels_date(close_time)
+    updated: list[int] = []
+    kinds: tuple[dm.PeriodKind, ...] = ("weekly", "monthly")
+    for kind in kinds:
+        start, end = _period(kind, day)
+        digest = _find(db, kind, start)
+        if digest is None:
+            continue
+        metrics = _snapshot(db, kind, start, end)
+        if digest.ai_summary and metrics != digest.metrics:
+            digest.ai_summary_stale_at = now
+        digest.metrics = metrics
+        digest.generated_at = now
+        updated.append(digest.id)
+        logger.info("Digest %s %s recomputed after a statistics exclusion change", kind, start)
+    db.flush()
+    return updated
 
 
 def get(db: Session, digest_id: int) -> schemas.DigestOut:
@@ -424,6 +455,7 @@ def store_ai_summary(db: Session, digest_id: int, summary: str) -> schemas.Diges
     """Save the AI summary (snapshot and review texts untouched); 404 if deleted meanwhile."""
     digest = _get_or_404(db, digest_id)
     digest.ai_summary = summary
+    digest.ai_summary_stale_at = None
     db.commit()
     return _out(db, digest)
 

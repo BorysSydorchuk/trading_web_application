@@ -13,7 +13,7 @@ Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 wit
 - [x] M8-01 owner check PASS, PM ACCEPTED (2026-11-18). PM answer -> M8-01b (auto-recompute saved digests). Flaky UI tests -> BACKLOG. Handoff file committed.
 - [x] M8-02 + M8-03 open-trade description + before/after chart links (owner claude, **tier L**, no migration) — merged `5a05b6a` (f1cfba5, feeb3f3, e6b1d26, 77a660b, b723667). Final make check on b723667 PASS (3415 backend / 1 skipped, 504 frontend). Reviews: python APPROVE; code CHANGES REQUESTED (HIGH form_open) -> fixed -> APPROVE. Report `docs/reports/M8-02.md`. App restart needed (journal_fields.yaml phase). Owner check + PM review pending.
 - [x] M8-02 + M8-03 TECHNICAL ACCEPTED (PM 2026-11-18); both deviations confirmed; owner check pending.
-- [ ] M8-01b saved digests follow exclude/include (owner claude, tier M) — branch `m8/digest-recompute`.
+- [ ] M8-01b saved digests follow exclude/include (owner claude, **tier L**: migration a91d3c7e5f20 `digests.ai_summary_stale_at`) — branch `m8/digest-recompute`. Tests first: `tests/test_digest_recompute.py` RED 6 failed -> GREEN 7; migration test. Frontend stale badge + digest query invalidation. Next: reviews (code, database, python), full make check, merge, backup + `make migrate`.
 - [ ] M8-15 Home «Потрібен опис» list + Journal filter open with/without description (owner claude, tier S).
 - RESUME FROM HERE (2026-11-18): M8-01b in progress, then M8-15; then M8-12 -> M8-16 -> M8-13 -> M8-14 (prompt from Borys). M8-09 and M8-02 owner checks pending.
 

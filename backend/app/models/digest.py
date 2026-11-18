@@ -32,5 +32,8 @@ class Digest(TimestampMixin, Base):
     what_to_fix: Mapped[str | None] = mapped_column(Text)
     focus_next: Mapped[str | None] = mapped_column(Text)
     ai_summary: Mapped[str | None] = mapped_column(Text)
+    # M8-01b: the numbers changed after the AI summary was written (exclude/include recompute);
+    # cleared by a new summary («Оновити підсумок»).
+    ai_summary_stale_at: Mapped[datetime | None]
     # Last change of the review texts while one stays non-empty; kept on regenerate.
     reviewed_at: Mapped[datetime | None]

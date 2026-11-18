@@ -4,6 +4,7 @@ import { isApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
+import { formatShortDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAiSummary } from './api'
 import type { Digest } from './types'
@@ -50,6 +51,12 @@ export function AiSummarySection({ digest }: { digest: Digest }) {
           {summary.isPending ? t.generating : hasSummary ? t.refresh : t.generate}
         </Button>
       </div>
+      {hasSummary && digest.ai_summary_stale_at && (
+        <p role="status" className="flex w-fit items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+          {t.stale(formatShortDateTimeBrussels(digest.ai_summary_stale_at))}
+        </p>
+      )}
       {hasSummary ? (
         <p className="text-sm whitespace-pre-line">{digest.ai_summary}</p>
       ) : (

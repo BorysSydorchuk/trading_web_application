@@ -87,7 +87,8 @@ export function useStatsExclusion() {
         queryClient.invalidateQueries({ queryKey: tradeKeys.all }),
         queryClient.invalidateQueries({ queryKey: inboxKeys.counts }),
         queryClient.invalidateQueries({ queryKey: dashboardKeys.dashboard }),
-        queryClient.invalidateQueries({ queryKey: digestKeys.lists }),
+        // M8-01b: the saved digests of the trade's week and month were recomputed.
+        queryClient.invalidateQueries({ queryKey: digestKeys.all }),
       ]),
   })
 }
