@@ -10,9 +10,10 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 
 | ID | Topic | Priority | Tier | Depends on | Status |
 |----|-------|----------|------|------------|--------|
-| M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | merged `69b3239` 2026-11-18, owner check + PM review pending |
-| M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L (likely) | M8-01 | planned |
-| M8-03 | Before/after chart link defaults | 4th (with M8-02) | S/M | M8-02 | planned |
+| M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | accepted (owner PASS, PM 2026-11-18) |
+| M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | **authorized 2026-11-18**, in progress |
+| M8-01b | Auto-recompute saved digests on exclude/include | with M8-02 | S/M | M8-01 | authorized 2026-11-18 (PM answer), planned |
+| M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, migration) | M8-02 | **authorized 2026-11-18**, in progress |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | planned |
 | M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | planned |
 | M8-06 | Multi-select POI, Fractal H1/H4 | 5th (batch) | L (batch) | M8-02/03 | planned |
@@ -24,7 +25,12 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 
 ## M8-01 — Exclude specific trades from strategy statistics (HIGH)
 
-Status 2026-11-18: merged `69b3239`, dev DB at e4a7c2f9b315, report `docs/reports/M8-01.md`. Owner check and PM review pending.
+Status 2026-11-18: merged `69b3239`, dev DB at e4a7c2f9b315, report `docs/reports/M8-01.md`. Owner check PASS, PM ACCEPTED 2026-11-18.
+
+### M8-01b — Saved digests follow exclude/include (PM answer 2026-11-18)
+- Excluding or returning a trade updates the affected saved digests automatically: the week and the month containing the trade, per account and combined. Numbers only are recomputed; saved review text is never touched.
+- A saved AI summary is NOT re-run; it gets the badge «Підсумок застарів: дані змінено <date>» until the owner presses «Оновити підсумок».
+- Tier S/M, may go with M8-02.
 
 - **Owner wording:** a gold/XAUUSD trade opened on the 11th only to check whether a newly funded account could trade; it should not distort strategy/performance statistics or require a normal strategy journal description. Per-trade action «Не враховувати у статистиці» with a **mandatory written reason**. Owner should be able to identify/read the excluded trade later.
 - **Decision:** excluded trade leaves strategy statistics (win rate, R, expectancy, breakdowns, digests, «Потрібен опис») but stays in all real-money/risk numbers (account P&L, balances, daily/weekly stops, 10 trades/week limit, risk rule checks). Reversible, mandatory reason, raw MT5 data never changed, survives re-sync.
@@ -36,13 +42,26 @@ Status 2026-11-18: merged `69b3239`, dev DB at e4a7c2f9b315, report `docs/report
 - **Owner wording:** record setup, emotions, reasoning and **before-entry charts while the position is still open**, not only after it closes.
 - **Behaviour:** persist a partial description on the open position and allow later additions/editing of the **same** record when the trade closes; no loss/replacement on MT5 sync. Lifecycle OPEN -> CLOSED; no duplicate description, no fabricated exit data, safe linking to the source MT5 position/deals.
 - **Open:** inspect schema and identity mappings (the current UI/DB is closed-trade-oriented) before choosing a solution.
-- **Acceptance:** TBD by PM.
+- **PM authorization 2026-11-18 (tier L, branch `m8/open-trade-description`, together with M8-03):**
+  - Open positions get a journal record as soon as sync sees them, keyed by account + MT5 position_id (the same id the closed trade will have). No duplicate record at close: the closed trade continues the same record.
+  - «Описати» is available for open positions (from Home «Відкриті позиції» and the Journal). Text, voice and audio upload work as for closed trades. AI extraction on an open trade fills only pre-entry fields; exit fields (exit reason, after-trade notes) are never filled for an open trade.
+  - Open trades are not in «Потрібен опис». On close, the record keeps everything already written; it enters «Потрібен опис» only if required fields are still missing, and the Describe screen highlights what is left (exit reason, after-trade fields, emotion after).
+  - MT5 sync never overwrites the owner's text, fields or links on open or closed records; partial closes keep one record.
+  - Statuses: open_draft -> (close) -> needs_description / draft / complete.
+- **Acceptance (tests):** open -> describe -> close via sync -> same record, text kept, inbox behaviour; partial close; re-sync does not overwrite; AI on an open trade leaves exit fields empty (fixture, no live call). Owner check: open a small real or demo position, describe it with 2 «до входу» links while open, close it, then add an «після угоди» link and complete it.
 
 ## M8-03 — Better before/after chart link defaults
 
 - **Owner wording:** usually **1–2 charts before entry** and **1–2 after exit**.
 - **Behaviour:** when adding chart links, show **two «до входу» fields by default** first, then «після угоди» links later; flexible counts; clear labels; editable on open and closed trades. Empty placeholders are not mandatory links unless the owner approves.
-- **Depends on:** M8-02 and the describe UI. **Acceptance:** TBD by PM.
+- **Depends on:** M8-02 and the describe UI.
+- **PM authorization 2026-11-18 (with M8-02):**
+  - Each chart link has a type: before («до входу») or after («після угоди»).
+  - Describe shows two empty «до входу» fields by default. «Після угоди» fields (one by default, «+ додати» for more) appear when the trade is closed. Any number allowed; empty fields are ignored on save.
+  - Completion requires at least 1 «до входу» link (replaces the old "at least 1 link" rule). «Після угоди» is optional.
+  - Existing links: do not guess. Migrate them as type «без позначки», shown in their own group, editable to before/after; they count toward the requirement as before.
+  - Migration with the pre-migration backup.
+- **Acceptance (tests):** link types and the new completion rule; legacy links untouched.
 
 ## M8-04 — Rule violation taxonomy updates
 
