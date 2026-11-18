@@ -73,6 +73,10 @@ class TradeRow(BaseModel):
     excluded_from_stats: bool
     excluded_reason: str | None
     excluded_at: UtcDatetime | None
+    # M8-16: MAE / MFE in R (None without an initial SL or before it is computed).
+    mfe_r: Decimal | None
+    mae_r: Decimal | None
+    excursion_status: str | None  # final | running («поточні») | unavailable | None
 
 
 class TradeList(BaseModel):
@@ -143,6 +147,15 @@ class TradeDetail(TradeRow):
     audio_notes: list[AudioNoteOut]  # oldest first (M3)
     bias_note_ids: BiasNoteIds  # M4: links from Describe to the bias notes
     exclusion_history: list[StatsExclusionOut]  # M8-01, oldest first
+    # M8-16: extreme prices, symbol points and times (long = bid, short = ask).
+    mfe_price: Decimal | None
+    mfe_points: Decimal | None
+    mfe_time: UtcDatetime | None
+    mae_price: Decimal | None
+    mae_points: Decimal | None
+    mae_time: UtcDatetime | None
+    excursion_source: str | None
+    excursion_at: UtcDatetime | None
 
 
 def check_chart_url(value: str) -> str:
