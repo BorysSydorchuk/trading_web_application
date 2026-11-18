@@ -16,6 +16,8 @@
 #   allow_other_text  true: text_key is the text for the "other" option only
 #                     false: text_key is an optional note for any value
 #   min, max       int fields only
+#   phase          before (default) | after: after-trade fields stay empty while the
+#                  position is open (M8-02); not allowed for auto and links fields
 #
 # YAML note: yes/no/on/off are plain strings in this file (only true/false are booleans).
 
@@ -80,6 +82,7 @@ fields:
     required: true
     analytics: true
     storage: column
+    phase: after
 
   # Computed from the bias entries (PRD 6.6); the user may override it with a reason.
   # Not required: the app fills it, it never blocks completing a trade.
@@ -101,6 +104,7 @@ fields:
     required: true
     analytics: true
     storage: column
+    phase: after
 
   # Auto-detected by the rules engine (config/rules.yaml) plus user-added; values are rule keys.
   - key: rule_violations
@@ -146,6 +150,7 @@ fields:
     required: true
     analytics: true
     storage: column
+    phase: after
     text_key: emotion_after_text
     allow_other_text: false
 
@@ -155,6 +160,7 @@ fields:
     required: false
     analytics: false
     storage: column
+    phase: after
 
   - key: lesson
     label: "Урок"
@@ -162,6 +168,7 @@ fields:
     required: false
     analytics: false
     storage: column
+    phase: after
 
   - key: quality_rating
     label: "Якість сетапу (1–5, незалежно від результату)"

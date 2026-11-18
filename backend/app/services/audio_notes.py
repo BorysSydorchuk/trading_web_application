@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.errors import AUDIO_MISSING, AUDIO_NOT_FAILED, AUDIO_TOO_LARGE, ApiError
 from app.models import AudioNote, BiasNote, Trade
-from app.models.enums import TradeStatus, TranscriptionStatus
+from app.models.enums import TranscriptionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +43,11 @@ def _trade_not_found(trade_id: int) -> ApiError:
 
 
 def check_trade_accepts_audio(db: Session, trade_id: int) -> None:
-    """404 for an unknown trade, 409 `trade_open` for an open one; any closed status is fine."""
-    row = db.execute(select(Trade.status, Trade.close_time).where(Trade.id == trade_id)).first()
+    """404 for an unknown trade; any status is fine (open trades too since M8-02)."""
+    found = db.scalar(select(Trade.id).where(Trade.id == trade_id))
     db.rollback()  # end the read transaction before the (slow) upload
-    if row is None:
+    if found is None:
         raise _trade_not_found(trade_id)
-    status, close_time = row
-    if status == TradeStatus.OPEN.value or close_time is None:
-        raise ApiError(
-            409, "trade_open", "Voice notes can only be added to a closed trade", {"id": trade_id}
-        )
 
 
 async def save_upload(chunks: AsyncIterator[bytes], target: Path, max_bytes: int) -> int:

@@ -347,7 +347,12 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     trade.risk_pct = metrics.risk_pct(risk, size)
     trade.r_multiple = metrics.r_multiple(trade.net_pnl, risk)
     trade.planned_rr = metrics.planned_rr(trade.entry_price, sl, trade.tp)
-    trade.status = next_status(trade.status, is_closed=True, has_initial_sl=True).value
+    trade.status = next_status(
+        trade.status,
+        is_closed=True,
+        has_initial_sl=True,
+        described=trade.described_at is not None,
+    ).value
     # Same recompute as the MT5 sync (risk %, planned RR and breakeven depend on the SL).
     recompute_rules_for_trade(db, trade, "initial SL")
 

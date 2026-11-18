@@ -51,6 +51,10 @@ function renderPage(trade: TradeDetail) {
   })
 }
 
+const l = t.links
+const SNAP_1 = 'https://www.tradingview.com/x/AbCd1234/'
+const SNAP_2 = 'https://www.tradingview.com/x/EfGh5678/'
+
 describe('DescribePage', () => {
   it('shows all three server alignments and links to the notes selected by the server', async () => {
     const trade = fixtureTrade({
@@ -245,5 +249,122 @@ describe('DescribePage', () => {
     expect(alert).toHaveTextContent(t.page.fieldsError)
     expect(alert).toHaveTextContent(uk.errors.config_error_reasons.mojibake('journal_fields.yaml'))
     expect(within(alert).getByRole('button', { name: uk.common.retry })).toBeEnabled()
+  })
+})
+
+describe('DescribePage: open trade and link groups (M8-02, M8-03)', () => {
+  it('describes an open trade: pre-entry fields, two «до входу» rows, draft only', async () => {
+    const trade = fixtureTrade({ status: 'open', close_time: null })
+    const saved = serveTrade(trade)
+    const { user } = renderPage(trade)
+
+    const before = await screen.findByRole('group', { name: l.groupTitle('before') })
+    expect(within(before).getAllByRole('textbox')).toHaveLength(2)
+    expect(screen.queryByRole('group', { name: l.groupTitle('after') })).not.toBeInTheDocument()
+    expect(screen.queryByText(labelOf('followed_plan'))).not.toBeInTheDocument()
+    expect(screen.queryByText(labelOf('mistakes'))).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: t.save.complete })).not.toBeInTheDocument()
+    expect(screen.getByText(t.save.openNote)).toBeInTheDocument()
+
+    await user.type(within(before).getByRole('textbox', { name: l.groupUrlLabel('before', 1) }), SNAP_1)
+    await user.click(screen.getByRole('button', { name: t.save.draft }))
+
+    await screen.findByTestId('inbox-page')
+    expect(saved).toHaveLength(1)
+    expect(saved[0]?.complete).toBe(false)
+    expect(saved[0]?.chart_links).toEqual([{ url: SNAP_1, kind: 'before' }])
+    expect(saved[0]?.fields).not.toHaveProperty('followed_plan')
+    expect(saved[0]?.fields).not.toHaveProperty('mistakes')
+  })
+
+  it('a closed trade has a «після угоди» group with one empty row, more on «додати»', async () => {
+    const trade = fixtureTrade()
+    const saved = serveTrade(trade)
+    const { user } = renderPage(trade)
+
+    const after = await screen.findByRole('group', { name: l.groupTitle('after') })
+    expect(within(after).getAllByRole('textbox')).toHaveLength(1)
+    expect(screen.getByText(labelOf('followed_plan'))).toBeInTheDocument()
+
+    await user.click(within(after).getByRole('button', { name: l.addToLabel('after') }))
+    expect(within(after).getAllByRole('textbox')).toHaveLength(2)
+    await user.type(within(after).getByRole('textbox', { name: l.groupUrlLabel('after', 2) }), SNAP_2)
+    const before = screen.getByRole('group', { name: l.groupTitle('before') })
+    await user.type(within(before).getByRole('textbox', { name: l.groupUrlLabel('before', 1) }), SNAP_1)
+    await user.click(screen.getByRole('button', { name: t.save.draft }))
+
+    await screen.findByTestId('inbox-page')
+    // Empty rows are ignored; the group sets the kind.
+    expect(saved[0]?.chart_links).toEqual([
+      { url: SNAP_1, kind: 'before' },
+      { url: SNAP_2, kind: 'after' },
+    ])
+  })
+
+  it('keeps saved links in their group and tops «до входу» up to two rows', async () => {
+    const trade = fixtureTrade({
+      chart_links: [{ id: 1, url: SNAP_1, kind: 'after', preview_url: null }],
+    })
+    serveTrade(trade)
+    renderPage(trade)
+
+    const after = await screen.findByRole('group', { name: l.groupTitle('after') })
+    expect(within(after).getByRole('textbox', { name: l.groupUrlLabel('after', 1) })).toHaveValue(SNAP_1)
+    expect(within(after).getAllByRole('textbox')).toHaveLength(1)
+    const before = screen.getByRole('group', { name: l.groupTitle('before') })
+    expect(within(before).getAllByRole('textbox')).toHaveLength(2)
+  })
+
+  it('keeps the open form when the trade closes under it and saves with form_open', async () => {
+    const openTrade = fixtureTrade({ status: 'open', close_time: null })
+    const saved = serveTrade(openTrade)
+    const { user, queryClient } = renderPage(openTrade)
+    const before = await screen.findByRole('group', { name: l.groupTitle('before') })
+    await user.type(within(before).getByRole('textbox', { name: l.groupUrlLabel('before', 1) }), SNAP_1)
+
+    // The sync closes the trade; a refetch (e.g. after a voice upload) brings the closed trade.
+    mockApi(http.get(`/api/trades/${openTrade.id}`, () => HttpResponse.json(fixtureTrade({ status: 'needs_description' }))))
+    await queryClient.invalidateQueries()
+
+    expect(await screen.findByText(t.save.closedSince)).toBeInTheDocument()
+    expect(within(before).getByRole('textbox', { name: l.groupUrlLabel('before', 1) })).toHaveValue(SNAP_1)
+    expect(screen.queryByRole('group', { name: l.groupTitle('after') })).not.toBeInTheDocument()
+    expect(screen.queryByText(labelOf('followed_plan'))).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: t.save.complete })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: t.save.draft }))
+    await screen.findByTestId('inbox-page')
+    expect(saved[0]).toMatchObject({ form_open: true, complete: false, chart_links: [{ url: SNAP_1, kind: 'before' }] })
+  })
+
+  it('a closed-trade save does not send form_open', async () => {
+    const trade = fixtureTrade()
+    const saved = serveTrade(trade)
+    const { user } = renderPage(trade)
+    await user.click(await screen.findByRole('button', { name: t.save.draft }))
+    await screen.findByTestId('inbox-page')
+    expect(saved[0]).not.toHaveProperty('form_open')
+  })
+
+  it('removes a row and splits a multi-URL paste inside a group (the group kind is kept)', async () => {
+    const trade = fixtureTrade()
+    serveTrade(trade)
+    const { user } = renderPage(trade)
+    const after = await screen.findByRole('group', { name: l.groupTitle('after') })
+
+    await user.click(within(after).getByRole('textbox', { name: l.groupUrlLabel('after', 1) }))
+    await user.paste(`${SNAP_1}
+${SNAP_2}`)
+    expect(within(after).getAllByRole('textbox')).toHaveLength(2)
+    expect(within(after).getByRole('textbox', { name: l.groupUrlLabel('after', 2) })).toHaveValue(SNAP_2)
+    const before = screen.getByRole('group', { name: l.groupTitle('before') })
+    expect(within(before).getAllByRole('textbox')).toHaveLength(2)
+
+    const [removeFirst] = within(after).getAllByRole('button', { name: l.remove })
+    if (!removeFirst) throw new Error('no remove button')
+    await user.click(removeFirst)
+    expect(within(after).getAllByRole('textbox')).toHaveLength(1)
+    expect(within(after).getByRole('textbox', { name: l.groupUrlLabel('after', 1) })).toHaveValue(SNAP_2)
+    expect(within(before).getAllByRole('textbox')).toHaveLength(2)
   })
 })

@@ -209,13 +209,12 @@ function TradeDetailBody({ trade }: { trade: TradeDetail }) {
         <ViolationList trade={trade} />
       </Section>
 
-      {trade.status !== 'open' && (
-        <div className="flex justify-end">
-          <Button asChild size="sm">
-            <Link to={describePath(trade.id)}>{trade.status === 'complete' ? d.editDescription : d.describe}</Link>
-          </Button>
-        </div>
-      )}
+      {/* M8-02: an open position can be described too (pre-entry fields). */}
+      <div className="flex justify-end">
+        <Button asChild size="sm">
+          <Link to={describePath(trade.id)}>{trade.status === 'complete' ? d.editDescription : d.describe}</Link>
+        </Button>
+      </div>
     </>
   )
 }

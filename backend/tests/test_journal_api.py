@@ -376,7 +376,9 @@ def test_needs_sl_is_409(client: TestClient, session: Session, account: Account)
     assert response.json()["error"]["code"] == "needs_sl"
 
 
-def test_open_trade_is_409(client: TestClient, session: Session, account: Account) -> None:
+def test_open_trade_cannot_be_completed(
+    client: TestClient, session: Session, account: Account
+) -> None:
     t = add_trade(
         session,
         account,
@@ -387,9 +389,10 @@ def test_open_trade_is_409(client: TestClient, session: Session, account: Accoun
         net_pnl=None,
         duration_seconds=None,
     )
-    response = put(client, t.id, body())
+    assert put(client, t.id, body()).json()["status"] == "open"  # M8-02: a draft while open
+    response = put(client, t.id, body(complete=True))
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "trade_open"
+    assert response.json()["error"]["code"] == "open_trade_complete"
 
 
 def test_put_404(client: TestClient) -> None:

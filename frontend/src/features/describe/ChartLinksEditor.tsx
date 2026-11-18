@@ -10,6 +10,7 @@ import {
   LINK_KINDS,
   MAX_CHART_LINKS,
   MAX_URL_LENGTH,
+  filledLinks,
   hasBeforeLink,
   isValidChartUrl,
   newLinkRow,
@@ -32,22 +33,43 @@ interface ChartLinksEditorProps {
   fieldKey?: string
   /** Label when there is no journal field (default "Посилання на графік (TradingView)"). */
   label?: string
-  /** Before/after select per row (off for bias links, which have one kind). */
+  /** Before/after select per row in the flat list (off for bias links, which have one kind). */
   showKind?: boolean
+  /**
+   * M8-03: trade links in one group per kind («до входу», then «після угоди»), each with its
+   * own add button; the group sets the kind. Undefined: one flat list (bias links).
+   */
+  groups?: readonly LinkKind[]
 }
 
 /** Chart links: before/after, add/remove, thumbnail for snapshot links (docs/api.md chart_links). */
 export function ChartLinksEditor(props: ChartLinksEditorProps) {
-  const { field, links, errors, missing, onChange, fieldKey = 'chart_links', label = l.title, showKind = true } = props
+  const { field, links, errors, missing, onChange, fieldKey = 'chart_links', label = l.title, showKind = true, groups } = props
   const kindLabel = (kind: string) => field?.options?.find((o) => o.value === kind)?.label ?? l.kinds[kind as LinkKind] ?? kind
-  const canAdd = links.length < MAX_CHART_LINKS
+  // Blank (default) rows are never sent, so only filled links count toward the limit.
+  const filledCount = filledLinks(links).length
+  const canAdd = filledCount < MAX_CHART_LINKS
 
   function update(rowId: string, patch: Partial<LinkDraft>) {
     onChange(links.map((link) => (link.rowId === rowId ? { ...link, ...patch, previewUrl: patch.url !== undefined ? null : link.previewUrl } : link)))
   }
 
-  function add() {
-    onChange([...links, newLinkRow('', hasBeforeLink(links) ? 'after' : 'before')])
+  function add(kind: LinkKind = hasBeforeLink(links) ? 'after' : 'before') {
+    onChange([...links, newLinkRow('', kind)])
+  }
+
+  function rowProps(link: LinkDraft, index: number, urlLabel: string) {
+    return {
+      link,
+      index,
+      urlLabel,
+      error: errors[link.rowId] ?? null,
+      kindLabel,
+      onUrl: (url: string) => update(link.rowId, { url }),
+      onKind: (kind: LinkKind) => update(link.rowId, { kind }),
+      onRemove: () => onChange(links.filter((other) => other.rowId !== link.rowId)),
+      onPaste: (event: ClipboardEvent<HTMLInputElement>) => handlePaste(event, link),
+    }
   }
 
   /** Pasting several URLs at once (space or newline separated) creates one row per URL. */
@@ -55,7 +77,7 @@ export function ChartLinksEditor(props: ChartLinksEditorProps) {
     const parts = event.clipboardData.getData('text').split(/\s+/).filter(Boolean)
     if (parts.length < 2) return
     event.preventDefault()
-    const room = MAX_CHART_LINKS - links.length + 1
+    const room = MAX_CHART_LINKS - filledCount + (row.url.trim() === '' ? 0 : 1)
     const [first = '', ...rest] = parts.slice(0, room)
     const extra = rest.map((url) => newLinkRow(url, row.kind))
     const index = links.findIndex((link) => link.rowId === row.rowId)
@@ -75,36 +97,48 @@ export function ChartLinksEditor(props: ChartLinksEditorProps) {
       group
     >
       <div id={fieldDomId(fieldKey)} className="flex flex-col gap-2">
-        {links.length === 0 && <p className="text-xs text-muted-foreground">{l.empty}</p>}
-        {links.map((link, index) => (
-          <LinkRow
-            key={link.rowId}
-            link={link}
-            index={index}
-            error={errors[link.rowId] ?? null}
-            kindLabel={kindLabel}
-            showKind={showKind}
-            onUrl={(url) => update(link.rowId, { url })}
-            onKind={(kind) => update(link.rowId, { kind })}
-            onRemove={() => onChange(links.filter((other) => other.rowId !== link.rowId))}
-            onPaste={(event) => handlePaste(event, link)}
-          />
-        ))}
-        <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={add} disabled={!canAdd}>
-            <Plus aria-hidden />
-            {l.add}
-          </Button>
-          {!canAdd && <span className="text-xs text-muted-foreground">{l.limit(MAX_CHART_LINKS)}</span>}
-        </div>
+        {groups === undefined ? (
+          <>
+            {links.length === 0 && <p className="text-xs text-muted-foreground">{l.empty}</p>}
+            {links.map((link, index) => (
+              <LinkRow key={link.rowId} {...rowProps(link, index, l.urlLabel(index + 1))} showKind={showKind} />
+            ))}
+            <AddButton label={l.add} onClick={() => add()} canAdd={canAdd} />
+          </>
+        ) : (
+          groups.map((kind) => {
+            const rows = links.filter((link) => link.kind === kind)
+            const name = kindLabel(kind)
+            return (
+              <div key={kind} role="group" aria-label={l.groupTitle(name)} className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground">{l.groupTitle(name)}</p>
+                {rows.map((link, index) => (
+                  <LinkRow key={link.rowId} {...rowProps(link, index, l.groupUrlLabel(name, index + 1))} showKind={false} />
+                ))}
+                <AddButton label={l.addTo} ariaLabel={l.addToLabel(name)} onClick={() => add(kind)} canAdd={canAdd} />
+              </div>
+            )
+          })
+        )}
+        {!canAdd && <span className="text-xs text-muted-foreground">{l.limit(MAX_CHART_LINKS)}</span>}
       </div>
     </FieldShell>
+  )
+}
+
+function AddButton({ label, ariaLabel, onClick, canAdd }: { label: string; ariaLabel?: string; onClick: () => void; canAdd: boolean }) {
+  return (
+    <Button type="button" variant="outline" size="sm" className="h-7 w-fit text-xs" aria-label={ariaLabel} onClick={onClick} disabled={!canAdd}>
+      <Plus aria-hidden />
+      {label}
+    </Button>
   )
 }
 
 interface LinkRowProps {
   link: LinkDraft
   index: number
+  urlLabel: string
   error: string | null
   kindLabel: (kind: string) => string
   showKind: boolean
@@ -114,7 +148,7 @@ interface LinkRowProps {
   onPaste: (event: ClipboardEvent<HTMLInputElement>) => void
 }
 
-function LinkRow({ link, index, error, kindLabel, showKind, onUrl, onKind, onRemove, onPaste }: LinkRowProps) {
+function LinkRow({ link, index, urlLabel, error, kindLabel, showKind, onUrl, onKind, onRemove, onPaste }: LinkRowProps) {
   const url = link.url.trim()
   const valid = isValidChartUrl(url)
   const preview = valid ? (link.previewUrl ?? snapshotPreviewUrl(url)) : null
@@ -139,7 +173,7 @@ function LinkRow({ link, index, error, kindLabel, showKind, onUrl, onKind, onRem
         )}
         <Input
           id={inputId}
-          aria-label={l.urlLabel(index + 1)}
+          aria-label={urlLabel}
           inputMode="url"
           spellCheck={false}
           autoComplete="off"

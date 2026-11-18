@@ -67,7 +67,6 @@ function DescribeContent({ tradeId }: { tradeId: number }) {
 }
 
 function DescribeGate({ trade, fields }: { trade: TradeDetail; fields: readonly JournalField[] }) {
-  if (trade.status === 'open') return <Notice text={p.open} />
   if (trade.status === 'needs_sl') {
     return (
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">

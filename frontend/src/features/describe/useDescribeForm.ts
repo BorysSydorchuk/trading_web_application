@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import type { JournalField, JournalValue, TradeDetail } from '@/features/trades/types'
 import { appendTranscript } from '@/features/voice/notesModel'
 import { mergeExtraction } from './aiMerge'
-import { filledLinks, isLinkKind, linkErrors, newLinkRow, type LinkDraft } from './chartLinks'
+import { blankLinkRows, filledLinks, isLinkKind, linkErrors, newLinkRow, type LinkDraft } from './chartLinks'
 import { initialMt5Filled, withoutMt5Mark, type Mt5FillSource } from './mt5Prefill'
 import {
   aiFilledForSave,
@@ -27,9 +27,10 @@ interface EditState {
 }
 
 function initialLinks(trade: TradeDetail): LinkDraft[] {
-  return trade.chart_links.map((link) =>
+  const saved = trade.chart_links.map((link) =>
     newLinkRow(link.url, isLinkKind(link.kind) ? link.kind : 'before', link.preview_url),
   )
+  return [...saved, ...blankLinkRows(saved, trade.status === 'open')]
 }
 
 /** What the user can change; compared with the start state for the unsaved-changes warning. */
@@ -73,7 +74,8 @@ function useJournalValues(trade: TradeDetail, fields: readonly JournalField[]) {
   return { stored, ...edit, setValue, mergeResult }
 }
 
-export function useDescribeForm(trade: TradeDetail, fields: readonly JournalField[]) {
+/** `formOpen`: the form was built for an open trade (M8-02): saves say so (`form_open`). */
+export function useDescribeForm(trade: TradeDetail, fields: readonly JournalField[], formOpen = false) {
   const journal = useJournalValues(trade, fields)
   const errors = useSaveErrors()
   const [links, setLinksState] = useState<LinkDraft[]>(() => initialLinks(trade))
@@ -99,6 +101,7 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
       raw_text: rawText.trim() === '' ? null : rawText,
       ai_filled_fields: aiFilledForSave(aiFilled, payload),
       complete,
+      ...(formOpen ? { form_open: true } : {}),
     }
     return { input, context: { sentRowIds: sent.map((link) => link.rowId), rendered: renderedKeys(fields, values) } }
   }

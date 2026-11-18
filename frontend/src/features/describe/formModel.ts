@@ -44,6 +44,11 @@ export function fieldsForTrade(fields: readonly JournalField[], newFields: reado
   return fields.map((field) => (exempt.has(field.key) && field.required ? { ...field, required: false } : field))
 }
 
+/** M8-02: the pre-entry fields only (phase before): what an open position can carry. */
+export function fieldsForOpenTrade(fields: readonly JournalField[]): readonly JournalField[] {
+  return fields.filter((field) => field.phase !== 'after')
+}
+
 /**
  * `keys` that are still empty in the form, with the same emptiness rule as `missingKeys`
  * (a links field needs a `before` link). A key not in `fields` is kept (shown raw).

@@ -176,6 +176,9 @@ class JournalInput(BaseModel):
     raw_text: str | None = Field(max_length=RAW_TEXT_MAX_LENGTH)
     ai_filled_fields: list[str] = Field(max_length=MAX_AI_FILLED_FIELDS)
     complete: bool
+    # M8-02: the form was built while the trade was open (pre-entry fields only). If the
+    # trade has closed since, the save keeps the stored after-trade values and links.
+    form_open: bool = False
 
 
 class TradePatch(BaseModel):

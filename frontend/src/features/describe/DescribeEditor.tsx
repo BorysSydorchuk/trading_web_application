@@ -5,10 +5,11 @@ import type { JournalField, TradeDetail } from '@/features/trades/types'
 import type { AudioNote } from '@/features/voice/types'
 import { uk } from '@/i18n/uk'
 import { ChartLinksEditor } from './ChartLinksEditor'
+import { linkGroups } from './chartLinks'
 import { DescribeVoice } from './DescribeVoice'
 import { DescriptionInput } from './DescriptionInput'
 import { AiBadge } from './FieldControls'
-import { fieldsForTrade, keyLabels, linksField, stillEmptyKeys } from './formModel'
+import { fieldsForOpenTrade, fieldsForTrade, keyLabels, linksField, stillEmptyKeys } from './formModel'
 import { JournalForm } from './JournalForm'
 import { TradeSummary } from './TradeSummary'
 import { UnsavedChangesGuard } from './UnsavedChangesGuard'
@@ -30,8 +31,16 @@ interface DescribeEditorProps {
 export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps) {
   // Fields made required after this trade closed are optional for it (docs/api.md M3).
   const newFields = trade.missing_new_fields ?? NO_NEW_FIELDS
-  const fields = useMemo(() => fieldsForTrade(allFields, newFields), [allFields, newFields])
-  const form = useDescribeForm(trade, fields)
+  // M8-02: an open position shows only the pre-entry fields; it cannot be completed yet.
+  // Fixed at mount: a close under the form never rebuilds it (the user's edits stay); the
+  // save then tells the server to keep the after-trade data (`form_open`).
+  const [open] = useState(() => trade.status === 'open')
+  const closedSince = open && trade.status !== 'open'
+  const fields = useMemo(() => {
+    const forTrade = fieldsForTrade(allFields, newFields)
+    return open ? fieldsForOpenTrade(forTrade) : forTrade
+  }, [allFields, newFields, open])
+  const form = useDescribeForm(trade, fields, open)
   const [unsentRecording, setUnsentRecordingState] = useState(false)
   // Read when a save lands (after this render), so a ref next to the state.
   const unsentRecordingRef = useRef(false)
@@ -50,6 +59,12 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
         <TradeSummary trade={trade} />
       </div>
       <div className="flex min-w-0 flex-col gap-4">
+        {closedSince && (
+          <div role="status" className="flex gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <p>{t.save.closedSince}</p>
+          </div>
+        )}
         <section className="flex flex-col gap-4 rounded-lg border p-4" aria-label={t.input.title}>
           <DescriptionInput
             rawText={form.rawText}
@@ -75,6 +90,7 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
             errors={form.linkErrors}
             missing={form.showMissing && links !== undefined && form.missing.has(links.key)}
             onChange={form.setLinks}
+            groups={linkGroups(open)}
           />
         </section>
         <FormSection trade={trade} fields={fields} form={form} newFields={newFields} />
@@ -84,6 +100,8 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
           general={form.saveErrors.general}
           saving={save.isPending}
           savingComplete={save.isPending && save.variables.complete}
+          open={open}
+          closed={closedSince}
           onSave={actions.submit}
         />
       </div>
@@ -174,11 +192,15 @@ interface SaveBarProps {
   general: boolean
   saving: boolean
   savingComplete: boolean
+  /** Open position: draft only, with a note that the exit side comes after the close. */
+  open: boolean
+  /** The trade closed under this open form (its own notice is shown above). */
+  closed: boolean
   onSave: (complete: boolean) => void
 }
 
 /** Sticky footer: "Не вистачає: …", draft and complete buttons. */
-function SaveBar({ fields, missing, general, saving, savingComplete, onSave }: SaveBarProps) {
+function SaveBar({ fields, missing, general, saving, savingComplete, open, closed, onSave }: SaveBarProps) {
   const labels = useMemo(() => keyLabels(fields), [fields])
   return (
     <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-background/95 px-4 py-3 backdrop-blur">
@@ -194,15 +216,18 @@ function SaveBar({ fields, missing, general, saving, savingComplete, onSave }: S
             {t.save.formError}
           </p>
         )}
+        {open && !closed && <p className="text-muted-foreground">{t.save.openNote}</p>}
       </div>
       <Button type="button" variant="outline" size="sm" onClick={() => onSave(false)} disabled={saving}>
         {saving && !savingComplete && <Loader2 className="animate-spin" aria-hidden />}
         {t.save.draft}
       </Button>
-      <Button type="button" size="sm" onClick={() => onSave(true)} disabled={saving}>
-        {savingComplete && <Loader2 className="animate-spin" aria-hidden />}
-        {t.save.complete}
-      </Button>
+      {!open && (
+        <Button type="button" size="sm" onClick={() => onSave(true)} disabled={saving}>
+          {savingComplete && <Loader2 className="animate-spin" aria-hidden />}
+          {t.save.complete}
+        </Button>
+      )}
     </div>
   )
 }

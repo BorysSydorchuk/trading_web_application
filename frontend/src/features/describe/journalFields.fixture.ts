@@ -33,7 +33,7 @@ export const FIXTURE_FIELDS: readonly JournalField[] = [
     required: false,
     storage: 'column',
   },
-  { key: 'followed_plan', label: 'Дотримався плану', type: 'bool', required: true, storage: 'column' },
+  { key: 'followed_plan', label: 'Дотримався плану', type: 'bool', required: true, storage: 'column', phase: 'after' },
   {
     key: 'rule_violations',
     label: 'Порушення правил',
@@ -52,7 +52,7 @@ export const FIXTURE_FIELDS: readonly JournalField[] = [
     text_key: 'emotion_before_text',
     allow_other_text: false,
   },
-  { key: 'mistakes', label: 'Помилки', type: 'text', required: false, storage: 'column' },
+  { key: 'mistakes', label: 'Помилки', type: 'text', required: false, storage: 'column', phase: 'after' },
   { key: 'quality_rating', label: 'Якість', type: 'int', min: 1, max: 5, required: true, storage: 'column' },
   {
     key: 'chart_links',

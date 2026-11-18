@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+import { describePath } from '@/features/trades/links'
 import { directionLabel, formatPrice, formatVolume } from '@/features/trades/format'
 import { uk } from '@/i18n/uk'
 import { formatShortDateTimeBrussels } from '@/lib/time'
@@ -35,6 +37,9 @@ export function OpenPositionsTable({ positions }: { positions: readonly OpenPosi
                 <th scope="col" className={`${TH} text-right`}>{c.sl}</th>
                 <th scope="col" className={`${TH} text-right`}>{c.risk}</th>
                 <th scope="col" className={`${TH} text-right`}>{c.openTime}</th>
+                <th scope="col" className={TH}>
+                  <span className="sr-only">{c.actions}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -48,6 +53,16 @@ export function OpenPositionsTable({ positions }: { positions: readonly OpenPosi
                   <td className={NUM}>{formatPrice(row.initial_sl)}</td>
                   <td className={NUM}>{row.risk_pct === null ? EMPTY : formatPct(row.risk_pct)}</td>
                   <td className={NUM}>{formatShortDateTimeBrussels(row.open_time)}</td>
+                  <td className={`${TD} text-right`}>
+                    {/* M8-02: describe the setup while the position is still open. */}
+                    <Link
+                      to={describePath(row.trade_id)}
+                      aria-label={p.describeLabel(row.symbol)}
+                      className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      {p.describe}
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
