@@ -108,6 +108,11 @@ describe('DashboardOverview', () => {
     expect(within(second).getByText('2650.12')).toBeInTheDocument()
     expect(within(second).getByText('2640.00')).toBeInTheDocument()
     expect(within(second).getByText('0.51%')).toBeInTheDocument()
+    // M8-02: an open position can be described from Home.
+    expect(within(first).getByRole('link', { name: d.positions.describeLabel('GER40') })).toHaveAttribute(
+      'href',
+      '/trades/11/describe',
+    )
   })
 
   it('shows empty states without accounts or positions, and the sync rows', async () => {

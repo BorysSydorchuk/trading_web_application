@@ -178,6 +178,8 @@ export interface JournalField {
   text_key?: string
   min?: number
   max?: number
+  /** M8-02: after-trade fields stay empty (and hidden) while the position is open. */
+  phase?: 'before' | 'after'
 }
 
 export interface JournalFieldList {

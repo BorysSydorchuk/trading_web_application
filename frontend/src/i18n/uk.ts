@@ -540,7 +540,6 @@ export const uk = {
       loading: 'Завантаження угоди…',
       loadError: 'Не вдалося завантажити угоду.',
       fieldsError: 'Не вдалося завантажити поля журналу (config/journal_fields.yaml).',
-      open: 'Угода ще відкрита. Описати її можна після закриття.',
       needsSl:
         'MT5 не передав початковий стоп. Вкажіть його — після цього відкриється форма опису (без SL не рахуються ризик і R).',
     },
@@ -580,6 +579,10 @@ export const uk = {
       placeholder: 'https://www.tradingview.com/x/…',
       urlLabel: (n: number) => `Посилання ${n}`,
       kindLabel: (n: number) => `Тип посилання ${n}`,
+      groupTitle: (kind: string) => `Графік ${kind}`,
+      groupUrlLabel: (kind: string, n: number) => `Посилання ${kind} ${n}`,
+      addTo: 'додати',
+      addToLabel: (kind: string) => `Додати посилання ${kind}`,
       kinds: {
         before: 'до входу',
         after: 'після угоди',
@@ -625,6 +628,7 @@ export const uk = {
       missing: 'Не вистачає:',
       draft: 'Зберегти чернетку',
       complete: 'Зберегти',
+      openNote: 'Угода ще відкрита: поля після угоди (причина виходу, емоція після, помилки, урок) і графіки «після угоди» з’являться після закриття.',
       saved: 'Опис збережено',
       draftSaved: 'Чернетку збережено',
       savedRecordingUnsent:
@@ -1021,6 +1025,8 @@ export const uk = {
       title: 'Відкриті позиції',
       empty: 'Відкритих позицій немає.',
       timeZoneNote: 'Час за Брюсселем.',
+      describe: 'Описати',
+      describeLabel: (symbol: string) => `Описати відкриту позицію ${symbol}`,
       columns: {
         account: 'Рахунок',
         symbol: 'Символ',
@@ -1030,6 +1036,7 @@ export const uk = {
         sl: 'Початковий SL',
         risk: 'Ризик, %',
         openTime: 'Відкрито',
+        actions: 'Дії',
       },
     },
     sync: {
@@ -1212,7 +1219,8 @@ export const uk = {
   errors: {
     already_excluded: 'Угоду вже виключено зі статистики. Оновіть сторінку.',
     not_excluded: 'Угода вже враховується у статистиці. Оновіть сторінку.',
-    trade_open: 'Угода ще відкрита: початковий SL і опис можна вказати лише для закритої угоди.',
+    trade_open: 'Угода ще відкрита: початковий SL можна вказати лише для закритої угоди.',
+    open_trade_complete: 'Угода ще відкрита: її можна зберегти лише як чернетку, завершити опис можна після закриття.',
     needs_sl: 'Спершу вкажіть початковий SL угоди, потім опис.',
     journal_incomplete: 'Не всі обовʼязкові поля заповнено. Заповніть позначені червоним або збережіть чернетку.',
     ai_not_configured: 'ШІ не налаштовано (немає ANTHROPIC_API_KEY у .env). Форму можна заповнити вручну.',

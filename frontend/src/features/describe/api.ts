@@ -9,8 +9,8 @@ import type { ExtractResult, JournalInput } from './types'
 /** The server keeps extraction (incl. one fallback attempt) within 30 s; leave room for the network. */
 const EXTRACT_TIMEOUT_MS = 45_000
 
-/** The trade changed status under the form: reload it so the page shows the SL form / open notice. */
-const STALE_STATUS_CODES = new Set(['needs_sl', 'trade_open'])
+/** The trade changed status under the form: reload it so the page shows the SL form or the open-trade form. */
+const STALE_STATUS_CODES = new Set(['needs_sl', 'trade_open', 'open_trade_complete'])
 
 function refreshOnStaleStatus(queryClient: QueryClient, tradeId: number, error: unknown) {
   if (isApiError(error) && STALE_STATUS_CODES.has(error.code)) {

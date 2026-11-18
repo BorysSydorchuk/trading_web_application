@@ -84,6 +84,22 @@ export function linkErrors(links: readonly LinkDraft[]): Record<string, string> 
   return errors
 }
 
+/** M8-03 defaults: two «до входу» rows, and one «після угоди» row once the trade is closed. */
+export const DEFAULT_ROWS: Readonly<Record<LinkKind, number>> = { before: 2, after: 1 }
+
+/** Kinds shown on the Describe screen: «після угоди» only after the close. */
+export function linkGroups(open: boolean): readonly LinkKind[] {
+  return open ? ['before'] : LINK_KINDS
+}
+
+/** Empty rows that top each shown group up to its default count (blank rows are never sent). */
+export function blankLinkRows(links: readonly LinkDraft[], open: boolean): LinkDraft[] {
+  return linkGroups(open).flatMap((kind) => {
+    const have = links.filter((link) => link.kind === kind).length
+    return Array.from({ length: Math.max(0, DEFAULT_ROWS[kind] - have) }, () => newLinkRow('', kind))
+  })
+}
+
 export function hasBeforeLink(links: readonly LinkDraft[]): boolean {
   return filledLinks(links).some((link) => link.kind === 'before')
 }
