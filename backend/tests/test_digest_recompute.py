@@ -153,3 +153,18 @@ def test_excluding_an_open_trade_touches_no_digest(
 
     digest = stored(session, weekly["id"])
     assert (digest.generated_at, digest.ai_summary_stale_at) == (EARLIER, None)
+
+
+def test_a_recompute_without_a_real_change_does_not_mark_the_summary_stale(
+    client: TestClient, session: Session, week: dict[str, Trade]
+) -> None:
+    from app.services.digests import recompute_for_trade
+
+    weekly = create(client, "weekly", WEEK)
+    with_review_and_summary(session, weekly["id"])
+
+    # The stored JSONB snapshot must equal a fresh one (no Decimal/date/float drift).
+    recompute_for_trade(session, week["test"].close_time, NOW)
+    session.commit()
+
+    assert stored(session, weekly["id"]).ai_summary_stale_at is None
