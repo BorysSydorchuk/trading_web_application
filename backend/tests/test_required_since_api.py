@@ -213,7 +213,9 @@ def test_open_trade_has_no_new_fields(
     trade = add_trade(session, account, status="open", close_time=None, duration_seconds=None)
     data = detail(client, trade.id)
     assert data["missing_new_fields"] == []
-    assert "mistakes" in data["missing_required"]
+    # M8-02: an open trade lists pre-entry fields only; mistakes is an after-trade field.
+    assert "mistakes" not in data["missing_required"]
+    assert "entry_model" in data["missing_required"]
 
 
 def test_unrequire_deletes_row_and_clears_new_fields(
