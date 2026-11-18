@@ -13,8 +13,8 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | accepted (owner PASS, PM 2026-11-18) |
 | M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | merged `71e599b` 2026-11-18, owner check + PM review pending |
-| M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | **authorized 2026-11-18**, in progress |
-| M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | authorized 2026-11-18, planned |
+| M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | merged `1d7b765` 2026-11-18, owner check pending |
+| M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | authorized 2026-11-18, in progress |
 | M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | authorized 2026-11-18, planned |
 | M8-14 | Charts on «Головна» | 4th of batch | M | — | authorized 2026-11-18, planned |
 | M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | TECHNICAL ACCEPTED (PM 2026-11-18), merged `860b4c8` 2026-11-18, owner check pending |
