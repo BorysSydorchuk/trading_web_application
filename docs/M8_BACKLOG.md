@@ -12,8 +12,8 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 |----|-------|----------|------|------------|--------|
 | M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | accepted (owner PASS, PM 2026-11-18) |
 | M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
-| M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | M | M8-01 | authorized 2026-11-18, in progress |
-| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S | M8-02 | authorized 2026-11-18, planned |
+| M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | merged `71e599b` 2026-11-18, owner check + PM review pending |
+| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S | M8-02 | authorized 2026-11-18, in progress |
 | M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | planned |
 | M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | planned |
