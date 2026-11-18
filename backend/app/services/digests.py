@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -29,7 +30,13 @@ from app.models.enums import AccountStatus, BiasKind, DigestKind
 from app.schemas import digests as schemas
 from app.schemas.dashboard import money_str
 from app.services.ai.digest_summary import SummaryInput, TradeTexts
-from app.services.digest_snapshot import Json, Scope, SnapshotInput, build_snapshot
+from app.services.digest_snapshot import (
+    ExcludedTrade,
+    Json,
+    Scope,
+    SnapshotInput,
+    build_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +120,22 @@ def _to_digest_trade(
     )
 
 
+@dataclass(frozen=True)
+class _Loaded:
+    """Closed trades split by M8-01: strategy trades and those excluded from statistics."""
+
+    strategy: list[dm.DigestTrade]
+    excluded: list[dm.DigestTrade]
+    reasons: dict[int, str]
+
+
 def _load_trades(
     db: Session,
     since: date,
     until: date,
     specs: Sequence[JournalField],
     breakeven_r: Decimal,
-) -> list[dm.DigestTrade]:
+) -> _Loaded:
     """Closed trades of non-archived accounts with a Brussels close date in [since, until]."""
     rows = db.scalars(
         select(Trade)
@@ -133,7 +149,15 @@ def _load_trades(
         .options(selectinload(Trade.rule_violations))
         .order_by(Trade.close_time, Trade.id)
     ).all()
-    return [_to_digest_trade(t, specs, breakeven_r) for t in rows]
+    loaded = _Loaded(strategy=[], excluded=[], reasons={})
+    for trade in rows:
+        item = _to_digest_trade(trade, specs, breakeven_r)
+        if trade.excluded_from_stats:
+            loaded.excluded.append(item)
+            loaded.reasons[trade.id] = trade.excluded_reason or ""
+        else:
+            loaded.strategy.append(item)
+    return loaded
 
 
 def _first_close_by_account(db: Session) -> dict[int, date]:
@@ -208,10 +232,13 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
     except ConfigError as exc:
         raise config_error(exc) from exc
     accounts = {a.id: a for a in db.scalars(select(Account).where(_not_archived()))}
-    trades = _load_trades(db, dm.norm_window_start(kind, start), end, specs, breakeven_r)
-    period = dm.trades_in_period(trades, kind, start)
-    window = dm.norm_window_trades(trades, kind, start)
-    currency = _currency(period, accounts)
+    loaded = _load_trades(db, dm.norm_window_start(kind, start), end, specs, breakeven_r)
+    # M8-01: every strategy number (period, norm window, sections, charts) skips excluded
+    # trades; they are listed apart so the totals reconcile with the account.
+    period = dm.trades_in_period(loaded.strategy, kind, start)
+    window = dm.norm_window_trades(loaded.strategy, kind, start)
+    excluded = dm.trades_in_period(loaded.excluded, kind, start)
+    currency = _currency([*period, *excluded], accounts)
     firsts = _first_close_by_account(db)
     period_accounts = sorted({t.account_id for t in period})
     by_account = {
@@ -237,6 +264,7 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
         by_account=by_account,
         journal_fields=[f.key for f in specs],
         bias_marks=_bias_marks(db, start, end),
+        excluded=[ExcludedTrade(trade=t, reason=loaded.reasons[t.id]) for t in excluded],
     )
     return build_snapshot(inp)
 
@@ -444,12 +472,13 @@ def _created_items(db: Session, kind: dm.PeriodKind | None) -> list[schemas.Dige
 
 
 def _closed_by_day(db: Session) -> list[tuple[date, int, Decimal]]:
-    """(Brussels close date, closed trades, net P&L) of non-archived accounts, one grouped query."""
+    """(Brussels close date, counted closed trades, net P&L) of non-archived accounts, one query."""
     day = cast(func.timezone(DEFAULT_TZ, Trade.close_time), Date).label("day")
     rows = db.execute(
         select(day, func.count(Trade.id), func.sum(Trade.net_pnl))
         .join(Account, Account.id == Trade.account_id)
-        .where(_not_archived(), _closed())
+        # M8-01: like the created rows (strategy numbers), excluded trades are left out.
+        .where(_not_archived(), _closed(), Trade.excluded_from_stats.is_(False))
         .group_by(day)
     )
     return [(d, int(n), total or Decimal(0)) for d, n, total in rows]

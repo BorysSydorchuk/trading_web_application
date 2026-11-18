@@ -8,6 +8,7 @@ import { AiSummarySection } from './AiSummarySection'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
 import { DigestCharts } from './charts/DigestCharts'
+import { ExcludedTrades } from './ExcludedTrades'
 import { formatDateBrussels, formatPeriod, missingRPath } from './format'
 import { MetricBlockCard } from './MetricBlockCard'
 import { NextPeriodBias } from './NextPeriodBias'
@@ -42,6 +43,7 @@ export function DigestView({ digest }: { digest: Digest }) {
           />
         ))}
       </div>
+      {snapshot.excluded && <ExcludedTrades block={snapshot.excluded} currency={snapshot.currency} />}
       <DigestCharts snapshot={snapshot} />
       <BreakdownTables breakdowns={snapshot.breakdowns} currency={snapshot.currency} />
       {/* Rules and bias stacked: the three bias cards need the full width (PM 2026-11-14). */}

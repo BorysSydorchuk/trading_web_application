@@ -1,4 +1,5 @@
-"""Inbox counts (docs/api.md): trades waiting for the user on accounts that are not archived.
+"""Inbox counts (docs/api.md): trades waiting for the user on accounts that are not archived,
+except trades excluded from statistics (M8-01).
 
 Shared by `GET /api/inbox/counts` and `GET /api/dashboard`.
 """
@@ -22,6 +23,8 @@ def count_inbox(db: Session) -> InboxCounts:
         .where(
             Account.status != AccountStatus.ARCHIVED.value,
             Trade.status.in_([s.value for s in INBOX_STATUSES]),
+            # M8-01: an excluded trade needs no strategy description.
+            Trade.excluded_from_stats.is_(False),
         )
         .group_by(Trade.status)
     )

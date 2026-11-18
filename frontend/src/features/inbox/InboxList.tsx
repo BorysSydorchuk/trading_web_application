@@ -21,6 +21,8 @@ const INBOX_LIMIT = 500
 const INBOX_POLL_MS = 60_000
 const INBOX_QUERY: TradeQuery = {
   status: [...INBOX_STATUSES],
+  // M8-01: excluded trades need no strategy description (same rule as the badge counts).
+  excluded: false,
   sort: 'close_time',
   order: 'desc',
   limit: INBOX_LIMIT,

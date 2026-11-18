@@ -54,3 +54,23 @@ describe('missing_new_fields filter', () => {
     })
   })
 })
+
+describe('M8-01 «Показати виключені» filter', () => {
+  it('is on by default: no URL param, no API param, not an active filter', () => {
+    const filters = parse('')
+    expect(filters.showExcluded).toBe(true)
+    expect(filtersToParams(filters).toString()).toBe('')
+    expect(toTradeQuery(filters, TODAY)).not.toHaveProperty('excluded')
+    expect(hasActiveFilters(filters)).toBe(false)
+  })
+
+  it('off hides excluded trades (excluded=false) and round-trips via excluded=hide', () => {
+    const filters = { ...parse(''), showExcluded: false }
+    const params = filtersToParams(filters)
+    expect(params.get('excluded')).toBe('hide')
+    expect(parseFilters(params)).toEqual(filters)
+    expect(toTradeQuery(filters, TODAY).excluded).toBe(false)
+    expect(hasActiveFilters(filters)).toBe(true)
+    expect(clearedFilters(filters).showExcluded).toBe(true)
+  })
+})

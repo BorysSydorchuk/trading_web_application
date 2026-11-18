@@ -26,6 +26,7 @@ export function useTrades(query: TradeQuery, options: { refetchInterval?: number
           to: query.to,
           missing_new_fields: query.missing_new_fields,
           missing_r: query.missing_r,
+          excluded: query.excluded,
           sort: query.sort,
           order: query.order,
           limit: query.limit,
@@ -62,6 +63,29 @@ export function useSetInitialSl() {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: tradeKeys.all }),
         queryClient.invalidateQueries({ queryKey: inboxKeys.counts }),
+      ]),
+  })
+}
+
+/**
+ * M8-01: exclude a trade from strategy statistics (reason required) or return it (reason optional).
+ * Errors are shown in the dialog, not as a toast.
+ */
+export function useStatsExclusion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, exclude, reason }: { id: number; exclude: boolean; reason: string | null }) =>
+      apiRequest<TradeDetail>(`/trades/${id}/${exclude ? 'exclude' : 'include'}`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    meta: { silentError: true },
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: tradeKeys.all }),
+        queryClient.invalidateQueries({ queryKey: inboxKeys.counts }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['digests', 'list'] }),
       ]),
   })
 }

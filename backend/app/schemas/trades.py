@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.chart_links import MAX_LINKS, MAX_URL_LENGTH, is_valid_chart_url
-from app.models.enums import ExitReasonSource, InitialSlSource
+from app.models.enums import ExitReasonSource, InitialSlSource, StatsExclusionAction
 from app.schemas.audio import AudioNoteOut
 from app.schemas.common import DecimalIn, UtcDatetime
 
@@ -69,6 +69,10 @@ class TradeRow(BaseModel):
     bias_alignment: str | None
     bias_alignment_weekly: str | None
     bias_alignment_monthly: str | None
+    # M8-01: left out of strategy statistics (still counted in money and risk).
+    excluded_from_stats: bool
+    excluded_reason: str | None
+    excluded_at: UtcDatetime | None
 
 
 class TradeList(BaseModel):
@@ -101,6 +105,14 @@ class ChartLinkOut(BaseModel):
     preview_url: str | None  # snapshot image; None for /chart links
 
 
+class StatsExclusionOut(BaseModel):
+    """One M8-01 history row: excluded from or returned to strategy statistics."""
+
+    action: StatsExclusionAction
+    reason: str | None
+    at: UtcDatetime
+
+
 class BiasNoteIds(BaseModel):
     """Bias notes whose entry decided each alignment (null = no_bias / config broken)."""
 
@@ -130,6 +142,7 @@ class TradeDetail(TradeRow):
     missing_new_fields: list[str]
     audio_notes: list[AudioNoteOut]  # oldest first (M3)
     bias_note_ids: BiasNoteIds  # M4: links from Describe to the bias notes
+    exclusion_history: list[StatsExclusionOut]  # M8-01, oldest first
 
 
 def check_chart_url(value: str) -> str:
@@ -171,6 +184,44 @@ class TradePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     initial_sl: Price
+
+
+EXCLUSION_REASON_MAX_LENGTH = 1000
+
+
+def _trimmed(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if len(text) > EXCLUSION_REASON_MAX_LENGTH:
+        raise ValueError(f"must be at most {EXCLUSION_REASON_MAX_LENGTH} characters")
+    return text or None
+
+
+class ExcludeInput(BaseModel):
+    """POST /api/trades/{id}/exclude (docs/api.md M8-01): the reason is mandatory."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _required(cls, value: str) -> str:
+        text = _trimmed(value)
+        if text is None:
+            raise ValueError("must not be empty")
+        return text
+
+
+class IncludeInput(BaseModel):
+    """POST /api/trades/{id}/include: optional reason, blank = none."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    reason: str | None = None
+
+    _trim = field_validator("reason")(_trimmed)
 
 
 class InboxCounts(BaseModel):

@@ -60,6 +60,10 @@ export interface TradeRow {
   bias_alignment_weekly: BiasAlignment | null
   bias_alignment_monthly: BiasAlignment | null
   violations: string[]
+  /** M8-01: left out of strategy statistics (still in account P&L and risk). */
+  excluded_from_stats: boolean
+  excluded_reason: string | null
+  excluded_at: string | null
 }
 
 export interface TradeList {
@@ -82,6 +86,13 @@ export interface ExitDeal {
   reason: string | null
   /** M8-09: raw MT5 DEAL_REASON code; null for deals stored before M8-09. */
   reason_code: number | null
+}
+
+/** M8-01: one «Не враховувати у статистиці» / «Повернути у статистику» action. */
+export interface StatsExclusionEvent {
+  action: 'exclude' | 'include'
+  reason: string | null
+  at: string
 }
 
 export interface RuleViolation {
@@ -123,6 +134,8 @@ export interface TradeDetail extends TradeRow {
    * Informational only: never in `missing_required`, never blocks `complete`.
    */
   missing_new_fields: string[]
+  /** M8-01: exclusion history, oldest first. */
+  exclusion_history: StatsExclusionEvent[]
 }
 
 export interface TradeQuery {
@@ -135,6 +148,8 @@ export interface TradeQuery {
   missing_new_fields?: boolean
   /** Only closed trades without an R multiple (digest «Сума R» n/N link). Absent = no filter. */
   missing_r?: boolean
+  /** M8-01: true = only excluded, false = only counted. Absent = all. */
+  excluded?: boolean
   sort?: TradeSort
   order?: SortOrder
   limit?: number

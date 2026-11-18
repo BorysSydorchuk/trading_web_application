@@ -117,3 +117,10 @@ class ExitReasonSource(enum.StrEnum):
     MT5_REASON = "mt5_reason"  # prefilled from the final closing deal's DEAL_REASON
     PRICE_MATCH = "price_match"  # prefilled: no deal reason, exit within 1 tick of SL/TP
     OWNER = "owner"  # entered, changed or cleared by the owner: the sync never touches it
+
+
+class StatsExclusionAction(enum.StrEnum):
+    """History rows of M8-01: exclude from / return to strategy statistics."""
+
+    EXCLUDE = "exclude"
+    INCLUDE = "include"

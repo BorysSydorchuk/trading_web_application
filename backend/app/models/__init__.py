@@ -9,7 +9,7 @@ from app.models.fx_rate import FxRate
 from app.models.journal_requirement import JournalFieldRequirement, JournalRequirementsState
 from app.models.media import AudioNote, ChartLink
 from app.models.sync_log import SyncLog
-from app.models.trade import RuleViolation, Trade, TradeExitDeal
+from app.models.trade import RuleViolation, Trade, TradeExitDeal, TradeStatsExclusion
 
 __all__ = [
     "NAMING_CONVENTION",
@@ -29,4 +29,5 @@ __all__ = [
     "SyncLog",
     "Trade",
     "TradeExitDeal",
+    "TradeStatsExclusion",
 ]

@@ -151,6 +151,26 @@ export interface DigestSnapshot {
   bias: Partial<Record<BiasScopeName, BiasScope>>
   charts: DigestCharts
   trade_ids: number[]
+  /** M8-01; absent in snapshots generated before M8-01. */
+  excluded?: ExcludedBlock
+}
+
+/** M8-01 «Виключені угоди»: strategy net P&L + `net_pnl` = `account_net_pnl`. */
+export interface ExcludedBlock {
+  trades: number
+  net_pnl: string
+  account_net_pnl: string
+  items: ExcludedTradeItem[]
+}
+
+export interface ExcludedTradeItem {
+  trade_id: number
+  account_id: number
+  account_name: string | null
+  symbol: string
+  close_time: string
+  net_pnl: string
+  reason: string
 }
 
 export interface Digest {
