@@ -22,7 +22,7 @@ from app.domain.sessions import DEFAULT_TZ
 from app.domain.trade_builder import next_status
 from app.errors import ApiError, config_error
 from app.models import Account, RuleViolation, SymbolSpec, Trade
-from app.models.enums import Direction, InitialSlSource, TradeStatus
+from app.models.enums import AccountStatus, Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
 from app.services.bias_alignment import alignment_settings, lookup_for, trade_bias
@@ -266,11 +266,19 @@ def list_trades(
     excluded: bool | None = Query(default=None),
     # M8-15: true = the owner saved a journal (described_at set, open trades too), false = not.
     described: bool | None = Query(default=None),
+    # M8-15: false = leave out archived accounts (the inbox count rule, Home «Потрібен опис»).
+    archived: bool = Query(default=True),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
     if excluded is not None:
         conditions.append(Trade.excluded_from_stats.is_(excluded))
+    if not archived:
+        conditions.append(
+            Trade.account_id.in_(
+                select(Account.id).where(Account.status != AccountStatus.ARCHIVED.value)
+            )
+        )
     if described is not None:
         conditions.append(
             Trade.described_at.is_not(None) if described else Trade.described_at.is_(None)

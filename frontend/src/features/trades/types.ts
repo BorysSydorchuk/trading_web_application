@@ -152,6 +152,8 @@ export interface TradeQuery {
   excluded?: boolean
   /** M8-15: true = the owner saved a journal (open trades too), false = not. Absent = all. */
   described?: boolean
+  /** M8-15: false = leave out archived accounts (inbox count rule). Absent = all. */
+  archived?: boolean
   sort?: TradeSort
   order?: SortOrder
   limit?: number

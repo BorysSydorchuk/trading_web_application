@@ -12,10 +12,12 @@ const n = uk.dashboard.needsDescription
 const c = n.columns
 /** Rows on Home; the rest is one click away in the Journal. */
 export const HOME_NEEDS_DESCRIPTION_LIMIT = 10
-/** Same rule as the inbox «Без опису» count: closed, no description, counted in statistics (M8-01). */
+/** Same rule as the inbox «Без опису» count: needs_description, counted in statistics (M8-01),
+ * active (not archived) accounts. */
 const QUERY: TradeQuery = {
   status: ['needs_description'],
   excluded: false,
+  archived: false,
   sort: 'close_time',
   order: 'desc',
   limit: HOME_NEEDS_DESCRIPTION_LIMIT,
@@ -35,7 +37,7 @@ export function NeedsDescriptionList() {
       <div className="flex items-baseline justify-between gap-2">
         <h2 id="dashboard-needs-description" className="text-sm font-semibold">{n.title}</h2>
         {total > items.length && (
-          <Link to="/journal?status=needs_description" className="text-xs text-muted-foreground underline-offset-2 hover:underline">
+          <Link to="/journal?status=needs_description&excluded=hide" className="text-xs text-muted-foreground underline-offset-2 hover:underline">
             {n.all(total)}
           </Link>
         )}
@@ -74,7 +76,7 @@ export function NeedsDescriptionList() {
                   <td className={`${TD} text-right`}>
                     <Link
                       to={describePath(trade.id)}
-                      aria-label={n.describeLabel(trade.symbol)}
+                      aria-label={n.describeLabel(trade.symbol, trade.close_time ? formatShortDateTimeBrussels(trade.close_time) : '')}
                       className="text-xs font-medium text-primary underline-offset-2 hover:underline"
                     >
                       {n.describe}

@@ -1036,7 +1036,7 @@ export const uk = {
       error: 'Не вдалося завантажити угоди без опису.',
       all: (n: number) => `Усі ${n} у журналі`,
       describe: 'Описати',
-      describeLabel: (symbol: string) => `Описати угоду ${symbol}`,
+      describeLabel: (symbol: string, closed: string) => `Описати угоду ${symbol} ${closed}`.trim(),
       columns: {
         account: 'Рахунок',
         symbol: 'Символ',

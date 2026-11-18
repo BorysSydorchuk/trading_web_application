@@ -28,11 +28,12 @@ describe('NeedsDescriptionList (M8-15)', () => {
     if (!row) throw new Error('one trade row expected')
     expect(within(row).getByText('XAUUSD')).toBeInTheDocument()
     expect(within(row).getByText('11.11, 10:00')).toBeInTheDocument()
-    expect(within(row).getByRole('link', { name: n.describeLabel('XAUUSD') })).toHaveAttribute('href', '/trades/21/describe')
-    expect(screen.getByRole('link', { name: n.all(12) })).toHaveAttribute('href', '/journal?status=needs_description')
+    expect(within(row).getByRole('link', { name: n.describeLabel('XAUUSD', '11.11, 10:00') })).toHaveAttribute('href', '/trades/21/describe')
+    expect(screen.getByRole('link', { name: n.all(12) })).toHaveAttribute('href', '/journal?status=needs_description&excluded=hide')
     // Same rule as the inbox count: needs_description, counted in statistics.
     expect(asked[0]?.getAll('status')).toEqual(['needs_description'])
     expect(asked[0]?.get('excluded')).toBe('false')
+    expect(asked[0]?.get('archived')).toBe('false')
   })
 
   it('shows an empty note when everything is described', async () => {

@@ -29,6 +29,8 @@ export function useTrades(query: TradeQuery, options: { refetchInterval?: number
           missing_new_fields: query.missing_new_fields,
           missing_r: query.missing_r,
           excluded: query.excluded,
+          described: query.described,
+          archived: query.archived,
           sort: query.sort,
           order: query.order,
           limit: query.limit,

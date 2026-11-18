@@ -119,6 +119,20 @@ describe('JournalPage: "Неповні за новими полями"', () => {
   })
 })
 
+describe('JournalPage: «Опис» filter (M8-15)', () => {
+  it.each([
+    ['no', 'false'],
+    ['yes', 'true'],
+  ])('described=%s in the URL sends described=%s to the API', async (url, api) => {
+    const queries = serveJournal()
+    renderWithProviders(<JournalPage />, { path: '/journal', url: `/journal?status=open&described=${url}` })
+
+    await waitFor(() => expect(queries.length).toBeGreaterThan(0))
+    expect(queries[0]?.get('described')).toBe(api)
+    expect(queries[0]?.getAll('status')).toEqual(['open'])
+  })
+})
+
 describe('JournalPage: bias alignment columns', () => {
   it('shows effective daily alignment and enables optional weekly/monthly columns via the chooser', async () => {
     serveJournal()

@@ -676,4 +676,5 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 ## M8-15 - Home «Потрібен опис» list; Journal filter by description (PM 2026-11-18)
 
 - `GET /api/trades?described=true|false`: true = the owner saved a journal (`described_at` set, open trades included), false = never saved; absent = all. Journal select «Опис: усі / З описом / Без опису» (URL `described=yes|no`); with status «відкрита» it gives open trades «з описом» / «без опису» (PM condition for keeping status `open`, DECISIONS 2026-11-18).
-- Home «Потрібен опис»: `GET /api/trades?status=needs_description&excluded=false&sort=close_time&order=desc&limit=10` (same rule as the inbox «Без опису» count), polled like the inbox counts (30 s); each row has «Описати» (Describe screen); «Усі N у журналі» links to `/journal?status=needs_description` when there are more.
+- `GET /api/trades?archived=false`: leave out trades of archived accounts (default true = all, as before).
+- Home «Потрібен опис»: `GET /api/trades?status=needs_description&excluded=false&archived=false&sort=close_time&order=desc&limit=10` (the inbox «Без опису» count rule), polled like the inbox counts (30 s); each row has «Описати» (Describe screen); «Усі N у журналі» links to `/journal?status=needs_description&excluded=hide` when there are more (the Journal itself still shows archived accounts).

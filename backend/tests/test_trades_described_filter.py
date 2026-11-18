@@ -37,3 +37,17 @@ def test_described_filter_splits_open_trades_with_and_without_a_description(
     assert ids(client, status="open", described="false") == [open_bare.id]
     assert ids(client, described="false") == sorted([open_bare.id, closed.id])
     assert ids(client) == sorted([open_described.id, open_bare.id, closed.id])
+
+
+def test_archived_false_leaves_out_archived_accounts_like_the_inbox_count(
+    client: TestClient, session: Session
+) -> None:
+    active = add_account(session, "Alpha", 1)
+    old = add_account(session, "Old", 2, status="archived")
+    kept = add_trade(session, active, status="needs_description")
+    add_trade(session, old, status="needs_description")
+
+    assert ids(client, status="needs_description", archived="false") == [kept.id]
+    assert len(ids(client, status="needs_description")) == 2
+    counts = client.get("/api/inbox/counts").json()
+    assert counts["needs_description"] == 1
