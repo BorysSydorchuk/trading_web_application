@@ -13,7 +13,11 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | accepted (owner PASS, PM 2026-11-18) |
 | M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | merged `71e599b` 2026-11-18, owner check + PM review pending |
-| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | merged `860b4c8` 2026-11-18, owner check pending |
+| M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | **authorized 2026-11-18**, in progress |
+| M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | authorized 2026-11-18, planned |
+| M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | authorized 2026-11-18, planned |
+| M8-14 | Charts on «Головна» | 4th of batch | M | — | authorized 2026-11-18, planned |
+| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | TECHNICAL ACCEPTED (PM 2026-11-18), merged `860b4c8` 2026-11-18, owner check pending |
 | M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | planned |
 | M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | planned |
@@ -109,3 +113,27 @@ Status 2026-11-18: merged `69b3239`, dev DB at e4a7c2f9b315, report `docs/report
 - **Owner wording:** occasionally after switching/opening a page the whole page scrolls far below the content; the status bar appears mid-viewport with a large blank dark area below (seen on «Головна»).
 - **Behaviour:** footer stays at the viewport bottom on every route; no blank area; no page-level horizontal scroll 1280–2560 px; long pages scroll only the content area; route change resets content scroll to top.
 - **Acceptance:** Playwright regression (all main pages, short/long content, resize); owner check: 10 fast page switches, resize, zoom 90 %/110 %. **Owner PASS, PM accepted 2026-11-17.**
+
+## M8-12..M8-16 — PM authorization 2026-11-18 (order M8-12 -> M8-16 -> M8-13 -> M8-14)
+
+Each on its own branch, own report (max 15 lines), merge per CLAUDE.md; continue to the next after each merge. M8-04..M8-08 and M8-10 NOT authorized.
+
+### M8-12 — Run without visible windows (M)
+- No console window: all processes hidden. Tray icon: «Відкрити журнал», «Показати термінали» / «Сховати термінали», «Логи», «Зупинити».
+- Autostart at Windows login ON (owner decision), hidden, tray only; toggle «Запускати з Windows» in Settings and the tray.
+- Desktop shortcuts «Торговий журнал — Старт» / «— Стоп» with the app icon; idempotent installer script; README.
+- MT5 portable terminals in the background: windows hidden after start and re-hidden if restored, no taskbar button; sync/margin/order_calc_profit work hidden. Never touch a terminal the owner opened.
+- Console-only errors reach the UI status bar and logs.
+- Owner check: reboot -> app starts, no PowerShell/MT5 windows, tray icon, sync works; «Стоп» stops cleanly; «Старт» starts again.
+
+### M8-16 — MAE / MFE per trade (L)
+- Owner wording: for every trade show how far price went against me and in my favour while open, in R; first my way then SL -> MFE in R; TP -> MFE at least the TP's RR.
+- MFE_R / MAE_R = max favourable / adverse excursion from entry (open..close) / initial SL distance; store points and times. Long = bid, short = ask (DECISIONS). M1 bars; ticks (copy_ticks_range) for trades < 2 h or ambiguous minutes. No SL: points only. Open trades: running values «поточні». Worker after close, never blocking sync; backfill (dry run first). Migration + backup.
+- UI: optional Journal columns «MAE, R» / «MFE, R»; trade details with points and times; digests: average MFE of winners/losers, count/share of losers that reached >= 1R first.
+- Tests: long/short, TP, SL after favourable move, plain SL, partial close, gap through SL, missing SL, bid/ask. Owner check: 3 real trades within 0.1R of the chart.
+
+### M8-13 — Choose the Claude model (M)
+- Settings → ШІ: default model per call type (trade extraction, bias extraction, digest summary) from config/ai_models.yaml (id, label, approx price per call). One-off selector next to «Заповнити з тексту» and «Підсумок від ШІ» with approx cost. ai_usage.jsonl records the model used; a rejected model -> clear Ukrainian error. Fixture tests only.
+
+### M8-14 — Charts on «Головна» (M)
+- Equity curve, P&L by day (bars), rolling win rate and average R (20 strategy trades; excluded out). Range «Тиждень», «Місяць», «3 місяці», «Рік», «Усе», «Свої дати»; account selector (each / all); remembered per browser (localStorage in try/catch); defaults «Місяць», all; empty «Немає угод за цей період». Account currency and % of account size; Brussels dates; reuse digest chart components. Owner check: numbers match the digest for the same period.

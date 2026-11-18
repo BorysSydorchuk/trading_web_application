@@ -14,6 +14,7 @@ from app.api import (
     digests,
     health,
     sync_status,
+    system,
     trades,
 )
 
@@ -30,5 +31,6 @@ api_router.include_router(bias.router)
 api_router.include_router(calculator.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(digests.router)
+api_router.include_router(system.router)
 
 __all__ = ["api_router"]

@@ -10,9 +10,11 @@ dependencies = [
     "fastapi>=0.162.0",
     "faster-whisper>=1.2.1",
     "metatrader5>=5.0.45 ; sys_platform == 'win32'",
+    "pillow>=11.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2",
     "pydantic-settings>=2.16.2",
+    "pystray>=0.19.5",
     "pyyaml>=6.0.3",
     "sqlalchemy>=2",
     "tzdata>=2025.2",
@@ -91,6 +93,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # faster-whisper ships no type information (imported lazily in app.services.transcriber).
 module = ["faster_whisper", "faster_whisper.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pystray ships no type information (tray icon, M8-12; scripts/tray.py).
+module = ["pystray", "pystray.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

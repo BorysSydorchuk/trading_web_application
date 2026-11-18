@@ -678,3 +678,11 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - `GET /api/trades?described=true|false`: true = the owner saved a journal (`described_at` set, open trades included), false = never saved; absent = all. Journal select «Опис: усі / З описом / Без опису» (URL `described=yes|no`); with status «відкрита» it gives open trades «з описом» / «без опису» (PM condition for keeping status `open`, DECISIONS 2026-11-18).
 - `GET /api/trades?archived=false`: leave out trades of archived accounts (default true = all, as before).
 - Home «Потрібен опис»: `GET /api/trades?status=needs_description&excluded=false&archived=false&sort=close_time&order=desc&limit=10` (the inbox «Без опису» count rule), polled like the inbox counts (30 s); each row has «Описати» (Describe screen); «Усі N у журналі» links to `/journal?status=needs_description&excluded=hide` when there are more (the Journal itself still shows archived accounts).
+
+## M8-12 - Run without visible windows (PM 2026-11-18)
+
+- `GET /api/system/desktop` -> `{supported, autostart, terminals_visible}` (`supported` = Windows).
+- `PUT /api/system/autostart {enabled: bool}` -> same shape; adds / removes the shortcut «Торговий журнал.lnk» in the user's Startup folder (`pythonw scripts/tray.py --autostart`). Error: 500 `shortcut_failed` (message names the cause); 409 `not_supported` off Windows.
+- `PUT /api/system/terminals {visible: bool}` -> same shape; stored in `<DATA_DIR>/terminals_visible.json`; the worker job `mt5_windows` (every 3 s) applies it.
+- MT5: `RealMt5Source.connect` snapshots the terminal processes at the account's terminal path before `mt5.initialize` and records the new ones (PID + creation time, `<DATA_DIR>/mt5_terminals.json`) after it, also after a failed login or a timeout. Only those are hidden (`ShowWindow SW_HIDE`, re-hidden when restored); «Показати термінали» shows exactly the windows the app hid. A terminal already running before the call (the owner's) is never touched. No MT5 API call changed.
+- Desktop: `scripts/tray.py` (pystray) starts `scripts/dev.py --no-browser` with CREATE_NO_WINDOW (children inherit the windowless console), logs to `logs/launcher.log` / `logs/tray.log`, notifies a failed start or crash. `scripts/install_shortcuts.py` writes the icon (`data/journal.ico`), the two desktop shortcuts and autostart (default ON).
