@@ -30,6 +30,8 @@ JOURNAL_FIELDS_FILE = "journal_fields.yaml"
 
 FieldType = Literal["enum", "multi_enum", "bool", "int", "text", "links", "auto"]
 Storage = Literal["column", "extra"]
+# M8-02: "after" fields describe the exit; they stay empty while the position is open.
+Phase = Literal["before", "after"]
 
 _KEY_PATTERN = r"^[a-z][a-z0-9_]*$"
 _OPTION_TYPES = frozenset({"enum", "multi_enum"})
@@ -86,6 +88,7 @@ class JournalField(_Strict):
     allow_other_text: bool = False
     min: int | None = None
     max: int | None = None
+    phase: Phase = "before"
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -110,6 +113,8 @@ class JournalField(_Strict):
             raise ValueError("min/max are only allowed for int fields")
         if self.min is not None and self.max is not None and self.min > self.max:
             raise ValueError(f"min {self.min} is greater than max {self.max}")
+        if self.phase == "after" and self.type in {"auto", "links"}:
+            raise ValueError(f"type {self.type} cannot have phase: after")
         if self.type == "auto" and self.storage != "column":
             raise ValueError("auto fields are computed by the app and need storage: column")
         return self
@@ -135,6 +140,15 @@ class JournalFieldsConfig(_Strict):
 
     def get(self, key: str) -> JournalField | None:
         return next((f for f in self.fields if f.key == key), None)
+
+    def for_open_trade(self) -> JournalFieldsConfig:
+        """Only the pre-entry fields (phase before): what an open position can carry (M8-02)."""
+        return self.model_copy(
+            update={"fields": tuple(f for f in self.fields if f.phase == "before")}
+        )
+
+    def after_fields(self) -> tuple[JournalField, ...]:
+        return tuple(f for f in self.fields if f.phase == "after")
 
     def to_api(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

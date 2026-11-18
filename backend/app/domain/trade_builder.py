@@ -417,11 +417,17 @@ def initial_stop_loss(
 
 
 def next_status(
-    current: TradeStatus | str | None, *, is_closed: bool, has_initial_sl: bool
+    current: TradeStatus | str | None,
+    *,
+    is_closed: bool,
+    has_initial_sl: bool,
+    described: bool = False,
 ) -> TradeStatus:
     """Status after a sync. Never downgrades draft/complete.
 
-    open position -> open; closed without SL -> needs_sl; closed with SL -> needs_description.
+    open position -> open; closed without SL -> needs_sl; closed with SL -> needs_description,
+    or draft when the owner already described it (while it was open, M8-02: `described` =
+    trades.described_at is set).
     """
     if current is not None:
         current = TradeStatus(current)
@@ -429,4 +435,6 @@ def next_status(
             return current
     if not is_closed:
         return TradeStatus.OPEN
-    return TradeStatus.NEEDS_DESCRIPTION if has_initial_sl else TradeStatus.NEEDS_SL
+    if not has_initial_sl:
+        return TradeStatus.NEEDS_SL
+    return TradeStatus.DRAFT if described else TradeStatus.NEEDS_DESCRIPTION

@@ -133,16 +133,13 @@ def test_extract_allowed_for_draft_and_complete(
     assert extract(client, trade.id).status_code == 200
 
 
-def test_extract_needs_sl_and_open_trade(
+def test_extract_needs_sl_and_unknown_trade(
     app: FastAPI, client: TestClient, session: Session, account: Account, usage_log: UsageLog
 ) -> None:
+    # An open trade may be extracted since M8-02 (tests/test_open_trade_journal.py).
     use_model(app, FakeClient([]))
     needs_sl = add_trade(session, account, status=TradeStatus.NEEDS_SL.value)
-    open_trade = add_trade(
-        session, account, status=TradeStatus.OPEN.value, close_time=None, exit_price=None
-    )
     error(extract(client, needs_sl.id), 409, "needs_sl")
-    error(extract(client, open_trade.id), 409, "trade_open")
     error(extract(client, 999999), 404, "not_found")
     assert not usage_log.path.exists()
 

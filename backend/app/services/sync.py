@@ -380,6 +380,7 @@ def trade_values(
         current.status if current is not None else None,
         is_closed=closed,
         has_initial_sl=initial_sl is not None,
+        described=current is not None and current.described_at is not None,
     )
     return {
         "symbol": symbol if symbol is not None else built.symbol,

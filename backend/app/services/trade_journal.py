@@ -89,8 +89,10 @@ def journal_view(
     links = sorted(trade.chart_links, key=lambda link: link.id)
     has_before = _has_before_link([c.kind for c in links])
     scope = requirement_scope(trade, required_since)
+    journal = visible_journal(config, stored)
+    config = journal_config_for(trade, config)  # missing lists: pre-entry only while open
     return JournalView(
-        journal=visible_journal(config, stored),
+        journal=journal,
         chart_links=[
             {"id": c.id, "url": c.url, "kind": c.kind, "preview_url": preview_url(c.url)}
             for c in links
@@ -105,10 +107,20 @@ def journal_view(
 # --- save ---
 
 
+def is_open(trade: Trade) -> bool:
+    return trade.status == TradeStatus.OPEN.value or trade.close_time is None
+
+
+def journal_config_for(trade: Trade, config: JournalFieldsConfig) -> JournalFieldsConfig:
+    """An open position carries only the pre-entry fields (M8-02); a closed trade all."""
+    return config.for_open_trade() if is_open(trade) else config
+
+
 def check_describable(trade: Trade) -> None:
-    """409 trade_open / needs_sl: the journal (and AI extraction) need a closed trade with SL."""
-    if trade.status == TradeStatus.OPEN.value or trade.close_time is None:
-        raise ApiError(409, "trade_open", "An open trade cannot be described yet", {"id": trade.id})
+    """409 needs_sl: a closed trade needs its initial SL before the journal (and AI).
+
+    An open trade may be described (M8-02): pre-entry fields only, see `save_journal`.
+    """
     if trade.status == TradeStatus.NEEDS_SL.value:
         raise ApiError(409, "needs_sl", "Set the initial SL before the journal", {"id": trade.id})
 
@@ -120,7 +132,28 @@ def _input_errors(
     errors = {f"fields.{key}": issue.message for key, issue in result.errors.items()}
     for i in duplicate_link_indexes([link.url for link in data.chart_links]):
         errors[f"chart_links.{i}.url"] = "duplicate link (same snapshot or chart)"
+    if is_open(trade):
+        errors |= _open_trade_errors(data, config, result.values)
     return result.values, errors
+
+
+def _is_empty(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == ()
+
+
+def _open_trade_errors(
+    data: JournalInput, config: JournalFieldsConfig, values: Mapping[str, Any]
+) -> dict[str, str]:
+    """After-trade fields and «після угоди» links wait for the close (M8-02)."""
+    errors: dict[str, str] = {}
+    for spec in config.after_fields():
+        for key in (spec.key, spec.text_key):
+            if key is not None and not _is_empty(values.get(key)):
+                errors[f"fields.{key}"] = "after-trade field: fill it in after the close"
+    for i, link in enumerate(data.chart_links):
+        if link.kind == ChartLinkKind.AFTER.value:
+            errors[f"chart_links.{i}.kind"] = "after-trade link: add it after the close"
+    return errors
 
 
 def _apply_values(trade: Trade, config: JournalFieldsConfig, values: dict[str, Any]) -> None:
@@ -179,6 +212,11 @@ def save_journal(
     journal_incomplete (the session is rolled back: nothing is saved).
     """
     check_describable(trade)
+    open_trade = is_open(trade)
+    if open_trade and data.complete:
+        raise ApiError(
+            409, "open_trade_complete", "An open trade cannot be completed", {"id": trade.id}
+        )
     values, errors = _input_errors(data, config, trade)
     if errors:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": errors})
@@ -193,7 +231,8 @@ def save_journal(
     trade.ai_filled_fields = filter_ai_filled(data.ai_filled_fields, values)
     trade.chart_links = [ChartLink(url=link.url, kind=link.kind) for link in data.chart_links]
     _save_violations(db, trade, config, values)
-    trade.status = (TradeStatus.COMPLETE if data.complete else TradeStatus.DRAFT).value
+    if not open_trade:  # an open trade stays open; the close makes it a draft (next_status)
+        trade.status = (TradeStatus.COMPLETE if data.complete else TradeStatus.DRAFT).value
     trade.described_at = now
     if data.complete:
         has_before = _has_before_link([link.kind for link in data.chart_links])

@@ -30,7 +30,11 @@ from app.services.ai.extraction import (
 )
 from app.services.ai.key_status import KeyStatus, KeyStatusTracker
 from app.services.ai.usage_log import UsageLog, summarise_month, usage_log_path
-from app.services.trade_journal import check_describable, requirement_scope
+from app.services.trade_journal import (
+    check_describable,
+    journal_config_for,
+    requirement_scope,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +107,8 @@ def extract(
     if trade is None:
         raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
     check_describable(trade)
+    # M8-02: on an open trade the model is offered (and may fill) pre-entry fields only.
+    config = journal_config_for(trade, config)
     scope = requirement_scope(trade, required_since)
     db.rollback()  # no transaction stays open during the (slow) AI call
     if client is None:

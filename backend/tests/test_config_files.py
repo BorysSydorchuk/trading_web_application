@@ -27,7 +27,7 @@ from app.config_files import (
     get_rules,
     reload_config,
 )
-from app.config_files.journal_fields import load_journal_fields
+from app.config_files.journal_fields import JournalField, load_journal_fields
 from app.config_files.loader import CONFIG_DIR_ENV, read_yaml
 from app.config_files.rules import load_rules
 from app.main import create_app
@@ -375,8 +375,10 @@ def test_get_journal_fields(cfg_dir: Path, api: TestClient) -> None:
         "allow_other_text",
         "min",
         "max",
+        "phase",
     }
     assert first["key"] == "setup_context"
+    assert first["phase"] == "before"
     assert first["options"][0] == {"value": "yes", "label": "так", "deprecated": False}
     assert first["storage"] == "column"
 
@@ -449,3 +451,19 @@ def test_broken_config_returns_config_error(cfg_dir: Path, api: TestClient) -> N
     # Fixing the file is picked up without a restart.
     shutil.copy(REAL_CONFIG / "rules.yaml", cfg_dir / "rules.yaml")
     assert api.get("/api/rules").status_code == 200
+
+
+@pytest.mark.parametrize("field_type", ["auto", "links"])
+def test_phase_after_is_refused_for_auto_and_links(field_type: str) -> None:
+    base: dict[str, Any] = {
+        "key": "x",
+        "label": "x",
+        "type": field_type,
+        "options": [{"value": "a", "label": "a"}],
+        "required": False,
+        "analytics": False,
+        "storage": "column",
+        "phase": "after",
+    }
+    with pytest.raises(ValueError, match="cannot have phase: after"):
+        JournalField.model_validate(base)

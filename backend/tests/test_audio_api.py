@@ -210,9 +210,9 @@ def test_upload_open_trade(
         session, account, status=TradeStatus.OPEN.value, close_time=None, exit_price=None
     )
     response = upload(client, open_trade.id)
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "trade_open"
-    assert _files(data_dir) == []
+    # M8-02: voice notes are accepted while the position is open.
+    assert response.status_code == 201, response.text
+    assert len(_files(data_dir)) == 1
 
 
 @pytest.mark.parametrize("status", ["needs_sl", "needs_description", "draft", "complete"])
