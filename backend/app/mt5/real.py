@@ -53,6 +53,7 @@ from app.mt5.types import (
     RawSymbolSpec,
     to_decimal,
 )
+from app.system.terminals import TerminalWindows
 
 logger = logging.getLogger(__name__)
 
@@ -240,8 +241,11 @@ class RealMt5Source:
         call_timeout_s: float = DEFAULT_CALL_TIMEOUT_S,
         retries: int = 1,
         retry_delay_s: float = RETRY_DELAY_S,
+        windows: TerminalWindows | None = None,
     ) -> None:
         self._module = module
+        # M8-12: hides the windows of terminals this source starts (None = leave them).
+        self._windows = windows
         self._call_timeout_s = call_timeout_s
         self._retries = retries
         self._retry_delay_s = retry_delay_s
@@ -372,6 +376,7 @@ class RealMt5Source:
         self._ensure_idle()
         self._broken = None
         logger.info("MT5 connect: %s login=%s server=%s", exe, login, server)
+        before = self._windows.snapshot(exe) if self._windows is not None else set()
 
         def init() -> bool:
             return bool(
@@ -389,6 +394,8 @@ class RealMt5Source:
             ok, last_error = self._call(
                 "initialize", init, timeout_s + CONNECT_GRACE_S, secrets=(secret,)
             )
+            if self._windows is not None:  # also after a failed login: it may have started one
+                self._windows.started(exe, before)
             if not ok:
                 code_msg = last_error if last_error is not None else (RES_E_FAIL, "failed")
                 raise error_from_last_error(code_msg, during="initialize", secrets=(secret,))

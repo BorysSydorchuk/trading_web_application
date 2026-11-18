@@ -1,5 +1,5 @@
 # Recipes must work in both cmd.exe and sh (GNU make on Windows may use either).
-.PHONY: install dev stop db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend e2e trade-check ai-eval whisper-bench
+.PHONY: install dev stop shortcuts db-ensure db-up migrate check lint typecheck test lint-backend lint-frontend typecheck-backend typecheck-frontend test-backend test-frontend e2e trade-check ai-eval whisper-bench
 
 install:
 	cd backend && uv sync
@@ -13,6 +13,11 @@ stop:
 	python scripts/dev.py --stop
 
 # Start PostgreSQL if needed (Docker) and apply migrations; no-op when already up.
+# M8-12: desktop shortcuts «Старт»/«Стоп» + autostart at login (NO_AUTOSTART=1 to turn it off)
+NO_AUTOSTART ?=
+shortcuts:
+	uv run --project backend python scripts/install_shortcuts.py $(if $(NO_AUTOSTART),--no-autostart)
+
 db-ensure:
 	python scripts/dev.py --ensure-db
 
@@ -37,7 +42,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck

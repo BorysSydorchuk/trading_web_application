@@ -53,6 +53,7 @@ from app.services.ai.warmup import (
 from app.services.journal_requirements import sync_requirements
 from app.services.risk_base import recompute_all
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
+from app.system.terminals import terminal_windows
 from app.worker.backup_job import BACKUP_JOB_ID, BACKUP_POLL_SECONDS, BackupJob
 from app.worker.margin_job import (
     MARGIN_JOB_ID,
@@ -80,6 +81,9 @@ logger = logging.getLogger(__name__)
 
 HEARTBEAT_JOB_ID = "heartbeat"
 HEARTBEAT_INTERVAL_S = 60
+# M8-12: re-hide MT5 windows the terminal restored; apply «Показати / Сховати термінали».
+TERMINALS_JOB_ID = "mt5_windows"
+TERMINALS_JOB_INTERVAL_S = 3
 REQUIREMENTS_JOB_ID = "journal_requirements"
 REQUIREMENTS_JOB_INTERVAL_S = 60
 # How often the main thread wakes while waiting for a stop signal. On Windows, Python only
@@ -204,6 +208,7 @@ def build_scheduler(
     margin_job: Callable[[], None] | None = None,
     mt5: SharedMt5 | None = None,
     backup_job: Callable[[], None] | None = None,
+    terminals_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -312,6 +317,19 @@ def build_scheduler(
         coalesce=True,
         replace_existing=True,
     )
+    windows = terminal_windows(settings.data_dir)
+    default_terminals = windows.apply if windows is not None else None
+    terminals = terminals_job or default_terminals
+    if terminals is not None:  # Windows only: elsewhere there are no terminal windows
+        scheduler.add_job(
+            _safe(TERMINALS_JOB_ID, terminals),
+            trigger=IntervalTrigger(seconds=TERMINALS_JOB_INTERVAL_S, timezone=UTC),
+            id=TERMINALS_JOB_ID,
+            name=TERMINALS_JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
     return scheduler
 
 

@@ -28,6 +28,7 @@ from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
 from app.services.symbol_map import apply_symbol_map
 from app.services.sync import close_orphaned_runs, is_due, sync_account
+from app.system.terminals import terminal_windows
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,8 @@ def make_source(settings: Settings) -> Mt5Source:
     """`MT5_SOURCE`: "real" (default) or "fixture:<path>" (relative to the repo root)."""
     spec = settings.mt5_source.strip()
     if spec.lower() in ("", "real"):
-        return RealMt5Source()
+        # M8-12: terminals the worker starts run with hidden windows.
+        return RealMt5Source(windows=terminal_windows(settings.data_dir))
     if spec.lower().startswith(FIXTURE_PREFIX):
         path = Path(spec[len(FIXTURE_PREFIX) :].strip())
         if not path.is_absolute():

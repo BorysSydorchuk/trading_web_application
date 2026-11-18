@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -62,6 +63,8 @@ def test_build_scheduler_registers_heartbeat(settings: Settings) -> None:
         REQUIREMENTS_JOB_ID,
         "daily_backup",
         "backup_recovery",
+        # M8-12: Windows only (re-hide the MT5 windows of terminals the app started).
+        *(["mt5_windows"] if sys.platform == "win32" else []),
     ]
     sync = scheduler.get_job(SYNC_JOB_ID)
     assert sync is not None

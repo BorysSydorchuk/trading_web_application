@@ -558,3 +558,38 @@ def test_resolve_terminal_guard_uses_env_target(
     with pytest.raises(Mt5Error) as err:
         resolve_terminal(str(exe))
     assert err.value.code is Mt5ErrorCode.TERMINAL_IN_PROGRAM_FILES
+
+
+class RecordingWindows:
+    """M8-12: stands in for app.system.terminals.TerminalWindows."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, Path]] = []
+
+    def snapshot(self, exe: Path) -> set[Any]:
+        self.events.append(("snapshot", exe))
+        return {"owner-terminal"}
+
+    def started(self, exe: Path, before: set[Any]) -> None:
+        assert before == {"owner-terminal"}
+        self.events.append(("started", exe))
+
+
+def test_connect_reports_the_terminal_it_may_have_started(fake: FakeMt5, terminal: Path) -> None:
+    windows = RecordingWindows()
+    src, _ = make_source(fake, windows=windows)
+
+    connect(src, terminal)
+
+    assert windows.events == [("snapshot", terminal), ("started", terminal)]
+
+
+def test_a_failed_login_still_reports_the_started_terminal(fake: FakeMt5, terminal: Path) -> None:
+    windows = RecordingWindows()
+    fake.init_result = False
+    src, _ = make_source(fake, windows=windows)
+
+    with pytest.raises(Mt5Error):
+        connect(src, terminal)
+
+    assert [e for e, _ in windows.events] == ["snapshot", "started"]
