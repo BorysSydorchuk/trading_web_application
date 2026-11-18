@@ -24,6 +24,9 @@ const DEFAULT_PERIOD: PeriodPreset = 'all'
 /** Same name and value in the page URL and the API query (docs/api.md M3). */
 const MISSING_NEW_FIELDS_PARAM = 'missing_new_fields'
 const MISSING_R_PARAM = 'missing_r'
+/** M8-01: `excluded=hide` hides trades excluded from statistics (default: shown). */
+const EXCLUDED_PARAM = 'excluded'
+const EXCLUDED_HIDE = 'hide'
 
 export interface JournalFilters {
   accounts: number[]
@@ -37,6 +40,8 @@ export interface JournalFilters {
   missingNewFields: boolean
   /** Only closed trades without R (`missing_r=true`, digest «Сума R» link). */
   missingR: boolean
+  /** M8-01 «Показати виключені»: default on, nothing disappears silently. */
+  showExcluded: boolean
   sort: TradeSort
   order: SortOrder
   /** 1-based. */
@@ -70,6 +75,7 @@ export function parseFilters(params: URLSearchParams): JournalFilters {
     to: isIsoDate(params.get('to') ?? '') ? (params.get('to') ?? '') : '',
     missingNewFields: params.get(MISSING_NEW_FIELDS_PARAM) === 'true',
     missingR: params.get(MISSING_R_PARAM) === 'true',
+    showExcluded: params.get(EXCLUDED_PARAM) !== EXCLUDED_HIDE,
     sort: oneOf(TRADE_SORT_FIELDS, params.get('sort'), DEFAULT_SORT),
     order: oneOf(['asc', 'desc'] as const, params.get('order'), DEFAULT_ORDER),
     page: positiveInt(params.get('page')) ?? 1,
@@ -91,6 +97,7 @@ export function filtersToParams(f: JournalFilters): URLSearchParams {
   }
   if (f.missingNewFields) params.set(MISSING_NEW_FIELDS_PARAM, 'true')
   if (f.missingR) params.set(MISSING_R_PARAM, 'true')
+  if (!f.showExcluded) params.set(EXCLUDED_PARAM, EXCLUDED_HIDE)
   if (f.sort !== DEFAULT_SORT) params.set('sort', f.sort)
   if (f.order !== DEFAULT_ORDER) params.set('order', f.order)
   if (f.page > 1) params.set('page', String(f.page))
@@ -124,6 +131,7 @@ export function toTradeQuery(f: JournalFilters, today: string = brusselsToday())
     ...periodRange(f, today),
     ...(f.missingNewFields ? { missing_new_fields: true } : {}),
     ...(f.missingR ? { missing_r: true } : {}),
+    ...(f.showExcluded ? {} : { excluded: false }),
     sort: f.sort,
     order: f.order,
     limit: f.limit,
@@ -138,7 +146,8 @@ export function hasActiveFilters(f: JournalFilters): boolean {
     f.statuses.length > 0 ||
     f.period !== DEFAULT_PERIOD ||
     f.missingNewFields ||
-    f.missingR
+    f.missingR ||
+    !f.showExcluded
   )
 }
 
@@ -154,6 +163,7 @@ export function clearedFilters(f: JournalFilters): JournalFilters {
     to: '',
     missingNewFields: false,
     missingR: false,
+    showExcluded: true,
     page: 1,
   }
 }

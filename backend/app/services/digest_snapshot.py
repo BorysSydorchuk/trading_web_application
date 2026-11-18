@@ -50,6 +50,14 @@ class Scope:
 
 
 @dataclass(frozen=True)
+class ExcludedTrade:
+    """M8-01: a period trade left out of the strategy numbers, with the owner's reason."""
+
+    trade: dm.DigestTrade
+    reason: str
+
+
+@dataclass(frozen=True)
 class SnapshotInput:
     kind: dm.PeriodKind
     start: date
@@ -61,6 +69,7 @@ class SnapshotInput:
     by_account: Mapping[int, Scope]  # only accounts with a trade in the period
     journal_fields: Sequence[str]
     bias_marks: Mapping[str, Sequence[bool | None]]
+    excluded: Sequence[ExcludedTrade] = ()
 
 
 def _utc(value: datetime) -> str:
@@ -211,6 +220,29 @@ def _charts(trades: Sequence[dm.DigestTrade], start: date) -> Json:
     }
 
 
+def _excluded(inp: SnapshotInput) -> Json:
+    """«Виключені угоди»: strategy net P&L + excluded net P&L = the accounts' real P&L."""
+    strategy = sum((t.net_pnl for t in inp.combined.period), Decimal(0))
+    excluded = sum((e.trade.net_pnl for e in inp.excluded), Decimal(0))
+    return {
+        "trades": len(inp.excluded),
+        "net_pnl": _money(excluded),
+        "account_net_pnl": _money(strategy + excluded),
+        "items": [
+            {
+                "trade_id": e.trade.id,
+                "account_id": e.trade.account_id,
+                "account_name": inp.account_names.get(e.trade.account_id),
+                "symbol": e.trade.symbol,
+                "close_time": _utc(e.trade.close_time),
+                "net_pnl": _money(e.trade.net_pnl),
+                "reason": e.reason,
+            }
+            for e in sorted(inp.excluded, key=lambda e: (e.trade.close_time, e.trade.id))
+        ],
+    }
+
+
 def build_snapshot(inp: SnapshotInput) -> Json:
     trades = inp.combined.period
     by_account = [
@@ -227,4 +259,5 @@ def build_snapshot(inp: SnapshotInput) -> Json:
         "bias": _bias(trades, inp.bias_marks),
         "charts": _charts(trades, inp.start),
         "trade_ids": sorted(t.id for t in trades),
+        "excluded": _excluded(inp),
     }

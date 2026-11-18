@@ -173,7 +173,8 @@ describe('Bias editor: extraction', () => {
       expect.objectContaining({ symbol: 'EURUSD', direction: 'bearish', confidence: 2, ai_filled_fields: ['direction'] }),
       expect.objectContaining({ symbol: 'GBPUSD', direction: 'bullish', key_levels: 'мої рівні', ai_filled_fields: ['direction'] }),
     ])
-  })
+    // Long user typing flow: timed out once at the 5 s default under full-gate load (M8-01).
+  }, 10_000)
 
   it('shows ai_not_configured as a calm note next to the button', async () => {
     serveEditor()

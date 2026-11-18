@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "calculator_margin_requests",
     "trades",
     "trade_exit_deals",
+    "trade_stats_exclusions",
     "chart_links",
     "audio_notes",
     "bias_entries",

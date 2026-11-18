@@ -12,6 +12,7 @@ import { INBOX_STATUSES, type InboxStatus, type TradeQuery, type TradeRow } from
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { inInbox } from './api'
 import { InitialSlForm } from './InitialSlForm'
 
 const p = uk.inboxPage
@@ -65,7 +66,7 @@ export function InboxList() {
       </div>
     )
   }
-  if (data.items.length === 0) {
+  if (!data.items.some(inInbox)) {
     return (
       <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
         <p className="text-muted-foreground">{p.empty}</p>
@@ -75,7 +76,7 @@ export function InboxList() {
 
   const groups = INBOX_STATUSES.map((status) => ({
     status,
-    trades: data.items.filter((t) => t.status === status),
+    trades: data.items.filter((t) => t.status === status && inInbox(t)),
   })).filter((g) => g.trades.length > 0)
 
   return (

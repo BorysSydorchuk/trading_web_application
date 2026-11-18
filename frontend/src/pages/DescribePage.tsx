@@ -2,6 +2,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { DescribeEditor } from '@/features/describe/DescribeEditor'
+import { ExclusionPanel } from '@/features/exclusion/ExclusionPanel'
 import { InitialSlForm } from '@/features/inbox/InitialSlForm'
 import { TradeSummary } from '@/features/describe/TradeSummary'
 import { useJournalFields, useTrade } from '@/features/trades/api'
@@ -57,7 +58,12 @@ function DescribeContent({ tradeId }: { tradeId: number }) {
       <LoadError text={p.fieldsError} error={fields.error} onRetry={() => void fields.refetch()} busy={fields.isFetching} />
     )
   }
-  return <DescribeGate trade={trade.data} fields={fields.data.fields} />
+  return (
+    <div className="flex flex-col gap-4">
+      <ExclusionPanel trade={trade.data} />
+      <DescribeGate trade={trade.data} fields={fields.data.fields} />
+    </div>
+  )
 }
 
 function DescribeGate({ trade, fields }: { trade: TradeDetail; fields: readonly JournalField[] }) {

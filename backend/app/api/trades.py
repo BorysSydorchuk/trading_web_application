@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.clock import utc_now
 from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
 from app.db import get_db
 from app.domain import metrics
@@ -28,6 +29,7 @@ from app.services.bias_alignment import alignment_settings, lookup_for, trade_bi
 from app.services.fx_values import stored_spec_tick_values
 from app.services.inbox import count_inbox
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
+from app.services.trade_exclusion import exclude_trade, include_trade
 from app.services.trade_journal import journal_view, save_journal
 from app.services.trade_rules import recompute_rules_for_trade
 
@@ -45,6 +47,7 @@ _DETAIL_EXTRA = _ROW_EXTRA | {
     "missing_new_fields",
     "audio_notes",
     "bias_note_ids",
+    "exclusion_history",
 }
 ROW_COLUMNS = [f for f in schemas.TradeRow.model_fields if f not in _ROW_EXTRA]
 DETAIL_COLUMNS = [f for f in schemas.TradeDetail.model_fields if f not in _DETAIL_EXTRA]
@@ -175,6 +178,10 @@ def to_detail(
                 for n in sorted(trade.audio_notes, key=lambda n: (n.created_at, n.id))
             ],
             "violations": [v.rule_key for v in violations],
+            "exclusion_history": [
+                {"action": e.action, "reason": e.reason, "at": e.created_at}
+                for e in trade.stats_exclusions
+            ],
             "rule_violations": [
                 {"rule_key": v.rule_key, "source": v.source, "details": v.details}
                 for v in violations
@@ -232,6 +239,7 @@ def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
             selectinload(Trade.rule_violations),
             selectinload(Trade.chart_links),
             selectinload(Trade.audio_notes),
+            selectinload(Trade.stats_exclusions),
         )
     ).one_or_none()
     if row is None:
@@ -253,9 +261,13 @@ def list_trades(
     missing_new_fields: bool = Query(default=False),
     # Closed trades without an R multiple (digest «Сума R» n/N link, PM 2026-11-14).
     missing_r: bool = Query(default=False),
+    # M8-01: true = only excluded from statistics, false = only counted, absent = all.
+    excluded: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
+    if excluded is not None:
+        conditions.append(Trade.excluded_from_stats.is_(excluded))
     if missing_new_fields:
         conditions.append(missing_new_fields_condition(*journal_context(db)))
     if missing_r:
@@ -369,6 +381,46 @@ def put_journal(
     config, required_since = journal_context(db)
     trade, _ = _load_detail(db, trade_id)
     save_journal(db, trade, body, config, now=datetime.now(UTC), required_since=required_since)
+    db.commit()
+    db.expire_all()
+    return detail(db, trade_id, config, required_since)
+
+
+def _locked(db: Session, trade_id: int) -> Trade:
+    """The trade row under FOR UPDATE: a double click cannot pass the 409 check twice."""
+    trade = db.scalar(select(Trade).where(Trade.id == trade_id).with_for_update())
+    if trade is None:
+        raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
+    return trade
+
+
+@router.post("/trades/{trade_id}/exclude", response_model=schemas.TradeDetail)
+def exclude(
+    trade_id: int,
+    body: schemas.ExcludeInput,
+    db: Session = Depends(get_db),
+    now: datetime = Depends(utc_now),
+) -> schemas.TradeDetail:
+    """Exclude from strategy statistics (docs/api.md M8-01): mandatory reason."""
+    config, required_since = journal_context(db)
+    trade = _locked(db, trade_id)
+    exclude_trade(db, trade, body.reason, now)
+    db.commit()
+    db.expire_all()
+    return detail(db, trade_id, config, required_since)
+
+
+@router.post("/trades/{trade_id}/include", response_model=schemas.TradeDetail)
+def include(
+    trade_id: int,
+    body: schemas.IncludeInput,
+    db: Session = Depends(get_db),
+    now: datetime = Depends(utc_now),
+) -> schemas.TradeDetail:
+    """Return to strategy statistics (docs/api.md M8-01): optional reason."""
+    config, required_since = journal_context(db)
+    trade = _locked(db, trade_id)
+    include_trade(db, trade, body.reason, now)
     db.commit()
     db.expire_all()
     return detail(db, trade_id, config, required_since)

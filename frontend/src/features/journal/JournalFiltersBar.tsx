@@ -129,6 +129,22 @@ export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps)
         />
         {j.filters.missingR}
       </label>
+      <label
+        htmlFor={`${id}-show-excluded`}
+        className={cn(
+          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
+          filters.showExcluded ? 'text-muted-foreground' : 'border-ring',
+        )}
+      >
+        <input
+          id={`${id}-show-excluded`}
+          type="checkbox"
+          className="size-3.5 accent-primary"
+          checked={filters.showExcluded}
+          onChange={(e) => update({ showExcluded: e.target.checked })}
+        />
+        {j.filters.showExcluded}
+      </label>
       {hasActiveFilters(filters) && (
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onChange(clearedFilters(filters))}>
           {j.resetFilters}

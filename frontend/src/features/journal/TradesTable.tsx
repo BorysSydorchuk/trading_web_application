@@ -1,4 +1,8 @@
+import { useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react'
+import { ExcludedBadge } from '@/features/exclusion/ExcludedBadge'
+import { ExclusionDialog, type ExclusionTarget } from '@/features/exclusion/ExclusionDialog'
+import { TradeRowMenu } from '@/features/exclusion/TradeRowMenu'
 import { TradeCell } from '@/features/trades/TradeCell'
 import type { SortOrder, TradeRow, TradeSort } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
@@ -18,6 +22,8 @@ interface TradesTableProps {
 }
 
 export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stale, violationLabel }: TradesTableProps) {
+  // M8-01: one dialog for the table, opened from a row menu.
+  const [exclusion, setExclusion] = useState<ExclusionTarget | null>(null)
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className={cn('w-full text-sm transition-opacity', stale && 'opacity-60')}>
@@ -59,6 +65,9 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                 </th>
               )
             })}
+            <th scope="col" className="px-2 py-2">
+              <span className="sr-only">{uk.journal.actionsColumn}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -88,10 +97,17 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                   <TradeCell trade={trade} column={key} violationLabel={violationLabel} />
                 </td>
               ))}
+              <td className="px-2 py-1 text-right align-top whitespace-nowrap">
+                <div className="flex items-center justify-end gap-1.5">
+                  {trade.excluded_from_stats && <ExcludedBadge reason={trade.excluded_reason} />}
+                  <TradeRowMenu trade={trade} onExclusion={setExclusion} />
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      <ExclusionDialog trade={exclusion} onClose={() => setExclusion(null)} />
     </div>
   )
 }

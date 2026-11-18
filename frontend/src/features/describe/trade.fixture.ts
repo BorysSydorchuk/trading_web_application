@@ -58,6 +58,10 @@ export function fixtureTrade(overrides: Partial<TradeDetail> = {}): TradeDetail 
     described_at: null,
     missing_required: [],
     missing_new_fields: [],
+    excluded_from_stats: false,
+    excluded_reason: null,
+    excluded_at: null,
+    exclusion_history: [],
     ...overrides,
   }
 }

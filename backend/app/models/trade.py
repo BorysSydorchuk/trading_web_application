@@ -37,6 +37,7 @@ from app.models.enums import (
     Direction,
     ExitReasonSource,
     InitialSlSource,
+    StatsExclusionAction,
     TradeStatus,
     TradingSession,
     ViolationSource,
@@ -73,6 +74,13 @@ class Trade(TimestampMixin, Base):
         CheckConstraint("jsonb_typeof(extra) = 'object'", name="extra_is_object"),
         CheckConstraint(
             "jsonb_typeof(ai_filled_fields) = 'array'", name="ai_filled_fields_is_array"
+        ),
+        # M8-01: an excluded trade always has its reason and time, a counted one neither.
+        CheckConstraint(
+            "excluded_from_stats = (excluded_reason IS NOT NULL)"
+            " AND excluded_from_stats = (excluded_at IS NOT NULL)"
+            " AND (excluded_reason IS NULL OR length(btrim(excluded_reason)) > 0)",
+            name="stats_exclusion_consistent",
         ),
     )
 
@@ -149,6 +157,12 @@ class Trade(TimestampMixin, Base):
     )
     described_at: Mapped[datetime | None]
 
+    # --- M8-01: left out of strategy statistics, still counted in money and risk ---
+    # Owner-only columns: the MT5 sync never writes them, so they survive every re-sync.
+    excluded_from_stats: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    excluded_reason: Mapped[str | None] = mapped_column(Text)
+    excluded_at: Mapped[datetime | None]
+
     exit_deals: Mapped[list[TradeExitDeal]] = relationship(
         back_populates="trade",
         cascade="all, delete-orphan",
@@ -163,6 +177,12 @@ class Trade(TimestampMixin, Base):
     )
     audio_notes: Mapped[list[AudioNote]] = relationship(
         back_populates="trade", cascade="all, delete-orphan", passive_deletes=True
+    )
+    stats_exclusions: Mapped[list[TradeStatsExclusion]] = relationship(
+        back_populates="trade",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="TradeStatsExclusion.id",
     )
 
 
@@ -206,3 +226,22 @@ class RuleViolation(TimestampMixin, Base):
     details: Mapped[str | None] = mapped_column(Text)
 
     trade: Mapped[Trade] = relationship(back_populates="rule_violations")
+
+
+class TradeStatsExclusion(TimestampMixin, Base):
+    """History of M8-01 exclude / include actions; ``created_at`` is when it happened."""
+
+    __tablename__ = "trade_stats_exclusions"
+    __table_args__ = (
+        enum_check("action", StatsExclusionAction, "action_valid"),
+        CheckConstraint(
+            "action <> 'exclude' OR length(btrim(reason)) > 0", name="exclude_has_reason"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trade_id: Mapped[int] = mapped_column(ForeignKey("trades.id", ondelete="CASCADE"), index=True)
+    action: Mapped[str] = mapped_column(String(10))
+    reason: Mapped[str | None] = mapped_column(Text)
+
+    trade: Mapped[Trade] = relationship(back_populates="stats_exclusions")
