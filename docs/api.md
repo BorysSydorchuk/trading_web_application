@@ -686,3 +686,28 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - `PUT /api/system/terminals {visible: bool}` -> same shape; stored in `<DATA_DIR>/terminals_visible.json`; the worker job `mt5_windows` (every 3 s) applies it.
 - MT5: `RealMt5Source.connect` snapshots the terminal processes at the account's terminal path before `mt5.initialize` and records the new ones (PID + creation time, `<DATA_DIR>/mt5_terminals.json`) after it, also after a failed login or a timeout. Only those are hidden (`ShowWindow SW_HIDE`, re-hidden when restored); «Показати термінали» shows exactly the windows the app hid. A terminal already running before the call (the owner's) is never touched. No MT5 API call changed.
 - Desktop: `scripts/tray.py` (pystray) starts `scripts/dev.py --no-browser` with CREATE_NO_WINDOW (children inherit the windowless console), logs to `logs/launcher.log` / `logs/tray.log`, notifies a failed start or crash. `scripts/install_shortcuts.py` writes the icon (`data/journal.ico`), the two desktop shortcuts and autostart (default ON).
+
+## M8-16 - MAE / MFE per trade (PM 2026-11-18; contract)
+
+### Domain (pure, `app/domain/excursion.py`, Decimal only)
+- Input: direction (buy/sell), `entry_price`, `initial_sl` (or None), `open_time`, `end_time` (close time, or "now" for an open trade; both aware UTC), price samples `PriceSample(time, bid_high, bid_low, ask_high, ask_low)`. A tick is a sample with high = low.
+- Only samples with `open_time <= time <= end_time` count.
+- Long (buy) uses **bid**: favourable extreme = max `bid_high`, adverse extreme = min `bid_low`. Short (sell) uses **ask**: favourable = min `ask_low`, adverse = max `ask_high` (the side the position closes on).
+- `mfe_distance = max(0, favourable move from entry)`, `mae_distance = max(0, adverse move from entry)` (price units); `mfe_price`/`mae_price` = the extreme price, `mfe_time`/`mae_time` = time of the first sample reaching it (if the move is 0, the price is the entry and the time is `open_time`).
+- `risk = |entry - initial_sl|`; `mfe_r = mfe_distance / risk`, `mae_r = mae_distance / risk`, rounded HALF_UP to 4 dp; None when there is no SL or risk is 0. MAE R may exceed 1 (gap / slippage through SL). Points = distance / symbol `point` (None when the point is unknown), 1 dp.
+- No sample in range -> None ("unavailable").
+
+### Price series (service)
+- MT5 read-only: `copy_ticks_range(symbol, from, to, COPY_TICKS_ALL)` and `copy_rates_range(symbol, TIMEFRAME_M1, from, to)` (server epochs, like `history_deals_get`; times converted with the sync's broker-time conversion).
+- Trade shorter than 2 h: ticks for the whole range. Longer: ticks for the entry minute (open_time .. next full minute) and the exit minute (last full minute .. close), M1 bars for the full minutes in between. Bar bid high/low = bar high/low; bar ask = bid + bar `spread` x point.
+
+### Storage (migration; `trades`)
+`mfe_price`, `mae_price` (PRICE), `mfe_time`, `mae_time` (timestamptz), `mfe_points`, `mae_points` (NUMERIC(14,1)), `mfe_r`, `mae_r` (RATIO), `excursion_status` (`final` | `running` | `unavailable`, CHECK), `excursion_source` (`ticks` | `m1_ticks`), `excursion_at` (timestamptz). MT5 raw data and the trade's other columns are never changed by it.
+
+### When it runs
+- In each account sync, after the trades are written, inside the same MT5 connection, with a time budget (20 s per account): closed trades of the last 7 days without a final value (oldest first, up to 5 per sync) and open trades whose running value is older than 15 min (status `running`, shown «поточні»). A failure is logged and never fails the sync. MT5 without history for the range -> `unavailable` (not retried by the worker).
+- Backfill: `python -m app.tools.backfill_excursions [--apply] [--account ID] [--retry-unavailable]` (dry run by default: computes and prints per trade and totals, writes nothing). Connects to MT5 read-only like `trade_check`; refuses while the worker is running (recent heartbeat).
+
+### API / UI
+- `TradeRow` / `TradeDetail` add `mfe_r`, `mae_r`, `excursion_status`; `TradeDetail` adds `mfe_price`, `mae_price`, `mfe_points`, `mae_points`, `mfe_time`, `mae_time`, `excursion_source`, `excursion_at`. Journal: optional columns «MAE, R» / «MFE, R» (column chooser); trade details: both values with points and Brussels times, «поточні» for an open trade.
+- Digest snapshot (strategy trades, M8-01 exclusions apply): `excursions: {winners_avg_mfe_r, losers_avg_mfe_r, losers_reached_1r, losers_reached_1r_share, n_winners, n_losers}` over trades with a final `mfe_r` (win/loss as in the digest's breakeven rule).
