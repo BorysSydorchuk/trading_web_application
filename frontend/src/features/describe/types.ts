@@ -1,13 +1,15 @@
 /** Describe screen API types (docs/api.md "## M2"). */
 import type { JournalValue } from '@/features/trades/types'
 
-/** Body of PUT /api/trades/{id}/journal: all five keys are required. */
+/** Body of PUT /api/trades/{id}/journal: the first five keys are required. */
 export interface JournalInput {
   fields: Record<string, JournalValue>
   chart_links: { url: string; kind: string }[]
   raw_text: string | null
   ai_filled_fields: string[]
   complete: boolean
+  /** M8-02: the form was built while the trade was open; the server keeps after-trade data. */
+  form_open?: boolean
 }
 
 export interface ExtractUsage {

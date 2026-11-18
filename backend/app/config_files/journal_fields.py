@@ -148,6 +148,7 @@ class JournalFieldsConfig(_Strict):
         )
 
     def after_fields(self) -> tuple[JournalField, ...]:
+        """The after-trade fields (phase after): empty while the position is open."""
         return tuple(f for f in self.fields if f.phase == "after")
 
     def to_api(self) -> dict[str, Any]:

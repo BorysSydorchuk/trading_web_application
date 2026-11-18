@@ -74,7 +74,8 @@ function useJournalValues(trade: TradeDetail, fields: readonly JournalField[]) {
   return { stored, ...edit, setValue, mergeResult }
 }
 
-export function useDescribeForm(trade: TradeDetail, fields: readonly JournalField[]) {
+/** `formOpen`: the form was built for an open trade (M8-02): saves say so (`form_open`). */
+export function useDescribeForm(trade: TradeDetail, fields: readonly JournalField[], formOpen = false) {
   const journal = useJournalValues(trade, fields)
   const errors = useSaveErrors()
   const [links, setLinksState] = useState<LinkDraft[]>(() => initialLinks(trade))
@@ -100,6 +101,7 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
       raw_text: rawText.trim() === '' ? null : rawText,
       ai_filled_fields: aiFilledForSave(aiFilled, payload),
       complete,
+      ...(formOpen ? { form_open: true } : {}),
     }
     return { input, context: { sentRowIds: sent.map((link) => link.rowId), rendered: renderedKeys(fields, values) } }
   }

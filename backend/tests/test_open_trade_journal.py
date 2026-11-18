@@ -36,7 +36,7 @@ OPENED = BASE  # server time 2026-10-20 09:00 = 06:00 UTC
 SERVER_OFFSET_S = 3 * 3600
 # Each sync runs a few minutes after the deals of its stage (the history window starts at
 # the last sync minus the overlap, so the close must be newer than the first sync).
-SYNC_AT = {"open": 300, "partial": 900, "closed": 1500}
+SYNC_AT = {"open": 300, "partial": 900, "closed": 1500, "closed_tp": 1500}
 BEFORE_1 = "https://www.tradingview.com/x/AbCd1234/"
 BEFORE_2 = "https://www.tradingview.com/x/EfGh5678/"
 AFTER_1 = "https://www.tradingview.com/x/IjKl9012/"
@@ -96,18 +96,22 @@ def _position(volume: str) -> dict[str, Any]:
 
 
 def mt5_data(stage: str) -> dict[str, Any]:
-    """`open`, `partial` (0.5 closed, 0.5 still open) or `closed`."""
+    """`open`, `partial` (0.5 closed, 0.5 still open), `closed` (manual) or `closed_tp`
+    (the last 0.5 hits the TP: MT5 reason 5, so the sync prefills exit_reason tp)."""
     deals = [
         _deal(1, OPENED - 86400, 0, "0", "0")
         | {"type": 2, "profit": "100000", "symbol": "", "position_id": 0},
         _deal(PID * 10, OPENED, 0, "1.165", "1"),
     ]
     positions = [_position("1")]
-    if stage in ("partial", "closed"):
+    if stage in ("partial", "closed", "closed_tp"):
         deals.append(_deal(PID * 10 + 1, OPENED + 600, 1, "1.168", "0.5"))
         positions = [_position("0.5")]
     if stage == "closed":
         deals.append(_deal(PID * 10 + 2, OPENED + 1200, 1, "1.168", "0.5"))
+        positions = []
+    if stage == "closed_tp":
+        deals.append(_deal(PID * 10 + 2, OPENED + 1200, 1, "1.17", "0.5") | {"reason": 5})
         positions = []
     return {
         "format": 1,
@@ -172,8 +176,10 @@ def journal_body(
     *,
     raw_text: str | None = "Вхід від FVG M5, спокійно.",
     complete: bool = False,
+    form_open: bool | None = None,
 ) -> dict[str, Any]:
-    return {
+    extra = {} if form_open is None else {"form_open": form_open}
+    return extra | {
         "fields": PRE_ENTRY if fields is None else fields,
         "chart_links": [
             {"url": url, "kind": kind}
@@ -468,3 +474,73 @@ def test_journal_fields_mark_the_after_trade_phase(client: TestClient) -> None:
     assert {k for k, p in phases.items() if p == "after"} == AFTER_KEYS
     assert phases["entry_model"] == phases["chart_links"] == "before"
     assert get_journal_fields().for_open_trade().get("exit_reason") is None
+
+
+# --- review fix: a form opened while the trade was open, saved after the close ---------------
+
+
+def test_open_form_saved_after_the_close_keeps_the_mt5_exit_reason(
+    client: TestClient, session: Session, account: Account, rules: RulesConfig
+) -> None:
+    trade = describe_open(client, session, account, rules)
+    closed = sync(session, account, rules, "closed_tp")
+    assert (closed.exit_reason, closed.exit_reason_source) == ("tp", "mt5_reason")
+
+    data = ok(put(client, trade, journal_body(raw_text="ще трохи тексту", form_open=True)))
+
+    assert data["status"] == TradeStatus.DRAFT.value
+    assert data["raw_text"] == "ще трохи тексту"
+    session.expire_all()
+    stored = session.get(Trade, trade.id)
+    assert stored is not None
+    assert (stored.exit_reason, stored.exit_reason_source) == ("tp", "mt5_reason")
+
+
+def test_open_form_saved_after_the_close_keeps_after_trade_values_and_links(
+    client: TestClient, session: Session, account: Account, rules: RulesConfig
+) -> None:
+    trade = describe_open(client, session, account, rules)
+    sync(session, account, rules, "closed")
+    after = {"emotion_after": "fomo", "emotion_after_text": "поспішив", "lesson": "терпіння"}
+    links = [(BEFORE_1, "before"), (AFTER_1, "after")]
+    ok(put(client, trade, journal_body(PRE_ENTRY | after, links)))  # e.g. another tab
+
+    # The stale open form: pre-entry values only, its own before links.
+    stale = journal_body(
+        PRE_ENTRY | {"entry_model": "qm_m5"}, [(BEFORE_2, "before")], form_open=True
+    )
+    data = ok(put(client, trade, stale))
+
+    assert data["journal"]["entry_model"] == "qm_m5"
+    assert data["journal"]["emotion_after"] == "fomo"
+    assert data["journal"]["emotion_after_text"] == "поспішив"
+    assert data["journal"]["lesson"] == "терпіння"
+    assert [(c["url"], c["kind"]) for c in data["chart_links"]] == [
+        (BEFORE_2, "before"),
+        (AFTER_1, "after"),
+    ]
+
+
+def test_without_the_flag_a_closed_trade_save_is_a_full_replacement(
+    client: TestClient, session: Session, account: Account, rules: RulesConfig
+) -> None:
+    trade = describe_open(client, session, account, rules)
+    sync(session, account, rules, "closed_tp")
+
+    ok(put(client, trade, journal_body()))
+
+    session.expire_all()
+    stored = session.get(Trade, trade.id)
+    assert stored is not None
+    assert (stored.exit_reason, stored.exit_reason_source) == (None, "owner")
+
+
+def test_after_trade_note_alone_is_rejected_while_open(
+    client: TestClient, session: Session, account: Account, rules: RulesConfig
+) -> None:
+    trade = sync(session, account, rules, "open")
+
+    response = put(client, trade, journal_body(PRE_ENTRY | {"emotion_after_text": "поспішив"}))
+
+    assert response.status_code == 422, response.text
+    assert "fields.emotion_after_text" in response.json()["error"]["details"]["fields"]

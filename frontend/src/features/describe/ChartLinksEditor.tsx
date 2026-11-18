@@ -10,6 +10,7 @@ import {
   LINK_KINDS,
   MAX_CHART_LINKS,
   MAX_URL_LENGTH,
+  filledLinks,
   hasBeforeLink,
   isValidChartUrl,
   newLinkRow,
@@ -45,7 +46,9 @@ interface ChartLinksEditorProps {
 export function ChartLinksEditor(props: ChartLinksEditorProps) {
   const { field, links, errors, missing, onChange, fieldKey = 'chart_links', label = l.title, showKind = true, groups } = props
   const kindLabel = (kind: string) => field?.options?.find((o) => o.value === kind)?.label ?? l.kinds[kind as LinkKind] ?? kind
-  const canAdd = links.length < MAX_CHART_LINKS
+  // Blank (default) rows are never sent, so only filled links count toward the limit.
+  const filledCount = filledLinks(links).length
+  const canAdd = filledCount < MAX_CHART_LINKS
 
   function update(rowId: string, patch: Partial<LinkDraft>) {
     onChange(links.map((link) => (link.rowId === rowId ? { ...link, ...patch, previewUrl: patch.url !== undefined ? null : link.previewUrl } : link)))
@@ -74,7 +77,7 @@ export function ChartLinksEditor(props: ChartLinksEditorProps) {
     const parts = event.clipboardData.getData('text').split(/\s+/).filter(Boolean)
     if (parts.length < 2) return
     event.preventDefault()
-    const room = MAX_CHART_LINKS - links.length + 1
+    const room = MAX_CHART_LINKS - filledCount + (row.url.trim() === '' ? 0 : 1)
     const [first = '', ...rest] = parts.slice(0, room)
     const extra = rest.map((url) => newLinkRow(url, row.kind))
     const index = links.findIndex((link) => link.rowId === row.rowId)

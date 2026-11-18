@@ -36,7 +36,7 @@ from app.domain.journal import (
 from app.errors import ApiError
 from app.models import ChartLink, RuleViolation, Trade
 from app.models.enums import ChartLinkKind, TradeStatus, ViolationSource
-from app.schemas.trades import JournalInput
+from app.schemas.trades import ChartLinkIn, JournalInput
 from app.services.trade_rules import recompute_rules_for_trade
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,7 @@ def journal_view(
 
 
 def is_open(trade: Trade) -> bool:
+    """The one rule for "position still open" (status open, no close time)."""
     return trade.status == TradeStatus.OPEN.value or trade.close_time is None
 
 
@@ -154,6 +155,27 @@ def _open_trade_errors(
         if link.kind == ChartLinkKind.AFTER.value:
             errors[f"chart_links.{i}.kind"] = "after-trade link: add it after the close"
     return errors
+
+
+def keep_after_trade(data: JournalInput, config: JournalFieldsConfig, trade: Trade) -> JournalInput:
+    """A form built while the trade was open, saved after the close (M8-02): it never had the
+    after-trade fields or «після угоди» links, so the stored ones (e.g. the M8-09 exit-reason
+    prefill) are kept instead of being cleared by the full replacement."""
+    stored = stored_journal(trade, config)
+    after_keys = {key for spec in config.after_fields() for key in (spec.key, spec.text_key) if key}
+    fields = {k: v for k, v in data.fields.items() if k not in after_keys}
+    fields |= {key: stored.get(key) for key in after_keys}
+    links = [link for link in data.chart_links if link.kind != ChartLinkKind.AFTER.value]
+    links += [
+        ChartLinkIn(url=c.url, kind=ChartLinkKind.AFTER.value)
+        for c in sorted(trade.chart_links, key=lambda link: link.id)
+        if c.kind == ChartLinkKind.AFTER.value
+    ]
+    ai_filled = [k for k in data.ai_filled_fields if k not in after_keys]
+    ai_filled += [k for k in trade.ai_filled_fields if k in after_keys]
+    return data.model_copy(
+        update={"fields": fields, "chart_links": links, "ai_filled_fields": ai_filled}
+    )
 
 
 def _apply_values(trade: Trade, config: JournalFieldsConfig, values: dict[str, Any]) -> None:
@@ -208,11 +230,13 @@ def save_journal(
     `complete: true` needs only the required fields that apply to the trade (closed at or
     after their `required_since`); a field made required later never blocks it.
 
-    Raises ApiError: 409 trade_open / needs_sl, 422 validation_error, 422
+    Raises ApiError: 409 needs_sl / open_trade_complete, 422 validation_error, 422
     journal_incomplete (the session is rolled back: nothing is saved).
     """
     check_describable(trade)
     open_trade = is_open(trade)
+    if data.form_open and not open_trade:
+        data = keep_after_trade(data, config, trade)
     if open_trade and data.complete:
         raise ApiError(
             409, "open_trade_complete", "An open trade cannot be completed", {"id": trade.id}
