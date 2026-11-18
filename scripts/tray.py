@@ -48,6 +48,8 @@ MUTEX_NAME = "Local\\TradingJournalTray"
 MAX_LOG_BYTES = 5 * 1024 * 1024
 READY_TIMEOUT_S = 600
 STOP_TIMEOUT_S = 120
+# After a stop: dev.py --stop waits 15 s for the launcher; then the tray kills what is left.
+QUIT_WAIT_S = 30
 ERROR_ALREADY_EXISTS = 183
 CREATE_NO_WINDOW = 0x08000000
 
@@ -242,6 +244,8 @@ class TrayApp:
         self._ready = False
         self._started_at = time.monotonic()
         self._timeout_reported = False
+        self._stop_thread: threading.Thread | None = None
+        self._stop_code: int | None = None
         self.icon = pystray.Icon(
             "trading_journal", draw_icon(64), MSG["title_starting"], self._menu()
         )
@@ -271,7 +275,11 @@ class TrayApp:
         return MSG["hide_terminals"] if terminals_visible(self._data_dir) else MSG["show_terminals"]
 
     def _toggle_terminals(self) -> None:
-        set_terminals_visible(self._data_dir, not terminals_visible(self._data_dir))
+        try:
+            set_terminals_visible(self._data_dir, not terminals_visible(self._data_dir))
+        except OSError as exc:
+            logger.error("Terminal visibility not saved: %s", exc)
+            self._notify(MSG["start_failed"].format(error=exc))
 
     def _autostart(self) -> bool:
         try:
@@ -291,14 +299,13 @@ class TrayApp:
             self._start_launcher()
 
     def _stop_async(self) -> None:
-        threading.Thread(target=self._stop, name="tray-stop", daemon=True).start()
+        self._stop_thread = threading.Thread(target=self._stop, name="tray-stop", daemon=True)
+        self._stop_thread.start()
 
     def _stop(self) -> None:
         """«Зупинити»: same path as the desktop «Стоп»; the watch loop closes the tray."""
-        code = run_stop()
-        logger.info("Stop requested from the tray, dev.py --stop exit %s", code)
-        if code != 0:
-            self._notify(MSG["stop_incomplete"])
+        self._stop_code = run_stop()
+        logger.info("Stop requested from the tray, dev.py --stop exit %s", self._stop_code)
 
     # -- launcher
 
@@ -342,12 +349,18 @@ class TrayApp:
             self._notify(MSG["ready"])
 
     def _quit(self, proc: subprocess.Popen[bytes] | None) -> None:
+        stopper = self._stop_thread
+        if stopper is not None:  # menu «Зупинити»: wait for its result before closing
+            stopper.join(timeout=STOP_TIMEOUT_S)
         if proc is not None:
             try:
-                proc.wait(timeout=STOP_TIMEOUT_S)
+                proc.wait(timeout=QUIT_WAIT_S)
             except subprocess.TimeoutExpired:
                 logger.warning("Launcher still alive after the stop: killing its tree")
                 kill_tree(proc.pid)
+        if self._stop_code not in (None, 0):
+            self._notify(MSG["stop_incomplete"])
+            time.sleep(3)  # let the notification show before the icon goes
         logger.info("Tray exits")
         self.icon.stop()
 
