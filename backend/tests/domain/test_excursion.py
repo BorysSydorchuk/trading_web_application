@@ -305,3 +305,53 @@ def test_naive_datetimes_rejected() -> None:
 def test_end_before_open_rejected() -> None:
     with pytest.raises(ValueError, match="before open_time"):
         run(Direction.BUY, "1.08500", "1.08400", [], end=at(-1))
+
+
+# --- review fixes: R that would not fit NUMERIC(10,4); R from stored extremes ------------------
+
+
+def test_an_r_too_large_for_storage_is_left_empty() -> None:
+    from app.domain.excursion import MAX_STORABLE_R
+
+    entry = Decimal("1.16500")
+    result = compute_excursion(
+        Direction.BUY,
+        entry,
+        entry - Decimal("0.00001"),  # 1 point of risk
+        T0,
+        at(10),
+        [tick(at(1), Decimal("200"), Decimal("200.0001"))],
+        Decimal("0.00001"),
+    )
+    assert result is not None
+    assert result.mfe_r is None  # 19_998_350 R does not fit NUMERIC(10,4)
+    assert result.mfe_points is not None
+    assert Decimal("999999.9999") == MAX_STORABLE_R
+
+
+@pytest.mark.parametrize(
+    ("direction", "mfe", "mae", "expected"),
+    [
+        (Direction.BUY, "1.16800", "1.16380", (Decimal("1.5000"), Decimal("0.6000"))),
+        (Direction.SELL, "1.16200", "1.16620", (Decimal("1.5000"), Decimal("0.6000"))),
+    ],
+)
+def test_r_is_recomputed_from_the_stored_extremes_for_a_new_sl(
+    direction: Direction, mfe: str, mae: str, expected: tuple[Decimal, Decimal]
+) -> None:
+    from app.domain.excursion import r_from_extremes
+
+    entry = Decimal("1.16500")
+    sl = entry - Decimal("0.002") if direction is Direction.BUY else entry + Decimal("0.002")
+    assert r_from_extremes(direction, entry, sl, Decimal(mfe), Decimal(mae)) == expected
+
+
+def test_r_from_extremes_without_prices_or_risk_is_empty() -> None:
+    from app.domain.excursion import r_from_extremes
+
+    entry = Decimal("1.165")
+    assert r_from_extremes(Direction.BUY, entry, entry, Decimal("1.17"), Decimal("1.16")) == (
+        None,
+        None,
+    )
+    assert r_from_extremes(Direction.BUY, entry, Decimal("1.16"), None, None) == (None, None)

@@ -232,7 +232,16 @@ def test_final_values_are_not_read_again(
     assert trades[SHORT_PID].excursion_status == "final"
 
 
-def test_an_mt5_read_failure_never_fails_the_sync(
+def at(
+    session: Session, account: Account, rules: RulesConfig, source: FixtureMt5Source, when: datetime
+) -> dict[int, Trade]:
+    session.expire_all()
+    log = run(session, account, source, rules, when)
+    assert log.ok is True, log.error_message
+    return trades_by_pid(session, account.id)
+
+
+def test_an_mt5_read_failure_never_fails_the_sync_and_is_retried_later(
     session: Session, account: Account, rules: RulesConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = FixtureMt5Source(data(NOW_SERVER))
@@ -243,18 +252,113 @@ def test_an_mt5_read_failure_never_fails_the_sync(
     monkeypatch.setattr(source, "ticks", broken)
     trades = sync(session, account, rules, source)
 
-    assert trades[SHORT_PID].excursion_status is None  # retried next sync
     assert trades[SHORT_PID].close_time is not None  # the trade itself synced
+    assert trades[SHORT_PID].excursion_status is None
+    assert trades[SHORT_PID].excursion_at == NOW  # the attempt is recorded
+
+    monkeypatch.undo()
+    calls = len(source.calls)
+    at(session, account, rules, source, NOW + timedelta(minutes=5))  # within RETRY_EVERY
+    assert "ticks" not in source.calls[calls:]
+    retried = at(session, account, rules, source, NOW + timedelta(minutes=11))
+    assert retried[SHORT_PID].excursion_status == "final"
 
 
-def test_no_history_marks_the_trade_unavailable(
+def test_a_timeout_ends_the_step_so_the_next_sync_is_not_blocked(
+    session: Session, account: Account, rules: RulesConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = FixtureMt5Source(data(NOW_SERVER))
+    reads: list[str] = []
+
+    def slow(symbol: str, *_: Any) -> Any:
+        reads.append(symbol)
+        raise Mt5Error(Mt5ErrorCode.TIMEOUT, "copy_ticks_range timed out")
+
+    monkeypatch.setattr(source, "ticks", slow)
+    sync(session, account, rules, source)
+
+    assert len(reads) == 1  # three closed trades were due; the first timeout stops the step
+
+
+def test_no_history_is_retried_until_a_day_after_the_close(
     session: Session, account: Account, rules: RulesConfig
 ) -> None:
-    empty = data(NOW_SERVER) | {"tick_history": {}, "m1_rates": {}}
-    trades = sync(session, account, rules, FixtureMt5Source(empty))
+    empty = FixtureMt5Source(data(NOW_SERVER) | {"tick_history": {}, "m1_rates": {}})
+    trades = sync(session, account, rules, empty)
+    assert trades[SHORT_PID].excursion_status is None  # fresh history may still download
 
+    later = NOW + timedelta(days=2)
+    old = FixtureMt5Source(data(NOW_SERVER + 2 * 86400) | {"tick_history": {}, "m1_rates": {}})
+    trades = at(session, account, rules, old, later)
     assert trades[SHORT_PID].excursion_status == "unavailable"
     assert trades[SHORT_PID].mfe_r is None
+
+
+def test_missing_edge_ticks_never_give_a_final_value_for_a_recent_trade(
+    session: Session, account: Account, rules: RulesConfig
+) -> None:
+    fixture = data(NOW_SERVER)
+    long_close = OPEN + 3 * 3600 + 30
+    fixture["tick_history"] = {
+        "EURUSD": [
+            t for t in fixture["tick_history"]["EURUSD"] if t["time_msc"] < (long_close - 60) * 1000
+        ]
+    }
+    trades = sync(session, account, rules, FixtureMt5Source(fixture))
+
+    assert trades[LONG_PID].excursion_status is None  # exit minute (SL/TP hit) missing
+    assert trades[SHORT_PID].excursion_status == "final"
+
+
+def test_an_open_trade_without_ticks_is_never_unavailable_and_becomes_final_after_close(
+    session: Session, account: Account, rules: RulesConfig
+) -> None:
+    opened = data(NOW_SERVER, open_position=True)
+    opened["tick_history"] = {
+        "EURUSD": [
+            t for t in opened["tick_history"]["EURUSD"] if t["time_msc"] < (NOW_SERVER - 700) * 1000
+        ]
+    }
+    trades = sync(session, account, rules, FixtureMt5Source(opened))
+    assert trades[OPEN_PID].excursion_status is None
+
+    closed = data(NOW_SERVER + 1200, open_position=True)
+    closed["positions"] = []
+    closed["deals"].append(deal(41, OPEN_PID, NOW_SERVER + 600, 1, 1, "1.1665"))
+    closed["tick_history"]["EURUSD"].append(
+        {"time_msc": (NOW_SERVER + 600) * 1000, "bid": "1.1665", "ask": "1.1666"}
+    )
+    later = NOW + timedelta(minutes=20)
+    source = FixtureMt5Source(closed)
+    at(session, account, rules, source, later)  # the close is synced
+    trades = at(session, account, rules, source, later + timedelta(minutes=11))
+    assert trades[OPEN_PID].excursion_status == "final"
+    assert trades[OPEN_PID].mfe_r == D("0.5000")
+
+
+def test_a_partial_close_stays_running_and_is_final_over_open_to_last_close(
+    session: Session, account: Account, rules: RulesConfig
+) -> None:
+    fixture = data(NOW_SERVER, open_position=True)
+    fixture["deals"][-1] = fixture["deals"][-1] | {"volume": "2"}
+    fixture["positions"][0] = fixture["positions"][0] | {"volume": "1"}
+    fixture["deals"].append(deal(41, OPEN_PID, NOW_SERVER - 400, 1, 1, "1.1665"))
+    trades = sync(session, account, rules, FixtureMt5Source(fixture))
+    assert trades[OPEN_PID].excursion_status == "running"
+
+    final = deepcopy(fixture)
+    final["positions"] = []
+    final["deals"].append(deal(42, OPEN_PID, NOW_SERVER + 600, 1, 1, "1.1680"))
+    final["tick_history"]["EURUSD"].append(
+        {"time_msc": (NOW_SERVER + 600) * 1000, "bid": "1.1680", "ask": "1.1681"}
+    )
+    final["ticks"] = {"EURUSD": NOW_SERVER + 1200}
+    later = NOW + timedelta(minutes=20)
+    source = FixtureMt5Source(final)
+    at(session, account, rules, source, later)
+    trades = at(session, account, rules, source, later + timedelta(minutes=11))
+    assert trades[OPEN_PID].excursion_status == "final"
+    assert trades[OPEN_PID].mfe_r == D("1.0000")  # the high came after the partial close
 
 
 def test_trades_older_than_seven_days_wait_for_the_backfill(
@@ -267,3 +371,22 @@ def test_trades_older_than_seven_days_wait_for_the_backfill(
         assert run(session, account, source, rules, later).ok is True
 
     assert trades_by_pid(session, account.id)[SHORT_PID].excursion_status is None
+
+
+def test_setting_the_initial_sl_recomputes_r_from_the_stored_extremes(
+    client: Any, session: Session, account: Account, rules: RulesConfig
+) -> None:
+    trade = sync(session, account, rules)[SHORT_PID]
+    trade.initial_sl, trade.mfe_r, trade.mae_r = None, None, None
+    trade.status, trade.initial_sl_source = "needs_sl", None
+    session.commit()
+
+    response = client.patch(f"/api/trades/{trade.id}", json={"initial_sl": "1.163"})
+
+    assert response.status_code == 200, response.text
+    session.expire_all()
+    stored = session.get(Trade, trade.id)
+    assert stored is not None
+    # risk 0.002: MFE 1.168 -> 1.5 R, MAE 1.1638 -> 0.6 R; points and prices unchanged
+    assert (stored.mfe_r, stored.mae_r) == (D("1.5000"), D("0.6000"))
+    assert stored.mfe_points == D("300.0")

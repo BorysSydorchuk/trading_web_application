@@ -77,11 +77,11 @@ from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSym
 from app.services.bias_alignment import recompute_after_sync
 from app.services.excursions import (
     ExcursionTarget,
-    Series,
     excursion_targets,
     fetch_series,
     store_excursions,
 )
+from app.services.excursions import Fetched as ExcursionFetched
 from app.services.exit_reason import prefill_exit_reason
 from app.services.fx_sync import FxFetched, fetch_fx, write_fx
 from app.services.fx_values import NO_VALUES, tick_values
@@ -125,7 +125,7 @@ class Fetched:
     position_ids: set[int] = field(default_factory=set)
     fx: FxFetched | None = None  # None: no FX step (no cross-currency data fetched)
     # M8-16: price series of trades whose MAE/MFE is due (read in the same connection).
-    series: list[Series] = field(default_factory=list)
+    excursions: ExcursionFetched = field(default_factory=lambda: ExcursionFetched([], []))
 
 
 def _is_trade_deal(raw: RawDeal) -> bool:
@@ -242,7 +242,7 @@ def fetch(
             lo, hi = server_epoch_range(earliest, now, conversion)
             by_ticket.update((d.ticket, d) for d in source.deals(lo, hi))
         fx = fetch_fx(source, specs.values(), info.currency)
-        series = fetch_series(source, excursions, conversion, specs, now)
+        found = _read_excursions(source, excursions, conversion, specs, now)
 
     return Fetched(
         info=info,
@@ -255,8 +255,23 @@ def fetch(
         positions=positions,
         position_ids=pids,
         fx=fx,
-        series=series,
+        excursions=found,
     )
+
+
+def _read_excursions(
+    source: Mt5Source,
+    targets: Sequence[ExcursionTarget],
+    conversion: Conversion,
+    specs: Mapping[str, RawSymbolSpec],
+    now: datetime,
+) -> ExcursionFetched:
+    """M8-16 read step: whatever happens here never fails the sync."""
+    try:
+        return fetch_series(source, targets, conversion, specs, now)
+    except Exception:
+        logger.exception("MAE/MFE price history not read")
+        return ExcursionFetched([], [])
 
 
 # --- write phase -----------------------------------------------------------------------
@@ -687,10 +702,10 @@ def sync_account(
 
 def _store_excursions(session: Session, account_id: int, fetched: Fetched, now: datetime) -> None:
     """M8-16, after the sync committed: a failure here is logged, never fails the sync."""
-    if not fetched.series:
+    if not fetched.excursions.series and not fetched.excursions.failed:
         return
     try:
-        changed = store_excursions(session, fetched.series, now)
+        changed = store_excursions(session, fetched.excursions, now)
         session.commit()
         logger.info("Account %s: MAE/MFE stored for %s trades", account_id, changed)
     except Exception:

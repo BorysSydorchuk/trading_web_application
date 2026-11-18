@@ -18,6 +18,7 @@ from app.clock import utc_now
 from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
 from app.db import get_db
 from app.domain import metrics
+from app.domain.excursion import r_from_extremes
 from app.domain.sessions import DEFAULT_TZ
 from app.domain.trade_builder import next_status
 from app.errors import ApiError, config_error
@@ -362,6 +363,10 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
     trade.risk_pct = metrics.risk_pct(risk, size)
     trade.r_multiple = metrics.r_multiple(trade.net_pnl, risk)
     trade.planned_rr = metrics.planned_rr(trade.entry_price, sl, trade.tp)
+    # M8-16: R of the stored MAE/MFE prices follows the new SL (points and prices stay).
+    trade.mfe_r, trade.mae_r = r_from_extremes(
+        Direction(trade.direction), trade.entry_price, sl, trade.mfe_price, trade.mae_price
+    )
     trade.status = next_status(
         trade.status,
         is_closed=True,

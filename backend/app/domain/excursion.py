@@ -17,6 +17,9 @@ from app.models.enums import Direction
 _R_STEP = Decimal("0.0001")
 _POINTS_STEP = Decimal("0.1")
 _ZERO = Decimal(0)
+# trades.mfe_r / mae_r are NUMERIC(10,4): a larger R (a tiny SL distance) is left empty
+# instead of failing the store.
+MAX_STORABLE_R = Decimal("999999.9999")
 
 
 @dataclass(frozen=True)
@@ -107,7 +110,7 @@ def compute_excursion(
     risk = abs(entry_price - initial_sl) if initial_sl is not None else _ZERO
 
     def to_r(distance: Decimal) -> Decimal | None:
-        return _quantize(distance / risk, _R_STEP) if risk > 0 else None
+        return _r(distance, risk)
 
     def to_points(distance: Decimal) -> Decimal | None:
         if point is None or point <= 0:
@@ -126,3 +129,36 @@ def compute_excursion(
         mfe_points=to_points(mfe_distance),
         mae_points=to_points(mae_distance),
     )
+
+
+def _r(distance: Decimal, risk: Decimal) -> Decimal | None:
+    """distance / risk at 4 dp; None without risk or when it would not fit the column."""
+    if risk <= 0:
+        return None
+    value = _quantize(distance / risk, _R_STEP)
+    return value if value <= MAX_STORABLE_R else None
+
+
+def r_from_extremes(
+    direction: Direction,
+    entry_price: Decimal,
+    initial_sl: Decimal | None,
+    mfe_price: Decimal | None,
+    mae_price: Decimal | None,
+) -> tuple[Decimal | None, Decimal | None]:
+    """(MFE R, MAE R) from stored extreme prices, e.g. after the owner sets or changes the SL.
+
+    Same rule as `compute_excursion`: favourable = up for a buy, down for a sell; never < 0.
+    """
+    if initial_sl is None:
+        return None, None
+    risk = abs(entry_price - initial_sl)
+    sign = Decimal(1) if direction is Direction.BUY else Decimal(-1)
+
+    def one(price: Decimal | None, favourable: bool) -> Decimal | None:
+        if price is None:
+            return None
+        move = (price - entry_price) * sign
+        return _r(max(_ZERO, move if favourable else -move), risk)
+
+    return one(mfe_price, True), one(mae_price, False)

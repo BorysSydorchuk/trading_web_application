@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import io
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -29,10 +30,12 @@ from app.models import Account, SyncLog, Trade
 from app.models.enums import AccountStatus, ExcursionStatus
 from app.mt5.errors import Mt5Error
 from app.mt5.source import Mt5Source, PriceHistory, connected
-from app.services.excursions import Series, series_for, store_excursions, target_of
+from app.services.excursions import Fetched, Series, series_for, store_excursions, target_of
 from app.services.sync import PasswordLookup
 
-WORKER_RECENT = timedelta(minutes=3)
+# Outside trading hours the worker syncs only every `interval_idle_seconds` (15 min): a sync
+# within that interval plus this slack means the worker may still be running.
+WORKER_SLACK = timedelta(minutes=2)
 
 
 class BackfillError(Exception):
@@ -42,16 +45,27 @@ class BackfillError(Exception):
 @dataclass
 class Totals:
     trades: int = 0
-    computed: int = 0
-    no_sl: int = 0
-    unavailable: int = 0
-    failed: int = 0
+    counts: Counter[str] = field(default_factory=Counter)  # computed / no_sl / unavailable / failed
     lines: list[str] = field(default_factory=list)
+
+    @property
+    def computed(self) -> int:
+        return self.counts["computed"]
+
+    @property
+    def failed(self) -> int:
+        return self.counts["failed"]
+
+
+def worker_window() -> timedelta:
+    sync = get_rules().sync
+    longest = max(sync.interval_idle_seconds, sync.interval_trading_seconds)
+    return timedelta(seconds=longest) + WORKER_SLACK
 
 
 def worker_running(session: Session, now: datetime) -> bool:
     last = session.scalar(select(func.max(SyncLog.started_at)))
-    return last is not None and now - last < WORKER_RECENT
+    return last is not None and now - last < worker_window()
 
 
 def pending_trades(session: Session, account_id: int, retry_unavailable: bool) -> list[Trade]:
@@ -121,6 +135,27 @@ def backfill_account(
         return
     if not isinstance(source, PriceHistory):
         raise BackfillError("this MT5 source has no price history")
+    try:
+        found = _read_account(source, account, trades, now, totals, password_for)
+    except Mt5Error as exc:  # e.g. the terminal does not connect: count it, go on
+        totals.counts["failed"] += len(trades)
+        totals.lines.append(f"Рахунок {account.name}: помилка MT5: {exc}")
+        return
+    if apply and found:
+        store_excursions(session, Fetched(series=found, failed=[]), now)
+        session.commit()
+
+
+def _read_account(
+    source: Mt5Source,
+    account: Account,
+    trades: Sequence[Trade],
+    now: datetime,
+    totals: Totals,
+    password_for: PasswordLookup,
+) -> list[Series]:
+    if not isinstance(source, PriceHistory):  # checked by the caller; narrows the type
+        raise BackfillError("this MT5 source has no price history")
     password = password_for(account.login)
     found: list[Series] = []
     with connected(source, account.terminal_path or "", account.login, password, account.server):
@@ -134,16 +169,14 @@ def backfill_account(
                     source, target_of(trade), conversion, spec.point if spec else None, now
                 )
             except (Mt5Error, ValueError) as exc:
-                totals.failed += 1
+                totals.counts["failed"] += 1
                 totals.lines.append(f"#{trade.id}: помилка MT5: {exc}")
                 continue
             kind, line = _line(trade, series)
-            setattr(totals, kind, getattr(totals, kind) + 1)
+            totals.counts[kind] += 1
             totals.lines.append(line)
             found.append(series)
-    if apply and found:
-        store_excursions(session, found, now)
-        session.commit()
+    return found
 
 
 def run(
@@ -158,7 +191,8 @@ def run(
 ) -> Totals:
     if worker_running(session, now):
         raise BackfillError(
-            "журнал працює (синхронізація була менше 3 хв тому): зупиніть його "
+            f"журнал працює (синхронізація менше {worker_window().seconds // 60} хв тому): "
+            "зупиніть його "
             "(«Торговий журнал — Стоп» або stop.bat) і запустіть знову"
         )
     query = select(Account).where(Account.status != AccountStatus.ARCHIVED.value)
@@ -182,9 +216,10 @@ def run(
 def summary(totals: Totals, apply: bool) -> str:
     mode = "записано" if apply else "пробний запуск, нічого не записано"
     return (
-        f"Угод без MAE/MFE: {totals.trades}; пораховано з R: {totals.computed}; "
-        f"без SL (лише пункти): {totals.no_sl}; без історії MT5: {totals.unavailable}; "
-        f"помилки: {totals.failed} ({mode})"
+        f"Угод без MAE/MFE: {totals.trades}; пораховано з R: {totals.counts['computed']}; "
+        f"без SL (лише пункти): {totals.counts['no_sl']}; "
+        f"без історії MT5: {totals.counts['unavailable']}; "
+        f"помилки: {totals.counts['failed']} ({mode})"
     )
 
 

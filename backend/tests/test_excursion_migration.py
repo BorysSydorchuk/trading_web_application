@@ -60,3 +60,10 @@ def test_check_rejects_an_unknown_status(db_engine: Engine) -> None:
         _insert_trade(conn)
     with pytest.raises(Exception, match="excursion_status_valid"), db_engine.begin() as conn:
         conn.execute(text("UPDATE trades SET excursion_status = 'maybe'"))
+
+
+def test_check_rejects_an_unknown_source(db_engine: Engine) -> None:
+    with db_engine.begin() as conn:
+        _insert_trade(conn)
+    with pytest.raises(Exception, match="excursion_source_valid"), db_engine.begin() as conn:
+        conn.execute(text("UPDATE trades SET excursion_source = 'm5'"))
