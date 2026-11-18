@@ -66,7 +66,7 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
               )
             })}
             <th scope="col" className="px-2 py-2">
-              <span className="sr-only">{uk.accounts.columns.actions}</span>
+              <span className="sr-only">{uk.journal.actionsColumn}</span>
             </th>
           </tr>
         </thead>

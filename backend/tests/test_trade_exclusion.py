@@ -136,8 +136,9 @@ def test_missing_or_blank_reason_is_422(
     assert ok(client.get(f"/api/trades/{week['test'].id}"))["excluded_from_stats"] is False
 
 
-def test_too_long_reason_is_422(client: TestClient, week: dict[str, Trade]) -> None:
+def test_too_long_or_nul_reason_is_422(client: TestClient, week: dict[str, Trade]) -> None:
     assert exclude(client, week["test"].id, "x" * 1001).status_code == 422
+    assert exclude(client, week["test"].id, "bad\x00reason").status_code == 422
 
 
 def test_exclude_sets_flag_reason_time_and_history(
@@ -216,6 +217,30 @@ def test_excluded_trade_leaves_the_inbox_and_revert_brings_it_back(
 
     ok(include(client, week["test"].id))
     assert ok(client.get("/api/inbox/counts"))["needs_description"] == 1
+
+
+def test_excluded_trade_without_sl_stays_in_needs_sl(
+    client: TestClient, session: Session, account: Account
+) -> None:
+    """The risk rules need the initial SL, so «Потрібен SL» still asks for it."""
+    trade = closed(session, account, TODAY, "-10.00", None, status="needs_sl")
+    ok(exclude(client, trade.id))
+
+    assert ok(client.get("/api/inbox/counts"))["needs_sl"] == 1
+
+
+def test_open_trade_can_be_excluded_and_stays_excluded_when_it_closes(
+    client: TestClient, session: Session, account: Account
+) -> None:
+    trade = add_trade(session, account, status="open", close_time=None, net_pnl=None)
+    ok(exclude(client, trade.id))
+
+    trade.status, trade.close_time, trade.net_pnl = "needs_description", TODAY, D("5.00")
+    session.commit()
+    session.refresh(trade)
+
+    assert (trade.excluded_from_stats, trade.excluded_reason) == (True, REASON)
+    assert ok(client.get("/api/inbox/counts"))["needs_description"] == 0
 
 
 # --- money and risk stay ---------------------------------------------------------------------
@@ -370,9 +395,14 @@ def test_digest_list_rows_skip_the_excluded_trade(
 # --- data model ------------------------------------------------------------------------------
 
 
-def test_db_rejects_an_inconsistent_flag(session: Session, account: Account) -> None:
+@pytest.mark.parametrize("reason", [None, "   "])
+def test_db_rejects_an_inconsistent_flag(
+    session: Session, account: Account, reason: str | None
+) -> None:
     trade = closed(session, account, TODAY, "1.00", None)
-    trade.excluded_from_stats = True  # no reason, no time
+    trade.excluded_from_stats = True
+    trade.excluded_reason = reason
+    trade.excluded_at = NOW
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()

@@ -386,6 +386,14 @@ def put_journal(
     return detail(db, trade_id, config, required_since)
 
 
+def _locked(db: Session, trade_id: int) -> Trade:
+    """The trade row under FOR UPDATE: a double click cannot pass the 409 check twice."""
+    trade = db.scalar(select(Trade).where(Trade.id == trade_id).with_for_update())
+    if trade is None:
+        raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
+    return trade
+
+
 @router.post("/trades/{trade_id}/exclude", response_model=schemas.TradeDetail)
 def exclude(
     trade_id: int,
@@ -395,7 +403,7 @@ def exclude(
 ) -> schemas.TradeDetail:
     """Exclude from strategy statistics (docs/api.md M8-01): mandatory reason."""
     config, required_since = journal_context(db)
-    trade, _ = _load_detail(db, trade_id)
+    trade = _locked(db, trade_id)
     exclude_trade(db, trade, body.reason, now)
     db.commit()
     db.expire_all()
@@ -411,7 +419,7 @@ def include(
 ) -> schemas.TradeDetail:
     """Return to strategy statistics (docs/api.md M8-01): optional reason."""
     config, required_since = journal_context(db)
-    trade, _ = _load_detail(db, trade_id)
+    trade = _locked(db, trade_id)
     include_trade(db, trade, body.reason, now)
     db.commit()
     db.expire_all()

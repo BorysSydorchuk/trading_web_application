@@ -192,6 +192,8 @@ EXCLUSION_REASON_MAX_LENGTH = 1000
 def _trimmed(value: str | None) -> str | None:
     if value is None:
         return None
+    if "\x00" in value:
+        raise ValueError("must not contain NUL characters")
     text = value.strip()
     if len(text) > EXCLUSION_REASON_MAX_LENGTH:
         raise ValueError(f"must be at most {EXCLUSION_REASON_MAX_LENGTH} characters")

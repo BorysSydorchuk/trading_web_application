@@ -2,7 +2,8 @@
 
 Adds ``trades.excluded_from_stats`` (BOOLEAN NOT NULL DEFAULT false), ``trades.excluded_reason``
 (TEXT) and ``trades.excluded_at`` (TIMESTAMPTZ) with a CHECK that the flag, reason and time
-are set together. Existing trades stay counted (false, NULL, NULL); no data is changed.
+are set together (reason never blank). Existing trades stay counted (false, NULL, NULL);
+no data is changed.
 Adds the history table ``trade_stats_exclusions`` (exclude / include actions, reason, time).
 Downgrade drops the table and the columns (exclusions and their history are lost).
 
@@ -33,7 +34,8 @@ def upgrade() -> None:
         op.f("ck_trades_stats_exclusion_consistent"),
         "trades",
         "excluded_from_stats = (excluded_reason IS NOT NULL)"
-        " AND excluded_from_stats = (excluded_at IS NOT NULL)",
+        " AND excluded_from_stats = (excluded_at IS NOT NULL)"
+        " AND (excluded_reason IS NULL OR length(btrim(excluded_reason)) > 0)",
     )
     op.create_table(
         "trade_stats_exclusions",

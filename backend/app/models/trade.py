@@ -78,7 +78,8 @@ class Trade(TimestampMixin, Base):
         # M8-01: an excluded trade always has its reason and time, a counted one neither.
         CheckConstraint(
             "excluded_from_stats = (excluded_reason IS NOT NULL)"
-            " AND excluded_from_stats = (excluded_at IS NOT NULL)",
+            " AND excluded_from_stats = (excluded_at IS NOT NULL)"
+            " AND (excluded_reason IS NULL OR length(btrim(excluded_reason)) > 0)",
             name="stats_exclusion_consistent",
         ),
     )

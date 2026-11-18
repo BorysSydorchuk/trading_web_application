@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiRequest } from '@/api/client'
+import { dashboardKeys } from '@/features/dashboard/api'
+import { digestKeys } from '@/features/digests/api'
 import { inboxKeys, type InboxCounts } from '@/features/inbox/api'
 import type { JournalFieldList, TradeDetail, TradeList, TradeQuery } from './types'
 
@@ -84,8 +86,8 @@ export function useStatsExclusion() {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: tradeKeys.all }),
         queryClient.invalidateQueries({ queryKey: inboxKeys.counts }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-        queryClient.invalidateQueries({ queryKey: ['digests', 'list'] }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.dashboard }),
+        queryClient.invalidateQueries({ queryKey: digestKeys.lists }),
       ]),
   })
 }

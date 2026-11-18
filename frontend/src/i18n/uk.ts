@@ -449,6 +449,7 @@ export const uk = {
       missingR: 'Без R',
       showExcluded: 'Показати виключені',
     },
+    actionsColumn: 'Дії',
     periods: {
       today: 'сьогодні',
       week: 'цей тиждень',
