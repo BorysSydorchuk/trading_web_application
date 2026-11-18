@@ -183,6 +183,8 @@ export interface Digest {
   what_to_fix: string | null
   focus_next: string | null
   ai_summary: string | null
+  /** M8-01b: ISO UTC; the numbers changed after the summary was written (null = current). */
+  ai_summary_stale_at?: string | null
   reviewed: boolean
   /** UTC ISO or null. */
   reviewed_at: string | null

@@ -14,6 +14,7 @@ const GENERATE_TIMEOUT_MS = 30_000
 const AI_SUMMARY_TIMEOUT_MS = 60_000
 
 export const digestKeys = {
+  all: ['digests'] as const,
   lists: ['digests', 'list'] as const,
   list: (kind: DigestKind) => ['digests', 'list', kind] as const,
   period: (kind: DigestKind, date: string) => ['digests', 'period', kind, date] as const,

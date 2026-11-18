@@ -46,6 +46,7 @@ class DigestOut(BaseModel):
     what_to_fix: str | None
     focus_next: str | None
     ai_summary: str | None
+    ai_summary_stale_at: UtcDatetime | None
     reviewed: bool
     reviewed_at: UtcDatetime | None
     next_bias_note_id: int | None

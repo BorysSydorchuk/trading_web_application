@@ -26,6 +26,7 @@ from app.models.enums import Direction, InitialSlSource, TradeStatus
 from app.schemas import trades as schemas
 from app.schemas.audio import to_audio_out
 from app.services.bias_alignment import alignment_settings, lookup_for, trade_bias
+from app.services.digests import recompute_for_trade
 from app.services.fx_values import stored_spec_tick_values
 from app.services.inbox import count_inbox
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
@@ -410,6 +411,7 @@ def exclude(
     config, required_since = journal_context(db)
     trade = _locked(db, trade_id)
     exclude_trade(db, trade, body.reason, now)
+    recompute_for_trade(db, trade.close_time, now)  # M8-01b: saved digests follow
     db.commit()
     db.expire_all()
     return detail(db, trade_id, config, required_since)
@@ -426,6 +428,7 @@ def include(
     config, required_since = journal_context(db)
     trade = _locked(db, trade_id)
     include_trade(db, trade, body.reason, now)
+    recompute_for_trade(db, trade.close_time, now)  # M8-01b: saved digests follow
     db.commit()
     db.expire_all()
     return detail(db, trade_id, config, required_since)
