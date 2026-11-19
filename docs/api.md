@@ -721,3 +721,10 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - `logs/ai_usage.jsonl` records `requested_model` and the `model` the API actually used (format unchanged).
 - A model the API does not know (HTTP 404) -> 502 `ai_error` kind `model_not_found` (no fallback); UI: «Сервіс ШІ не знає вибраної моделі…».
 - UI: Settings → «Моделі ШІ» (three selects with the approximate cost); a small selector «Модель ШІ для цього виклику» next to «Заповнити з тексту» (Describe and bias) and «Підсумок від ШІ».
+
+## M8-14 - Charts on «Головна» (PM 2026-11-18)
+
+- `GET /api/dashboard/charts?from=YYYY-MM-DD&to=YYYY-MM-DD[&account_id=N]` (Brussels dates, inclusive; non-archived accounts; unknown account -> 404; to < from -> 422) -> `{from, to, currency, account_size, trades, equity: [{time, cum_pnl, cum_pct}], daily: [{day, net_pnl, pct, trades}], rolling: [{time, n, win_rate, avg_r}], rolling_window: 20}`. Money 2 dp, percents and R 4 dp, as strings.
+- Equity (from 0 at Brussels midnight of `from`) and P&L by day: every closed trade of the range, M8-01 excluded trades included (account money; the equity end equals the digest's «P&L рахунку разом з виключеними» for the same period). Rolling win rate / average R: the last 20 strategy trades at each trade (excluded trades out, the digest's breakeven rule), the window reaching back before `from`; points shown for the range only.
+- `account_size` / percents: one account's size, or the sum of the sizes of the accounts with a trade in the range (the digest's combined rule); null without a size.
+- UI: «Головна» → «Графіки»: «Тиждень» (Monday..today), «Місяць» (1st..today), «3 місяці» / «Рік» (same day back + 1), «Усе», «Свої дати»; account selector (all / each); selection remembered per browser (localStorage, try/catch); defaults «Місяць», all accounts; empty range «Немає угод за цей період». Plain SVG like the digest charts (EquityChart reused).

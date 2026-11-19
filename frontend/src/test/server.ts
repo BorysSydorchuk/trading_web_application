@@ -11,6 +11,21 @@ import { setupServer } from 'msw/node'
  * stays hidden and requests carry no `model` unless a test mocks its own list.
  */
 const DEFAULTS: RequestHandler[] = [
+  // M8-14 Home charts: empty unless a test mocks its own data.
+  http.get('/api/dashboard/charts', ({ request }) => {
+    const url = new URL(request.url)
+    return HttpResponse.json({
+      from: url.searchParams.get('from'),
+      to: url.searchParams.get('to'),
+      currency: null,
+      account_size: null,
+      trades: 0,
+      equity: [],
+      daily: [],
+      rolling: [],
+      rolling_window: 20,
+    })
+  }),
   http.get('/api/ai/models', () =>
     HttpResponse.json({
       models: [],
