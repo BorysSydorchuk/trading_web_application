@@ -151,7 +151,8 @@ def test_show_if_needs_both_parts(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("flag", ["required", "analytics"])
 def test_legacy_field_cannot_be_required_or_analytics(tmp_path: Path, flag: str) -> None:
-    message = problems_of(tmp_path, field("old", legacy=True, **{flag: True}))
+    flags: dict[str, Any] = {"legacy": True, flag: True}
+    message = problems_of(tmp_path, field("old", **flags))
 
     assert "old" in message
     assert "legacy" in message
@@ -167,7 +168,8 @@ def real() -> Any:
 
 
 def option_values(real: Any, key: str) -> list[str]:
-    return real.get(key).option_values()
+    values: list[str] = real.get(key).option_values()
+    return values
 
 
 def test_real_new_fields_in_form_order(real: Any) -> None:

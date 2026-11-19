@@ -36,12 +36,12 @@ from sqlalchemy import (
     select,
     true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from sqlalchemy.types import TypeEngine
 
-from app.config_files.journal_fields import JournalFieldsConfig
+from app.config_files.journal_fields import JournalField, JournalFieldsConfig
 from app.domain.journal import RULE_VIOLATIONS_KEY, JournalKey, journal_keys, required_field_keys
 from app.models import ChartLink, RuleViolation, Trade
 from app.models.enums import ChartLinkKind
@@ -174,6 +174,8 @@ def _empty_sql(spec: JournalKey) -> ColumnElement[bool]:
 def _empty_value(value: ColumnElement[Any], column_type: TypeEngine[Any]) -> ColumnElement[bool]:
     if isinstance(column_type, JSONB):
         return _empty_json(value)
+    if isinstance(column_type, ARRAY):  # multi_enum column: NULL (or a stray '{}')
+        return or_(value.is_(None), func.cardinality(value) == 0)
     if isinstance(column_type, String):  # Text is a String
         return or_(value.is_(None), value == "")
     if isinstance(column_type, Integer | Boolean | Numeric | DateTime):
@@ -181,13 +183,38 @@ def _empty_value(value: ColumnElement[Any], column_type: TypeEngine[Any]) -> Col
     raise TypeError(f"no SQL empty check for column type {column_type!r}")
 
 
+def _shown_sql(config: JournalFieldsConfig, field: JournalField) -> ColumnElement[bool]:
+    """SQL form of `app.domain.journal.is_shown` (the parent equals / contains the option)."""
+    cond = field.show_if
+    if cond is None:
+        return true()
+    parent = config.get(cond.field)
+    if parent is None:
+        return false()
+    if parent.storage == "extra":
+        value = Trade.extra[cond.field]
+        if parent.type == "multi_enum":
+            return value.contains(literal([cond.includes], JSONB))
+        return value == literal(cond.includes, JSONB)
+    column = Trade.__table__.c.get(cond.field)
+    if column is None:
+        return false()
+    if isinstance(column.type, ARRAY):
+        return column.contains([cond.includes])
+    return column == cond.includes
+
+
 def missing_new_fields_condition(
     config: JournalFieldsConfig, required_since: Mapping[str, datetime]
 ) -> ColumnElement[bool]:
     """Closed trades with a non-empty `missing_new_fields` (same rule as
-    `app.domain.journal.missing_new_fields`)."""
+    `app.domain.journal.missing_new_fields`; a field hidden by its show_if never counts)."""
     per_field = [
-        and_(Trade.close_time < required_since[spec.key], _empty_sql(spec))
+        and_(
+            Trade.close_time < required_since[spec.key],
+            _shown_sql(config, spec.field),
+            _empty_sql(spec),
+        )
         for spec in journal_keys(config)
         if not spec.is_text_key and spec.field.required and spec.key in required_since
     ]

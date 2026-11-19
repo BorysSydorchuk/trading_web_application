@@ -22,6 +22,7 @@ from app.domain.exit_reason import source_after_owner_save
 from app.domain.journal import (
     RULE_VIOLATIONS_KEY,
     JournalKey,
+    JournalValidation,
     RequirementScope,
     filter_ai_filled,
     journal_keys,
@@ -128,14 +129,14 @@ def check_describable(trade: Trade) -> None:
 
 def _input_errors(
     data: JournalInput, config: JournalFieldsConfig, trade: Trade
-) -> tuple[dict[str, Any], dict[str, str]]:
+) -> tuple[JournalValidation, dict[str, str]]:
     result = validate_fields(config, data.fields, stored_journal(trade, config))
     errors = {f"fields.{key}": issue.message for key, issue in result.errors.items()}
     for i in duplicate_link_indexes([link.url for link in data.chart_links]):
         errors[f"chart_links.{i}.url"] = "duplicate link (same snapshot or chart)"
     if is_open(trade):
         errors |= _open_trade_errors(data, config, result.values)
-    return result.values, errors
+    return result, errors
 
 
 def _is_empty(value: Any) -> bool:
@@ -224,8 +225,9 @@ def save_journal(
     config: JournalFieldsConfig,
     now: datetime,
     required_since: Mapping[str, datetime],
-) -> None:
-    """Apply a JournalInput (full replacement). Flushes, never commits.
+) -> list[str]:
+    """Apply a JournalInput (full replacement). Flushes, never commits. Returns the field
+    keys that were sent with a value but are hidden by their show_if (stored as None).
 
     `complete: true` needs only the required fields that apply to the trade (closed at or
     after their `required_since`); a field made required later never blocks it.
@@ -241,7 +243,8 @@ def save_journal(
         raise ApiError(
             409, "open_trade_complete", "An open trade cannot be completed", {"id": trade.id}
         )
-    values, errors = _input_errors(data, config, trade)
+    result, errors = _input_errors(data, config, trade)
+    values = result.values
     if errors:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": errors})
     old_status = trade.status
@@ -278,3 +281,6 @@ def save_journal(
             )
     db.flush()
     logger.info("Trade %s: journal saved, status %s -> %s", trade.id, old_status, trade.status)
+    if result.cleared_hidden:
+        logger.info("Trade %s: hidden fields cleared: %s", trade.id, list(result.cleared_hidden))
+    return list(result.cleared_hidden)

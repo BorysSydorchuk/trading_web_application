@@ -107,3 +107,20 @@ def test_guard_refuses_names_that_are_not_plain_identifiers(scratch: str) -> Non
 def test_guard_is_case_sensitive_about_the_suffix() -> None:
     with pytest.raises(ValueError, match=r".+"):
         assert_safe_scratch("trading_journal", "trading_journal_taxdry_TEST")
+
+
+# --- counts from the before / after measurements (added in GREEN) ---
+
+
+def test_counts_from_before_and_after() -> None:
+    from app.tools.taxonomy_dry_run import counts_from
+
+    before = {"setup_context": 11, "poi_type": 14, "fvg_kind": 11, "violations": 9}
+    after = {"setup_context": 3, "poi_type": 0, "fvg_kind": 5, "violations": 7}
+
+    assert counts_from(before, after) == {
+        "setup_context": {"mapped": 8, "legacy": 3},
+        "poi_type": {"mapped": 14, "legacy": 0},
+        "fvg_kind": {"mapped": 6, "legacy": 5},
+        "violations": {"remapped": 9, "merged": 2},
+    }

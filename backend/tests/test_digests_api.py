@@ -437,9 +437,10 @@ REAL_BREAKDOWN_ORDER = [
     "hour",
     "weekday",
     "bias_alignment",
-    "setup_context",
-    "poi_type",
-    "fvg_kind",
+    # multi_enum fields (poi_types, fvg_types_*) get their breakdowns in merge B (M8-04..08);
+    # legacy fields (setup_context, fvg_kind) are never analysed.
+    "h1_context",
+    "h4_context",
     "entry_model",
     "exit_reason",
     "followed_plan",

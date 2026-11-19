@@ -27,9 +27,10 @@ SNAP_PREVIEW = "https://s3.tradingview.com/snapshots/a/AbCd1234.png"
 CHART = "https://www.tradingview.com/chart/Xy12ab/"
 
 COMPLETE_FIELDS: dict[str, Any] = {
-    "setup_context": "yes",
-    "poi_type": "fvg_h4",
-    "fvg_kind": "na",
+    "h1_context": "flow",
+    "h4_context": "flow",
+    "poi_types": ["fvg_h4"],
+    "fvg_types_h4": ["post_manipulation"],  # shown (and required) by poi_types fvg_h4
     "entry_model": "ifvg_m5",
     "exit_reason": "tp",
     "followed_plan": True,
@@ -126,9 +127,10 @@ def violation_rows(session: Session, trade_id: int) -> list[tuple[str, str]]:
 
 
 def test_detail_m2_shape(client: TestClient, session: Session, trade: Trade) -> None:
-    trade.setup_context = "yes"
-    trade.poi_type = "other"
-    trade.poi_type_other = "OB H4"
+    trade.h1_context = "flow"
+    trade.poi_types = ["other"]
+    trade.poi_types_other = "OB H4"
+    trade.setup_context = "no"  # legacy: read-only, still shown
     trade.bias_alignment = "counter"
     trade.extra = {"removed_field": 1}
     session.add(ChartLink(trade_id=trade.id, url=SNAP, kind="before"))
@@ -139,11 +141,13 @@ def test_detail_m2_shape(client: TestClient, session: Session, trade: Trade) -> 
 
     data = ok(client.get(f"/api/trades/{trade.id}"))
 
-    for key in ("setup_context", "extra", "bias_alignment_override", "poi_type_other"):
+    for key in ("h1_context", "extra", "bias_alignment_override", "poi_types_other"):
         assert key not in data
     journal = data["journal"]
-    assert journal["setup_context"] == "yes"
-    assert journal["poi_type_other"] == "OB H4"
+    assert journal["h1_context"] == "flow"
+    assert journal["poi_types"] == ["other"]
+    assert journal["poi_types_other"] == "OB H4"
+    assert journal["setup_context"] == "no"
     assert journal["rule_violations"] == ["max_risk_pct", "min_planned_rr"]
     assert journal["bias_alignment"] == "counter"
     assert journal["lesson"] is None
@@ -156,7 +160,7 @@ def test_detail_m2_shape(client: TestClient, session: Session, trade: Trade) -> 
     ]
     assert all(isinstance(c["id"], int) for c in data["chart_links"])
     assert data["missing_required"] == [
-        "fvg_kind",
+        "h4_context",
         "entry_model",
         "exit_reason",
         "followed_plan",
@@ -193,28 +197,28 @@ def test_put_draft_saves_columns(client: TestClient, session: Session, trade: Tr
             client,
             trade.id,
             body(
-                fields={"setup_context": "yes", "quality_rating": 4, "lesson": "  wait  "},
+                fields={"h1_context": "flow", "quality_rating": 4, "lesson": "  wait  "},
                 raw_text="опис угоди як є",
             ),
         )
     )
     assert data["status"] == "draft"
-    assert data["journal"]["setup_context"] == "yes"
+    assert data["journal"]["h1_context"] == "flow"
     assert data["journal"]["lesson"] == "wait"
     assert data["raw_text"] == "опис угоди як є"
     t = stored(session, trade.id)
-    assert (t.status, t.setup_context, t.quality_rating, t.lesson) == ("draft", "yes", 4, "wait")
+    assert (t.status, t.h1_context, t.quality_rating, t.lesson) == ("draft", "flow", 4, "wait")
     assert t.described_at is not None
     assert t.described_at >= before
 
 
 def test_put_is_full_replacement(client: TestClient, session: Session, trade: Trade) -> None:
-    ok(put(client, trade.id, body(fields={"setup_context": "yes", "lesson": "x"})))
+    ok(put(client, trade.id, body(fields={"h1_context": "flow", "lesson": "x"})))
     data = ok(put(client, trade.id, body(fields={"lesson": None, "mistakes": "y"})))
-    assert data["journal"]["setup_context"] is None
+    assert data["journal"]["h1_context"] is None
     assert data["journal"]["lesson"] is None
     assert data["journal"]["mistakes"] == "y"
-    assert stored(session, trade.id).setup_context is None
+    assert stored(session, trade.id).h1_context is None
 
 
 def test_described_at_updated_on_every_save(
@@ -257,8 +261,10 @@ def test_unknown_and_not_writable_field_keys(client: TestClient, trade: Trade) -
 @pytest.mark.parametrize(
     ("key", "value"),
     [
-        ("setup_context", "maybe"),
-        ("setup_context", True),
+        ("h1_context", "maybe"),
+        ("h1_context", True),
+        ("poi_types", "fvg_h4"),
+        ("poi_types", ["fvg_h4", "fvg_h4"]),
         ("followed_plan", "yes"),
         ("quality_rating", 0),
         ("quality_rating", 6),
@@ -285,10 +291,12 @@ def test_raw_text_limit(client: TestClient, trade: Trade) -> None:
 
 
 def test_other_text_cleared_unless_other(client: TestClient, trade: Trade) -> None:
-    data = ok(put(client, trade.id, body(fields={"poi_type": "fvg_h4", "poi_type_other": "OB"})))
-    assert data["journal"]["poi_type_other"] is None
-    data = ok(put(client, trade.id, body(fields={"poi_type": "other", "poi_type_other": "OB"})))
-    assert data["journal"]["poi_type_other"] == "OB"
+    fields: dict[str, Any] = {"poi_types": ["fvg_h4"], "poi_types_other": "OB"}
+    data = ok(put(client, trade.id, body(fields=fields)))
+    assert data["journal"]["poi_types_other"] is None
+    fields = {"poi_types": ["fvg_h4", "other"], "poi_types_other": "OB"}
+    data = ok(put(client, trade.id, body(fields=fields)))
+    assert data["journal"]["poi_types_other"] == "OB"
 
 
 def test_note_text_key_kept(client: TestClient, trade: Trade) -> None:
@@ -304,19 +312,19 @@ def test_ai_filled_fields_filtered(client: TestClient, session: Session, trade: 
             client,
             trade.id,
             body(
-                fields={"setup_context": "yes", "followed_plan": False, "lesson": ""},
+                fields={"h1_context": "flow", "followed_plan": False, "lesson": ""},
                 ai_filled_fields=[
                     "followed_plan",
                     "lesson",
                     "entry_model",
                     "nope",
-                    "setup_context",
+                    "h1_context",
                 ],
             ),
         )
     )
-    assert data["ai_filled_fields"] == ["followed_plan", "setup_context"]
-    assert stored(session, trade.id).ai_filled_fields == ["followed_plan", "setup_context"]
+    assert data["ai_filled_fields"] == ["followed_plan", "h1_context"]
+    assert stored(session, trade.id).ai_filled_fields == ["followed_plan", "h1_context"]
 
 
 # --- status rules ---
@@ -334,7 +342,7 @@ def test_complete_saves_and_back_to_draft(client: TestClient, trade: Trade) -> N
 def test_incomplete_is_422_and_saves_nothing(
     client: TestClient, session: Session, trade: Trade
 ) -> None:
-    fields = COMPLETE_FIELDS | {"poi_type": "other", "fvg_kind": None}
+    fields = COMPLETE_FIELDS | {"poi_types": ["other", "fvg_h4"], "fvg_types_h4": None}
     response = put(
         client,
         trade.id,
@@ -348,9 +356,9 @@ def test_incomplete_is_422_and_saves_nothing(
     assert response.status_code == 422, response.text
     error = response.json()["error"]
     assert error["code"] == "journal_incomplete"
-    assert error["details"] == {"missing": ["poi_type_other", "fvg_kind", "chart_links"]}
+    assert error["details"] == {"missing": ["poi_types_other", "fvg_types_h4", "chart_links"]}
     t = stored(session, trade.id)
-    assert (t.status, t.setup_context, t.raw_text, t.described_at) == (
+    assert (t.status, t.h1_context, t.raw_text, t.described_at) == (
         "needs_description",
         None,
         None,
@@ -578,6 +586,8 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcription.yaml",
         "transcript_glossary.yaml",
         "bias.yaml",
+        "symbols.yaml",
+        "violations.yaml",
     ):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -599,14 +609,14 @@ def test_deprecated_option_only_if_already_stored(
 ) -> None:
     edit_yaml(
         cfg_dir,
-        '{ value: partially, label: "частково" }',
-        '{ value: partially, label: "частково", deprecated: true }',
+        '{ value: range, label: "Range" }',
+        '{ value: range, label: "Range", deprecated: true }',
     )
-    old = add_trade(session, account, setup_context="partially")
+    old = add_trade(session, account, h1_context="range")
     new = add_trade(session, account)
-    fields = {"setup_context": "partially"}
-    assert "fields.setup_context" in field_errors(put(client, new.id, body(fields=fields)))
-    assert ok(put(client, old.id, body(fields=fields)))["journal"]["setup_context"] == "partially"
+    fields = {"h1_context": "range"}
+    assert "fields.h1_context" in field_errors(put(client, new.id, body(fields=fields)))
+    assert ok(put(client, old.id, body(fields=fields)))["journal"]["h1_context"] == "range"
 
 
 def test_new_yaml_field_works_without_code_changes(

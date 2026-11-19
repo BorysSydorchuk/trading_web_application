@@ -1,0 +1,39 @@
+# Rule violations a trade can carry (M8-04). The options of the journal field
+# `rule_violations` (config/journal_fields.yaml) come from this file. Validated at API start;
+# a change is picked up without a restart.
+#
+# Entry keys:
+#   key     stable snake_case id (<= 50 characters), stored in the DB: never rename or delete
+#           it, set `status: deprecated` instead so old trades keep it
+#   label   Ukrainian label shown in the UI
+#   type    auto   = detected by the rules engine (thresholds in rules.yaml); every key the
+#                    engine reports must be here as type auto, status active
+#           manual = chosen by you on a trade; adding one is one new entry here
+#   status  active | deprecated (shown on old trades and in history stats, not selectable
+#           on a trade that does not have it)
+
+violations:
+  # --- detected by the rules engine ---
+  - { key: max_risk_pct, label: "ризик на угоду вище ліміту", type: auto, status: active }
+  - { key: daily_risk, label: "Порушення денного ризику", type: auto, status: active }
+  - { key: weekly_risk, label: "Порушення тижневого ризику", type: auto, status: active }
+  - { key: max_trades_per_week, label: "перевищено ліміт угод на тиждень", type: auto, status: active }
+  - { key: max_reentries_per_idea, label: "забагато перезаходів в ідею", type: auto, status: active }
+  - { key: min_planned_rr, label: "плановий RR нижче мінімуму", type: auto, status: active }
+  - { key: entry_session, label: "вхід поза дозволеною сесією", type: auto, status: active }
+  - { key: qm_not_in_ny, label: "QM у сесії NY", type: auto, status: active }
+  - { key: no_breakeven, label: "перенесення в беззбиток", type: auto, status: active }
+
+  # --- chosen by you ---
+  - { key: entry_not_by_model, label: "Вхід не за моделлю входу", type: manual, status: active }
+  - { key: entry_weak_poi, label: "Вхід від слабкої POI", type: manual, status: active }
+  - key: entry_against_system
+    label: "Вхід не за торговою системою (не дотримуючись контексту H1/H4)"
+    type: manual
+    status: active
+
+  # --- replaced by daily_risk / weekly_risk (M8-04); kept for the history ---
+  - { key: daily_stop_loss_pct, label: "вхід після денного стоп-лосу", type: auto, status: deprecated }
+  - { key: daily_stop_profit_pct, label: "вхід після денного стоп-профіту", type: auto, status: deprecated }
+  - { key: weekly_stop_loss_pct, label: "вхід після тижневого стоп-лосу", type: auto, status: deprecated }
+  - { key: weekly_stop_profit_pct, label: "вхід після тижневого стоп-профіту", type: auto, status: deprecated }

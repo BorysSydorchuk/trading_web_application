@@ -22,6 +22,7 @@ from app.config_files.loader import ConfigError
 from app.db import make_session_factory
 from app.models import RuleViolation, Trade
 from app.services import risk_base
+from tests.domain.test_rules import limit_names
 from tests.test_accounts_api import _create, _fields
 
 D = Decimal
@@ -152,7 +153,7 @@ def _row(session: Session, trade_id: int) -> Trade:
 def _violation_keys(session: Session, trade_id: int) -> set[str]:
     session.expire_all()
     rows = session.scalars(select(RuleViolation).where(RuleViolation.trade_id == trade_id))
-    return {r.rule_key for r in rows}
+    return set().union(*(limit_names(r.rule_key, r.details) for r in rows))
 
 
 def test_patching_the_size_recomputes_percents_of_that_account(

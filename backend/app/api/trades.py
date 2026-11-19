@@ -398,17 +398,21 @@ def update_trade(
     return detail(db, trade_id, config, required_since)
 
 
-@router.put("/trades/{trade_id}/journal", response_model=schemas.TradeDetail)
+@router.put("/trades/{trade_id}/journal", response_model=schemas.JournalSaved)
 def put_journal(
     trade_id: int, body: schemas.JournalInput, db: Session = Depends(get_db)
-) -> schemas.TradeDetail:
-    """Save the journal (docs/api.md M2 "Journal save"): draft or complete."""
+) -> schemas.JournalSaved:
+    """Save the journal (docs/api.md M2 "Journal save"): draft or complete. `cleared_hidden`
+    lists the fields cleared by their show_if (M8-04..08)."""
     config, required_since = journal_context(db)
     trade, _ = _load_detail(db, trade_id)
-    save_journal(db, trade, body, config, now=datetime.now(UTC), required_since=required_since)
+    cleared = save_journal(
+        db, trade, body, config, now=datetime.now(UTC), required_since=required_since
+    )
     db.commit()
     db.expire_all()
-    return detail(db, trade_id, config, required_since)
+    saved = detail(db, trade_id, config, required_since)
+    return schemas.JournalSaved.model_validate(saved.model_dump() | {"cleared_hidden": cleared})
 
 
 def _locked(db: Session, trade_id: int) -> Trade:

@@ -33,6 +33,7 @@ CONFIG_NAMES = (
     "transcript_glossary.yaml",
     "bias.yaml",
     "symbols.yaml",
+    "violations.yaml",
 )
 
 

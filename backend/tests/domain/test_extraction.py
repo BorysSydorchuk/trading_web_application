@@ -59,6 +59,8 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcription.yaml",
         "transcript_glossary.yaml",
         "bias.yaml",
+        "symbols.yaml",
+        "violations.yaml",
     ):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -134,7 +136,8 @@ def test_schema_is_one_flat_array_of_key_value_evidence(config: JournalFieldsCon
 
 def test_schema_keys_are_the_ai_fillable_keys_in_yaml_order(config: JournalFieldsConfig) -> None:
     keys = schema_keys(config)
-    assert keys[:4] == ["setup_context", "poi_type", "poi_type_other", "fvg_kind"]
+    assert keys[:4] == ["h1_context", "h1_context_other", "h4_context", "h4_context_other"]
+    assert {"setup_context", "fvg_kind"}.isdisjoint(keys)  # legacy: never AI-filled
     assert {"entry_model", "followed_plan", "quality_rating", "lesson"} <= set(keys)
     assert {"bias_alignment", "chart_links", "rule_violations"}.isdisjoint(keys)
     assert {"message", "question", "comment", "notes"}.isdisjoint(keys)
@@ -237,13 +240,15 @@ def test_answer_with_wrong_shape_is_invalid(config: JournalFieldsConfig, answer:
 
 def test_catalogue_lists_options_with_labels_in_yaml_order(config: JournalFieldsConfig) -> None:
     catalogue = render_field_catalogue(config)
-    assert "- `setup_context` (Контекст (Flow H1 синхронний з H4)): one option value:" in catalogue
+    assert "- `h1_context` (Контекст H1): one option value:" in catalogue
     assert "  - `ifvg_m5`: IFVG M5" in catalogue
     assert "- `quality_rating`" in catalogue
     assert "integer from 1 to 5" in catalogue
-    assert "`poi_type_other`" in catalogue
-    assert "only when `poi_type` is `other`" in catalogue
-    assert catalogue.index("`setup_context`") < catalogue.index("`quality_rating`")
+    assert "`poi_types_other`" in catalogue
+    assert "only when `poi_types` contains `other`" in catalogue
+    assert "only when `h1_context` is `other`" in catalogue
+    assert catalogue.index("`h1_context`") < catalogue.index("`quality_rating`")
+    assert "setup_context" not in catalogue  # legacy
     assert "rule_violations" not in catalogue
     assert "chart_links" not in catalogue
 
@@ -272,14 +277,14 @@ def test_valid_values_are_kept_in_yaml_order(config: JournalFieldsConfig) -> Non
     output = {
         "lesson": entry("чекати підтвердження", "Урок: чекати підтвердження"),
         "entry_model": entry("ifvg_m5", "Вхід по IFVG M5"),
-        "setup_context": entry("yes", "Flow H1 синхронний з H4"),
+        "h1_context": entry("flow", "Flow H1"),
         "exit_reason": entry("tp", "Закрив по тейку"),
         "emotion_before": entry("calm", "був спокійний"),
     }
     result = guard(config, output, TEXT)
     assert result.dropped == []
     assert list(result.fields) == [
-        "setup_context",
+        "h1_context",
         "entry_model",
         "exit_reason",
         "emotion_before",
@@ -290,15 +295,15 @@ def test_valid_values_are_kept_in_yaml_order(config: JournalFieldsConfig) -> Non
 
 def test_evidence_not_in_text_is_dropped(config: JournalFieldsConfig) -> None:
     output = {
-        "poi_type": entry("fvg_h4", "POI FVG H4"),  # never said
+        "poi_types": entry(["fvg_h4"], "POI FVG H4"),  # never said
         "followed_plan": {"value": True},  # no evidence at all
-        "fvg_kind": "post_manipulation",  # not an entry object
+        "h4_context": "reversal",  # not an entry object
     }
     result = guard(config, output, TEXT)
     assert result.fields == {}
     assert result.dropped == [
-        Dropped("poi_type", "evidence_not_in_text"),
-        Dropped("fvg_kind", "evidence_not_in_text"),
+        Dropped("h4_context", "evidence_not_in_text"),
+        Dropped("poi_types", "evidence_not_in_text"),
         Dropped("followed_plan", "evidence_not_in_text"),
     ]
 
@@ -306,15 +311,15 @@ def test_evidence_not_in_text_is_dropped(config: JournalFieldsConfig) -> None:
 def test_invalid_and_deprecated_options_are_dropped(cfg_dir: Path) -> None:
     path = cfg_dir / "journal_fields.yaml"
     content = path.read_text(encoding="utf-8")
-    old = '{ value: partially, label: "частково" }'
+    old = '{ value: range, label: "Range" }'
     path.write_text(
-        content.replace(old, '{ value: partially, label: "частково", deprecated: true }'),
+        content.replace(old, '{ value: range, label: "Range", deprecated: true }'),
         encoding="utf-8",
     )
     reload_config()
     output = {
         "entry_model": entry("ifvg_h1", "Вхід по IFVG M5"),
-        "setup_context": entry("partially", "Flow H1 синхронний з H4"),
+        "h1_context": entry("range", "Flow H1 синхронний з H4"),
         "followed_plan": entry("yes", "Закрив по тейку"),  # wrong type
     }
     result = guard(get_journal_fields(), output, TEXT)
@@ -333,21 +338,24 @@ def test_int_out_of_range_is_dropped(config: JournalFieldsConfig) -> None:
 
 def test_other_text_needs_parent_other(config: JournalFieldsConfig) -> None:
     text = "POI був OB H4, вхід по IFVG M5"
-    result = guard(config, {"poi_type_other": entry("OB H4", "OB H4")}, text)
-    assert result.dropped == [Dropped("poi_type_other", "parent_not_other")]
+    result = guard(config, {"poi_types_other": entry("OB H4", "OB H4")}, text)
+    assert result.dropped == [Dropped("poi_types_other", "parent_not_other")]
     result = guard(
         config,
-        {"poi_type": entry("fvg_h4", "OB H4"), "poi_type_other": entry("OB H4", "OB H4")},
+        {"poi_types": entry(["fvg_h4"], "OB H4"), "poi_types_other": entry("OB H4", "OB H4")},
         text,
     )
-    assert result.fields == {"poi_type": "fvg_h4"}
-    assert result.dropped == [Dropped("poi_type_other", "parent_not_other")]
+    assert result.fields == {"poi_types": ["fvg_h4"]}
+    assert result.dropped == [Dropped("poi_types_other", "parent_not_other")]
     result = guard(
         config,
-        {"poi_type": entry("other", "POI був OB H4"), "poi_type_other": entry("OB H4", "OB H4")},
+        {
+            "poi_types": entry(["fvg_h4", "other"], "POI був OB H4"),
+            "poi_types_other": entry("OB H4", "OB H4"),
+        },
         text,
     )
-    assert result.fields == {"poi_type": "other", "poi_type_other": "OB H4"}
+    assert result.fields == {"poi_types": ["fvg_h4", "other"], "poi_types_other": "OB H4"}
 
 
 def test_text_with_question_not_in_evidence_is_dropped(config: JournalFieldsConfig) -> None:
@@ -402,10 +410,10 @@ def test_text_values_are_trimmed(config: JournalFieldsConfig) -> None:
 
 def test_missing_required_always_lists_chart_links(config: JournalFieldsConfig) -> None:
     """Extraction returns no links, so chart_links is listed even if the text has one."""
-    fields = {"setup_context": "yes", "entry_model": "ifvg_m5"}
+    fields = {"h1_context": "flow", "entry_model": "ifvg_m5"}
     assert extraction_missing(config, fields) == [
-        "poi_type",
-        "fvg_kind",
+        "h4_context",
+        "poi_types",
         "exit_reason",
         "followed_plan",
         "emotion_before",
@@ -485,9 +493,9 @@ def test_text_value_must_be_his_own_words(config: JournalFieldsConfig) -> None:
 def test_other_text_value_must_be_in_the_text(config: JournalFieldsConfig) -> None:
     text = "POI був ордер блок на H4"
     output = {
-        "poi_type": entry("other", "POI був ордер блок"),
-        "poi_type_other": entry("OB H4", "ордер блок на H4"),  # translated, not his words
+        "poi_types": entry(["other"], "POI був ордер блок"),
+        "poi_types_other": entry("OB H4", "ордер блок на H4"),  # translated, not his words
     }
     result = guard(config, output, text)
-    assert result.fields == {"poi_type": "other"}
-    assert result.dropped == [Dropped("poi_type_other", "evidence_not_in_text")]
+    assert result.fields == {"poi_types": ["other"]}
+    assert result.dropped == [Dropped("poi_types_other", "evidence_not_in_text")]

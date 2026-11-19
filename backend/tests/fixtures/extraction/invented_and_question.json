@@ -4,7 +4,7 @@
   "model_output": {
     "entry_model": { "value": "qm_m5", "evidence": "Зайшов по QM M5" },
     "exit_reason": { "value": "sl", "evidence": "вибило по стопу" },
-    "setup_context": { "value": "no", "evidence": "Flow H1 не синхронний з H4" },
+    "h1_context": { "value": "flow", "evidence": "Flow H1 не синхронний з H4" },
     "quality_rating": { "value": 2, "evidence": "погана якість сетапу" },
     "emotion_after": { "value": "anger", "evidence": "Злий" },
     "mistakes": { "value": "Чому ти зайшов у NY, якщо QM там заборонений?", "evidence": "Зайшов по QM M5 в Нью-Йорку" },
@@ -16,7 +16,7 @@
     "exit_reason": "sl"
   },
   "expected_dropped": [
-    { "key": "setup_context", "reason": "evidence_not_in_text" },
+    { "key": "h1_context", "reason": "evidence_not_in_text" },
     { "key": "emotion_after", "reason": "invalid_option" },
     { "key": "mistakes", "reason": "question" },
     { "key": "lesson", "reason": "evidence_not_in_text" },

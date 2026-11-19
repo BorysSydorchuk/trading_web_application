@@ -31,7 +31,7 @@ def test_system_prompt_has_rules_glossary_and_yaml_options() -> None:
     assert FIELDS_PLACEHOLDER not in prompt
     for phrase in ("Never invent", "verbatim", "Never ask questions", "IFVG", "QM", "Point B"):
         assert phrase in prompt
-    assert "`fvg_kind` (Тип FVG): one option value:" in prompt
+    assert "`fvg_types_h1` (Тип FVG H1): one or more option values:" in prompt
     assert "  - `post_manipulation`: після маніпуляції" in prompt
 
 

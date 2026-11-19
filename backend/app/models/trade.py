@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import (
@@ -49,9 +49,11 @@ from app.models.enums import (
 if TYPE_CHECKING:
     from app.models.media import AudioNote, ChartLink
 
-# Journal option fields (setup_context, poi_type, ...) hold option keys from
+# Journal option fields (h1_context, entry_model, ...) hold option keys from
 # config/journal_fields.yaml. No CHECK on purpose: options change, old values must survive.
 JOURNAL_OPTION = String(50)
+# multi_enum journal fields with storage: column (M8-04..08).
+JOURNAL_OPTIONS = ARRAY(JOURNAL_OPTION)
 EXCURSION_POINTS = Numeric(14, 1)  # MAE/MFE distance in symbol points (M8-16)
 
 
@@ -128,11 +130,27 @@ class Trade(TimestampMixin, Base):
     is_reentry: Mapped[bool] = mapped_column(Boolean, server_default=false())
 
     # --- Journal fields (PRD 6.4; options in config/journal_fields.yaml) ---
+    # M8-04..08 taxonomy: H1/H4 context, POI and FVG types (multi: VARCHAR(50)[], NULL when
+    # empty, never '{}'), each with its «Інше» text.
+    h1_context: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
+    h1_context_other: Mapped[str | None] = mapped_column(Text)
+    h4_context: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
+    h4_context_other: Mapped[str | None] = mapped_column(Text)
+    poi_types: Mapped[list[str] | None] = mapped_column(JOURNAL_OPTIONS)
+    poi_types_other: Mapped[str | None] = mapped_column(Text)
+    fvg_types_h1: Mapped[list[str] | None] = mapped_column(JOURNAL_OPTIONS)
+    fvg_types_h1_other: Mapped[str | None] = mapped_column(Text)
+    fvg_types_h4: Mapped[list[str] | None] = mapped_column(JOURNAL_OPTIONS)
+    fvg_types_h4_other: Mapped[str | None] = mapped_column(Text)
+    # Old fields (M8-04..08): setup_context / fvg_kind hold the values the migration could
+    # not map exactly (legacy, read-only); poi_type / poi_type_other are always emptied.
+    # Never dropped.
     setup_context: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     poi_type: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     poi_type_other: Mapped[str | None] = mapped_column(Text)
     fvg_kind: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     entry_model: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
+    entry_model_other: Mapped[str | None] = mapped_column(Text)
     exit_reason: Mapped[str | None] = mapped_column(JOURNAL_OPTION)
     # Who set exit_reason (M8-09): mt5_reason / price_match = prefilled by the sync (UI marks
     # it), owner = entered/changed/cleared by the owner (sync never touches it); NULL = set

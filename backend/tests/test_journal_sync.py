@@ -31,10 +31,10 @@ from tests.test_sync import (
 
 SNAP = "https://www.tradingview.com/x/AbCd1234/"
 FIELDS: dict[str, Any] = {
-    "setup_context": "yes",
-    "poi_type": "other",
-    "poi_type_other": "OB H4",
-    "fvg_kind": "na",
+    "h1_context": "flow",
+    "h4_context": "flow",
+    "poi_types": ["other"],
+    "poi_types_other": "OB H4",
     "entry_model": "ifvg_m5",
     "exit_reason": "tp",
     "followed_plan": True,
@@ -80,7 +80,7 @@ def save(client: TestClient, trade: Trade, complete: bool) -> dict[str, Any]:
             "fields": FIELDS,
             "chart_links": [{"url": SNAP, "kind": "before"}],
             "raw_text": "опис",
-            "ai_filled_fields": ["setup_context", "lesson"],
+            "ai_filled_fields": ["h1_context", "lesson"],
             "complete": complete,
         },
     )

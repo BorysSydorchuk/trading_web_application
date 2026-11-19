@@ -130,7 +130,7 @@ def test_eval_expected_fields_is_the_right_answer(tmp_path: Path) -> None:
 
     # a correct live answer: right for the text, so no EXTRA / MISSING
     correct = {
-        "poi_type": {"value": "fvg_h4", "evidence": "POI FVG H4"},
+        "poi_types": {"value": ["fvg_h4"], "evidence": "POI FVG H4"},
         "entry_model": {"value": "other", "evidence": "Зашел по IFVG на M15"},
         "exit_reason": {"value": "tp", "evidence": "Закрыл в TP"},
         "followed_plan": {"value": False, "evidence": "не по моему плану"},
@@ -187,14 +187,14 @@ def test_wrong_answer_and_failed_calls_are_reported(tmp_path: Path) -> None:
     assert "attempts 2, cost USD 0.0000" in report
     assert "ERROR bad fixture" in report
     assert "WRONG entry_model: expected 'qm_m5', got 'ifvg_m5'" in report
-    assert "MISSING: setup_context, exit_reason" in report
+    assert "MISSING: exit_reason" in report
     assert "EXTRA: followed_plan" in report
     assert "fixtures 4, ok 1, failed calls 2, bad fixture files 1" in report
     assert "duration s (all calls incl. failed, n=3)" in report
     assert "duration s (successful calls, n=1)" in report
     # failed attempts are in the cost: refusal 0.0058 + overloads 0 + xau 0.0058
     assert "incl. failed, 4 attempts): total 0.0116, mean per extraction 0.0039" in report
-    assert "correct 0/4 (0.0%), wrong 1, missing 2, extra 1" in report
+    assert "correct 0/3 (0.0%), wrong 1, missing 1, extra 1" in report
     assert len(usage_lines(tmp_path)) == 4
 
 

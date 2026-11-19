@@ -298,8 +298,11 @@ def test_worker_job_syncs_and_skips_broken_yaml(
 
 
 def _all_required(config: JournalFieldsConfig) -> JournalFieldsConfig:
+    """Every field required, except legacy ones (read-only, never required)."""
     return JournalFieldsConfig(
-        fields=tuple(f.model_copy(update={"required": True}) for f in config.fields)
+        fields=tuple(
+            f if f.legacy else f.model_copy(update={"required": True}) for f in config.fields
+        )
     )
 
 
@@ -308,7 +311,11 @@ def test_sql_filter_runs_for_every_real_field(session: Session) -> None:
     with Python (catches a column type without an SQL empty check)."""
     account = add_account(session, "Alpha", 1)
     add_trade(session, account)
-    add_trade(session, account, setup_context="", mistakes="", quality_rating=3)
+    add_trade(session, account, h1_context="", mistakes="", quality_rating=3)
+    # show_if (M8-04..08): FVG H1 types shown and empty / shown and filled / hidden.
+    add_trade(session, account, poi_types=["fvg_h1"])
+    add_trade(session, account, poi_types=["fvg_h1", "fvg_h4"], fvg_types_h1=["other"])
+    add_trade(session, account, poi_types=["fractal_h1"], fvg_types_h4=["other"])
     cfg = _all_required(load_journal_fields())
     since = {f.key: LATER for f in cfg.fields}
     assert _sql_ids(session, cfg, since) == _python_ids(session, cfg, since)

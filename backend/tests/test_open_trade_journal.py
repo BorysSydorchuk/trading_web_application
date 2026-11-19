@@ -42,9 +42,10 @@ BEFORE_2 = "https://www.tradingview.com/x/EfGh5678/"
 AFTER_1 = "https://www.tradingview.com/x/IjKl9012/"
 # Pre-entry values only (phase "before" in config/journal_fields.yaml).
 PRE_ENTRY = {
-    "setup_context": "yes",
-    "poi_type": "fvg_h1",
-    "fvg_kind": "fractal_updating",
+    "h1_context": "flow",
+    "h4_context": "flow",
+    "poi_types": ["fvg_h1"],
+    "fvg_types_h1": ["fractal_updating"],
     "entry_model": "ifvg_m5",
     "emotion_before": "calm",
     "quality_rating": 4,

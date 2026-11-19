@@ -84,7 +84,7 @@ class JournalKey:
 
     @property
     def writable(self) -> bool:
-        return self.type not in NOT_WRITABLE_TYPES
+        return self.type not in NOT_WRITABLE_TYPES and not self.field.legacy
 
     @property
     def ai_fillable(self) -> bool:
@@ -95,6 +95,8 @@ class JournalKey:
 class JournalValidation:
     values: dict[str, Any]  # every writable YAML key → normalised value or None
     errors: dict[str, FieldIssue]  # input key → issue
+    # Field keys sent with a value but hidden by their show_if (stored as None), YAML order.
+    cleared_hidden: tuple[str, ...] = ()
 
 
 def journal_keys(config: JournalFieldsConfig) -> tuple[JournalKey, ...]:
@@ -108,7 +110,7 @@ def journal_keys(config: JournalFieldsConfig) -> tuple[JournalKey, ...]:
 
 
 def writable_keys(config: JournalFieldsConfig) -> tuple[JournalKey, ...]:
-    """Keys accepted in `PUT .../journal` `fields` (all but `auto` and `links`)."""
+    """Keys accepted in `PUT .../journal` `fields` (all but `auto`, `links` and legacy)."""
     return tuple(k for k in journal_keys(config) if k.writable)
 
 
@@ -196,9 +198,30 @@ def _key_issue(key: str, specs: Mapping[str, JournalKey]) -> FieldIssue | None:
         return FieldIssue("unknown_key", "unknown journal field")
     if spec.type == "links":
         return FieldIssue("not_writable", "chart links are saved in the top-level chart_links")
+    if spec.field.legacy:
+        return FieldIssue("not_writable", "old field (legacy), read-only")
     if not spec.writable:
         return FieldIssue("not_writable", "computed by the app, not writable")
     return None
+
+
+def has_other(value: Any) -> bool:
+    """The value is `other` (enum) or contains it (multi_enum)."""
+    if isinstance(value, list | tuple):
+        return OTHER_OPTION in value
+    return bool(value == OTHER_OPTION)
+
+
+def is_shown(field: JournalField, values: Mapping[str, Any]) -> bool:
+    """`show_if`: the parent's value equals (enum) or contains (multi_enum) the option.
+    A field without show_if is always shown."""
+    cond = field.show_if
+    if cond is None:
+        return True
+    parent = values.get(cond.field)
+    if isinstance(parent, list | tuple):
+        return cond.includes in parent
+    return bool(parent == cond.includes)
 
 
 def validate_fields(
@@ -206,7 +229,9 @@ def validate_fields(
 ) -> JournalValidation:
     """Full replacement of the writable YAML keys: missing keys become None.
 
-    An `other_only` text key is cleared (no error) unless its field's value is `other`.
+    An `other_only` text key is cleared (no error) unless its field's value is or contains
+    `other`. A field hidden by its `show_if` (parent value of this same save) and its text
+    key are stored as None; hidden fields sent with a value are listed in `cleared_hidden`.
     """
     specs = {k.key: k for k in journal_keys(config)}
     errors: dict[str, FieldIssue] = {}
@@ -222,9 +247,16 @@ def validate_fields(
             errors[spec.key] = exc.issue
             values[spec.key] = None
     for spec in writable_keys(config):
-        if spec.other_only and values.get(spec.field.key) != OTHER_OPTION:
+        if spec.other_only and not has_other(values.get(spec.field.key)):
             values[spec.key] = None
-    return JournalValidation(values=values, errors=errors)
+    cleared: list[str] = []
+    for spec in writable_keys(config):
+        if is_shown(spec.field, values):
+            continue
+        if not spec.is_text_key and values.get(spec.key) is not None:
+            cleared.append(spec.key)
+        values[spec.key] = None
+    return JournalValidation(values=values, errors=errors, cleared_hidden=tuple(cleared))
 
 
 # --- completeness ---
@@ -269,15 +301,18 @@ def missing_required(
     scope: RequirementScope | None = None,
 ) -> list[str]:
     """What blocks `complete` (YAML order): required fields without a value, an
-    `other_only` text when its field is `other`, `links` without a `before` link.
+    `other_only` text when its field is (or contains) `other`, `links` without a `before`
+    link. Legacy fields and fields hidden by their `show_if` never block.
 
     With a `scope`, a required field is skipped for a trade that closed before the field
     became required (old complete trades stay complete). Without one, every field counts.
     """
     missing: list[str] = []
     for spec in journal_keys(config):
-        if spec.other_only:
-            blocked = values.get(spec.field.key) == OTHER_OPTION and values.get(spec.key) is None
+        if spec.field.legacy or not is_shown(spec.field, values):
+            blocked = False
+        elif spec.other_only:
+            blocked = has_other(values.get(spec.field.key)) and _is_empty(values.get(spec.key))
         elif (
             spec.is_text_key
             or not spec.field.required
@@ -305,6 +340,7 @@ def missing_new_fields(
         for spec in journal_keys(config)
         if not spec.is_text_key
         and spec.field.required
+        and is_shown(spec.field, values)
         and scope.is_new_for_trade(spec.key)
         and _required_blank(spec, values, has_before_link)
     ]

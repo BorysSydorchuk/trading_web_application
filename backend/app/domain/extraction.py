@@ -27,6 +27,7 @@ from app.domain.journal import (
     JournalKey,
     RequirementScope,
     ai_fillable_keys,
+    has_other,
     missing_required,
     normalise_value,
 )
@@ -191,7 +192,8 @@ def answer_entries(config: JournalFieldsConfig, answer: Mapping[str, Any]) -> di
 def _catalogue_lines(spec: JournalKey) -> list[str]:
     head = f"- `{spec.key}` ({spec.field.label})"
     if spec.other_only:
-        return [f"{head}: free text, only when `{spec.field.key}` is `{OTHER_OPTION}`."]
+        verb = "contains" if spec.field.type == "multi_enum" else "is"
+        return [f"{head}: free text, only when `{spec.field.key}` {verb} `{OTHER_OPTION}`."]
     if spec.is_text_key:
         return [f"{head}: optional free-text note about `{spec.field.key}`."]
     match spec.type:
@@ -361,7 +363,7 @@ def apply_guards(
             kept[key] = value
     for key in list(kept):
         spec = specs[key]
-        if spec.other_only and kept.get(spec.field.key) != OTHER_OPTION:
+        if spec.other_only and not has_other(kept.get(spec.field.key)):
             del kept[key]
             dropped.append(Dropped(key, "parent_not_other"))
     ordered = {key: kept[key] for key in sorted(kept, key=order.__getitem__)}

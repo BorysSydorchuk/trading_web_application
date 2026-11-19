@@ -2,9 +2,10 @@
   "description": "UA/RU mix with glossary terms; everything stated clearly is kept. 'Закрыл по тейку в точке B' = point B target (TP placed at point B) -> point_b, not tp (PM 2026-11-09)",
   "text": "Лондон, золото. Флоу H1 синхронний з H4, POI — FVG H4, фвг после манипуляции, сняли ликвидность под лоу. Вход по IFVG M5. Закрыл по тейку в точке B. По плану, спокойно. Сетап на 4 из 5. Урок: не двигать стоп раньше времени.",
   "model_output": {
-    "setup_context": { "value": "yes", "evidence": "Флоу H1 синхронний з H4" },
-    "poi_type": { "value": "fvg_h4", "evidence": "POI — FVG H4" },
-    "fvg_kind": { "value": "post_manipulation", "evidence": "фвг после манипуляции" },
+    "h1_context": { "value": "flow", "evidence": "Флоу H1 синхронний з H4" },
+    "h4_context": { "value": "flow", "evidence": "Флоу H1 синхронний з H4" },
+    "poi_types": { "value": ["fvg_h4"], "evidence": "POI — FVG H4" },
+    "fvg_types_h4": { "value": ["post_manipulation"], "evidence": "фвг после манипуляции" },
     "entry_model": { "value": "ifvg_m5", "evidence": "Вход по IFVG M5" },
     "exit_reason": { "value": "point_b", "evidence": "Закрыл по тейку в точке B" },
     "followed_plan": { "value": true, "evidence": "По плану" },
@@ -13,9 +14,10 @@
     "lesson": { "value": "не двигать стоп раньше времени", "evidence": "Урок: не двигать стоп раньше времени" }
   },
   "expected_fields": {
-    "setup_context": "yes",
-    "poi_type": "fvg_h4",
-    "fvg_kind": "post_manipulation",
+    "h1_context": "flow",
+    "h4_context": "flow",
+    "poi_types": ["fvg_h4"],
+    "fvg_types_h4": ["post_manipulation"],
     "entry_model": "ifvg_m5",
     "exit_reason": "point_b",
     "followed_plan": true,

@@ -2,7 +2,8 @@
 
 Editable YAML configuration (not secrets):
 - `rules.yaml`: session boundaries and trading rules (PRD 6.3, 6.9), added in M1.
-- `journal_fields.yaml`: journal field definitions (PRD 6.4), added in M1.
+- `journal_fields.yaml`: journal field definitions (PRD 6.4), added in M1. M8-04..08: `show_if` (a field shown and required only when an earlier option field has a value) and `legacy` (read-only old fields).
+- `violations.yaml`: the rule violations a trade can carry (key, Ukrainian label, `auto` = rules engine / `manual` = chosen by you, `active` / `deprecated`); the options of the journal field «Порушення правил» come from here. Add a manual violation with one entry. Added in M8-04.
 - `ai_pricing.yaml`: Anthropic prices per million tokens per model (cost in `logs/ai_usage.jsonl`), added in M2.
 - `extraction.yaml`: number words the AI extraction accepts for number fields ("четвірка" = 4); add your own words or phrases, added in M3.
 - `transcription.yaml`: glossary of trading terms passed to Whisper as a hint for voice notes, added in M3.

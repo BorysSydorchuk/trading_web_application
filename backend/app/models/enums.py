@@ -1,6 +1,6 @@
 """System enums, stored as VARCHAR + CHECK (see `enum_check`).
 
-Journal option fields (setup_context, poi_type, entry_model, emotions, ...) are NOT here:
+Journal option fields (h1_context, poi_types, entry_model, emotions, ...) are NOT here:
 their options live in config/journal_fields.yaml and change over time (PRD 6.4).
 """
 

@@ -1,6 +1,6 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
 ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml, bias.yaml,
-symbols.yaml).
+symbols.yaml, violations.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -60,6 +60,11 @@ from app.config_files.transcription import (
     clear_transcription_cache,
     get_transcription,
 )
+from app.config_files.violations import (
+    ViolationsConfig,
+    clear_violations_cache,
+    get_violations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +80,7 @@ def reload_config() -> None:
     clear_transcript_glossary_cache()
     clear_bias_cache()
     clear_symbols_cache()
+    clear_violations_cache()
 
 
 def check_config_files() -> list[ConfigError]:
@@ -82,6 +88,7 @@ def check_config_files() -> list[ConfigError]:
     errors: list[ConfigError] = []
     loaders: list[Callable[[], object]] = [
         get_rules,
+        get_violations,
         get_journal_fields,
         get_ai_pricing,
         get_ai_models,
@@ -95,7 +102,9 @@ def check_config_files() -> list[ConfigError]:
         try:
             load()
         except ConfigError as exc:
-            errors.append(exc)
+            # journal_fields.yaml re-raises a broken violations.yaml: report it once.
+            if not any(e.path == exc.path and e.problems == exc.problems for e in errors):
+                errors.append(exc)
     for error in errors:
         logger.error("CONFIG ERROR, fix the file and reload the page. %s", error)
     if not errors:
@@ -120,6 +129,7 @@ __all__ = [
     "SessionWindow",
     "SymbolsConfig",
     "TranscriptionConfig",
+    "ViolationsConfig",
     "check_config_files",
     "config_dir",
     "get_ai_models",
@@ -131,5 +141,6 @@ __all__ = [
     "get_symbols_config",
     "get_transcript_glossary",
     "get_transcription",
+    "get_violations",
     "reload_config",
 ]

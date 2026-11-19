@@ -161,7 +161,7 @@ def test_extra_entry_field_is_rejected(tmp_path: Path) -> None:
     entries: list[dict[str, Any]] = [*valid_entries()]
     entries[0] = entries[0] | {"colour": "red"}
 
-    assert "colour" in problems_of(tmp_path, entries)  # type: ignore[arg-type]
+    assert "colour" in problems_of(tmp_path, entries)
 
 
 # --- the real file ---

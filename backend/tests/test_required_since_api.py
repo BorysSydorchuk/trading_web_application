@@ -28,9 +28,10 @@ from tests.test_trades_api import add_account, add_trade
 
 SNAP = "https://www.tradingview.com/x/AbCd1234/"
 COMPLETE: dict[str, Any] = {
-    "setup_context": "yes",
-    "poi_type": "fvg_h4",
-    "fvg_kind": "na",
+    "h1_context": "flow",
+    "h4_context": "flow",
+    "poi_types": ["fvg_h4"],
+    "fvg_types_h4": ["post_manipulation"],
     "entry_model": "ifvg_m5",
     "exit_reason": "tp",
     "followed_plan": True,
@@ -78,6 +79,8 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcription.yaml",
         "transcript_glossary.yaml",
         "bias.yaml",
+        "symbols.yaml",
+        "violations.yaml",
     ):
         shutil.copy(REPO_ROOT / "config" / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -135,7 +138,7 @@ def made_required(
     detail(client, seed.id)  # picks up the change without a restart
     since = load_requirements(session)["mistakes"]
     assert before <= since <= datetime.now(UTC)
-    assert load_requirements(session)["setup_context"] == INITIAL_REQUIRED_SINCE
+    assert load_requirements(session)["h1_context"] == INITIAL_REQUIRED_SINCE
     return since
 
 
@@ -145,7 +148,7 @@ def test_first_read_fills_1970_and_counts_everything(
     trade = closed(session, account, datetime(2020, 1, 1, tzinfo=UTC))
     data = detail(client, trade.id)
     assert data["missing_new_fields"] == []
-    assert data["missing_required"][0] == "setup_context"
+    assert data["missing_required"][0] == "h1_context"
     assert data["missing_required"][-1] == "chart_links"
     assert set(load_requirements(session).values()) == {INITIAL_REQUIRED_SINCE}
 

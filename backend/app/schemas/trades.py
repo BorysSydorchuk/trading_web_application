@@ -158,6 +158,13 @@ class TradeDetail(TradeRow):
     excursion_at: UtcDatetime | None
 
 
+class JournalSaved(TradeDetail):
+    """PUT /api/trades/{id}/journal response: TradeDetail plus the field keys that were sent
+    with a value but hidden by their show_if, so stored as empty (M8-04..08)."""
+
+    cleared_hidden: list[str]
+
+
 def check_chart_url(value: str) -> str:
     """TradingView link rule of docs/api.md M2 (trade and bias links)."""
     if len(value) > MAX_URL_LENGTH:

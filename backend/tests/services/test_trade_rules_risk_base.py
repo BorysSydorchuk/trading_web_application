@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.config_files import get_rules
 from app.models import Account, RuleViolation, Trade
 from app.services.trade_rules import recompute_rules
+from tests.domain.test_rules import limit_names
 
 D = Decimal
 MON = datetime(2026, 11, 2, 7, 5, tzinfo=UTC)  # Mon 08:05 Brussels, london
@@ -65,7 +66,7 @@ def _trade(
 def _keys(db: Session, trade: Trade) -> set[str]:
     db.expire_all()
     rows = db.scalars(select(RuleViolation).where(RuleViolation.trade_id == trade.id))
-    return {r.rule_key for r in rows}
+    return set().union(*(limit_names(r.rule_key, r.details) for r in rows))
 
 
 def _day(db: Session, size: str, loss: str) -> tuple[Account, Trade]:

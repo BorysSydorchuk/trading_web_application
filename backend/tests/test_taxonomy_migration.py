@@ -1,4 +1,4 @@
-"""M8-04..M8-08 migration (one revision after e4a7c2f9b315, docs/api.md "Migration"):
+"""M8-04..M8-08 migration (one revision after c6f2a8d4e173, docs/api.md "Migration"):
 the exact mappings of the old journal values and rule violations, the requirements rows
 and the downgrade. Drift / roundtrip / single head: test_migrations.py."""
 
@@ -15,7 +15,9 @@ from sqlalchemy import Connection, Engine, text
 
 from tests.conftest import alembic_config
 
-BEFORE = "e4a7c2f9b315"
+# The head before this revision (the brief named e4a7c2f9b315, but a91d3c7e5f20 and
+# c6f2a8d4e173 already follow it; revising it would create a second head).
+BEFORE = "c6f2a8d4e173"
 NEW_TEXT_COLUMNS = [
     "h1_context_other",
     "h4_context_other",
@@ -105,7 +107,7 @@ def _columns(db_engine: Engine) -> dict[str, str]:
                 " WHERE attrelid = 'trades'::regclass AND attnum > 0 AND NOT attisdropped"
             )
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
 
 def test_the_new_revision_follows_the_previous_head() -> None:
@@ -190,6 +192,9 @@ def migrated(db_engine: Engine) -> dict[str, int]:
             text("INSERT INTO journal_field_requirements (key, required_since) VALUES (:k, :s)"),
             {"k": "h1_context", "s": datetime(2026, 1, 2, tzinfo=UTC)},
         )
+        # A DB whose first requirements fill happened (DECISIONS 2026-11-19, RED gaps): only
+        # then does the migration insert rows for the new required keys.
+        _mark_first_fill_done(conn)
     command.upgrade(alembic_config(), "head")
     assert "poi_types" in _columns(db_engine)  # the upgrade really ran
     return ids
@@ -375,6 +380,13 @@ def test_no_row_keeps_an_old_risk_key(db_engine: Engine, migrated: dict[str, int
 # --- requirements ---
 
 
+def _mark_first_fill_done(conn: Connection) -> None:
+    conn.execute(
+        text("UPDATE journal_requirements_state SET initial_fill_at = :s"),
+        {"s": datetime(2026, 1, 1, tzinfo=UTC)},
+    )
+
+
 def _requirements(db_engine: Engine) -> dict[str, datetime]:
     with db_engine.connect() as conn:
         rows = conn.execute(text("SELECT key, required_since FROM journal_field_requirements"))
@@ -384,15 +396,35 @@ def _requirements(db_engine: Engine) -> dict[str, datetime]:
 def test_requirements_rows_for_the_new_required_keys_are_inserted_with_now(
     db_engine: Engine,
 ) -> None:
+    # Adjusted to DECISIONS 2026-11-19 (RED gaps): ALL five new required keys get a row
+    # (show_if fields are required when shown, so old FVG trades must not become incomplete),
+    # and only when the first fill already happened (initial_fill_at set).
     command.downgrade(alembic_config(), BEFORE)
+    with db_engine.begin() as conn:
+        _mark_first_fill_done(conn)
     lo = datetime.now(UTC) - timedelta(minutes=1)
 
     command.upgrade(alembic_config(), "head")
 
     rows = _requirements(db_engine)
     hi = datetime.now(UTC) + timedelta(minutes=1)
-    for key in ("h1_context", "h4_context", "poi_types"):
+    for key in ("h1_context", "h4_context", "poi_types", "fvg_types_h1", "fvg_types_h4"):
         assert lo <= rows[key] <= hi, key
+
+
+def test_requirements_rows_are_not_inserted_before_the_first_fill(db_engine: Engine) -> None:
+    """A fresh DB (initial_fill_at NULL) keeps the 1970 first-fill rule of the M3-07 sync."""
+    command.downgrade(alembic_config(), BEFORE)
+
+    command.upgrade(alembic_config(), "head")
+
+    assert not set(_requirements(db_engine)) & {
+        "h1_context",
+        "h4_context",
+        "poi_types",
+        "fvg_types_h1",
+        "fvg_types_h4",
+    }
 
 
 def test_requirements_existing_rows_win_and_removed_keys_are_deleted(

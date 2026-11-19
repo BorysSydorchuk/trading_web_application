@@ -29,11 +29,13 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.config_files.rules import RulesConfig
+from app.config_files.rules import DAILY_RISK_KEY, WEEKLY_RISK_KEY, RulesConfig
 from app.domain.period_pnl import PeriodExtremes, local_day, period_extremes, week_start
 from app.domain.sessions import OUTSIDE
 
 PCT_Q = Decimal("0.01")
+# Joins the loss and profit parts of one daily_risk / weekly_risk details text (M8-04).
+RISK_DETAILS_SEPARATOR = "; "
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,39 @@ def _period_stop(
     )
 
 
+def _period_risk(
+    trade: RuleTradeInput, others: list[RuleTradeInput], rules: RulesConfig, weekly: bool
+) -> Violation | None:
+    """One `daily_risk` / `weekly_risk` violation (M8-04): the limits hit are named in the
+    details by their rules.yaml key, loss part first, parts joined by "; "."""
+    cfg = rules.rules
+    if weekly:
+        label, rule_key = "week", WEEKLY_RISK_KEY
+        loss_key, profit_key = "weekly_stop_loss_pct", "weekly_stop_profit_pct"
+        loss_rule, profit_rule = cfg.weekly_stop_loss_pct, cfg.weekly_stop_profit_pct
+    else:
+        label, rule_key = "day", DAILY_RISK_KEY
+        loss_key, profit_key = "daily_stop_loss_pct", "daily_stop_profit_pct"
+        loss_rule, profit_rule = cfg.daily_stop_loss_pct, cfg.daily_stop_profit_pct
+    if not (loss_rule.enabled or profit_rule.enabled):
+        return None
+    stop = _period_stop(trade, others, rules.timezone, weekly)
+    if stop is None:
+        return None
+    parts: list[str] = []
+    if loss_rule.enabled and stop.low_pct <= loss_rule.value:
+        parts.append(
+            f"{loss_key}: {label} P&L reached {_fmt(stop.low_pct)}% ({_fmt(stop.low_pnl)}) "
+            f"before entry <= limit {loss_rule.value}%"
+        )
+    if profit_rule.enabled and stop.high_pct >= profit_rule.value:
+        parts.append(
+            f"{profit_key}: {label} P&L reached {_fmt(stop.high_pct)}% ({_fmt(stop.high_pnl)}) "
+            f"before entry >= limit {profit_rule.value}%"
+        )
+    return Violation(rule_key, RISK_DETAILS_SEPARATOR.join(parts)) if parts else None
+
+
 def _near(a: Decimal, b: Decimal, tick: Decimal | None) -> bool:
     return abs(a - b) <= tick if tick is not None and tick > 0 else a == b
 
@@ -134,33 +169,10 @@ def evaluate(
             )
         )
 
-    for weekly, label, loss_rule, profit_rule in (
-        (False, "day", cfg.daily_stop_loss_pct, cfg.daily_stop_profit_pct),
-        (True, "week", cfg.weekly_stop_loss_pct, cfg.weekly_stop_profit_pct),
-    ):
-        if not (loss_rule.enabled or profit_rule.enabled):
-            continue
-        stop = _period_stop(trade, others, tz, weekly)
-        if stop is None:
-            continue
-        loss_key = "weekly_stop_loss_pct" if weekly else "daily_stop_loss_pct"
-        profit_key = "weekly_stop_profit_pct" if weekly else "daily_stop_profit_pct"
-        if loss_rule.enabled and stop.low_pct <= loss_rule.value:
-            out.append(
-                Violation(
-                    loss_key,
-                    f"{label} P&L reached {_fmt(stop.low_pct)}% ({_fmt(stop.low_pnl)}) "
-                    f"before entry <= limit {loss_rule.value}%",
-                )
-            )
-        if profit_rule.enabled and stop.high_pct >= profit_rule.value:
-            out.append(
-                Violation(
-                    profit_key,
-                    f"{label} P&L reached {_fmt(stop.high_pct)}% ({_fmt(stop.high_pnl)}) "
-                    f"before entry >= limit {profit_rule.value}%",
-                )
-            )
+    for weekly in (False, True):
+        risk = _period_risk(trade, others, rules, weekly)
+        if risk is not None:
+            out.append(risk)
 
     if cfg.max_trades_per_week.enabled:
         week = _week_start(trade.open_time, tz)
