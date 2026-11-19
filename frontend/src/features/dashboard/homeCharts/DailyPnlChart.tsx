@@ -1,5 +1,5 @@
 import { linearScale } from '@/features/digests/charts/scale'
-import { formatSignedMoney } from '@/features/trades/format'
+import { formatPercent, formatSignedMoney } from '@/features/trades/format'
 import { uk } from '@/i18n/uk'
 import { decimalSign } from '@/lib/decimal'
 import { cn } from '@/lib/utils'
@@ -36,7 +36,7 @@ export function DailyPnlChart({ days, currency }: { days: HomeCharts['daily']; c
               height={Math.max(1, Math.abs(y(value) - y(0)))}
               className={cn(sign > 0 ? 'fill-profit' : sign < 0 ? 'fill-loss' : 'fill-muted-foreground')}
             >
-              <title>{t.dayTitle(d.day, money(d.net_pnl), d.trades)}</title>
+              <title>{t.dayTitle(d.day, money(d.net_pnl), d.pct === null ? '' : formatPercent(d.pct, true), d.trades)}</title>
             </rect>
           )
         })}

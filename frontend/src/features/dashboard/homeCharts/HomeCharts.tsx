@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { isApiError } from '@/api/client'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { EquityChart } from '@/features/digests/charts/EquityChart'
@@ -84,14 +85,25 @@ export function HomeCharts({ accounts }: { accounts: readonly DashboardAccount[]
   )
 }
 
+function errorNote(error: unknown): string {
+  if (isApiError(error) && error.code === 'mixed_currency') return t.mixedCurrency
+  return `${t.loadError} ${errorText(error)}`
+}
+
 function Body({ query, data }: { query: ReturnType<typeof useHomeCharts>; data: ReturnType<typeof useHomeCharts>['data'] }) {
   if (query.isError && !data) {
     return (
       <p role="alert" className="rounded-lg border border-dashed px-4 py-3 text-sm text-destructive">
-        {t.loadError} {errorText(query.error)}
+        {errorNote(query.error)}
       </p>
     )
   }
+  // A failed refresh keeps the last charts, but says so (errors must be visible).
+  const stale = query.isError ? (
+    <p role="alert" className="text-xs text-destructive">
+      {t.refreshError} {errorNote(query.error)}
+    </p>
+  ) : null
   if (!data) {
     if (!query.isFetching) return null
     return (
@@ -102,11 +114,17 @@ function Body({ query, data }: { query: ReturnType<typeof useHomeCharts>; data: 
     )
   }
   if (data.trades === 0) {
-    return <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">{t.empty}</p>
+    return (
+      <div className="flex flex-col gap-2">
+        {stale}
+        <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">{t.empty}</p>
+      </div>
+    )
   }
   const lastPct = data.equity[data.equity.length - 1]?.cum_pct ?? null
   return (
     <div className="flex flex-col gap-2">
+      {stale}
       <p className="text-xs text-muted-foreground">
         {t.summary(data.trades, data.from, data.to)}
         {lastPct !== null && ` · ${t.ofSize(formatPercent(lastPct, true))}`}

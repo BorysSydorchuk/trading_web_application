@@ -37,11 +37,18 @@ export function RollingChart({ points, window }: { points: HomeCharts['rolling']
       <svg role="img" aria-label={t.rollingSummary(points.length)} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-32 w-full rounded-md border bg-muted/10">
         <line x1={PAD} x2={WIDTH - PAD} y1={yR(0)} y2={yR(0)} className="stroke-border" strokeDasharray="3 3" />
         <polyline data-testid="rolling-win-rate" points={line(winRates, yWin)} fill="none" strokeWidth={1.5} className="stroke-primary" />
-        <polyline data-testid="rolling-avg-r" points={line(rs, yR)} fill="none" strokeWidth={1.5} className="stroke-profit" strokeDasharray="4 2" />
+        <polyline data-testid="rolling-avg-r" points={line(rs, yR)} fill="none" strokeWidth={1.5} className="stroke-muted-foreground" strokeDasharray="4 2" />
       </svg>
-      <p className="flex gap-3 text-xs text-muted-foreground">
-        <span>{t.legendWinRate}</span>
-        <span>{t.legendAvgR}</span>
+      {/* Two scales on one plot: name both (win rate 0–100 %, R from its own min to max). */}
+      <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <svg aria-hidden width="16" height="4"><line x1="0" x2="16" y1="2" y2="2" className="stroke-primary" strokeWidth="2" /></svg>
+          {t.legendWinRate} ({t.winRateScale})
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <svg aria-hidden width="16" height="4"><line x1="0" x2="16" y1="2" y2="2" className="stroke-muted-foreground" strokeWidth="2" strokeDasharray="4 2" /></svg>
+          {t.legendAvgR} ({t.rScale(formatR(String(Math.min(0, ...known))), formatR(String(Math.max(0, ...known))))})
+        </span>
       </p>
     </figure>
   )

@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/api/client'
+import { DASHBOARD_POLL_MS } from '../api'
 
 /** docs/api.md M8-14 `GET /api/dashboard/charts`: money 2 dp, percents and R 4 dp (strings). */
 export interface HomeCharts {
@@ -28,6 +29,8 @@ export function useHomeCharts(range: { from: string; to: string } | null, accoun
         query: { from: range?.from, to: range?.to, account_id: accountId ?? undefined },
       }),
     enabled: range !== null,
+    // New trades from a sync appear like the rest of Home.
+    refetchInterval: DASHBOARD_POLL_MS,
     placeholderData: keepPreviousData,
     meta: { silentError: true },
   })

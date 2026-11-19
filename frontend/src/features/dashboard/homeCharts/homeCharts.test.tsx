@@ -46,6 +46,9 @@ describe('M8-14 range presets', () => {
     expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'month' }, TODAY)).toEqual({ from: '2026-11-01', to: TODAY })
     expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'months3' }, TODAY)).toEqual({ from: '2026-08-20', to: TODAY })
     expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'year' }, TODAY)).toEqual({ from: '2025-11-20', to: TODAY })
+    // month ends and leap days clamp to the target month (no roll-over into the next one)
+    expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'months3' }, '2026-05-31')).toEqual({ from: '2026-03-01', to: '2026-05-31' })
+    expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'year' }, '2028-02-29')).toEqual({ from: '2027-03-01', to: '2028-02-29' })
     expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'custom', from: '2026-11-10', to: '2026-11-01' }, TODAY)).toBeNull()
     expect(rangeOf({ ...DEFAULT_SELECTION, preset: 'custom', from: '2026-11-01', to: '2026-11-10' }, TODAY)).toEqual({
       from: '2026-11-01',
@@ -91,5 +94,39 @@ describe('M8-14 HomeCharts', () => {
 
     await user.click(screen.getByRole('button', { name: t.presets.week }))
     expect(screen.getByRole('button', { name: t.presets.week })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('«Свої дати» asks only once both dates are valid', async () => {
+    const asked: URLSearchParams[] = []
+    mockApi(
+      http.get('/api/dashboard/charts', ({ request }) => {
+        asked.push(new URL(request.url).searchParams)
+        return HttpResponse.json(DATA)
+      }),
+    )
+    const { user } = renderWithProviders(<HomeCharts accounts={ACCOUNTS} />)
+    await screen.findAllByTestId('daily-bar')
+
+    await user.click(screen.getByRole('button', { name: t.presets.custom }))
+    expect(screen.getByText(t.customHint)).toBeInTheDocument()
+    const calls = asked.length
+    await user.type(screen.getByLabelText(t.from), '2026-11-01')
+    await user.type(screen.getByLabelText(t.to), '2026-11-10')
+
+    expect(screen.queryByText(t.customHint)).not.toBeInTheDocument()
+    await screen.findAllByTestId('daily-bar')
+    expect(asked.length).toBeGreaterThan(calls)
+    expect(asked.at(-1)?.get('from')).toBe('2026-11-01')
+    expect(asked.at(-1)?.get('to')).toBe('2026-11-10')
+  })
+
+  it('shows a readable message for mixed currencies and other errors', async () => {
+    mockApi(
+      http.get('/api/dashboard/charts', () =>
+        HttpResponse.json({ error: { code: 'mixed_currency', message: 'x', details: {} } }, { status: 409 }),
+      ),
+    )
+    renderWithProviders(<HomeCharts accounts={ACCOUNTS} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.mixedCurrency)
   })
 })

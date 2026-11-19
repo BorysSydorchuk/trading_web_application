@@ -25,6 +25,10 @@ from app.models import Account, Trade
 from app.models.enums import AccountStatus
 from app.schemas import home_charts as schemas
 
+# Custom dates outside this window are rejected (422) instead of overflowing datetime.
+MIN_DATE = date(2000, 1, 1)
+MAX_DATE = date(2100, 12, 31)
+
 
 def _midnight_utc(day: date) -> datetime:
     return datetime.combine(day, time(0), tzinfo=ZoneInfo(DEFAULT_TZ)).astimezone(UTC)
@@ -66,11 +70,32 @@ def _trades(db: Session, account_ids: list[int], until: datetime) -> list[hc.Cha
     return trades
 
 
-def build(db: Session, start: date, end: date, account_id: int | None) -> schemas.HomeCharts:
+def _invalid(field: str, message: str) -> ApiError:
+    return ApiError(
+        422, "validation_error", "Request validation failed", {"fields": {field: message}}
+    )
+
+
+def _check_range(start: date, end: date) -> None:
+    for field, day in (("from", start), ("to", end)):
+        if not MIN_DATE <= day <= MAX_DATE:
+            raise _invalid(field, f"must be between {MIN_DATE} and {MAX_DATE}")
     if end < start:
-        raise ApiError(
-            422, "validation_error", "Request validation failed", {"fields": {"to": "before from"}}
-        )
+        raise _invalid("to", "before from")
+
+
+def _percent_base(accounts: list[Account]) -> Decimal | None:
+    """The digest's rule: every counted account needs a finite size > 0, else no percent."""
+    if not accounts:
+        return None
+    sizes = [a.reference_balance for a in accounts]
+    if any(not s.is_finite() or s <= 0 for s in sizes):
+        return None
+    return sum(sizes, Decimal(0))
+
+
+def build(db: Session, start: date, end: date, account_id: int | None) -> schemas.HomeCharts:
+    _check_range(start, end)
     try:
         breakeven_r = get_rules().breakeven_r_threshold
     except ConfigError as exc:
@@ -80,12 +105,16 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
     every = _trades(db, [a.id for a in accounts], hi)
     in_range = [t for t in every if t.close_time >= lo]
     active = {t.account_id for t in in_range}
-    size: Decimal | None = sum(
-        (a.reference_balance for a in accounts if a.id in active or account_id is not None),
-        Decimal(0),
-    )
-    size = size if size and size > 0 else None
-    currencies = {a.currency for a in accounts if a.id in active or account_id is not None}
+    counted = [a for a in accounts if a.id in active or account_id is not None]
+    currencies = {a.currency for a in counted}
+    if len(currencies) > 1:  # same refusal as the digest: never add USD and EUR together
+        raise ApiError(
+            409,
+            "mixed_currency",
+            "The range has trades in more than one account currency",
+            {"currencies": sorted(currencies)},
+        )
+    size = _percent_base(counted)
     rolling = [p for p in hc.rolling(every, breakeven_r=breakeven_r) if p.time >= lo]
     return schemas.HomeCharts(
         from_=start,

@@ -18,10 +18,13 @@ export const DEFAULT_SELECTION: ChartSelection = { preset: 'month', from: '', to
 const ALL_FROM = '2000-01-01'
 const STORAGE_KEY = 'tj.home.charts'
 
+/** The same day ``months`` back (clamped to the target month's length), plus one day. */
 function monthsBack(today: string, months: number): string {
   const [y, m, d] = today.split('-').map(Number) as [number, number, number]
-  const date = new Date(Date.UTC(y, m - 1 - months, d))
-  return addDays(date.toISOString().slice(0, 10), 1)
+  const first = new Date(Date.UTC(y, m - 1 - months, 1))
+  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate()
+  first.setUTCDate(Math.min(d, lastDay))
+  return addDays(first.toISOString().slice(0, 10), 1)
 }
 
 /** from..to for the API, or null while a custom range is incomplete or reversed. */

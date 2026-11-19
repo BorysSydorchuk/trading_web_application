@@ -3,9 +3,11 @@
 # ruff: noqa: F811  (pytest fixtures imported from test_trade_exclusion)
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -108,3 +110,57 @@ def test_archived_accounts_are_left_out(
     session.commit()
 
     assert charts(client)["trades"] == 0
+
+
+# --- review fixes ----------------------------------------------------------------------------
+
+
+def test_all_accounts_in_two_currencies_are_refused_like_the_digest(
+    client: TestClient, session: Session, account: Account, week: dict[str, Trade]
+) -> None:
+    euro = add_account(session, "Euro", 3)
+    euro.currency = "EUR"
+    session.commit()
+    closed(session, euro, TODAY, "10.00", "0.1")
+
+    response = client.get("/api/dashboard/charts", params={"from": WEEK_FROM, "to": WEEK_TO})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "mixed_currency"
+    assert charts(client, account_id=euro.id)["currency"] == "EUR"  # one account works
+
+
+@pytest.mark.parametrize("size", ["0", "NaN"])
+def test_a_traded_account_without_a_usable_size_gives_no_percent(
+    client: TestClient, session: Session, account: Account, week: dict[str, Trade], size: str
+) -> None:
+    other = add_account(session, "Beta", 2, reference_balance=Decimal(size))
+    closed(session, other, TODAY, "-25.00", "-0.25")
+
+    data = charts(client)
+
+    assert data["account_size"] is None
+    assert data["equity"][-1]["cum_pct"] is None
+    assert data["equity"][-1]["cum_pnl"] == "25.00"
+
+
+@pytest.mark.parametrize(("start", "end"), [("0001-01-01", WEEK_TO), (WEEK_FROM, "9999-12-31")])
+def test_dates_outside_the_supported_window_are_422(
+    client: TestClient, account: Account, start: str, end: str
+) -> None:
+    response = client.get("/api/dashboard/charts", params={"from": start, "to": end})
+    assert response.status_code == 422
+
+
+def test_a_range_across_the_dst_change_uses_brussels_midnights(
+    client: TestClient, session: Session, account: Account
+) -> None:
+    # Brussels leaves summer time on Sun 2026-10-25 (03:00 -> 02:00).
+    inside = closed(session, account, datetime(2026, 10, 25, 22, 30, tzinfo=UTC), "10.00", "0.1")
+    closed(session, account, datetime(2026, 10, 25, 23, 30, tzinfo=UTC), "20.00", "0.2")  # 26.10
+
+    data = charts(client, **{"from": "2026-10-25", "to": "2026-10-25"})
+
+    assert data["trades"] == 1  # 25.10 22:30 UTC = 23:30 Brussels (winter time)
+    assert data["equity"][0]["time"] == "2026-10-24T22:00:00Z"  # 00:00 summer time
+    assert inside.id is not None
