@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,10 @@ from tests.test_ai_api import (  # noqa: F401 (fixtures)
 from tests.test_trades_api import add_trade
 
 SONNET, OPUS = "claude-sonnet-5-5", "claude-opus-5-5"
+
+
+def ENV_EXTRACTION() -> str:  # noqa: N802 - reads like a constant in the asserts
+    return get_settings().anthropic_model_extraction
 
 
 @pytest.fixture(autouse=True)
@@ -149,3 +154,102 @@ def test_a_broken_models_file_is_a_config_error(tmp_path: Path) -> None:
         load_ai_models(path)
     text = str(caught.value)
     assert "bias_extraction" in text  # missing call type in the first entry
+
+
+# --- review fixes: fallback paths, order, no fallback for a one-off pick -----------------------
+
+
+@pytest.fixture
+def broken_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.api.ai as ai_api
+
+    def broken() -> Any:
+        raise ConfigError(Path("ai_models.yaml"), ["file not found"])
+
+    monkeypatch.setattr(ai_api, "get_ai_models", broken)
+
+
+def test_without_a_model_a_broken_list_falls_back_to_the_env_model(
+    app: FastAPI,
+    client: TestClient,
+    session: Session,
+    account: Account,
+    usage_log: UsageLog,
+    broken_models: None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    trade = add_trade(session, account)
+    model = use_model(app, FakeClient([reply(OUTPUT)]))
+
+    assert extract(client, trade.id).status_code == 200
+    assert model.requests[0].model == get_settings().anthropic_model_extraction
+    assert "the .env model is used" in caplog.text
+
+
+def test_a_requested_model_with_a_broken_list_is_a_config_error(
+    app: FastAPI,
+    client: TestClient,
+    session: Session,
+    account: Account,
+    usage_log: UsageLog,
+    broken_models: None,
+) -> None:
+    trade = add_trade(session, account)
+    use_model(app, FakeClient([]))
+
+    response = extract(client, trade.id, {"text": "Вхід", "model": OPUS})
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "config_error"
+
+
+def test_a_stored_default_no_longer_listed_or_a_corrupt_file_falls_back_to_env(
+    client: TestClient,
+) -> None:
+    path = get_settings().data_dir / CHOICE_FILE
+    path.write_text(json.dumps({"trade_extraction": "claude-gone"}), encoding="utf-8")
+    assert (
+        models(client)["defaults"]["trade_extraction"] == get_settings().anthropic_model_extraction
+    )
+
+    path.write_text("{broken", encoding="utf-8")
+    assert (
+        models(client)["defaults"]["trade_extraction"] == get_settings().anthropic_model_extraction
+    )
+
+
+def test_an_empty_change_writes_nothing(client: TestClient) -> None:
+    assert client.put("/api/ai/models/defaults", json={}).status_code == 200
+    assert not (get_settings().data_dir / CHOICE_FILE).exists()
+
+
+def test_a_one_off_model_is_never_replaced_by_the_fallback(
+    app: FastAPI, client: TestClient, session: Session, account: Account, usage_log: UsageLog
+) -> None:
+    from tests.services.ai_fakes import overloaded
+
+    trade = add_trade(session, account)
+    model = use_model(app, FakeClient([overloaded(), reply(OUTPUT)]))
+
+    response = extract(client, trade.id, {"text": "Вхід по IFVG M5", "model": SONNET})
+
+    assert response.status_code == 502
+    assert [r.model for r in model.requests] == [SONNET]  # no second call on another model
+
+
+def test_summary_validates_the_model_before_the_key_check(
+    app: FastAPI, client: TestClient, session: Session
+) -> None:
+    from app.api.ai import get_model_client
+    from app.models import Digest
+
+    digest = Digest(kind="weekly", period_start=date(2026, 11, 9), period_end=date(2026, 11, 15))
+    session.add(digest)
+    session.commit()
+    app.dependency_overrides[get_model_client] = lambda: None  # no API key
+
+    unknown = client.post(f"/api/digests/{digest.id}/ai-summary", json={"model": "claude-x"})
+    no_key = client.post(f"/api/digests/{digest.id}/ai-summary")
+
+    assert unknown.status_code == 422
+    assert no_key.status_code == 503

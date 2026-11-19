@@ -13,12 +13,14 @@ import logging
 import os
 import tempfile
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 
 from app.config import Settings
 from app.config_files.ai_models import CALL_TYPES, AiModelsConfig, CallType
 from app.config_files.loader import ConfigError
 from app.errors import ApiError, config_error
+from app.services.ai.extraction import ExtractionSettings
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,8 @@ def save_defaults(
     settings: Settings, models: AiModelsConfig, changes: Mapping[CallType, str]
 ) -> dict[CallType, str]:
     """Store the owner's defaults (422 for an id not in the list); returns the effective ones."""
+    if not changes:
+        return defaults(settings, models)
     for model in changes.values():
         if models.get(model) is None:
             raise unknown_model(model)
@@ -87,6 +91,11 @@ def save_defaults(
         raise
     logger.info("AI model defaults changed: %s", dict(changes))
     return defaults(settings, models)
+
+
+def one_off_settings(settings: ExtractionSettings, requested: str | None) -> ExtractionSettings:
+    """A model the owner picked for this call is never silently replaced by the fallback."""
+    return settings if requested is None else replace(settings, fallback_model=None)
 
 
 def resolve(

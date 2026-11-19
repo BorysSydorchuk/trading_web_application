@@ -28,7 +28,7 @@ from app.services.ai.client import ModelClient
 from app.services.ai.digest_summary import summarise_digest
 from app.services.ai.extraction import ExtractionFailed
 from app.services.ai.key_status import KeyStatusTracker
-from app.services.ai.model_choice import resolve
+from app.services.ai.model_choice import one_off_settings, resolve
 from app.services.ai.usage_log import UsageLog
 
 logger = logging.getLogger(__name__)
@@ -97,18 +97,20 @@ def create_ai_summary(
     usage_log: UsageLog = Depends(get_usage_log),
     key_tracker: KeyStatusTracker = Depends(get_key_tracker),
 ) -> schemas.DigestOut:
-    """One AI call on ANTHROPIC_MODEL_SUMMARY; stores and returns the digest with ai_summary.
+    """One AI call (the digest-summary model, M8-13); stores and returns the digest.
 
-    Order: 404 → 503 ai_not_configured → AI call (502 ai_error leaves ai_summary unchanged).
+    Model: the one-off ``body.model``, else the default (Settings, else ANTHROPIC_MODEL_SUMMARY).
+    Order: 404 → 422 unknown model → 503 ai_not_configured → AI call (502 ai_error leaves
+    ai_summary unchanged). A one-off model gets no fallback to another model.
     """
     summary_input = service.ai_summary_input(db, digest_id)
     db.rollback()  # no transaction stays open during the (slow) AI call
+    requested = body.model if body is not None else None
+    model = resolve("digest_summary", requested, get_settings(), get_ai_models)
     if client is None:
         logger.warning("AI digest summary %s: ANTHROPIC_API_KEY is not set", digest_id)
         raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
-    requested = body.model if body is not None else None
-    model = resolve("digest_summary", requested, get_settings(), get_ai_models)
-    settings = replace(extraction_settings(), primary_model=model)
+    settings = one_off_settings(replace(extraction_settings(), primary_model=model), requested)
     try:
         outcome = summarise_digest(
             summary_input, client=client, settings=settings, usage_log=usage_log

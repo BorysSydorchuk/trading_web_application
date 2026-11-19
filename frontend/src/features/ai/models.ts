@@ -42,19 +42,25 @@ export function useSetAiDefaults() {
 export interface OneOffModel {
   models: readonly AiModel[]
   callType: CallType
-  /** Undefined until the list is loaded: the server then uses the default. */
+  /** What the selector shows: the owner's pick, else the default (may be an .env id not listed). */
+  shown: string | undefined
+  /** What the request sends: only a model the owner picked here; undefined = server default. */
   model: string | undefined
   setModel: (id: string) => void
 }
 
-/** The model for the next call of ``callType``: starts at the default, changeable per call. */
+/** The model for the next call of ``callType``: shows the default, sends only a real pick. */
 export function useOneOffModel(callType: CallType): OneOffModel {
   const query = useAiModels()
   const fallback = query.data?.defaults[callType]
   const [chosen, setChosen] = useState<string | undefined>(undefined)
   const models = query.data?.models ?? []
-  // The default applies until the owner picks here; a pick no longer listed falls back too.
-  const valid = chosen !== undefined && models.some((m) => m.id === chosen) ? chosen : fallback
-  // No list (not loaded, failed, empty): send no model, the server uses its default.
-  return { models, callType, model: models.length > 0 ? valid : undefined, setModel: setChosen }
+  const picked = chosen !== undefined && models.some((m) => m.id === chosen) ? chosen : undefined
+  // Sending the default explicitly would break when it is an .env id not in the list (422).
+  return { models, callType, shown: picked ?? fallback, model: picked, setModel: setChosen }
+}
+
+/** True when ``id`` (e.g. an .env default) is not one of the listed models. */
+export function isUnlisted(models: readonly AiModel[], id: string | undefined): id is string {
+  return id !== undefined && !models.some((m) => m.id === id)
 }

@@ -846,6 +846,7 @@ export const uk = {
     saveError: 'Не вдалося зберегти:',
     pickerLabel: 'Модель ШІ для цього виклику',
     option: (label: string, usd: string) => `${label} · ≈ $${usd}`,
+    envOption: (id: string) => `${id} (з .env, немає у списку)`,
     callTypes: {
       trade_extraction: 'Опис угоди («Заповнити з тексту»)',
       bias_extraction: 'Біас («Заповнити з тексту»)',

@@ -52,8 +52,24 @@ describe('M8-13 model choice', () => {
 
     const picker = await screen.findByRole('combobox', { name: t.pickerLabel })
     expect(picker).toHaveValue('claude-opus-5-5')
+    expect(seen.at(-1)).toBeUndefined() // showing the default, sending none
     await user.selectOptions(picker, 'claude-sonnet-5-5')
     expect(seen.at(-1)).toBe('claude-sonnet-5-5')
+  })
+
+  it('sends no model until the owner picks one, also when the default is an .env id not listed', async () => {
+    const envDefaults = { ...MODELS, defaults: { ...MODELS.defaults, digest_summary: 'claude-old-4' } }
+    mockApi(http.get('/api/ai/models', () => HttpResponse.json(envDefaults)))
+    const seen: (string | undefined)[] = []
+    const { user } = renderWithProviders(<Picker onModel={(m) => seen.push(m)} />)
+
+    const picker = await screen.findByRole('combobox', { name: t.pickerLabel })
+    expect(picker).toHaveValue('claude-old-4')
+    expect(screen.getByRole('option', { name: t.envOption('claude-old-4') })).toBeInTheDocument()
+    expect(seen.at(-1)).toBeUndefined() // the server resolves its own default
+
+    await user.selectOptions(picker, 'claude-opus-5-5')
+    expect(seen.at(-1)).toBe('claude-opus-5-5')
   })
 
   it('shows a readable error for a model the AI service does not know', () => {

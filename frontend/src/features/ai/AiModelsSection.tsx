@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { NativeSelect } from '@/components/ui/native-select'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
-import { CALL_TYPES, useAiModels, useSetAiDefaults, type CallType } from './models'
+import { CALL_TYPES, isUnlisted, useAiModels, useSetAiDefaults, type CallType } from './models'
 
 const t = uk.aiModels
 
@@ -43,6 +43,9 @@ export function AiModelsSection() {
               disabled={save.isPending}
               onChange={(e) => save.mutate({ [callType]: e.target.value })}
             >
+              {isUnlisted(data.models, data.defaults[callType]) && (
+                <option value={data.defaults[callType]}>{t.envOption(data.defaults[callType])}</option>
+              )}
               {data.models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {t.option(m.label, m.approx_usd[callType])}

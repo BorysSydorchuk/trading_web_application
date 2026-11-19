@@ -38,7 +38,7 @@ from app.services.ai.extraction import (
 )
 from app.services.ai.key_status import KeyStatus, KeyStatusTracker
 from app.services.ai.model_choice import defaults as model_defaults
-from app.services.ai.model_choice import resolve
+from app.services.ai.model_choice import one_off_settings, resolve
 from app.services.ai.model_choice import save_defaults as save_model_defaults
 from app.services.ai.usage_log import UsageLog, summarise_month, usage_log_path
 from app.services.trade_journal import (
@@ -133,7 +133,9 @@ def extract(
             config=config,
             number_words=number_words,
             client=client,
-            settings=replace(extraction_settings(), primary_model=model),
+            settings=one_off_settings(
+                replace(extraction_settings(), primary_model=model), body.model
+            ),
             usage_log=usage_log,
             scope=scope,
         )
@@ -196,7 +198,9 @@ def extract_bias(
             config=config,
             number_words=number_words,
             client=client,
-            settings=replace(extraction_settings(), primary_model=model),
+            settings=one_off_settings(
+                replace(extraction_settings(), primary_model=model), body.model
+            ),
             usage_log=usage_log,
         )
     except ExtractionFailed as exc:
