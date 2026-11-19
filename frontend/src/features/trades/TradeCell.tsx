@@ -18,7 +18,7 @@ import {
   statusLabel,
   weekdayLabel,
 } from './format'
-import type { TradeRow } from './types'
+import type { ExcursionStatus, TradeRow } from './types'
 import { useViolationLabel } from './violations'
 
 const EMPTY = uk.common.empty
@@ -90,6 +90,9 @@ export function TradeCell({ trade, column, violationLabel }: {
       return <span className="num">{formatPercent(trade.risk_pct)}</span>
     case 'r_multiple':
       return <span className={cn('num', pnlClass(trade.r_multiple))}>{formatR(trade.r_multiple)}</span>
+    case 'mae_r':
+    case 'mfe_r':
+      return <ExcursionR value={trade[column] ?? null} status={trade.excursion_status ?? null} />
     case 'planned_rr':
       return <span className="num">{formatRatio(trade.planned_rr)}</span>
     case 'is_reentry':
@@ -131,6 +134,18 @@ function LabeledViolationBadges({ keys, label }: {
           {label(key)}
         </span>
       ))}
+    </span>
+  )
+}
+
+/** M8-16 «MAE, R» / «MFE, R»: «поточні» for an open trade, a note when MT5 had no history. */
+export function ExcursionR({ value, status }: { value: string | null; status: ExcursionStatus | null }) {
+  if (status === 'unavailable') return <span className="text-xs text-muted-foreground">{uk.trades.excursion.unavailable}</span>
+  if (value === null) return <Muted />
+  return (
+    <span className="num">
+      {formatR(value)}
+      {status === 'running' && <span className="ml-1 text-xs text-muted-foreground">{uk.trades.excursion.running}</span>}
     </span>
   )
 }

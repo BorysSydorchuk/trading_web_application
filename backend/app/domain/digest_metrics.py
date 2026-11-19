@@ -101,6 +101,8 @@ class DigestTrade:
     violations: tuple[str, ...] = ()
     # |R| below this is breakeven (rules.yaml breakeven_r_threshold); 0 = P&L sign only.
     breakeven_r_threshold: Decimal = ZERO
+    # M8-16: final MFE in R (None: no SL, not computed yet, or only a running value).
+    mfe_r: Decimal | None = None
 
 
 # --- results ---------------------------------------------------------------------------------

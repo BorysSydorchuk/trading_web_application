@@ -243,6 +243,30 @@ def _excluded(inp: SnapshotInput) -> Json:
     }
 
 
+ONE_R = Decimal(1)
+HUNDRED = Decimal(100)
+
+
+def _average(values: Sequence[Decimal]) -> Decimal | None:
+    return sum(values, Decimal(0)) / len(values) if values else None
+
+
+def _excursions(trades: Sequence[dm.DigestTrade]) -> Json:
+    """M8-16: how far winners and losers went in our favour (trades with a final MFE R)."""
+    measured = [t for t in trades if t.mfe_r is not None]
+    winners = [t.mfe_r for t in measured if dm.outcome(t) == "win" and t.mfe_r is not None]
+    losers = [t.mfe_r for t in measured if dm.outcome(t) == "loss" and t.mfe_r is not None]
+    reached = sum(1 for r in losers if r >= ONE_R)
+    return {
+        "n_winners": len(winners),
+        "n_losers": len(losers),
+        "winners_avg_mfe_r": _ratio(_average(winners)),
+        "losers_avg_mfe_r": _ratio(_average(losers)),
+        "losers_reached_1r": reached,
+        "losers_reached_1r_share": _ratio(HUNDRED * reached / len(losers)) if losers else None,
+    }
+
+
 def build_snapshot(inp: SnapshotInput) -> Json:
     trades = inp.combined.period
     by_account = [
@@ -260,4 +284,5 @@ def build_snapshot(inp: SnapshotInput) -> Json:
         "charts": _charts(trades, inp.start),
         "trade_ids": sorted(t.id for t in trades),
         "excluded": _excluded(inp),
+        "excursions": _excursions(trades),
     }

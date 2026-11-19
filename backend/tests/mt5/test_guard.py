@@ -94,9 +94,14 @@ def test_allow_list_is_read_only() -> None:
     assert not any(name.startswith(("order_send", "order_check")) for name in ALLOWED_FUNCTIONS)
 
 
-def test_allowed_constants_are_only_the_two_order_types() -> None:
-    """Module attributes read besides functions: only what order_calc_margin needs."""
-    assert frozenset({"ORDER_TYPE_BUY", "ORDER_TYPE_SELL"}) == real.ALLOWED_CONSTANTS
+def test_allowed_constants_are_only_the_call_arguments() -> None:
+    """Module attributes read besides functions: the order types for order_calc_margin/profit
+    and, since M8-16, the M1 timeframe and tick flags of the read-only price history."""
+    assert (
+        frozenset({"ORDER_TYPE_BUY", "ORDER_TYPE_SELL", "TIMEFRAME_M1", "COPY_TICKS_ALL"})
+        == real.ALLOWED_CONSTANTS
+    )
+    assert {"copy_rates_range", "copy_ticks_range"} <= ALLOWED_FUNCTIONS
     assert real.ALLOWED_CONSTANTS.isdisjoint(ALLOWED_FUNCTIONS)
 
 

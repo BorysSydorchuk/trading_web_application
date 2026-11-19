@@ -27,6 +27,8 @@ export const COLUMN_KEYS = [
   'risk_pct',
   'r_multiple',
   'planned_rr',
+  'mae_r',
+  'mfe_r',
   'is_reentry',
   'bias_alignment',
   'bias_alignment_weekly',
@@ -86,6 +88,8 @@ export const NUMERIC_COLUMNS: ReadonlySet<ColumnKey> = new Set<ColumnKey>([
   'risk_pct',
   'r_multiple',
   'planned_rr',
+  'mae_r',
+  'mfe_r',
   'position_id',
 ])
 

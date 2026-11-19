@@ -46,11 +46,13 @@ from app.mt5.types import (
     DIRECTIONS,
     Direction,
     RawAccountInfo,
+    RawBar,
     RawDeal,
     RawOrder,
     RawPosition,
     RawQuote,
     RawSymbolSpec,
+    RawTick,
     to_decimal,
 )
 from app.system.terminals import TerminalWindows
@@ -80,10 +82,15 @@ ALLOWED_FUNCTIONS = frozenset(
         "order_calc_margin",
         # Hypothetical profit for the M5-09 loss-value check: only calculates, never trades.
         "order_calc_profit",
+        # M8-16 MAE/MFE: price history (read-only).
+        "copy_rates_range",
+        "copy_ticks_range",
     }
 )
-# Module constants read besides the functions above (order_calc_margin/profit arguments).
-ALLOWED_CONSTANTS = frozenset({"ORDER_TYPE_BUY", "ORDER_TYPE_SELL"})
+# Module constants read besides the functions above (call arguments).
+ALLOWED_CONSTANTS = frozenset(
+    {"ORDER_TYPE_BUY", "ORDER_TYPE_SELL", "TIMEFRAME_M1", "COPY_TICKS_ALL"}
+)
 
 
 class Mt5Module(Protocol):
@@ -105,6 +112,15 @@ class Mt5Module(Protocol):
         self, action: int, symbol: str, volume: float, price_open: float, price_close: float
     ) -> Any: ...
 
+    def copy_rates_range(
+        self, symbol: str, timeframe: int, date_from: int, date_to: int
+    ) -> Any: ...
+    def copy_ticks_range(self, symbol: str, date_from: int, date_to: int, flags: int) -> Any: ...
+
+    @property
+    def TIMEFRAME_M1(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
+    @property
+    def COPY_TICKS_ALL(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
     @property
     def ORDER_TYPE_BUY(self) -> int: ...  # noqa: N802 - MetaTrader5 module constant
     @property
@@ -485,6 +501,43 @@ class RealMt5Source:
         deals = [deal_from_mt5(o) for o in objs or ()]
         deals.sort(key=lambda d: (d.time, d.ticket))
         return deals
+
+    def rates_m1(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawBar]:
+        mt5 = self._mt5()
+        rows = self._read(
+            "copy_rates_range",
+            lambda: mt5.copy_rates_range(
+                symbol, mt5.TIMEFRAME_M1, from_server_epoch, to_server_epoch
+            ),
+            empty_ok=True,
+        )
+        bars = [
+            RawBar(
+                time=int(r["time"]),
+                high=to_decimal(r["high"]),
+                low=to_decimal(r["low"]),
+                spread=int(r["spread"]),
+            )
+            for r in (rows if rows is not None else ())
+        ]
+        bars.sort(key=lambda b: b.time)
+        return bars
+
+    def ticks(self, symbol: str, from_server_epoch: int, to_server_epoch: int) -> list[RawTick]:
+        mt5 = self._mt5()
+        rows = self._read(
+            "copy_ticks_range",
+            lambda: mt5.copy_ticks_range(
+                symbol, from_server_epoch, to_server_epoch, mt5.COPY_TICKS_ALL
+            ),
+            empty_ok=True,
+        )
+        ticks = [
+            RawTick(time_msc=int(r["time_msc"]), bid=to_decimal(r["bid"]), ask=to_decimal(r["ask"]))
+            for r in (rows if rows is not None else ())
+        ]
+        ticks.sort(key=lambda t: t.time_msc)
+        return ticks
 
     def opening_order(self, order_ticket: int) -> RawOrder | None:
         mt5 = self._mt5()

@@ -119,6 +119,19 @@ class ExitReasonSource(enum.StrEnum):
     OWNER = "owner"  # entered, changed or cleared by the owner: the sync never touches it
 
 
+class ExcursionStatus(enum.StrEnum):
+    """trades.excursion_status (M8-16): MAE/MFE of the trade."""
+
+    FINAL = "final"  # closed trade, computed over open..close
+    RUNNING = "running"  # open trade, computed so far («поточні»)
+    UNAVAILABLE = "unavailable"  # MT5 had no price history for the range
+
+
+class ExcursionSource(enum.StrEnum):
+    TICKS = "ticks"  # ticks only (trade shorter than 2 h)
+    M1_TICKS = "m1_ticks"  # M1 bars in the middle, ticks for the entry and exit minutes
+
+
 class StatsExclusionAction(enum.StrEnum):
     """History rows of M8-01: exclude from / return to strategy statistics."""
 

@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -35,6 +36,8 @@ from app.models.base import (
 from app.models.enums import (
     BiasAlignment,
     Direction,
+    ExcursionSource,
+    ExcursionStatus,
     ExitReasonSource,
     InitialSlSource,
     StatsExclusionAction,
@@ -49,6 +52,7 @@ if TYPE_CHECKING:
 # Journal option fields (setup_context, poi_type, ...) hold option keys from
 # config/journal_fields.yaml. No CHECK on purpose: options change, old values must survive.
 JOURNAL_OPTION = String(50)
+EXCURSION_POINTS = Numeric(14, 1)  # MAE/MFE distance in symbol points (M8-16)
 
 
 class Trade(TimestampMixin, Base):
@@ -65,6 +69,8 @@ class Trade(TimestampMixin, Base):
         enum_check("bias_alignment_monthly", BiasAlignment, "bias_alignment_monthly_valid"),
         enum_check("bias_alignment_override", BiasAlignment, "bias_alignment_override_valid"),
         enum_check("exit_reason_source", ExitReasonSource, "exit_reason_source_valid"),
+        enum_check("excursion_status", ExcursionStatus, "excursion_status_valid"),
+        enum_check("excursion_source", ExcursionSource, "excursion_source_valid"),
         CheckConstraint("weekday BETWEEN 0 AND 6", name="weekday_range"),
         CheckConstraint("hour BETWEEN 0 AND 23", name="hour_range"),
         CheckConstraint("quality_rating BETWEEN 1 AND 5", name="quality_rating_range"),
@@ -162,6 +168,20 @@ class Trade(TimestampMixin, Base):
     excluded_from_stats: Mapped[bool] = mapped_column(Boolean, server_default=false())
     excluded_reason: Mapped[str | None] = mapped_column(Text)
     excluded_at: Mapped[datetime | None]
+
+    # --- M8-16: MAE / MFE (computed from MT5 price history; long = bid, short = ask) ---
+    mfe_price: Mapped[Decimal | None] = mapped_column(PRICE)
+    mfe_time: Mapped[datetime | None]
+    mfe_points: Mapped[Decimal | None] = mapped_column(EXCURSION_POINTS)
+    mfe_r: Mapped[Decimal | None] = mapped_column(RATIO)
+    mae_price: Mapped[Decimal | None] = mapped_column(PRICE)
+    mae_time: Mapped[datetime | None]
+    mae_points: Mapped[Decimal | None] = mapped_column(EXCURSION_POINTS)
+    mae_r: Mapped[Decimal | None] = mapped_column(RATIO)
+    # final | running (open trade, «поточні») | unavailable (no MT5 history); NULL = not yet.
+    excursion_status: Mapped[str | None] = mapped_column(String(20))
+    excursion_source: Mapped[str | None] = mapped_column(String(10))
+    excursion_at: Mapped[datetime | None]
 
     exit_deals: Mapped[list[TradeExitDeal]] = relationship(
         back_populates="trade",

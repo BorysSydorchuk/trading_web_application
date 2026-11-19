@@ -26,7 +26,7 @@ from app.domain import digest_metrics as dm
 from app.domain.sessions import DEFAULT_TZ
 from app.errors import ApiError, config_error
 from app.models import Account, BiasEntry, BiasNote, Digest, Trade
-from app.models.enums import AccountStatus, BiasKind, DigestKind
+from app.models.enums import AccountStatus, BiasKind, DigestKind, ExcursionStatus
 from app.schemas import digests as schemas
 from app.schemas.dashboard import money_str
 from app.services.ai.digest_summary import SummaryInput, TradeTexts
@@ -117,6 +117,7 @@ def _to_digest_trade(
         journal=journal,
         violations=tuple(v.rule_key for v in trade.rule_violations),
         breakeven_r_threshold=breakeven_r,
+        mfe_r=trade.mfe_r if trade.excursion_status == ExcursionStatus.FINAL.value else None,
     )
 
 

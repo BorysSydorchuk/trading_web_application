@@ -201,6 +201,10 @@ function TradeDetailBody({ trade }: { trade: TradeDetail }) {
         </Section>
       </div>
 
+      <Section title={d.sections.excursion}>
+        <ExcursionRows trade={trade} />
+      </Section>
+
       <Section title={d.sections.exitDeals}>
         <ExitDealsTable trade={trade} />
       </Section>
@@ -255,5 +259,32 @@ function ExitDealsTable({ trade }: { trade: TradeDetail }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+/** M8-16: MFE / MAE with R, symbol points, extreme price and Brussels time. */
+function ExcursionRows({ trade }: { trade: TradeDetail }) {
+  const x = uk.trades.excursion
+  const status = trade.excursion_status ?? null
+  if (status === null) return <p className="text-xs text-muted-foreground">{x.notYet}</p>
+  if (status === 'unavailable') return <p className="text-xs text-muted-foreground">{x.unavailable}</p>
+  const side = (r: string | null | undefined, points: string | null | undefined, price: string | null | undefined, time: string | null | undefined) => {
+    const when = time ? formatDateTimeBrussels(time) : uk.common.empty
+    const pts = points ?? uk.common.empty
+    const at = formatPrice(price ?? null)
+    return r ? x.value(formatR(r), pts, at, when) : `${x.points(pts, at, when)} (${x.noSl})`
+  }
+  return (
+    <>
+      <Row label={d.excursion.mfe}>
+        <span className="num">{side(trade.mfe_r, trade.mfe_points, trade.mfe_price, trade.mfe_time)}</span>
+        {status === 'running' && <span className="ml-1 text-xs text-muted-foreground">{x.running}</span>}
+      </Row>
+      <Row label={d.excursion.mae}>
+        <span className="num">{side(trade.mae_r, trade.mae_points, trade.mae_price, trade.mae_time)}</span>
+        {status === 'running' && <span className="ml-1 text-xs text-muted-foreground">{x.running}</span>}
+      </Row>
+      <p className="text-xs text-muted-foreground">{x.hint}</p>
+    </>
   )
 }

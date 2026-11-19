@@ -64,6 +64,11 @@ export interface TradeRow {
   excluded_from_stats: boolean
   excluded_reason: string | null
   excluded_at: string | null
+  /** M8-16: MAE / MFE in R (null without an SL or before it is computed). */
+  mfe_r?: string | null
+  mae_r?: string | null
+  /** final | running («поточні», open trade) | unavailable (no MT5 history) | null. */
+  excursion_status?: ExcursionStatus | null
 }
 
 export interface TradeList {
@@ -136,6 +141,15 @@ export interface TradeDetail extends TradeRow {
   missing_new_fields: string[]
   /** M8-01: exclusion history, oldest first. */
   exclusion_history: StatsExclusionEvent[]
+  /** M8-16 (ISO UTC times; points = distance / symbol point). */
+  mfe_price?: string | null
+  mfe_points?: string | null
+  mfe_time?: string | null
+  mae_price?: string | null
+  mae_points?: string | null
+  mae_time?: string | null
+  excursion_source?: string | null
+  excursion_at?: string | null
 }
 
 export interface TradeQuery {
@@ -189,3 +203,5 @@ export interface JournalField {
 export interface JournalFieldList {
   fields: JournalField[]
 }
+
+export type ExcursionStatus = 'final' | 'running' | 'unavailable'

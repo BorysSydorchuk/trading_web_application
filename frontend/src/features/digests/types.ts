@@ -153,6 +153,19 @@ export interface DigestSnapshot {
   trade_ids: number[]
   /** M8-01; absent in snapshots generated before M8-01. */
   excluded?: ExcludedBlock
+  /** M8-16; absent in snapshots generated before M8-16. */
+  excursions?: ExcursionsBlock
+}
+
+/** M8-16: MFE of winners / losers (R strings, 4 dp) over trades with a final MFE. */
+export interface ExcursionsBlock {
+  n_winners: number
+  n_losers: number
+  winners_avg_mfe_r: string | null
+  losers_avg_mfe_r: string | null
+  losers_reached_1r: number
+  /** Percent of losers, e.g. "50.0000". */
+  losers_reached_1r_share: string | null
 }
 
 /** M8-01 «Виключені угоди»: strategy net P&L + `net_pnl` = `account_net_pnl`. */
