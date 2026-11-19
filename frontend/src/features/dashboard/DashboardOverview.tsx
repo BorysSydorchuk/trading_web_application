@@ -5,6 +5,7 @@ import { errorText } from '@/lib/errors'
 import { AccountLimitsCard } from './AccountLimitsCard'
 import { useDashboard } from './api'
 import { DigestSuggestionCard } from './DigestSuggestionCard'
+import { HomeCharts } from './homeCharts/HomeCharts'
 import { InboxSummary } from './InboxSummary'
 import { NeedsDescriptionList } from './NeedsDescriptionList'
 import { OpenPositionsTable } from './OpenPositionsTable'
@@ -40,6 +41,7 @@ function DashboardData({ data }: { data: Dashboard }) {
         <InboxSummary counts={data.inbox} />
         <SyncSummary />
       </div>
+      <HomeCharts accounts={data.accounts} />
       <OpenPositionsTable positions={data.open_positions} />
       <NeedsDescriptionList />
     </>
