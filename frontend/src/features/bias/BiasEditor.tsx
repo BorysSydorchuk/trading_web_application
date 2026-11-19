@@ -1,6 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ModelPicker } from '@/features/ai/ModelPicker'
+import { useOneOffModel } from '@/features/ai/models'
 import { DescriptionInput } from '@/features/describe/DescriptionInput'
 import { AiBadge } from '@/features/describe/FieldControls'
 import { UnsavedChangesGuard } from '@/features/describe/UnsavedChangesGuard'
@@ -46,6 +48,7 @@ export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: B
   // Read when a save lands (after this render), so a ref next to the state.
   const unsentRecordingRef = useRef(false)
   const actions = useBiasActions({ form, initialNoteId: note?.id ?? null, unsentRecordingRef, onCreated, embedded })
+  const pick = useOneOffModel('bias_extraction')
   const upload = useUploadBiasAudio(actions.ensureNoteId)
 
   function setUnsentRecording(unsent: boolean) {
@@ -65,7 +68,8 @@ export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: B
           rawText={form.rawText}
           onRawText={form.setRawText}
           rawTextError={form.serverErrors.rawText}
-          onExtract={actions.runExtract}
+          onExtract={() => actions.runExtract(pick.model)}
+          modelPicker={<ModelPicker {...pick} disabled={actions.extract.isPending} />}
           extracting={actions.extract.isPending}
           startedAt={actions.extractStartedAt}
           extractError={actions.extract.isError ? actions.extract.error : null}

@@ -110,12 +110,12 @@ export function useBiasActions({ form, initialNoteId, unsentRecordingRef, onCrea
     }
   }
 
-  function runExtract() {
+  function runExtract(model?: string) {
     const text = form.rawText.trim()
     if (text === '') return
     setExtractStartedAt(Date.now())
     extract.mutate(
-      { kind: form.kind, text },
+      { kind: form.kind, text, model },
       { onSuccess: (result) => form.applyExtraction(result), onSettled: () => setExtractStartedAt(null) },
     )
   }

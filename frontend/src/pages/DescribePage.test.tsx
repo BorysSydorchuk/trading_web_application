@@ -252,7 +252,9 @@ describe('DescribePage', () => {
   })
 })
 
-describe('DescribePage: open trade and link groups (M8-02, M8-03)', () => {
+// Long typing flows (several URLs): one timed out at the 5 s default under full-gate load
+// (M8-13 gate). Same isolation question as the BACKLOG note of 2026-11-18.
+describe('DescribePage: open trade and link groups (M8-02, M8-03)', { timeout: 10_000 }, () => {
   it('describes an open trade: pre-entry fields, two «до входу» rows, draft only', async () => {
     const trade = fixtureTrade({ status: 'open', close_time: null })
     const saved = serveTrade(trade)

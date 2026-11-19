@@ -51,11 +51,14 @@ test: test-backend test-frontend
 
 # Tests build their own schema on the test DB(s); only Postgres must be up (never migrates the
 # dev DB). -n auto: pytest-xdist, one test database per worker (tests/conftest.py).
+# Trading hours (weekdays 08:00-16:00 Brussels, CLAUDE.md): make check PYTEST_WORKERS=2 VITEST_WORKERS=2
+PYTEST_WORKERS ?= auto
+VITEST_WORKERS ?=
 test-backend: db-up
-	cd backend && uv run pytest -n auto
+	cd backend && uv run pytest -n $(PYTEST_WORKERS)
 
 test-frontend:
-	cd frontend && npm test
+	cd frontend && npm test$(if $(VITEST_WORKERS), -- --maxWorkers=$(VITEST_WORKERS))
 
 # Browser layout regressions (Playwright, installed Chrome, mocked API; not part of check): make e2e
 e2e:

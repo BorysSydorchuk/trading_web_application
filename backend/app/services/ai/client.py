@@ -25,7 +25,15 @@ from app.config import AnthropicEffort
 logger = logging.getLogger(__name__)
 
 AiErrorKind = Literal[
-    "auth", "rate_limit", "overloaded", "timeout", "connection", "api", "refusal", "invalid_output"
+    "auth",
+    "rate_limit",
+    "overloaded",
+    "timeout",
+    "connection",
+    "api",
+    "refusal",
+    "invalid_output",
+    "model_not_found",  # M8-13: the API does not know (or no longer offers) the chosen model
 ]
 
 OVERLOADED_STATUS = 529
@@ -129,6 +137,8 @@ def classify_error(exc: Exception) -> tuple[AiErrorKind, bool]:
         return "auth", False
     if isinstance(exc, anthropic.RateLimitError):
         return "rate_limit", False
+    if isinstance(exc, anthropic.NotFoundError):  # unknown model id: never a silent fallback
+        return "model_not_found", False
     if isinstance(exc, anthropic.APIStatusError):
         if exc.status_code == OVERLOADED_STATUS:
             return "overloaded", True

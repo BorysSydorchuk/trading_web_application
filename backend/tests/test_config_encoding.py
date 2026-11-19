@@ -27,6 +27,7 @@ CONFIG_NAMES = (
     "rules.yaml",
     "journal_fields.yaml",
     "ai_pricing.yaml",
+    "ai_models.yaml",
     "extraction.yaml",
     "transcription.yaml",
     "transcript_glossary.yaml",

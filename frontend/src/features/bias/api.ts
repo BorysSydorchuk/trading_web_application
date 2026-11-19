@@ -135,11 +135,11 @@ export function useSetBiasResult() {
 }
 
 /** A client-side timeout is shown as the AI timeout, not as "server unavailable" (as on Describe). */
-async function extractBias(kind: BiasKind, text: string): Promise<BiasExtractResult> {
+async function extractBias(kind: BiasKind, text: string, model?: string): Promise<BiasExtractResult> {
   try {
     return await apiRequest<BiasExtractResult>('/bias/notes/extract', {
       method: 'POST',
-      body: { kind, text },
+      body: model === undefined ? { kind, text } : { kind, text, model },
       timeoutMs: EXTRACT_TIMEOUT_MS,
     })
   } catch (error) {
@@ -153,7 +153,8 @@ async function extractBias(kind: BiasKind, text: string): Promise<BiasExtractRes
 export function useBiasExtract() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ kind, text }: { kind: BiasKind; text: string }) => extractBias(kind, text),
+    mutationFn: ({ kind, text, model }: { kind: BiasKind; text: string; model?: string }) =>
+      extractBias(kind, text, model),
     // Shown inline next to the button (ai_not_configured is a calm note, not a red toast).
     meta: { silentError: true },
     onSettled: () => queryClient.invalidateQueries({ queryKey: aiKeys.usage }),

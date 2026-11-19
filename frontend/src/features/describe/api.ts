@@ -35,11 +35,12 @@ export function useSaveJournal(tradeId: number) {
 }
 
 /** A client-side timeout is shown as the AI timeout, not as "server unavailable". */
-async function extract(tradeId: number, text: string): Promise<ExtractResult> {
+async function extract(tradeId: number, text: string, model?: string): Promise<ExtractResult> {
   try {
     return await apiRequest<ExtractResult>(`/trades/${tradeId}/extract`, {
       method: 'POST',
-      body: { text },
+      // M8-13: a one-off model; without it the server uses the default.
+      body: model === undefined ? { text } : { text, model },
       timeoutMs: EXTRACT_TIMEOUT_MS,
     })
   } catch (error) {
@@ -53,7 +54,7 @@ async function extract(tradeId: number, text: string): Promise<ExtractResult> {
 export function useExtract(tradeId: number) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (text: string) => extract(tradeId, text),
+    mutationFn: ({ text, model }: { text: string; model?: string }) => extract(tradeId, text, model),
     // Errors are shown inline next to the button (ai_not_configured is a calm note, not a red toast).
     meta: { silentError: true },
     onError: (error) => refreshOnStaleStatus(queryClient, tradeId, error),

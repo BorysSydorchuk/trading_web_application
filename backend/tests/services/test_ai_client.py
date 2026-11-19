@@ -125,7 +125,7 @@ def test_reply_without_text_block() -> None:
         (400, "api", False),
         (401, "auth", False),
         (403, "auth", False),
-        (404, "api", False),
+        (404, "model_not_found", False),  # M8-13: an unknown model id
         (429, "rate_limit", False),
         (500, "api", True),
         (503, "api", True),
@@ -242,7 +242,7 @@ def test_retrieve_model_calls_the_models_endpoint_once() -> None:
     [
         (401, "auth"),
         (403, "auth"),
-        (404, "api"),
+        (404, "model_not_found"),
         (429, "rate_limit"),
         (500, "api"),
         (529, "overloaded"),
@@ -291,3 +291,10 @@ def test_retrieve_model_is_bounded_by_wall_clock_time() -> None:
         client_with(slow).retrieve_model("m", 0.3)
     assert time.monotonic() - started < 1.0
     assert caught.value.kind == "timeout"
+
+
+def test_an_unknown_model_is_model_not_found_without_fallback() -> None:
+    """M8-13: a model the API does not offer is reported clearly, never silently replaced."""
+    with pytest.raises(AiCallError) as caught:
+        client_with(status_error(404)).create(request())
+    assert (caught.value.kind, caught.value.fallback_ok) == ("model_not_found", False)

@@ -5,6 +5,7 @@ extraction")."""
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
@@ -12,7 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.api.trades import journal_context
 from app.config import get_settings
-from app.config_files import ConfigError, get_bias_config, get_number_words
+from app.config_files import (
+    AiModelsConfig,
+    ConfigError,
+    get_ai_models,
+    get_bias_config,
+    get_number_words,
+)
+from app.config_files.ai_models import CallType
 from app.db import get_db
 from app.domain.extraction import NumberWords
 from app.errors import ApiError, config_error
@@ -29,6 +37,9 @@ from app.services.ai.extraction import (
     extract_trade_fields,
 )
 from app.services.ai.key_status import KeyStatus, KeyStatusTracker
+from app.services.ai.model_choice import defaults as model_defaults
+from app.services.ai.model_choice import one_off_settings, resolve
+from app.services.ai.model_choice import save_defaults as save_model_defaults
 from app.services.ai.usage_log import UsageLog, summarise_month, usage_log_path
 from app.services.trade_journal import (
     check_describable,
@@ -107,6 +118,7 @@ def extract(
     if trade is None:
         raise ApiError(404, "not_found", "Trade not found", {"id": trade_id})
     check_describable(trade)
+    model = resolve("trade_extraction", body.model, get_settings(), get_ai_models)
     # M8-02: on an open trade the model is offered (and may fill) pre-entry fields only.
     config = journal_config_for(trade, config)
     scope = requirement_scope(trade, required_since)
@@ -121,7 +133,9 @@ def extract(
             config=config,
             number_words=number_words,
             client=client,
-            settings=extraction_settings(),
+            settings=one_off_settings(
+                replace(extraction_settings(), primary_model=model), body.model
+            ),
             usage_log=usage_log,
             scope=scope,
         )
@@ -173,6 +187,7 @@ def extract_bias(
     except ConfigError as exc:
         raise config_error(exc) from None
     number_words = _number_words()
+    model = resolve("bias_extraction", body.model, get_settings(), get_ai_models)
     if client is None:
         logger.warning("AI bias extraction: ANTHROPIC_API_KEY is not set")
         raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
@@ -183,7 +198,9 @@ def extract_bias(
             config=config,
             number_words=number_words,
             client=client,
-            settings=extraction_settings(),
+            settings=one_off_settings(
+                replace(extraction_settings(), primary_model=model), body.model
+            ),
             usage_log=usage_log,
         )
     except ExtractionFailed as exc:
@@ -217,3 +234,50 @@ def ai_usage(
 def ai_check(key_tracker: KeyStatusTracker = Depends(get_key_tracker)) -> schemas.AiKeyOut:
     """Re-check the key now (blocking, at most ~10 s)."""
     return key_out(key_tracker.check())
+
+
+# --- M8-13: model choice ------------------------------------------------------------------
+
+
+def _models() -> AiModelsConfig:
+    try:
+        return get_ai_models()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
+def _models_out(models: AiModelsConfig) -> schemas.AiModelsOut:
+    return schemas.AiModelsOut(
+        models=[
+            schemas.AiModelOut(
+                id=m.id,
+                label=m.label,
+                approx_usd=schemas.AiApproxCostOut(**m.approx_usd.model_dump()),
+            )
+            for m in models.models
+        ],
+        defaults=schemas.AiModelDefaults(**model_defaults(get_settings(), models)),
+    )
+
+
+@router.get("/ai/models", response_model=schemas.AiModelsOut)
+def ai_models() -> schemas.AiModelsOut:
+    """Models from config/ai_models.yaml and the default per call type (docs/api.md M8-13)."""
+    return _models_out(_models())
+
+
+@router.put("/ai/models/defaults", response_model=schemas.AiModelsOut)
+def put_ai_model_defaults(body: schemas.AiDefaultsInput) -> schemas.AiModelsOut:
+    """Settings → ШІ: the default model per call type (422 for an id not in the list)."""
+    models = _models()
+    asked: dict[CallType, str | None] = {
+        "trade_extraction": body.trade_extraction,
+        "bias_extraction": body.bias_extraction,
+        "digest_summary": body.digest_summary,
+    }
+    changes = {k: v for k, v in asked.items() if v is not None}
+    try:
+        save_model_defaults(get_settings(), models, changes)
+    except OSError as exc:
+        raise ApiError(500, "internal_error", f"Model choice not saved: {exc}") from exc
+    return _models_out(models)
