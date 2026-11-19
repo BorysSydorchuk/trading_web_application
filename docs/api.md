@@ -787,3 +787,34 @@ Branch `m8/journal-taxonomy`, tier L, one migration. Merge A: config engine + `v
   - `poi_types__combo` (`combination`): one group per distinct selection, key = values in YAML option order joined « + » (one value = the value itself); empty -> `null`.
   - `h1_context__x__h4_context` (`matrix`): groups with `key: [h1, h4]` (either part may be null), same numbers per group; `coverage.filled` = trades with both set. UI: table H1 rows × H4 columns, each cell «N угод · P&L · R · WR», empty cells «—».
 - Trade details (Journal dialog, Describe): each violation shows its label and `details`; legacy fields show «Старе значення: <option label>» when not empty.
+
+## M8-10b - «Головна» rebuild (PM 2026-11-20; contract)
+
+Branch `m8/home-redesign`, tier M, no migration. Layout and behaviour: docs/design/home-mockup.html (top to bottom). Existing endpoints reused: `GET /api/dashboard/charts` (hero P&L curve per range/account, «P&L по днях», «Форма · 20 угод»), the «Потрібен опис» list (M8-15), `GET /api/bias/status`. New: `GET /api/home?account_id=N` (omit = all active accounts).
+
+```
+{
+  now, timezone: "Europe/Brussels",
+  session: {key: "london"|"premarket"|"ny"|"outside", entries_allowed: bool},          # rules.yaml sessions, Brussels now
+  bias_today: {pre_london: [{symbol, direction}] | null, pre_ny_missing: bool},          # today's notes; null = no pre-London note
+  limits: {account_id, account_name, currency,
+           day: {pct, loss_pct, profit_pct}, week: {...}, month: {pct, loss_pct, profit_pct},
+           trades_week, max_trades_week, to_daily_stop_pct},                            # one account (see below)
+  kpis: {
+    today:    {pnl, pct, trades, series: [{time, cum_pnl}]},                            # closed trades today, from 0 at Brussels midnight
+    win_rate: {value, n, window: 20, series: [{time, value}]},                         # strategy trades (M8-01 exclusions out)
+    avg_r:    {value, n, window: 20, series: [{time, value}]},
+    drawdown: {pct, limit_pct, series: [{time, pct}]}                                   # from the running peak, this Brussels month
+  },
+  open_positions: [{trade_id, symbol, direction, volume, account_id, account_name, open_time,
+                    entry_price, initial_sl, tp, current_price, price_time, pnl, r_now, tp_r,
+                    mae_r, mfe_r, risk_pct, described: bool}],
+  open_totals: {pnl, risk_pct, price_time}
+}
+```
+- Money 2 dp, percents and R 4 dp, prices plain decimals, as strings (rounding is display only, «overview» formatter). Win rate / R series: last 20 points, same rules as the M8-14 rolling chart (breakeven by |R|). Money side (today P&L, limits, drawdown, open P&L) includes excluded trades.
+- Limits card: one account. `account_id` given -> that account; all accounts -> the active account with the lowest `to_daily_stop_pct` (closest to its daily stop); the card shows its name and lets the owner switch (same query param). Month limits: new optional rules.yaml section `account_limits: {max_drawdown_pct: -10.0, profit_target_pct: 10.0}` (FundedNext; display only, no violations); missing -> month bar without limits. `to_daily_stop_pct` = day pct − daily_stop_loss_pct (e.g. +2.1 − (−3.0) = 5.1). `trades_week` counts every trade opened this Brussels week (excluded ones too: the limit is real).
+- Drawdown series: running closed P&L of the month from 0; drawdown = (running − peak so far) / account size × 100 (≤ 0). `limit_pct` = account_limits.max_drawdown_pct.
+- Open positions live values: the worker writes `DATA_DIR/open_positions.json` after every account sync (per position id: price_current, profit + swap, time; read-only MT5 positions_get). `current_price`, `pnl`, `r_now` are null when there is no snapshot or it is older than 5 minutes (UI: «ціна недоступна» / «дані застаріли HH:MM»). `r_now` = signed price move / initial SL distance; `tp_r` = TP distance / SL distance (null without SL or TP). `mae_r` / `mfe_r` = the running M8-16 values. `described` = a description was saved while open (M8-02).
+- Errors: unknown account 404; broken rules.yaml -> config_error like the dashboard; a broken or missing snapshot never fails the endpoint (live fields null, logged once).
+- UI (exact mockup order): header (Brussels date/time, chips «<сесія> · вхід дозволено / заборонено», «Лондон: EURUSD ↑ GER40 ↑», «+ Біас NY» when pre_ny_missing, «Калькулятор»); hero P&L (span 2, range selector «Тиждень/Місяць/3 міс/Рік/Усе/Дати», big total + %, value labels: all points ≤ 8 else every 3rd + min + last, min in loss colour below the line, last value pill, axis and dates) + «Ліміти» (day/week/month bars: hatched loss zone, gradient fill from zero, zero tick; «Угод 7 / 10», «До стопу дня»); «Відкриті позиції» (live dot, total P&L pill, risk pill, cards with price ladder SL→entry→TP, MAE–MFE band, current price dot and tag, −1R / 0 / TP R, ↓ MAE / ↑ MFE chips, description pill, «Описати»); 4 KPI toggle cards (Сьогодні, Win rate, Сер. R, Просідання) with sparklines that switch the hero chart, selected card ring ≥ 3:1 and «на графіку», click again or «← Крива P&L» returns; «Потрібен опис» tiles (up to 5 + «+N у журналі»); «P&L по днях» bars with value labels and «Форма · 20 угод» with end labels. All numbers through the «overview» formatter.
