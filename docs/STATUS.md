@@ -18,8 +18,10 @@ Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 wit
 - [x] M8-15 TECHNICAL ACCEPTED (PM 2026-11-18). PM authorized M8-12 -> M8-16 -> M8-13 -> M8-14 (continue after each merge).
 - [x] M8-12 run without visible windows (owner claude, tier M) — merged `1d7b765`. Final make check on 6481295 PASS (3460 backend / 1 skipped, 516 frontend). Reviews python APPROVE, code CHANGES REQUESTED -> fixed -> APPROVE. Report `docs/reports/M8-12.md`. Owner check pending (6 steps).
 - [x] M8-16 MAE/MFE per trade (owner claude, tier L) — merged `486e854`. Final make check on b0bf600 PASS (3515 backend / 1 skipped, 520 frontend). Reviews database APPROVE, python + code CHANGES REQUESTED -> fixed -> APPROVE. Dev DB migrated to c6f2a8d4e173 (backup `backups/pre-migration-c6f2a8d4e173-20261119T085051Z.dump`). Report `docs/reports/M8-16.md`. Borys: backfill dry run -> apply, owner check (3 trades).
-- [ ] M8-13 choose the Claude model per call type (owner claude, tier M) — branch `m8/ai-model-choice`.
-- RESUME FROM HERE (2026-11-19): M8-16 merged; M8-13 next, then M8-14. Owner checks pending (one batch): M8-09, M8-02, M8-01b, M8-15, M8-12, M8-16 (+ backfill).
+- [x] M8-13 choose the Claude model per call type (owner claude, tier M) — merged `0d0ec58`. Gate (trading-hours, 2 workers) on 7730794 PASS (3531 backend / 1 skipped, 525 frontend). code-reviewer CHANGES REQUESTED -> fixed -> APPROVE. Report `docs/reports/M8-13.md`. Trading-hours load rule added to CLAUDE.md.
+- [ ] M8-14 charts on «Головна» (owner claude, tier M) — branch `m8/home-charts`.
+- [ ] Frontend timeout flakiness under load (BiasNotePage, DigestPageEditing, JournalPage) — tier S after M8-14 (find the shared cause; per-test timeouts only with a reason).
+- RESUME FROM HERE (2026-11-19): M8-13 merged; M8-14 in progress, then the flaky-tests task (S). Trading hours 08:00-16:00 Brussels: gate with PYTEST_WORKERS=2 VITEST_WORKERS=2, no heavy jobs. Owner checks pending (one batch): M8-09, M8-02, M8-01b, M8-15, M8-12, M8-16 (+ backfill dry run after 11:22), M8-13.
 
 ## M7 closure documentation — owner codex, tier S
 
