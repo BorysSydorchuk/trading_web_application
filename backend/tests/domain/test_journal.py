@@ -466,3 +466,35 @@ def test_field_without_known_date_counts(real: JournalFieldsConfig) -> None:
     scope = RequirementScope({}, CHANGE)
     assert missing_required(real, {}, has_before_link=False, scope=scope) == BLANK_MISSING
     assert missing_new_fields(real, {}, has_before_link=False, scope=scope) == []
+
+
+# --- «Інше» text and required_since (review 2026-11-19) ---
+
+
+def test_other_text_follows_its_required_since(real: JournalFieldsConfig) -> None:
+    values = {"entry_model": "other"}
+    old = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE - timedelta(days=1))
+    new = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE + timedelta(days=1))
+    unknown = RequirementScope(since_map(), CHANGE - timedelta(days=1))
+
+    assert "entry_model_other" not in missing_required(
+        real, values, has_before_link=True, scope=old
+    )
+    assert "entry_model_other" in missing_new_fields(real, values, has_before_link=True, scope=old)
+    assert "entry_model_other" in missing_required(real, values, has_before_link=True, scope=new)
+    assert "entry_model_other" not in missing_new_fields(
+        real, values, has_before_link=True, scope=new
+    )
+    # no row for the text key: it counts, as before
+    assert "entry_model_other" in missing_required(
+        real, values, has_before_link=True, scope=unknown
+    )
+
+
+def test_new_other_text_not_listed_when_parent_is_not_other(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE - timedelta(days=1))
+
+    for values in ({"entry_model": "ifvg_m5"}, {"entry_model": "other", "entry_model_other": "x"}):
+        assert "entry_model_other" not in missing_new_fields(
+            real, values, has_before_link=True, scope=scope
+        )

@@ -267,6 +267,19 @@ def required_field_keys(config: JournalFieldsConfig) -> tuple[str, ...]:
     return tuple(field.key for field in config.fields if field.required)
 
 
+def requirement_keys(config: JournalFieldsConfig) -> tuple[str, ...]:
+    """Keys with a `required_since` (journal_field_requirements, M3-07), YAML order: the
+    required fields plus the «Інше» text key (`allow_other_text`) of every non-legacy option
+    field, which blocks `complete` only when its parent is `other` (review 2026-11-19)."""
+    keys: list[str] = []
+    for spec in journal_keys(config):
+        if spec.field.legacy:
+            continue
+        if spec.other_only or (not spec.is_text_key and spec.field.required):
+            keys.append(spec.key)
+    return tuple(keys)
+
+
 @dataclass(frozen=True)
 class RequirementScope:
     """When each required field became required (`journal_field_requirements`) and when
@@ -312,7 +325,7 @@ def missing_required(
         if spec.field.legacy or not is_shown(spec.field, values):
             blocked = False
         elif spec.other_only:
-            blocked = has_other(values.get(spec.field.key)) and _is_empty(values.get(spec.key))
+            blocked = _other_text_blank(spec, values) and (scope is None or scope.applies(spec.key))
         elif (
             spec.is_text_key
             or not spec.field.required
@@ -334,16 +347,31 @@ def missing_new_fields(
     scope: RequirementScope,
 ) -> list[str]:
     """TradeDetail.missing_new_fields (YAML order): required now, empty on the trade and
-    made required after it closed. Informational, never blocks saving; [] for open trades."""
-    return [
-        spec.key
-        for spec in journal_keys(config)
-        if not spec.is_text_key
-        and spec.field.required
-        and is_shown(spec.field, values)
-        and scope.is_new_for_trade(spec.key)
-        and _required_blank(spec, values, has_before_link)
-    ]
+    made required after it closed; an «Інше» text key when its parent is `other`, the text
+    is empty and its row is newer than the close. Informational, never blocks saving; []
+    for open trades."""
+    out: list[str] = []
+    for spec in journal_keys(config):
+        if spec.field.legacy or not is_shown(spec.field, values):
+            continue
+        if not scope.is_new_for_trade(spec.key):
+            continue
+        if spec.other_only:
+            blank = _other_text_blank(spec, values)
+        else:
+            blank = (
+                not spec.is_text_key
+                and spec.field.required
+                and _required_blank(spec, values, has_before_link)
+            )
+        if blank:
+            out.append(spec.key)
+    return out
+
+
+def _other_text_blank(spec: JournalKey, values: Mapping[str, Any]) -> bool:
+    """An «Інше» text key whose parent is (or contains) `other` and has no text."""
+    return has_other(values.get(spec.field.key)) and _is_empty(values.get(spec.key))
 
 
 def _is_empty(value: Any) -> bool:

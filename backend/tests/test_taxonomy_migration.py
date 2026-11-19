@@ -27,6 +27,15 @@ NEW_TEXT_COLUMNS = [
     "entry_model_other",
 ]
 NEW_MULTI_COLUMNS = ["poi_types", "fvg_types_h1", "fvg_types_h4"]
+# «Інше» texts get requirements rows too (review 2026-11-19).
+NEW_TEXT_KEYS = (
+    "h1_context_other",
+    "h4_context_other",
+    "poi_types_other",
+    "fvg_types_h1_other",
+    "fvg_types_h4_other",
+    "entry_model_other",
+)
 NEW_COLUMNS = ["h1_context", "h4_context", *NEW_TEXT_COLUMNS, *NEW_MULTI_COLUMNS]
 OLD_RISK_KEYS = [
     "daily_stop_loss_pct",
@@ -410,6 +419,8 @@ def test_requirements_rows_for_the_new_required_keys_are_inserted_with_now(
     hi = datetime.now(UTC) + timedelta(minutes=1)
     for key in ("h1_context", "h4_context", "poi_types", "fvg_types_h1", "fvg_types_h4"):
         assert lo <= rows[key] <= hi, key
+    for key in NEW_TEXT_KEYS:
+        assert lo <= rows[key] <= hi, key
 
 
 def test_requirements_rows_are_not_inserted_before_the_first_fill(db_engine: Engine) -> None:
@@ -424,7 +435,21 @@ def test_requirements_rows_are_not_inserted_before_the_first_fill(db_engine: Eng
         "poi_types",
         "fvg_types_h1",
         "fvg_types_h4",
+        *NEW_TEXT_KEYS,
     }
+
+
+def test_downgrade_deletes_the_requirements_rows_of_the_new_keys(db_engine: Engine) -> None:
+    command.downgrade(alembic_config(), BEFORE)
+    with db_engine.begin() as conn:
+        _mark_first_fill_done(conn)
+    command.upgrade(alembic_config(), "head")
+    assert set(NEW_TEXT_KEYS) <= set(_requirements(db_engine))
+
+    command.downgrade(alembic_config(), BEFORE)
+
+    left = set(_requirements(db_engine))
+    assert not left & {*NEW_TEXT_KEYS, "h1_context", "h4_context", "poi_types"}
 
 
 def test_requirements_existing_rows_win_and_removed_keys_are_deleted(

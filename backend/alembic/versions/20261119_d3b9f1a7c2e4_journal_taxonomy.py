@@ -16,9 +16,11 @@ in the old column as a read-only legacy value; old columns are never dropped):
   there were none); two rows of one trade merge into one (loss part first, joined by "; ",
   source user if either was user);
 - journal_field_requirements: rows of setup_context / poi_type / fvg_kind deleted; rows for
-  the new required keys (incl. fvg_types_h1 / fvg_types_h4) inserted with now() (ON CONFLICT
+  the new required keys (incl. fvg_types_h1 / fvg_types_h4) and the new «Інше» text keys
+  (h1/h4_context_other, poi_types_other, fvg_types_h1/h4_other, entry_model_other: an
+  `other` without text blocks only trades closed after now) inserted with now() (ON CONFLICT
   DO NOTHING), only when the first fill already happened (initial_fill_at set): a fresh DB
-  keeps the 1970 first-fill rule.
+  keeps the 1970 first-fill rule. The downgrade deletes the rows of all these keys.
 
 Downgrade restores the old columns where one value exists (poi_types[1]; h1 = h4 = flow ->
 yes; the single FVG type of the restored FVG POI fvg_h1 / fvg_h4 -> fvg_kind, never for a
@@ -57,6 +59,8 @@ TEXT_COLUMNS = (
 )
 MULTI_COLUMNS = ("poi_types", "fvg_types_h1", "fvg_types_h4")
 NEW_REQUIRED_KEYS = ("h1_context", "h4_context", "poi_types", "fvg_types_h1", "fvg_types_h4")
+# The «Інше» texts have a required_since too (review 2026-11-19): exactly TEXT_COLUMNS.
+NEW_REQUIREMENT_KEYS = (*NEW_REQUIRED_KEYS, *TEXT_COLUMNS)
 REMOVED_REQUIRED_KEYS = ("setup_context", "poi_type", "fvg_kind")
 
 _MAP_CONTEXT = """
@@ -129,7 +133,7 @@ def upgrade() -> None:
     for sql in (_MAP_CONTEXT, _MAP_FVG, _MAP_POI, _MERGE_VIOLATIONS, _DELETE_OLD_VIOLATIONS):
         op.execute(sa.text(sql))
     op.execute(sa.text(_DELETE_REQUIREMENTS).bindparams(keys=list(REMOVED_REQUIRED_KEYS)))
-    op.execute(sa.text(_INSERT_REQUIREMENTS).bindparams(keys=list(NEW_REQUIRED_KEYS)))
+    op.execute(sa.text(_INSERT_REQUIREMENTS).bindparams(keys=list(NEW_REQUIREMENT_KEYS)))
 
 
 _SPLIT_VIOLATIONS = """
@@ -198,6 +202,6 @@ def downgrade() -> None:
         _RESTORE_FVG,
     ):
         op.execute(sa.text(sql))
-    op.execute(sa.text(_DELETE_REQUIREMENTS).bindparams(keys=list(NEW_REQUIRED_KEYS)))
+    op.execute(sa.text(_DELETE_REQUIREMENTS).bindparams(keys=list(NEW_REQUIREMENT_KEYS)))
     for name in (*MULTI_COLUMNS, *TEXT_COLUMNS, *OPTION_COLUMNS):
         op.drop_column("trades", name)

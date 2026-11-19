@@ -1,7 +1,8 @@
 """`GET /api/trades?journal=<key>:<value>` conditions (M8-04..08 merge B, docs/api.md
 "Merge B exact shapes").
 
-Same key = any of the values; different keys = all of them; `null` = empty. Allowed keys:
+Same key = any of the values; different keys = all of them; `null` = empty (a show_if
+field: shown and empty). Allowed keys:
 non-legacy enum / multi_enum / bool fields of config/journal_fields.yaml. Multi fields match
 when the array (or the violation rows, for `rule_violations`) contains the value. Every
 condition is a parameterized SQLAlchemy expression.
@@ -12,11 +13,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import ColumnElement, exists, false, func, or_, true
+from sqlalchemy import ColumnElement, and_, exists, false, func, or_, true
 
 from app.config_files import JournalField, JournalFieldsConfig
 from app.config_files.journal_fields import RULE_VIOLATIONS_FIELD
 from app.models import RuleViolation, Trade
+from app.services.journal_requirements import shown_sql
 
 NULL_VALUE = "null"
 _FILTER_TYPES = frozenset({"enum", "multi_enum", "bool"})
@@ -83,12 +85,21 @@ def _column_condition(term: _Term) -> ColumnElement[bool]:
     return column == term.value
 
 
-def _condition(term: _Term) -> ColumnElement[bool]:
+def _value_condition(term: _Term) -> ColumnElement[bool]:
     if term.field.key == RULE_VIOLATIONS_FIELD:
         return _violation_condition(term.value)
     if term.field.storage == "extra":
         return _extra_condition(term)
     return _column_condition(term)
+
+
+def _condition(term: _Term, config: JournalFieldsConfig) -> ColumnElement[bool]:
+    """`null` of a show_if field = shown (parent includes the option) and empty: a trade
+    the field does not apply to is not «empty» (review 2026-11-19)."""
+    condition = _value_condition(term)
+    if term.value == NULL_VALUE and term.field.show_if is not None:
+        return and_(shown_sql(config, term.field), condition)
+    return condition
 
 
 def journal_conditions(
@@ -99,4 +110,4 @@ def journal_conditions(
     for raw in raw_values:
         term = _parse(raw, config)
         by_key.setdefault(term.field.key, []).append(term)
-    return [or_(*(_condition(t) for t in terms)) for terms in by_key.values()]
+    return [or_(*(_condition(t, config) for t in terms)) for terms in by_key.values()]

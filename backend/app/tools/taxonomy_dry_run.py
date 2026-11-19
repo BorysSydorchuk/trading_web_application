@@ -304,10 +304,14 @@ def dry_run(settings: Settings, out: TextIO, err: TextIO) -> int:
         _run_on_scratch(settings, target, scratch_db, out)
     except Exception as exc:
         failed = True
+        # The full exception (traceback, driver message) goes to the log file only; the
+        # console names just the exception class (review 2026-11-19), never a DSN.
         logger.exception("taxonomy dry run failed")
-        # DB driver / tool messages name host, user and database but never the password;
-        # the DSN itself is never printed.
-        print(PREFIX + f"Пробний прогін не вдався: {type(exc).__name__}: {exc}", file=err)
+        print(
+            PREFIX
+            + f"Пробний прогін не вдався: {type(exc).__name__}. Деталі: див. logs/{LOG_FILE}",
+            file=err,
+        )
     finally:
         if created and not _drop_quietly(
             settings.database_url, target.database, scratch_db, out, err

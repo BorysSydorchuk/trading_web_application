@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import REPO_ROOT
 from app.config_files import reload_config
 from app.config_files.loader import CONFIG_DIR_ENV
-from app.models import Trade
+from app.models import Account, Trade
 from tests.test_trades_api import (  # noqa: F401
     _clean,
     add_account,
@@ -92,7 +92,7 @@ def test_different_keys_must_all_match(client: TestClient, session: Session) -> 
 
 def test_null_matches_empty_values(client: TestClient, session: Session) -> None:
     # Arrange
-    flow, reversal, empty = three_trades(session)
+    flow, _reversal, empty = three_trades(session)
 
     # Act
     enum_null = ids(client, "h1_context:null")
@@ -102,7 +102,27 @@ def test_null_matches_empty_values(client: TestClient, session: Session) -> None
     # Assert
     assert enum_null == [empty.id]
     assert multi_null == [empty.id]
-    assert show_if_null_or_value == sorted([flow.id, reversal.id, empty.id])
+    # review 2026-11-19: a show_if field is «empty» only where it is shown (reversal and
+    # empty have no fvg_h1 POI, so the field does not apply to them)
+    assert show_if_null_or_value == [flow.id]
+
+
+def test_show_if_null_matches_only_shown_and_empty(client: TestClient, session: Session) -> None:
+    # Arrange
+    flow, reversal, empty = three_trades(session)
+    account = session.get(Account, flow.account_id)
+    assert account is not None
+    shown_empty = add_trade(session, account, poi_types=["fvg_h1"])
+    h4_shown_empty = add_trade(session, account, poi_types=["fvg_h4"])
+
+    # Act
+    h1_null = ids(client, "fvg_types_h1:null")
+    h4_null = ids(client, "fvg_types_h4:null")
+
+    # Assert
+    assert h1_null == [shown_empty.id]
+    assert h4_null == [h4_shown_empty.id]
+    assert not {reversal.id, empty.id} & set(h1_null)
 
 
 def test_multi_filter_matches_when_the_array_contains_the_value(

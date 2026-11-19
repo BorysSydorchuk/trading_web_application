@@ -354,11 +354,15 @@ def _drop_hidden(
     current: Mapping[str, Any],
     dropped: list[Dropped],
 ) -> None:
-    """Remove (in place) the show_if fields and texts whose parent includes the option
-    neither in the answer nor on the trade (`current`)."""
+    """Remove (in place) the show_if fields and texts whose parent does not include the
+    option. The parent value is the answer's when the answer has one (it replaces the
+    stored value on save); only without it the trade's stored value (`current`) counts."""
     for key in list(kept):
         field = specs[key].field
-        if field.show_if is None or is_shown(field, kept) or is_shown(field, current):
+        if field.show_if is None:
+            continue
+        parent_source = kept if field.show_if.field in kept else current
+        if is_shown(field, parent_source):
             continue
         del kept[key]
         dropped.append(Dropped(key, "parent_not_selected"))

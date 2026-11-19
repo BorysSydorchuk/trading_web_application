@@ -20,12 +20,21 @@ from app.config import REPO_ROOT
 from app.config_files import get_journal_fields, reload_config
 from app.config_files.loader import CONFIG_DIR_ENV
 from app.db import make_session_factory
-from app.domain.journal import journal_keys, required_field_keys
+from app.domain.journal import journal_keys, requirement_keys
 from app.models import Account, ChartLink, RuleViolation, Trade
 from tests.test_trades_api import add_account, add_trade, add_violation
 
 SNAP = "https://www.tradingview.com/x/AbCd1234/"
 NEW_REQUIRED_KEYS = {"h1_context", "h4_context", "poi_types", "fvg_types_h1", "fvg_types_h4"}
+# «Інше» texts are stamped by the migration too (review 2026-11-19).
+NEW_TEXT_KEYS = {
+    "h1_context_other",
+    "h4_context_other",
+    "poi_types_other",
+    "fvg_types_h1_other",
+    "fvg_types_h4_other",
+    "entry_model_other",
+}
 
 BASE_FIELDS: dict[str, Any] = {
     "h1_context": "flow",
@@ -481,7 +490,7 @@ def seed_requirements(db: Session, config_keys: tuple[str, ...], new_since: date
     """The table as after the migration: old keys since 1970, the new ones since `new_since`."""
     old_since = datetime(1970, 1, 1, tzinfo=UTC)
     for key in config_keys:
-        since = new_since if key in NEW_REQUIRED_KEYS else old_since
+        since = new_since if key in NEW_REQUIRED_KEYS | NEW_TEXT_KEYS else old_since
         db.execute(
             text("INSERT INTO journal_field_requirements (key, required_since) VALUES (:k, :s)"),
             {"k": key, "s": since},
@@ -494,7 +503,7 @@ def test_new_required_fields_do_not_make_an_old_complete_trade_incomplete(
     client: TestClient, session: Session, account: Account
 ) -> None:
     since = datetime.now(UTC)
-    seed_requirements(session, required_field_keys(get_journal_fields()), since)
+    seed_requirements(session, requirement_keys(get_journal_fields()), since)
     old_fields = {
         k: v for k, v in BASE_FIELDS.items() if k not in {"h1_context", "h4_context", "poi_types"}
     }
@@ -525,7 +534,7 @@ def test_a_trade_closed_after_the_change_needs_the_new_fields(
     client: TestClient, session: Session, account: Account
 ) -> None:
     since = datetime.now(UTC)
-    seed_requirements(session, required_field_keys(get_journal_fields()), since)
+    seed_requirements(session, requirement_keys(get_journal_fields()), since)
     new = add_trade(
         session,
         account,
@@ -539,3 +548,57 @@ def test_a_trade_closed_after_the_change_needs_the_new_fields(
     missing = incomplete_missing(put(client, new.id, body(old_fields, complete=True, links=True)))
 
     assert missing == ["h1_context", "h4_context", "poi_types"]
+
+
+# --- «Інше» text made required later (review 2026-11-19: entry_model had `other` before) ---
+
+
+def _old_other_trade(session: Session, account: Account, since: datetime) -> Trade:
+    fields = BASE_FIELDS | {"entry_model": "other"}
+    old = add_trade(
+        session,
+        account,
+        status="complete",
+        close_time=since - timedelta(days=5),
+        open_time=since - timedelta(days=5, minutes=30),
+        **fields,
+    )
+    session.add(ChartLink(trade_id=old.id, url=SNAP, kind="before"))
+    session.commit()
+    return old
+
+
+def test_old_trade_with_other_and_no_text_stays_and_completes(
+    client: TestClient, session: Session, account: Account
+) -> None:
+    since = datetime.now(UTC)
+    seed_requirements(session, requirement_keys(get_journal_fields()), since)
+    old = _old_other_trade(session, account, since)
+
+    data = detail(client, old.id)
+    resaved = ok(
+        put(client, old.id, body(BASE_FIELDS | {"entry_model": "other"}, complete=True, links=True))
+    )
+
+    assert data["status"] == "complete"
+    assert data["missing_required"] == []
+    assert data["missing_new_fields"] == ["entry_model_other"]
+    assert resaved["status"] == "complete"
+
+
+def test_new_trade_with_other_needs_the_text(
+    client: TestClient, session: Session, account: Account
+) -> None:
+    since = datetime.now(UTC)
+    seed_requirements(session, requirement_keys(get_journal_fields()), since)
+    new = add_trade(
+        session,
+        account,
+        close_time=since + timedelta(seconds=1),
+        open_time=since - timedelta(minutes=30),
+    )
+    fields = BASE_FIELDS | {"entry_model": "other"}
+
+    missing = incomplete_missing(put(client, new.id, body(fields, complete=True, links=True)))
+
+    assert missing == ["entry_model_other"]

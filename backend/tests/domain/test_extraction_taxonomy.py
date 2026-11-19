@@ -146,6 +146,21 @@ def test_show_if_field_is_kept_when_the_current_parent_includes_the_option(
     assert without_current.dropped == [Dropped("fvg_types_h1", "parent_not_selected")]
 
 
+def test_the_answers_parent_wins_over_the_stored_parent(config: JournalFieldsConfig) -> None:
+    # Arrange: stored POI FVG H1, but the new text names a fractal POI only (review 2026-11-19)
+    output = {
+        "poi_types": entry(["fractal_h4"], "фрактал H4"),
+        "fvg_types_h1": entry(["post_manipulation"], "FVG після маніпуляції"),
+    }
+
+    # Act
+    result = guard(config, output, current={"poi_types": ["fvg_h1"]})
+
+    # Assert
+    assert result.fields == {"poi_types": ["fractal_h4"]}
+    assert result.dropped == [Dropped("fvg_types_h1", "parent_not_selected")]
+
+
 def test_entry_model_other_keeps_his_words(config: JournalFieldsConfig) -> None:
     # Arrange
     output = {

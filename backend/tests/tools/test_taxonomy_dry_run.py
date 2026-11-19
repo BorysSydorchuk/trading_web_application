@@ -241,3 +241,7 @@ def test_failed_run_still_drops_and_fails(monkeypatch: pytest.MonkeyPatch) -> No
     assert dry.dry_run(_settings(), out, err) == 1
     assert calls[-1] == "drop trading_journal_taxdry_test"
     assert "secret" not in err.getvalue() + out.getvalue()
+    # review 2026-11-19: only the exception class and the log file, never its text
+    assert "RuntimeError" in err.getvalue()
+    assert "upgrade failed" not in err.getvalue()
+    assert "logs/taxonomy_dry_run.log" in err.getvalue()
