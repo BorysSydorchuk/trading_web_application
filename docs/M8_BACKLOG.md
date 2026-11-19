@@ -26,7 +26,7 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-07 | Multi-select, conditional FVG type | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-08 | Entry model single-select, «Інше» needs text | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-09 | Exit reason from MT5 | 2nd | L | M8-11 | merged `eb6e690`, TECHNICAL ACCEPTED, owner check pending (next 3 closed trades) |
-| M8-10 | UI/UX research, redesign, branding | last | TBD | owner design choice | planned (research only) |
+| M8-10 | UI/UX research, redesign, branding | last | TBD | owner design choice | authorized 2026-11-20 (PM): «Студія» light theme, 10a foundations -> 10b Home -> 10c pages |
 | M8-11 | Footer overscroll | 1st | S | — | accepted (owner PASS, PM 2026-11-17) |
 
 ## M8-01 — Exclude specific trades from strategy statistics (HIGH)
