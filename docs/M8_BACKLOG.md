@@ -14,7 +14,7 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | merged `71e599b` 2026-11-18, owner check + PM review pending |
 | M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | merged `1d7b765` 2026-11-18, owner check pending |
-| M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | merged `486e854` 2026-11-19, backfill + owner check pending |
+| M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | accepted (backfill 17/17, owner PASS, PM 2026-11-19) |
 | M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | merged `0d0ec58` 2026-11-19, owner check pending |
 | M8-14 | Charts on «Головна» | 4th of batch | M | — | authorized 2026-11-18, in progress |
 | M8-17 | Frontend timeout flakiness under load (shared cause) | after M8-14 | S | — | authorized 2026-11-19 (PM), planned |
