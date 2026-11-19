@@ -3,7 +3,7 @@
  * checkboxes, bool → так/ні, int → number (buttons for a short range), text → textarea,
  * auto → read-only. A field added to config/journal_fields.yaml appears without code changes.
  */
-import { Lock } from 'lucide-react'
+import { Eraser, Lock } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
@@ -17,7 +17,11 @@ import {
   MAX_TEXT_LENGTH,
   RULE_VIOLATIONS_KEY,
   formFields,
+  isEmptyValue,
+  isLegacy,
+  isShown,
   otherTextActive,
+  toBeCleared,
   visibleOptions,
   type FormValues,
 } from './formModel'
@@ -44,16 +48,69 @@ export interface JournalFormProps {
 }
 
 export function JournalForm(props: JournalFormProps) {
+  const shownFields = formFields(props.fields)
+  // show_if children that are hidden now but still hold a value, by parent key («Буде очищено»).
+  const cleared = new Map<string, string[]>()
+  for (const child of toBeCleared(shownFields, props.values)) {
+    const parent = child.show_if?.field ?? ''
+    cleared.set(parent, [...(cleared.get(parent) ?? []), child.label])
+  }
   return (
     <div className="flex flex-col gap-2">
-      {formFields(props.fields).map((field) => (
-        <FieldBlock key={field.key} field={field} {...props} />
+      {shownFields.map((field) => (
+        <FieldEntry key={field.key} field={field} cleared={cleared.get(field.key)} {...props} />
       ))}
     </div>
   )
 }
 
 type FieldProps = JournalFormProps & { field: JournalField }
+
+/** One YAML field: hidden by show_if → nothing; legacy → read-only old value; else the control. */
+function FieldEntry({ cleared, ...props }: FieldProps & { cleared: string[] | undefined }) {
+  const { field, values, journal } = props
+  if (isLegacy(field)) return isEmptyValue(journal[field.key]) ? null : <LegacyBlock field={field} journal={journal} />
+  if (!isShown(field, values)) return null
+  return (
+    <>
+      <FieldBlock {...props} />
+      {cleared && <ClearNote labels={cleared} />}
+    </>
+  )
+}
+
+/** Inline warning under a parent: these hidden fields lose their values on save. */
+function ClearNote({ labels }: { labels: readonly string[] }) {
+  return (
+    <div role="note" className="ml-3 flex gap-2 rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">
+      <Eraser className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <div className="flex flex-col gap-0.5">
+        <p className="text-foreground">{f.willBeCleared(labels.join(', '))}</p>
+        <p>{f.willBeClearedHint}</p>
+      </div>
+    </div>
+  )
+}
+
+function optionLabel(field: JournalField, value: string): string {
+  return field.options?.find((option) => option.value === value)?.label ?? value
+}
+
+/** M8-04..08: an old field the new taxonomy replaced; never editable, never sent. */
+function LegacyBlock({ field, journal }: Pick<FieldProps, 'field' | 'journal'>) {
+  const value = journal[field.key]
+  const label = Array.isArray(value)
+    ? value.map((v) => optionLabel(field, v)).join(', ')
+    : optionLabel(field, String(value))
+  return (
+    <div className="flex flex-col gap-0.5 border-l-2 border-transparent py-1 pl-3" title={f.legacyHint}>
+      <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
+      <p id={fieldDomId(field.key)} className="text-xs text-muted-foreground">
+        {f.legacyValue(label)}
+      </p>
+    </div>
+  )
+}
 
 function FieldBlock(props: FieldProps) {
   const { field, values, stored, aiFilled, mt5Filled, missing, errors } = props

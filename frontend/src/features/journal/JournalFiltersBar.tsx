@@ -6,7 +6,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useAccounts } from '@/features/accounts/api'
 import { useTradeSymbols } from '@/features/trades/api'
 import { statusLabel } from '@/features/trades/format'
-import { TRADE_STATUSES } from '@/features/trades/types'
+import { TRADE_STATUSES, type JournalField } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import {
@@ -18,15 +18,18 @@ import {
   type JournalFilters,
   type PeriodPreset,
 } from './filters'
+import { JournalFieldFilters } from './JournalFieldFilters'
 
 const j = uk.journal
 
 interface JournalFiltersBarProps {
   filters: JournalFilters
   onChange: (next: JournalFilters) => void
+  /** GET /api/journal-fields of the page (undefined while loading or on error). */
+  journalFields?: readonly JournalField[]
 }
 
-export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps) {
+export function JournalFiltersBar({ filters, onChange, journalFields }: JournalFiltersBarProps) {
   const id = useId()
   // Archived accounts too: their trades stay in the journal.
   const accounts = useAccounts(true)
@@ -62,6 +65,7 @@ export function JournalFiltersBar({ filters, onChange }: JournalFiltersBarProps)
         selected={filters.statuses}
         onChange={(values) => update({ statuses: values })}
       />
+      <JournalFieldFilters fields={journalFields} selection={filters.journal} onChange={(journal) => update({ journal })} />
       <label htmlFor={`${id}-described`} className="sr-only">
         {j.filters.described}
       </label>

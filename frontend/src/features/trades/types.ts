@@ -168,6 +168,11 @@ export interface TradeQuery {
   described?: boolean
   /** M8-15: false = leave out archived accounts (inbox count rule). Absent = all. */
   archived?: boolean
+  /**
+   * M8-04..08: repeatable `journal=<key>:<value>` (`null` = empty). Same key = any of,
+   * different keys = all. Absent = no filter.
+   */
+  journal?: string[]
   sort?: TradeSort
   order?: SortOrder
   limit?: number
@@ -198,6 +203,17 @@ export interface JournalField {
   max?: number
   /** M8-02: after-trade fields stay empty (and hidden) while the position is open. */
   phase?: 'before' | 'after'
+  /** M8-04..08: shown (and required, sent) only when the parent equals / contains the option. */
+  show_if?: JournalShowIf | null
+  /** M8-04..08: old read-only field, shown as «Старе значення» only when the trade has a value. */
+  legacy?: boolean
+  /** `rule_violations` only (M8-04): violation key → detected by the rules engine or chosen. */
+  violation_types?: Record<string, 'auto' | 'manual'>
+}
+
+export interface JournalShowIf {
+  field: string
+  includes: string
 }
 
 export interface JournalFieldList {

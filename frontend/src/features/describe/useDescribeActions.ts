@@ -55,7 +55,12 @@ export function useDescribeActions(tradeId: number, form: DescribeForm, unsentRe
     }
     const { input, context } = form.buildInput(complete)
     save.mutate(input, {
-      onSuccess: () => {
+      onSuccess: (saved) => {
+        // The server cleared show_if fields the form still sent (normally the form leaves them out).
+        const cleared = saved.cleared_hidden ?? []
+        if (cleared.length > 0) {
+          toast(t.save.clearedHidden(cleared.map(form.keyLabel).join(', ')), { id: 'describe-cleared-hidden' })
+        }
         // Checked when the save lands: the upload may have finished or failed meanwhile.
         if (unsentRecordingRef.current) {
           toast(t.save.savedRecordingUnsent, { id: 'describe-saved-recording-unsent' })

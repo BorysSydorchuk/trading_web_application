@@ -32,7 +32,7 @@ import {
   weekdayLabel,
 } from './format'
 import type { TradeDetail } from './types'
-import { Row, Section, ViolationList } from './DetailParts'
+import { LegacyValues, Row, Section, ViolationList } from './DetailParts'
 import { describePath } from './links'
 
 const d = uk.tradeDetail
@@ -212,6 +212,8 @@ function TradeDetailBody({ trade }: { trade: TradeDetail }) {
       <Section title={d.sections.violations}>
         <ViolationList trade={trade} />
       </Section>
+
+      <LegacyValues trade={trade} />
 
       {/* M8-02: an open position can be described too (pre-entry fields). */}
       <div className="flex justify-end">

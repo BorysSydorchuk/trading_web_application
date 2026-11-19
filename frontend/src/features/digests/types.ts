@@ -75,7 +75,8 @@ export interface AccountMetricBlock extends MetricBlock {
   account_name: string
 }
 
-export type GroupKey = string | number | boolean | null
+/** A `matrix` breakdown key is a pair (e.g. `[h1, h4]`, either part may be null). */
+export type GroupKey = string | number | boolean | null | readonly (string | null)[]
 
 export interface BreakdownGroup {
   key: GroupKey
@@ -85,7 +86,11 @@ export interface BreakdownGroup {
   win_rate: string | null
 }
 
+/** M8-04..08; a snapshot entry without `kind` (older digests) is a `field` breakdown. */
+export type BreakdownKind = 'field' | 'combination' | 'matrix'
+
 export interface Breakdown {
+  kind?: BreakdownKind
   groups: BreakdownGroup[]
   coverage: { filled: number; total: number }
 }

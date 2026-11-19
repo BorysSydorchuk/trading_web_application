@@ -31,6 +31,18 @@ const EXCLUDED_HIDE = 'hide'
 const DESCRIBED_PARAM = 'described'
 export const DESCRIBED_FILTERS = ['all', 'yes', 'no'] as const
 export type DescribedFilter = (typeof DESCRIBED_FILTERS)[number]
+/**
+ * M8-04..08: journal field filters, same param in the page URL and the API:
+ * repeatable `journal=<key>:<value>`; `null` = the field is empty.
+ */
+const JOURNAL_PARAM = 'journal'
+export const JOURNAL_NULL_VALUE = 'null'
+/** Journal fields offered as filters (labels and options come from GET /api/journal-fields). */
+export const JOURNAL_FILTER_KEYS = ['poi_types', 'fvg_types_h1', 'fvg_types_h4', 'h1_context', 'h4_context', 'entry_model'] as const
+const JOURNAL_KEY_RE = /^[a-z][a-z0-9_]*$/
+
+/** Field key → chosen values (any of); keys in first-seen order. */
+export type JournalFieldFilters = Readonly<Record<string, readonly string[]>>
 
 export interface JournalFilters {
   accounts: number[]
@@ -48,6 +60,8 @@ export interface JournalFilters {
   showExcluded: boolean
   /** M8-15: with / without a saved description (e.g. open trades «з описом» / «без опису»). */
   described: DescribedFilter
+  /** M8-04..08: journal field values; different keys = all, same key = any of. */
+  journal: JournalFieldFilters
   sort: TradeSort
   order: SortOrder
   /** 1-based. */
@@ -67,6 +81,31 @@ function positiveInt(value: string | null): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null
 }
 
+function parseJournal(params: URLSearchParams): JournalFieldFilters {
+  const result: Record<string, string[]> = {}
+  for (const raw of params.getAll(JOURNAL_PARAM)) {
+    const sep = raw.indexOf(':')
+    if (sep <= 0) continue
+    const key = raw.slice(0, sep)
+    const value = raw.slice(sep + 1)
+    if (!JOURNAL_KEY_RE.test(key) || value === '') continue
+    const current = result[key] ?? []
+    if (!current.includes(value)) result[key] = [...current, value]
+  }
+  return result
+}
+
+/** `key:value` pairs in key order (the API and the URL use the same form). */
+export function journalPairs(journal: JournalFieldFilters): string[] {
+  return Object.entries(journal).flatMap(([key, values]) => values.map((value) => `${key}:${value}`))
+}
+
+/** One field's selection replaced; an empty selection removes the key. Returns a new object. */
+export function withJournalFilter(journal: JournalFieldFilters, key: string, values: readonly string[]): JournalFieldFilters {
+  const rest = Object.fromEntries(Object.entries(journal).filter(([k]) => k !== key))
+  return values.length === 0 ? rest : { ...rest, [key]: [...values] }
+}
+
 export function parseFilters(params: URLSearchParams): JournalFilters {
   const limit = positiveInt(params.get('limit'))
   return {
@@ -83,6 +122,7 @@ export function parseFilters(params: URLSearchParams): JournalFilters {
     missingR: params.get(MISSING_R_PARAM) === 'true',
     showExcluded: params.get(EXCLUDED_PARAM) !== EXCLUDED_HIDE,
     described: oneOf(DESCRIBED_FILTERS, params.get(DESCRIBED_PARAM), 'all'),
+    journal: parseJournal(params),
     sort: oneOf(TRADE_SORT_FIELDS, params.get('sort'), DEFAULT_SORT),
     order: oneOf(['asc', 'desc'] as const, params.get('order'), DEFAULT_ORDER),
     page: positiveInt(params.get('page')) ?? 1,
@@ -106,6 +146,7 @@ export function filtersToParams(f: JournalFilters): URLSearchParams {
   if (f.missingR) params.set(MISSING_R_PARAM, 'true')
   if (!f.showExcluded) params.set(EXCLUDED_PARAM, EXCLUDED_HIDE)
   if (f.described !== 'all') params.set(DESCRIBED_PARAM, f.described)
+  for (const pair of journalPairs(f.journal)) params.append(JOURNAL_PARAM, pair)
   if (f.sort !== DEFAULT_SORT) params.set('sort', f.sort)
   if (f.order !== DEFAULT_ORDER) params.set('order', f.order)
   if (f.page > 1) params.set('page', String(f.page))
@@ -132,6 +173,7 @@ export function periodRange(f: JournalFilters, today: string = brusselsToday()):
 }
 
 export function toTradeQuery(f: JournalFilters, today: string = brusselsToday()): TradeQuery {
+  const journal = journalPairs(f.journal)
   return {
     account_id: f.accounts,
     symbol: f.symbols,
@@ -141,6 +183,7 @@ export function toTradeQuery(f: JournalFilters, today: string = brusselsToday())
     ...(f.missingR ? { missing_r: true } : {}),
     ...(f.showExcluded ? {} : { excluded: false }),
     ...(f.described === 'all' ? {} : { described: f.described === 'yes' }),
+    ...(journal.length > 0 ? { journal } : {}),
     sort: f.sort,
     order: f.order,
     limit: f.limit,
@@ -157,7 +200,8 @@ export function hasActiveFilters(f: JournalFilters): boolean {
     f.missingNewFields ||
     f.missingR ||
     !f.showExcluded ||
-    f.described !== 'all'
+    f.described !== 'all' ||
+    Object.keys(f.journal).length > 0
   )
 }
 
@@ -175,6 +219,7 @@ export function clearedFilters(f: JournalFilters): JournalFilters {
     missingR: false,
     showExcluded: true,
     described: 'all',
+    journal: {},
     page: 1,
   }
 }

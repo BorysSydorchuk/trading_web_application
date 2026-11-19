@@ -30,7 +30,28 @@ export function isEditable(field: JournalField): boolean {
 const NOT_SENT_TYPES = new Set(['auto', 'links'])
 
 function isSent(field: JournalField): boolean {
-  return !NOT_SENT_TYPES.has(field.type)
+  return !NOT_SENT_TYPES.has(field.type) && !isLegacy(field)
+}
+
+/** M8-04..08: old read-only field; never sent, never required. */
+export function isLegacy(field: JournalField): boolean {
+  return field.legacy === true
+}
+
+/**
+ * M8-04..08 `show_if`: the field applies only when its parent's value equals (enum) or
+ * contains (multi_enum) the option. A field without show_if is always shown.
+ */
+export function isShown(field: JournalField, values: FormValues): boolean {
+  const cond = field.show_if
+  if (!cond) return true
+  const parent = values[cond.field]
+  return Array.isArray(parent) ? parent.includes(cond.includes) : parent === cond.includes
+}
+
+/** The value is `other` (enum) or contains it (multi_enum). */
+export function hasOther(value: JournalValue | undefined): boolean {
+  return Array.isArray(value) ? value.includes(OTHER_OPTION) : value === OTHER_OPTION
 }
 
 /**
@@ -59,8 +80,12 @@ export function stillEmptyKeys(
   values: FormValues,
   links: readonly LinkDraft[],
 ): string[] {
-  const types = new Map(fields.map((field) => [field.key, field.type]))
-  return keys.filter((key) => (types.get(key) === 'links' ? !hasBeforeLink(links) : isEmptyValue(values[key])))
+  const byKey = new Map(fields.map((field) => [field.key, field]))
+  return keys.filter((key) => {
+    const field = byKey.get(key)
+    if (field && !isShown(field, values)) return false
+    return field?.type === 'links' ? !hasBeforeLink(links) : isEmptyValue(values[key])
+  })
 }
 
 /** Fields rendered in the form (everything except links, which have their own editor). */
@@ -99,9 +124,9 @@ export function isEmptyValue(value: JournalValue | undefined): boolean {
   return false
 }
 
-/** text_key that only applies to the `other` option and is hidden otherwise. */
+/** text_key that only applies to the `other` option (enum value or in the list) and is hidden otherwise. */
 export function otherTextActive(field: JournalField, values: FormValues): boolean {
-  return field.allow_other_text === true && values[field.key] === OTHER_OPTION
+  return field.allow_other_text === true && hasOther(values[field.key])
 }
 
 /**
@@ -119,6 +144,7 @@ export function missingKeys(
       if (field.required && !hasBeforeLink(links)) missing.push(field.key)
       continue
     }
+    if (isLegacy(field) || !isShown(field, values)) continue
     if (field.required && isEmptyValue(values[field.key])) missing.push(field.key)
     if (field.text_key && otherTextActive(field, values) && isEmptyValue(values[field.text_key])) {
       missing.push(field.text_key)
@@ -153,13 +179,15 @@ function fieldPayload(field: JournalField, value: JournalValue | undefined): Jou
 }
 
 /**
- * `fields` of the PUT body: every YAML key except auto and links. A type this UI does not know
- * is sent back unchanged (a key missing from the body would be cleared by the server).
+ * `fields` of the PUT body: every YAML key except auto, links and legacy fields. A type this UI
+ * does not know is sent back unchanged (a key missing from the body would be cleared by the
+ * server). A field hidden by its `show_if` is left out with its text_key (the server stores it
+ * as empty).
  */
 export function buildFields(fields: readonly JournalField[], values: FormValues): Record<string, JournalValue> {
   const payload: Record<string, JournalValue> = {}
   for (const field of fields) {
-    if (!isSent(field)) continue
+    if (!isSent(field) || !isShown(field, values)) continue
     payload[field.key] = fieldPayload(field, values[field.key])
     if (!field.text_key) continue
     const textApplies = !field.allow_other_text || otherTextActive(field, values)
@@ -172,7 +200,9 @@ export function buildFields(fields: readonly JournalField[], values: FormValues)
 export function renderedKeys(fields: readonly JournalField[], values: FormValues): Set<string> {
   const keys = new Set<string>()
   for (const field of formFields(fields)) {
+    if (!isShown(field, values) || (isLegacy(field) && isEmptyValue(values[field.key]))) continue
     keys.add(field.key)
+    if (isLegacy(field)) continue
     if (field.text_key && (!field.allow_other_text || otherTextActive(field, values))) keys.add(field.text_key)
   }
   return keys
@@ -197,6 +227,17 @@ export function visibleOptions(field: JournalField, stored: JournalValue | undef
     .filter((value) => !defined.has(value))
     .map((value) => ({ value, label: value, deprecated: true }))
   return [...options, ...unknown]
+}
+
+/**
+ * Fields hidden by their `show_if` that still hold a value (or an «Інше» text): saving clears
+ * them («Буде очищено: …»). YAML order.
+ */
+export function toBeCleared(fields: readonly JournalField[], values: FormValues): JournalField[] {
+  return fields.filter((field) => {
+    if (isShown(field, values) || isLegacy(field)) return false
+    return !isEmptyValue(values[field.key]) || (field.text_key !== undefined && !isEmptyValue(values[field.text_key]))
+  })
 }
 
 /** Label for any YAML key (field or text_key), used by "Не вистачає: …". */

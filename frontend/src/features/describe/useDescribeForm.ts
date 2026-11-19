@@ -10,6 +10,7 @@ import {
   buildFields,
   initialValues,
   intFieldErrors,
+  keyLabels,
   missingKeys,
   renderedKeys,
   type FormValues,
@@ -90,6 +91,7 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
   const missing = useMemo(() => new Set([...localMissing, ...(serverMissing ?? [])]), [localMissing, serverMissing])
   const clientLinkErrors = useMemo(() => linkErrors(links), [links])
   const intErrors = useMemo(() => intFieldErrors(fields, values), [fields, values])
+  const labels = useMemo(() => keyLabels(fields), [fields])
 
   /** PUT body plus what is needed to point server errors back at the form. */
   function buildInput(complete: boolean): { input: JournalInput; context: SaveContext } {
@@ -145,6 +147,8 @@ export function useDescribeForm(trade: TradeDetail, fields: readonly JournalFiel
       setShowMissing(true)
     },
     buildInput,
+    /** Label of any YAML key (the key itself when unknown). */
+    keyLabel: (key: string) => labels.get(key) ?? key,
     handleSaveError: errors.handleSaveError,
   }
 }

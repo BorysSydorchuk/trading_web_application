@@ -5,6 +5,8 @@ import { formatR, formatSignedMoney, pnlClass, sessionLabel, weekdayLabel } from
 import type { JournalField } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
+import { BreakdownMatrix } from './BreakdownMatrix'
+import { optionLabel, type FieldMap } from './breakdownLabels'
 import type { Breakdown, GroupKey } from './types'
 
 const t = uk.digests.breakdowns
@@ -12,6 +14,9 @@ const EMPTY = uk.common.empty
 const TH = 'px-3 py-1.5 font-medium whitespace-nowrap'
 const TD = 'px-3 py-1 whitespace-nowrap'
 const NUM = `${TD} num text-right`
+/** `poi_types__combo`: one group per distinct selection, values joined « + » (docs/api.md M8-04..08). */
+const COMBO_SUFFIX = '__combo'
+const COMBO_JOIN = ' + '
 
 /** Trade fields of the snapshot; every other breakdown is a journal field with «заповнено N/M». */
 const TRADE_FIELD_LABELS: Readonly<Record<string, string>> = {
@@ -22,7 +27,9 @@ const TRADE_FIELD_LABELS: Readonly<Record<string, string>> = {
   bias_alignment: uk.trades.columns.bias_alignment,
 }
 
-function tradeKeyLabel(field: string, key: Exclude<GroupKey, null>): string {
+type ScalarKey = Exclude<GroupKey, null | readonly (string | null)[]>
+
+function tradeKeyLabel(field: string, key: ScalarKey): string {
   if (field === 'session') return sessionLabel(String(key))
   if (field === 'weekday' && typeof key === 'number') return weekdayLabel(key)
   if (field === 'hour') return t.hour(String(key).padStart(2, '0'))
@@ -33,24 +40,27 @@ function tradeKeyLabel(field: string, key: Exclude<GroupKey, null>): string {
   return String(key)
 }
 
-function journalKeyLabel(field: JournalField | undefined, key: Exclude<GroupKey, null>): string {
+function journalKeyLabel(field: JournalField | undefined, key: ScalarKey): string {
   if (typeof key === 'boolean') return key ? uk.trades.yes : uk.trades.no
-  const option = field?.options?.find((o) => o.value === String(key))
-  return option?.label ?? String(key)
+  return optionLabel(field, String(key))
 }
 
-/** Breakdown tables in the snapshot order (trade fields, then analytics journal fields). */
+/** Breakdown tables in the snapshot order (trade fields, analytics journal fields, combinations, matrix). */
 export function BreakdownTables({ breakdowns, currency }: { breakdowns: Record<string, Breakdown>; currency: string | null }) {
   const { data } = useJournalFields()
-  const fields = useMemo(() => new Map((data?.fields ?? []).map((f) => [f.key, f])), [data])
+  const fields: FieldMap = useMemo(() => new Map((data?.fields ?? []).map((f) => [f.key, f])), [data])
   const entries = Object.entries(breakdowns)
   return (
     <section aria-labelledby="digest-breakdowns" className="flex flex-col gap-2">
       <h2 id="digest-breakdowns" className="text-sm font-semibold">{t.title}</h2>
       <div className="grid gap-3 lg:grid-cols-2">
-        {entries.map(([name, breakdown]) => (
-          <BreakdownTable key={name} name={name} breakdown={breakdown} field={fields.get(name)} currency={currency} />
-        ))}
+        {entries.map(([name, breakdown]) =>
+          breakdown.kind === 'matrix' ? (
+            <BreakdownMatrix key={name} name={name} breakdown={breakdown} fields={fields} currency={currency} />
+          ) : (
+            <BreakdownTable key={name} name={name} breakdown={breakdown} fields={fields} currency={currency} />
+          ),
+        )}
       </div>
     </section>
   )
@@ -59,27 +69,59 @@ export function BreakdownTables({ breakdowns, currency }: { breakdowns: Record<s
 interface BreakdownTableProps {
   name: string
   breakdown: Breakdown
-  field: JournalField | undefined
+  fields: FieldMap
   currency: string | null
 }
 
-function BreakdownTable({ name, breakdown, field, currency }: BreakdownTableProps) {
-  const isTradeField = Object.hasOwn(TRADE_FIELD_LABELS, name)
-  const title = (isTradeField ? TRADE_FIELD_LABELS[name] : field?.label) ?? name
+interface TableView {
+  title: string
+  label: (key: ScalarKey) => string
+  showCoverage: boolean
+  note: string | null
+}
+
+/** Title, key labels and note of a `field` or `combination` breakdown (no `kind` = field). */
+function tableView(name: string, breakdown: Breakdown, fields: FieldMap): TableView {
+  if (breakdown.kind === 'combination') {
+    const base = name.endsWith(COMBO_SUFFIX) ? name.slice(0, -COMBO_SUFFIX.length) : name
+    const field = fields.get(base)
+    return {
+      title: t.combinationTitle(field?.label ?? base),
+      label: (key) => String(key).split(COMBO_JOIN).map((value) => optionLabel(field, value)).join(COMBO_JOIN),
+      showCoverage: true,
+      note: null,
+    }
+  }
+  if (Object.hasOwn(TRADE_FIELD_LABELS, name)) {
+    return { title: TRADE_FIELD_LABELS[name] ?? name, label: (key) => tradeKeyLabel(name, key), showCoverage: false, note: null }
+  }
+  const field = fields.get(name)
+  return {
+    title: field?.label ?? name,
+    label: (key) => journalKeyLabel(field, key),
+    showCoverage: true,
+    // A multi field counts a trade once in each of its values, so the rows add up to more trades.
+    note: field?.type === 'multi_enum' ? t.multiNote : null,
+  }
+}
+
+function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTableProps) {
+  const view = tableView(name, breakdown, fields)
   const label = (key: GroupKey) => {
     if (key === null) return t.notFilled
-    return isTradeField ? tradeKeyLabel(name, key) : journalKeyLabel(field, key)
+    return Array.isArray(key) ? key.map((part) => part ?? t.notFilled).join(COMBO_JOIN) : view.label(key as ScalarKey)
   }
   return (
-    <article aria-label={title} className="flex flex-col gap-1 rounded-lg border">
+    <article aria-label={view.title} className="flex flex-col gap-1 rounded-lg border">
       <div className="flex items-baseline justify-between gap-2 px-3 pt-2">
-        <h3 className="text-xs font-semibold">{title}</h3>
-        {!isTradeField && (
+        <h3 className="text-xs font-semibold">{view.title}</h3>
+        {view.showCoverage && (
           <span className="num text-xs text-muted-foreground">
             {t.coverage(breakdown.coverage.filled, breakdown.coverage.total)}
           </span>
         )}
       </div>
+      {view.note && <p className="px-3 text-[11px] text-muted-foreground">{view.note}</p>}
       <table className="w-full text-sm">
         <thead className="text-xs text-muted-foreground">
           <tr>
