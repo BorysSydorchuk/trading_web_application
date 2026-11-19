@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearedFilters, filtersToParams, hasActiveFilters, parseFilters, toTradeQuery } from './filters'
+import { clearedFilters, filtersToParams, hasActiveFilters, parseFilters, toTradeQuery, withJournalFilter } from './filters'
 
 const TODAY = '2026-11-04'
 
@@ -92,5 +92,42 @@ describe('M8-15 «Опис» filter', () => {
     expect(hasActiveFilters(without)).toBe(true)
     expect(clearedFilters(without).described).toBe('all')
     expect(parse('described=maybe').described).toBe('all')
+  })
+})
+
+describe('M8-04..08 journal field filters', () => {
+  it('parses repeatable journal=<key>:<value>, grouping by key and dropping malformed pairs', () => {
+    const f = parse('journal=poi_types:fvg_h1&journal=h1_context:null&journal=poi_types:other&journal=bad&journal=:x&journal=poi_types:fvg_h1&journal=Key:v')
+    expect(f.journal).toEqual({ poi_types: ['fvg_h1', 'other'], h1_context: ['null'] })
+    expect(hasActiveFilters(f)).toBe(true)
+  })
+
+  it('sends the pairs to the API and round-trips them through the URL with the other filters', () => {
+    const f = parse('status=complete&journal=fvg_types_h4:post_manipulation&journal=entry_model:null')
+    expect(toTradeQuery(f, TODAY)).toMatchObject({
+      status: ['complete'],
+      journal: ['fvg_types_h4:post_manipulation', 'entry_model:null'],
+    })
+    const params = filtersToParams(f)
+    expect(params.getAll('journal')).toEqual(['fvg_types_h4:post_manipulation', 'entry_model:null'])
+    expect(parseFilters(params)).toEqual(f)
+  })
+
+  it('drops keys that are not offered filters (bookmarked legacy key → no 422)', () => {
+    const f = parse('journal=setup_context:no&journal=poi_type:fvg_h1&journal=h4_context:flow')
+    expect(f.journal).toEqual({ h4_context: ['flow'] })
+    expect(toTradeQuery(f, TODAY).journal).toEqual(['h4_context:flow'])
+  })
+
+  it('is absent from the query by default and cleared by «Скинути фільтри»', () => {
+    expect(toTradeQuery(parse(''), TODAY)).not.toHaveProperty('journal')
+    expect(clearedFilters(parse('journal=h4_context:flow')).journal).toEqual({})
+  })
+
+  it('withJournalFilter replaces one key and removes it when empty, without mutating', () => {
+    const start = { poi_types: ['fvg_h1'], h1_context: ['flow'] }
+    expect(withJournalFilter(start, 'poi_types', ['other'])).toEqual({ h1_context: ['flow'], poi_types: ['other'] })
+    expect(withJournalFilter(start, 'h1_context', [])).toEqual({ poi_types: ['fvg_h1'] })
+    expect(start).toEqual({ poi_types: ['fvg_h1'], h1_context: ['flow'] })
   })
 })

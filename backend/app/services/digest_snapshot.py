@@ -14,9 +14,15 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain import digest_metrics as dm
+from app.domain.digest_breakdowns import JournalSpec, journal_breakdowns
 from app.schemas.dashboard import money_str, pct_str
 
 type Json = dict[str, Any]
+
+# M8-04..08 merge B: the multi fields also broken down by combination, and the field pairs
+# shown as a matrix (skipped when a field is not an analytics field in journal_fields.yaml).
+COMBINATION_FIELDS: tuple[str, ...] = ("poi_types",)
+MATRIX_FIELDS: tuple[tuple[str, str], ...] = (("h1_context", "h4_context"),)
 
 COUNT_METRICS: frozenset[str] = frozenset({"trades", "wins", "losses", "breakeven", "violations"})
 MONEY_METRICS: frozenset[str] = frozenset({"net_pnl", "max_drawdown"})
@@ -67,7 +73,7 @@ class SnapshotInput:
     account_names: Mapping[int, str]
     combined: Scope
     by_account: Mapping[int, Scope]  # only accounts with a trade in the period
-    journal_fields: Sequence[str]
+    journal_fields: Sequence[JournalSpec]
     bias_marks: Mapping[str, Sequence[bool | None]]
     excluded: Sequence[ExcludedTrade] = ()
 
@@ -140,23 +146,31 @@ def metric_block(scope: Scope, inp: SnapshotInput) -> Json:
     }
 
 
-def _breakdowns(trades: Sequence[dm.DigestTrade], journal_fields: Sequence[str]) -> Json:
+def _breakdown_json(b: dm.Breakdown) -> Json:
     return {
-        name: {
-            "groups": [
-                {
-                    "key": g.key,
-                    "trades": g.trades,
-                    "net_pnl": _money(g.net_pnl),
-                    "total_r": pct_str(g.total_r),
-                    "win_rate": _ratio(g.win_rate),
-                }
-                for g in b.groups
-            ],
-            "coverage": {"filled": b.filled, "total": b.total},
-        }
-        for name, b in dm.breakdowns(trades, journal_fields).items()
+        "kind": b.kind,
+        "groups": [
+            {
+                # a matrix key (row, column) is stored as a JSON list
+                "key": list(g.key) if isinstance(g.key, tuple) else g.key,
+                "trades": g.trades,
+                "net_pnl": _money(g.net_pnl),
+                "total_r": pct_str(g.total_r),
+                "win_rate": _ratio(g.win_rate),
+            }
+            for g in b.groups
+        ],
+        "coverage": {"filled": b.filled, "total": b.total},
     }
+
+
+def _breakdowns(trades: Sequence[dm.DigestTrade], journal_fields: Sequence[JournalSpec]) -> Json:
+    """Trade fields first, then the journal fields in file order (a journal key that is also
+    a trade field, bias_alignment, is the trade field)."""
+    result = {name: _breakdown_json(b) for name, b in dm.breakdowns(trades).items()}
+    specs = [s for s in journal_fields if s.key not in result]
+    journal = journal_breakdowns(trades, specs, COMBINATION_FIELDS, MATRIX_FIELDS)
+    return result | {name: _breakdown_json(b) for name, b in journal.items()}
 
 
 def _rules(trades: Sequence[dm.DigestTrade]) -> Json:

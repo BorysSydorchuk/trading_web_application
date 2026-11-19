@@ -163,7 +163,25 @@ class RulesSet(_Strict):
     no_breakeven: Rule
 
 
+# Thresholds in rules.yaml `rules:` (not the violation keys: the daily/weekly limits are
+# reported as one `daily_risk` / `weekly_risk` violation each, M8-04).
 RULE_KEYS: tuple[str, ...] = tuple(RulesSet.model_fields)
+
+DAILY_RISK_KEY = "daily_risk"
+WEEKLY_RISK_KEY = "weekly_risk"
+# The `rule_key`s the rules engine emits (app.domain.rules). config/violations.yaml must
+# list exactly these as active `auto` entries (checked by its loader).
+ENGINE_RULE_KEYS: tuple[str, ...] = (
+    "max_risk_pct",
+    DAILY_RISK_KEY,
+    WEEKLY_RISK_KEY,
+    "max_trades_per_week",
+    "max_reentries_per_idea",
+    "min_planned_rr",
+    "entry_session",
+    "qm_not_in_ny",
+    "no_breakeven",
+)
 
 
 class DigestConfig(_Strict):

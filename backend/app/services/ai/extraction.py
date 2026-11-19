@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -311,6 +311,7 @@ def extract_trade_fields(
     usage_log: UsageLog,
     purpose: str = PURPOSE,
     scope: RequirementScope | None = None,
+    current: Mapping[str, Any] | None = None,
     clock: Callable[[], float] = time.monotonic,
     now: Callable[[], datetime] = _utc_now,
 ) -> ExtractionOutcome:
@@ -318,7 +319,8 @@ def extract_trade_fields(
 
     `purpose` / `trade_id` go into the usage log (`warmup` with no trade for the worker's
     warm-up call). `scope` = the trade's required-since rule for `missing_required` (None:
-    every required field counts). Raises PromptError when the prompt file is missing.
+    every required field counts). `current` = the trade's stored journal values (show_if
+    parents, M8-04..08). Raises PromptError when the prompt file is missing.
     """
     call = call_model(
         CallSpec(
@@ -335,7 +337,7 @@ def extract_trade_fields(
         clock=clock,
         now=now,
     )
-    guarded = apply_guards(config, call.output, text, number_words)
+    guarded = apply_guards(config, call.output, text, number_words, current=current)
     if guarded.dropped:
         subject = purpose if trade_id is None else f"trade {trade_id}"
         logger.info(

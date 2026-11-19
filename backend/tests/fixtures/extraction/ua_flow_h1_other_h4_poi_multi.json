@@ -1,0 +1,70 @@
+{
+  "description": "M8-04..08 UA: «Флоу на H1» -> h1 flow; H4 «інше» with his words as h4_context_other; POI multi (FVG H1 + фрактал H4); FVG H1 type post_manipulation kept (POI has fvg_h1); the model also filled the FVG H4 type although POI has no FVG H4 -> dropped parent_not_selected",
+  "text": "GER40, Лондон. Флоу на H1, на H4 інше: накопичення перед новинами. POI FVG H1 і фрактал H4. FVG H1 після маніпуляції, зняли ліквідність. Вхід IFVG M5, закрив по тейку. Все по плану.",
+  "model_output": {
+    "h1_context": {
+      "value": "flow",
+      "evidence": "Флоу на H1"
+    },
+    "h4_context": {
+      "value": "other",
+      "evidence": "на H4 інше"
+    },
+    "h4_context_other": {
+      "value": "накопичення перед новинами",
+      "evidence": "накопичення перед новинами"
+    },
+    "poi_types": {
+      "value": [
+        "fvg_h1",
+        "fractal_h4"
+      ],
+      "evidence": "POI FVG H1 і фрактал H4"
+    },
+    "fvg_types_h1": {
+      "value": [
+        "post_manipulation"
+      ],
+      "evidence": "FVG H1 після маніпуляції"
+    },
+    "fvg_types_h4": {
+      "value": [
+        "post_manipulation"
+      ],
+      "evidence": "зняли ліквідність"
+    },
+    "entry_model": {
+      "value": "ifvg_m5",
+      "evidence": "Вхід IFVG M5"
+    },
+    "exit_reason": {
+      "value": "tp",
+      "evidence": "закрив по тейку"
+    },
+    "followed_plan": {
+      "value": true,
+      "evidence": "Все по плану"
+    }
+  },
+  "expected_fields": {
+    "h1_context": "flow",
+    "h4_context": "other",
+    "h4_context_other": "накопичення перед новинами",
+    "poi_types": [
+      "fvg_h1",
+      "fractal_h4"
+    ],
+    "fvg_types_h1": [
+      "post_manipulation"
+    ],
+    "entry_model": "ifvg_m5",
+    "exit_reason": "tp",
+    "followed_plan": true
+  },
+  "expected_dropped": [
+    {
+      "key": "fvg_types_h4",
+      "reason": "parent_not_selected"
+    }
+  ]
+}

@@ -118,7 +118,7 @@ def spec(config: JournalFieldsConfig, key: str) -> Any:
 
 def test_journal_keys_in_yaml_order_with_text_keys(real: JournalFieldsConfig) -> None:
     keys = [k.key for k in journal_keys(real)]
-    assert keys[:4] == ["setup_context", "poi_type", "poi_type_other", "fvg_kind"]
+    assert keys[:4] == ["h1_context", "h1_context_other", "h4_context", "h4_context_other"]
     assert keys.index("emotion_before_text") == keys.index("emotion_before") + 1
     assert keys[-1] == "chart_links"
 
@@ -127,7 +127,8 @@ def test_writable_keys_exclude_auto_and_links(real: JournalFieldsConfig) -> None
     keys = {k.key for k in writable_keys(real)}
     assert "bias_alignment" not in keys
     assert "chart_links" not in keys
-    assert {"rule_violations", "poi_type_other", "quality_rating"} <= keys
+    assert {"rule_violations", "poi_types_other", "quality_rating"} <= keys
+    assert not keys & {"setup_context", "fvg_kind"}  # legacy: read-only
 
 
 def test_ai_fillable_keys_exclude_rule_violations(real: JournalFieldsConfig) -> None:
@@ -135,17 +136,17 @@ def test_ai_fillable_keys_exclude_rule_violations(real: JournalFieldsConfig) -> 
     assert "rule_violations" not in keys
     assert "bias_alignment" not in keys
     assert "chart_links" not in keys
-    assert keys[:3] == ["setup_context", "poi_type", "poi_type_other"]
+    assert keys[:3] == ["h1_context", "h1_context_other", "h4_context"]
     assert "emotion_after_text" in keys
 
 
 def test_text_key_spec(real: JournalFieldsConfig) -> None:
-    other = spec(real, "poi_type_other")
+    other = spec(real, "poi_types_other")
     assert (other.type, other.is_text_key, other.other_only) == ("text", True, True)
     note = spec(real, "emotion_before_text")
     assert (note.type, note.other_only) == ("text", False)
     assert spec(real, "rule_violations").is_relation
-    assert not spec(real, "setup_context").is_relation
+    assert not spec(real, "h1_context").is_relation
 
 
 # --- normalise_value per type ---
@@ -272,10 +273,11 @@ def test_validate_fields_deprecated_uses_current(cfg: JournalFieldsConfig) -> No
 
 
 def test_missing_required_order_and_links(real: JournalFieldsConfig) -> None:
+    # fvg_types_h1 / fvg_types_h4 are hidden (no FVG in poi_types), so not missing.
     assert missing_required(real, {}, has_before_link=False) == [
-        "setup_context",
-        "poi_type",
-        "fvg_kind",
+        "h1_context",
+        "h4_context",
+        "poi_types",
         "entry_model",
         "exit_reason",
         "followed_plan",
@@ -288,9 +290,10 @@ def test_missing_required_order_and_links(real: JournalFieldsConfig) -> None:
 
 def test_missing_required_complete(real: JournalFieldsConfig) -> None:
     values = {
-        "setup_context": "yes",
-        "poi_type": "fvg_h4",
-        "fvg_kind": "na",
+        "h1_context": "flow",
+        "h4_context": "range",
+        "poi_types": ["fvg_h4"],
+        "fvg_types_h4": ["fractal_updating"],  # shown by poi_types fvg_h4
         "entry_model": "ifvg_m5",
         "exit_reason": "tp",
         "followed_plan": False,  # False is a value, not missing
@@ -303,10 +306,10 @@ def test_missing_required_complete(real: JournalFieldsConfig) -> None:
 
 
 def test_missing_required_other_text(real: JournalFieldsConfig) -> None:
-    missing = missing_required(real, {"poi_type": "other"}, has_before_link=True)
-    assert missing[:3] == ["setup_context", "poi_type_other", "fvg_kind"]
-    filled = {"poi_type": "other", "poi_type_other": "OB"}
-    assert "poi_type_other" not in missing_required(real, filled, has_before_link=True)
+    missing = missing_required(real, {"poi_types": ["other"]}, has_before_link=True)
+    assert missing[:3] == ["h1_context", "h4_context", "poi_types_other"]
+    filled = {"poi_types": ["other"], "poi_types_other": "OB"}
+    assert "poi_types_other" not in missing_required(real, filled, has_before_link=True)
 
 
 def test_missing_required_links_not_required() -> None:
@@ -326,10 +329,11 @@ def test_missing_required_links_not_required() -> None:
 
 
 def test_split_storage(real: JournalFieldsConfig) -> None:
-    values = validate_fields(real, {"setup_context": "yes", "rule_violations": ["x"]}, {}).values
+    values = validate_fields(real, {"h1_context": "flow", "rule_violations": ["x"]}, {}).values
     columns, extra = split_storage(real, values)
-    assert columns["setup_context"] == "yes"
-    assert "poi_type_other" in columns
+    assert columns["h1_context"] == "flow"
+    assert "poi_types_other" in columns
+    assert "setup_context" not in columns  # legacy: never written
     assert "rule_violations" not in columns  # relation, saved separately
     assert extra == {}
 
@@ -381,9 +385,11 @@ def test_new_extra_field_is_picked_up_everywhere(cfg: JournalFieldsConfig) -> No
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 CHANGE = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 ALL_REQUIRED = (
-    "setup_context",
-    "poi_type",
-    "fvg_kind",
+    "h1_context",
+    "h4_context",
+    "poi_types",
+    "fvg_types_h1",
+    "fvg_types_h4",
     "entry_model",
     "exit_reason",
     "followed_plan",
@@ -392,6 +398,8 @@ ALL_REQUIRED = (
     "quality_rating",
     "chart_links",
 )
+# Missing on a blank trade: the show_if FVG types are hidden while poi_types is empty.
+BLANK_MISSING = [k for k in ALL_REQUIRED if k not in {"fvg_types_h1", "fvg_types_h4"}]
 
 
 def since_map(**new: datetime) -> dict[str, datetime]:
@@ -417,7 +425,7 @@ def test_missing_required_respects_required_since(
     scope = RequirementScope(since_map(quality_rating=CHANGE), close_time)
     missing = missing_required(real, {}, has_before_link=False, scope=scope)
     assert ("quality_rating" in missing) is counts
-    assert "setup_context" in missing  # required since 1970 always counts
+    assert "h1_context" in missing  # required since 1970 always counts
     new = missing_new_fields(real, {}, has_before_link=False, scope=scope)
     assert new == ([] if counts else ["quality_rating"])
 
@@ -431,21 +439,21 @@ def test_links_field_follows_required_since(real: JournalFieldsConfig) -> None:
 
 def test_missing_new_fields_yaml_order_and_only_empty(real: JournalFieldsConfig) -> None:
     scope = RequirementScope(
-        since_map(quality_rating=CHANGE, setup_context=CHANGE, poi_type=CHANGE),
+        since_map(quality_rating=CHANGE, h1_context=CHANGE, poi_types=CHANGE),
         CHANGE - timedelta(hours=1),
     )
-    values = {"poi_type": "fvg_h4"}
+    values = {"poi_types": ["fractal_h4"]}
     assert missing_new_fields(real, values, has_before_link=True, scope=scope) == [
-        "setup_context",
+        "h1_context",
         "quality_rating",
     ]
 
 
 def test_other_text_rule_not_affected_by_required_since(real: JournalFieldsConfig) -> None:
-    scope = RequirementScope(since_map(poi_type=CHANGE), CHANGE - timedelta(days=1))
-    missing = missing_required(real, {"poi_type": "other"}, has_before_link=True, scope=scope)
-    assert "poi_type_other" in missing
-    assert "poi_type" not in missing
+    scope = RequirementScope(since_map(poi_types=CHANGE), CHANGE - timedelta(days=1))
+    missing = missing_required(real, {"poi_types": ["other"]}, has_before_link=True, scope=scope)
+    assert "poi_types_other" in missing
+    assert "poi_types" not in missing
 
 
 def test_open_trade_scope_counts_everything(real: JournalFieldsConfig) -> None:
@@ -456,5 +464,37 @@ def test_open_trade_scope_counts_everything(real: JournalFieldsConfig) -> None:
 
 def test_field_without_known_date_counts(real: JournalFieldsConfig) -> None:
     scope = RequirementScope({}, CHANGE)
-    assert missing_required(real, {}, has_before_link=False, scope=scope) == list(ALL_REQUIRED)
+    assert missing_required(real, {}, has_before_link=False, scope=scope) == BLANK_MISSING
     assert missing_new_fields(real, {}, has_before_link=False, scope=scope) == []
+
+
+# --- «Інше» text and required_since (review 2026-11-19) ---
+
+
+def test_other_text_follows_its_required_since(real: JournalFieldsConfig) -> None:
+    values = {"entry_model": "other"}
+    old = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE - timedelta(days=1))
+    new = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE + timedelta(days=1))
+    unknown = RequirementScope(since_map(), CHANGE - timedelta(days=1))
+
+    assert "entry_model_other" not in missing_required(
+        real, values, has_before_link=True, scope=old
+    )
+    assert "entry_model_other" in missing_new_fields(real, values, has_before_link=True, scope=old)
+    assert "entry_model_other" in missing_required(real, values, has_before_link=True, scope=new)
+    assert "entry_model_other" not in missing_new_fields(
+        real, values, has_before_link=True, scope=new
+    )
+    # no row for the text key: it counts, as before
+    assert "entry_model_other" in missing_required(
+        real, values, has_before_link=True, scope=unknown
+    )
+
+
+def test_new_other_text_not_listed_when_parent_is_not_other(real: JournalFieldsConfig) -> None:
+    scope = RequirementScope(since_map(entry_model_other=CHANGE), CHANGE - timedelta(days=1))
+
+    for values in ({"entry_model": "ifvg_m5"}, {"entry_model": "other", "entry_model_other": "x"}):
+        assert "entry_model_other" not in missing_new_fields(
+            real, values, has_before_link=True, scope=scope
+        )

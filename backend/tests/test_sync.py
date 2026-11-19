@@ -282,7 +282,7 @@ def test_step_advance_closes_open_trade_and_keeps_journal(
     trades = trades_by_pid(session, account.id)
     t1 = trades[2000101]
     t1.status = "draft"
-    t1.setup_context = "yes"
+    t1.h1_context = "flow"
     t1.lesson = "patience"
     session.add(RuleViolation(trade_id=t1.id, rule_key="no_breakeven", source="user"))
     t7 = trades[2000701]
@@ -306,7 +306,7 @@ def test_step_advance_closes_open_trade_and_keeps_journal(
     assert t7.risk_amount == D("160.00")
     assert t7.r_multiple == D("1.4700")
     t1 = trades[2000101]
-    assert (t1.status, t1.setup_context, t1.lesson) == ("draft", "yes", "patience")
+    assert (t1.status, t1.h1_context, t1.lesson) == ("draft", "flow", "patience")
     assert violations(session, t1) == ["no_breakeven"]
     session.refresh(account)
     assert account.balance == D("101298.00")

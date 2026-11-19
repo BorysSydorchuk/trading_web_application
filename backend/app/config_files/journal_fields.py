@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from app.config_files.loader import (
     ConfigError,
@@ -20,7 +21,8 @@ from app.config_files.loader import (
     read_yaml,
     validation_problems,
 )
-from app.config_files.rules import RULE_KEYS, get_rules, rules_path
+from app.config_files.rules import get_rules, rules_path
+from app.config_files.violations import get_violations, violations_path
 from app.models.enums import BiasAlignment, ChartLinkKind
 from app.models.trade import Trade
 
@@ -58,8 +60,9 @@ RESERVED_KEYS = frozenset(
 SYSTEM_ENUM_COLUMNS: dict[str, frozenset[str]] = {
     "bias_alignment": frozenset(v.value for v in BiasAlignment),
     "chart_links": frozenset({ChartLinkKind.BEFORE.value, ChartLinkKind.AFTER.value}),
-    "rule_violations": frozenset(RULE_KEYS),
 }
+# Its options are injected from config/violations.yaml (M8-04), never written in this file.
+RULE_VIOLATIONS_FIELD = "rule_violations"
 # rules.yaml `qm_not_in_ny.entry_model` must be an option of this field.
 QM_RULE_FIELD = "entry_model"
 
@@ -72,6 +75,13 @@ class JournalOption(_Strict):
     value: str = Field(pattern=_KEY_PATTERN, max_length=50)
     label: str = Field(min_length=1)
     deprecated: bool = False
+
+
+class ShowIf(_Strict):
+    """Show (and require) the field only when the parent equals / contains `includes`."""
+
+    field: str = Field(pattern=_KEY_PATTERN, max_length=63)
+    includes: str = Field(pattern=_KEY_PATTERN, max_length=50)
 
 
 class JournalField(_Strict):
@@ -89,9 +99,15 @@ class JournalField(_Strict):
     min: int | None = None
     max: int | None = None
     phase: Phase = "before"
+    # M8-04..08: shown, required and AI-fillable only when the parent has the option.
+    show_if: ShowIf | None = None
+    # Read-only old field («Старе значення»): never written, required or analysed.
+    legacy: bool = False
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.legacy and (self.required or self.analytics):
+            raise ValueError("legacy fields cannot be required or analytics")
         if self.type in _OPTION_TYPES:
             active = [o for o in self.options if not o.deprecated]
             if not active:
@@ -123,8 +139,41 @@ class JournalField(_Strict):
         return [o.value for o in self.options if include_deprecated or not o.deprecated]
 
 
+def _show_if_problem(field: JournalField, earlier: dict[str, JournalField]) -> str | None:
+    """Why `field.show_if` is invalid (None = valid). `earlier` = the fields above it."""
+    cond = field.show_if
+    if cond is None:
+        return None
+    where = f"field {field.key!r} show_if"
+    if cond.field == field.key:
+        return f"{where}: a field cannot depend on itself"
+    parent = earlier.get(cond.field)
+    if parent is None:
+        return f"{where}: parent {cond.field!r} must be a field earlier in the file"
+    if parent.type not in _OPTION_TYPES:
+        return f"{where}: parent {cond.field!r} must be enum or multi_enum"
+    if parent.show_if is not None or parent.legacy:
+        return f"{where}: parent {cond.field!r} cannot have its own show_if or be legacy"
+    if cond.includes not in parent.option_values():
+        return f"{where}: {cond.includes!r} is not an option of {cond.field!r}"
+    return None
+
+
 class JournalFieldsConfig(_Strict):
     fields: tuple[JournalField, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _show_if_parents(self) -> Self:
+        earlier: dict[str, JournalField] = {}
+        problems: list[str] = []
+        for field in self.fields:
+            problem = _show_if_problem(field, earlier)
+            if problem is not None:
+                problems.append(problem)
+            earlier[field.key] = field
+        if problems:
+            raise ValueError("\n".join(problems))
+        return self
 
     @model_validator(mode="after")
     def _unique_keys(self) -> Self:
@@ -196,11 +245,23 @@ def model_problems(config: JournalFieldsConfig) -> list[str]:
                     f"{where}: unknown option values {', '.join(unknown)} "
                     f"(allowed: {', '.join(sorted(allowed))})"
                 )
-            if field.key == "rule_violations":
-                missing = sorted(allowed - set(field.option_values()))
-                if missing:
-                    problems.append(f"{where}: no option (label) for rules {', '.join(missing)}")
+        problems.extend(_array_problems(field, where))
     return problems
+
+
+def _array_problems(field: JournalField, where: str) -> list[str]:
+    """A multi_enum column is a VARCHAR[] trades column; a scalar field is not."""
+    if field.storage != "column" or field.key in RELATION_FIELDS:
+        return []
+    column = Trade.__table__.columns.get(field.key)
+    if column is None:
+        return []
+    is_array = isinstance(column.type, ARRAY)
+    if field.type == "multi_enum" and not is_array:
+        return [f"{where}: multi_enum with storage column needs an array column"]
+    if field.type != "multi_enum" and is_array:
+        return [f"{where}: column {field.key!r} is an array, the field must be multi_enum"]
+    return []
 
 
 def _rules_problems(config: JournalFieldsConfig) -> list[str]:
@@ -230,6 +291,7 @@ def load_journal_fields(path: Path | None = None) -> JournalFieldsConfig:
     raw = read_yaml(path)
     if not isinstance(raw, dict):
         raise ConfigError(path, ["(root): expected a mapping with a `fields` list"])
+    raw = _with_violation_options(path, raw)
     try:
         config = JournalFieldsConfig.model_validate(raw)
     except ValidationError as exc:
@@ -238,6 +300,28 @@ def load_journal_fields(path: Path | None = None) -> JournalFieldsConfig:
     if problems:
         raise ConfigError(path, problems)
     return config
+
+
+def _with_violation_options(path: Path, raw: dict[str, Any]) -> dict[str, Any]:
+    """A copy of `raw` whose `rule_violations` field has the options of violations.yaml
+    (labels; deprecated = status deprecated). Raises the violations.yaml ConfigError when
+    that file is broken (the field cannot be built without it)."""
+    fields = raw.get("fields")
+    if not isinstance(fields, list):
+        return raw
+    out: list[Any] = []
+    for item in fields:
+        if isinstance(item, dict) and item.get("key") == RULE_VIOLATIONS_FIELD:
+            if item.get("options"):
+                message = f"options come from {violations_path().name}, remove them here"
+                raise ConfigError(path, [f"{RULE_VIOLATIONS_FIELD}: {message}"])
+            options = [
+                {"value": v.key, "label": v.label, "deprecated": v.deprecated}
+                for v in get_violations().violations
+            ]
+            item = item | {"options": options}
+        out.append(item)
+    return raw | {"fields": out}
 
 
 def _with_field_keys(raw: dict[str, Any], problems: list[str]) -> list[str]:
@@ -257,7 +341,7 @@ def _with_field_keys(raw: dict[str, Any], problems: list[str]) -> list[str]:
 
 
 _cache: FileCache[JournalFieldsConfig] = FileCache(
-    lambda: [journal_fields_path(), rules_path()], load_journal_fields
+    lambda: [journal_fields_path(), rules_path(), violations_path()], load_journal_fields
 )
 
 

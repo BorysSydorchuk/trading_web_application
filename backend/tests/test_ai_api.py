@@ -119,6 +119,28 @@ def test_extract_returns_guarded_fields_and_saves_nothing(
     assert len(usage_log.path.read_text(encoding="utf-8").splitlines()) == 1
 
 
+def test_extract_keeps_a_show_if_field_when_the_saved_parent_includes_the_option(
+    app: FastAPI, client: TestClient, session: Session, account: Account, usage_log: UsageLog
+) -> None:
+    # Arrange: POI FVG H1 already saved; the text names only the FVG types
+    trade = add_trade(session, account, poi_types=["fvg_h1"])
+    output = {
+        "fvg_types_h1": {"value": ["post_manipulation"], "evidence": "FVG після маніпуляції"},
+        "fvg_types_h4": {"value": ["fractal_updating"], "evidence": "оновлює фрактал"},
+    }
+    use_model(app, FakeClient([reply(output)]))
+    text_in = "FVG після маніпуляції, оновлює фрактал."
+
+    # Act
+    response = extract(client, trade.id, {"text": text_in})
+
+    # Assert
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["fields"] == {"fvg_types_h1": ["post_manipulation"]}
+    assert data["dropped"] == [{"key": "fvg_types_h4", "reason": "parent_not_selected"}]
+
+
 @pytest.mark.parametrize("status", ["draft", "complete"])
 def test_extract_allowed_for_draft_and_complete(
     app: FastAPI,
@@ -199,6 +221,8 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcription.yaml",
         "transcript_glossary.yaml",
         "bias.yaml",
+        "symbols.yaml",
+        "violations.yaml",
     ):
         shutil.copy(REPO_ROOT / "config" / name, target / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(target))

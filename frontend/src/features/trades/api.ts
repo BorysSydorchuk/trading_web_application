@@ -31,6 +31,7 @@ export function useTrades(query: TradeQuery, options: { refetchInterval?: number
           excluded: query.excluded,
           described: query.described,
           archived: query.archived,
+          journal: query.journal,
           sort: query.sort,
           order: query.order,
           limit: query.limit,

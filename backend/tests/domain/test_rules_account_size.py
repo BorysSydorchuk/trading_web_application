@@ -13,11 +13,22 @@ from typing import Any
 import pytest
 
 from app.domain.rules import RuleTradeInput, Violation, evaluate
-from tests.domain.test_rules import RULES, D, keys, rules, tr, utc
+from tests.domain.test_rules import RISK_KEYS, RULES, D, limits, rules, tr, utc
 
 
-def _details(trade_key: str, trade: RuleTradeInput, ctx: list[RuleTradeInput]) -> list[Violation]:
-    found = [v for v in evaluate(trade, ctx, RULES, None) if v.rule_key == trade_key]
+def _details(limit: str, trade: RuleTradeInput, ctx: list[RuleTradeInput]) -> list[Violation]:
+    """Violations of one rule; a daily/weekly limit (M8-04: a `<limit>: ...` part of the
+    daily_risk / weekly_risk details) as Violation(limit, part without the prefix)."""
+    found: list[Violation] = []
+    for v in evaluate(trade, ctx, RULES, None):
+        if v.rule_key in RISK_KEYS:
+            found += [
+                Violation(limit, part.removeprefix(f"{limit}: "))
+                for part in v.details.split("; ")
+                if part.startswith(f"{limit}:")
+            ]
+        elif v.rule_key == limit:
+            found.append(v)
     return found
 
 
@@ -63,35 +74,35 @@ def test_weekly_stops_use_the_account_size() -> None:
     ]
     wed = tr(1, utc(11, 4, 8), size=SIZE)
 
-    assert "weekly_stop_loss_pct" in keys(wed, ctx)
+    assert "weekly_stop_loss_pct" in limits(wed, ctx)
     ctx_ok = [ctx[0], tr(11, utc(11, 3, 8), utc(11, 3, 9), "-199.99", size=SIZE)]
-    assert "weekly_stop_loss_pct" not in keys(wed, ctx_ok)
+    assert "weekly_stop_loss_pct" not in limits(wed, ctx_ok)
     win = [
         tr(10, utc(11, 2, 8), utc(11, 2, 9), "600.00", size=SIZE),
         tr(11, utc(11, 3, 8), utc(11, 3, 9), "400.00", size=SIZE),  # +10.00 %
     ]
-    assert "weekly_stop_profit_pct" in keys(wed, win)
+    assert "weekly_stop_profit_pct" in limits(wed, win)
     win_ok = [win[0], tr(11, utc(11, 3, 8), utc(11, 3, 9), "399.99", size=SIZE)]
-    assert "weekly_stop_profit_pct" not in keys(wed, win_ok)
+    assert "weekly_stop_profit_pct" not in limits(wed, win_ok)
 
 
 def test_the_base_is_the_entering_trades_account_size_not_the_pnl() -> None:
     # Same -300.00 P&L: -3.00 % of 10000 flags; -0.30 % of 100000 does not.
     big = tr(1, utc(11, 2, 9), size="100000")
-    assert "daily_stop_loss_pct" not in keys(big, _day("-300.00"))
-    assert "daily_stop_loss_pct" in keys(_entry(), _day("-300.00"))
+    assert "daily_stop_loss_pct" not in limits(big, _day("-300.00"))
+    assert "daily_stop_loss_pct" in limits(_entry(), _day("-300.00"))
 
 
 @pytest.mark.parametrize("size", [None, "0", "-1"])
 def test_no_usable_size_gives_no_stop_violation(size: str | None) -> None:
     trade = tr(1, utc(11, 2, 9), size=size)
 
-    assert not {"daily_stop_loss_pct", "weekly_stop_loss_pct"} & keys(trade, _day("-900.00"))
+    assert not {"daily_stop_loss_pct", "weekly_stop_loss_pct"} & limits(trade, _day("-900.00"))
 
 
 def test_max_risk_pct_uses_the_given_risk_pct() -> None:
-    assert "max_risk_pct" in keys(tr(1, utc(11, 2, 8), size=SIZE, risk_pct=D("1.1001")))
-    assert "max_risk_pct" not in keys(tr(1, utc(11, 2, 8), size=SIZE, risk_pct=D("1.1000")))
-    assert "max_risk_pct" not in keys(
+    assert "max_risk_pct" in limits(tr(1, utc(11, 2, 8), size=SIZE, risk_pct=D("1.1001")))
+    assert "max_risk_pct" not in limits(tr(1, utc(11, 2, 8), size=SIZE, risk_pct=D("1.1000")))
+    assert "max_risk_pct" not in limits(
         tr(1, utc(11, 2, 8), size=SIZE, risk_pct=D("5")), cfg=rules(max_risk_pct={"enabled": False})
     )

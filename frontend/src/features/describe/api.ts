@@ -4,7 +4,7 @@ import { aiKeys } from '@/features/ai/api'
 import { inboxKeys } from '@/features/inbox/api'
 import { tradeKeys } from '@/features/trades/api'
 import type { TradeDetail } from '@/features/trades/types'
-import type { ExtractResult, JournalInput } from './types'
+import type { ExtractResult, JournalInput, JournalSaved } from './types'
 
 /** The server keeps extraction (incl. one fallback attempt) within 30 s; leave room for the network. */
 const EXTRACT_TIMEOUT_MS = 45_000
@@ -22,9 +22,10 @@ export function useSaveJournal(tradeId: number) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: JournalInput) =>
-      apiRequest<TradeDetail>(`/trades/${tradeId}/journal`, { method: 'PUT', body: input }),
-    onSuccess: (trade) => {
-      queryClient.setQueryData(tradeKeys.detail(tradeId), trade)
+      apiRequest<JournalSaved>(`/trades/${tradeId}/journal`, { method: 'PUT', body: input }),
+    onSuccess: (saved) => {
+      // A TradeDetail plus `cleared_hidden`; the extra key is harmless in the detail cache.
+      queryClient.setQueryData<TradeDetail>(tradeKeys.detail(tradeId), saved)
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: tradeKeys.all }),
         queryClient.invalidateQueries({ queryKey: inboxKeys.counts }),

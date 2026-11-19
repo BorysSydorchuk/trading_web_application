@@ -1,0 +1,79 @@
+{
+  "description": "M8-04..08 EN: 'H1 flow' / 'H4 range'; POI Fractal H4 + other with his words; the model filled the FVG H1 type and its other-text although POI has no FVG H1 -> both dropped parent_not_selected",
+  "text": "GER40 London. H1 flow, H4 range. POI was a fractal H4 plus something else: the weekly open level. Entry IFVG M5. Closed manually, followed the plan, calm before entry. Setup quality 4.",
+  "model_output": {
+    "h1_context": {
+      "value": "flow",
+      "evidence": "H1 flow"
+    },
+    "h4_context": {
+      "value": "range",
+      "evidence": "H4 range"
+    },
+    "poi_types": {
+      "value": [
+        "fractal_h4",
+        "other"
+      ],
+      "evidence": "a fractal H4 plus something else"
+    },
+    "poi_types_other": {
+      "value": "the weekly open level",
+      "evidence": "the weekly open level"
+    },
+    "fvg_types_h1": {
+      "value": [
+        "other"
+      ],
+      "evidence": "something else"
+    },
+    "fvg_types_h1_other": {
+      "value": "the weekly open level",
+      "evidence": "the weekly open level"
+    },
+    "entry_model": {
+      "value": "ifvg_m5",
+      "evidence": "Entry IFVG M5"
+    },
+    "exit_reason": {
+      "value": "manual",
+      "evidence": "Closed manually"
+    },
+    "followed_plan": {
+      "value": true,
+      "evidence": "followed the plan"
+    },
+    "emotion_before": {
+      "value": "calm",
+      "evidence": "calm before entry"
+    },
+    "quality_rating": {
+      "value": 4,
+      "evidence": "Setup quality 4"
+    }
+  },
+  "expected_fields": {
+    "h1_context": "flow",
+    "h4_context": "range",
+    "poi_types": [
+      "fractal_h4",
+      "other"
+    ],
+    "poi_types_other": "the weekly open level",
+    "entry_model": "ifvg_m5",
+    "exit_reason": "manual",
+    "followed_plan": true,
+    "emotion_before": "calm",
+    "quality_rating": 4
+  },
+  "expected_dropped": [
+    {
+      "key": "fvg_types_h1",
+      "reason": "parent_not_selected"
+    },
+    {
+      "key": "fvg_types_h1_other",
+      "reason": "parent_not_selected"
+    }
+  ]
+}

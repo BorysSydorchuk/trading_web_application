@@ -274,6 +274,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   - `evidence_not_in_text`: every value must come with an `evidence` quote that appears in the input text (case-insensitive, whitespace-normalised);
   - `invalid_option`: enum values must be valid, non-deprecated options; `out_of_range`: ints within `min`/`max`;
   - `parent_not_other`: a `text_key` with `allow_other_text` is dropped when its enum was not filled as `other`;
+  - `parent_not_selected` (M8-04..08): a `show_if` field (or its `text_key`) is dropped when its parent includes the option neither in the answer nor in the trade's saved journal;
   - `question`: a text value containing `?` while its evidence does not;
   - `not_fillable`: a key the model returned that is not in the schema (auto, links, `rule_violations`, unknown) is dropped;
   - the output has no free-form message field, so the model cannot ask questions.
@@ -728,3 +729,61 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 - Equity (from 0 at Brussels midnight of `from`) and P&L by day: every closed trade of the range, M8-01 excluded trades included (account money; the equity end equals the digest's «P&L рахунку разом з виключеними» for the same period). Rolling win rate / average R: the last 20 strategy trades at each trade (excluded trades out, the digest's breakeven rule), the window reaching back before `from`; points shown for the range only.
 - `account_size` / percents: one account's size, or the sum of the sizes of the accounts with a trade in the range (the digest's combined rule); null when any counted account has no finite size > 0. The charts refresh every 30 s like the rest of Home; a failed refresh keeps the last charts with an error note.
 - UI: «Головна» → «Графіки»: «Тиждень» (Monday..today), «Місяць» (1st..today), «3 місяці» / «Рік» (same day back + 1), «Усе», «Свої дати»; account selector (all / each); selection remembered per browser (localStorage, try/catch); defaults «Місяць», all accounts; empty range «Немає угод за цей період». Plain SVG like the digest charts (EquityChart reused).
+
+## M8-04..M8-08 - Journal taxonomy batch (PM 2026-11-19; contract)
+
+Branch `m8/journal-taxonomy`, tier L, one migration. Merge A: config engine + `violations.yaml` + rules engine + migration + dry-run tool. Merge B: Describe UI, AI extraction, Journal filters, digest breakdowns/combinations.
+
+### Engine (config/journal_fields.yaml)
+- `multi_enum` = the PM's multi_select (already in the engine). New: `multi_enum` with `storage: column` is a `VARCHAR(50)[]` trades column (NULL when empty, never `{}`); `required` = at least one value.
+- `allow_other_text: true` = the PM's other_requires_text, now also for `multi_enum` (the text applies when `other` is in the list). «Інше» without text: `complete` is refused (422 `journal_incomplete`, key = the text_key) as today; a draft may keep it. The text key has its own `journal_field_requirements` row (review 2026-11-19): it blocks only trades closed at or after that `required_since` (no row = counts, as before), and `missing_new_fields` lists it when the parent is `other`, the text is empty and the row is newer than the close. The migration stamps the new text keys (incl. `entry_model_other`) with now().
+- New `show_if: {field: <key>, includes: <option value>}`: the field is shown, required and AI-fillable only when the parent's value equals (enum) or contains (multi_enum) the option. On save a hidden field and its text_key are stored as NULL; the `PUT .../journal` response lists them in `cleared_hidden` (the UI warns before saving: «Буде очищено: <label>»). Validation: the parent is an earlier enum/multi_enum field without its own show_if, the option exists.
+- New `legacy: true`: read-only old field (the PM's «старе значення»). Not writable (422 `not_writable`), never required, not AI-fillable, not analytics, not a filter. `TradeDetail.journal` still returns it; the UI shows «Старе значення: <label>» only when it is not empty.
+- New required fields get `required_since` = when they became required (existing M3-07 rule), so trades closed before stay complete; «Неповні за новими полями» lists them.
+
+### New fields (journal_fields.yaml, form order)
+| key | type | options | text_key | rules |
+|-----|------|---------|----------|-------|
+| `h1_context` «Контекст H1» | enum | flow «Flow», reversal «Reversal», range «Range», other «Інше» | `h1_context_other` | required, analytics |
+| `h4_context` «Контекст H4» | enum | same | `h4_context_other` | required, analytics |
+| `poi_types` «POI» | multi_enum | fvg_h4 «FVG H4», fvg_h1 «FVG H1», fractal_h1 «Fractal H1», fractal_h4 «Fractal H4», other «Інше» | `poi_types_other` | required (>= 1), analytics |
+| `fvg_types_h1` «Тип FVG H1» | multi_enum | fractal_updating «оновлює фрактал», post_manipulation «після маніпуляції», other «Інше» | `fvg_types_h1_other` | show_if poi_types includes fvg_h1; required when shown; analytics |
+| `fvg_types_h4` «Тип FVG H4» | multi_enum | same | `fvg_types_h4_other` | show_if poi_types includes fvg_h4; required when shown; analytics |
+| `entry_model` (single, unchanged) | enum | label «Інше» for `other` | new `entry_model_other` | allow_other_text |
+| `setup_context` «Контекст (Flow H1 синхронний з H4)» | enum | unchanged | — | `legacy: true` |
+| `fvg_kind` «Тип FVG (старе)» | enum | unchanged | — | `legacy: true` |
+
+`poi_type` / `poi_type_other` leave the YAML (columns kept; always mapped exactly, so the migration empties them).
+
+### Violations (config/violations.yaml, new)
+- `violations: [{key, label, type: auto|manual, status: active|deprecated}]`; the options of the journal field `rule_violations` come from this file (no options for it in journal_fields.yaml). Adding a manual violation = one entry; the file is re-read on change (FileCache), a restart also works.
+- Validation: keys snake_case <= 50, unique; every key the rules engine emits is an active `auto` entry and every `auto` entry is an engine key; at least one active entry. Deprecated: shown on old trades and in history stats, not selectable on a trade that does not have it.
+- Engine keys: `max_risk_pct`, `daily_risk` «Порушення денного ризику», `weekly_risk` «Порушення тижневого ризику», `max_trades_per_week`, `max_reentries_per_idea`, `min_planned_rr`, `entry_session`, `qm_not_in_ny`, `no_breakeven`. Thresholds stay in rules.yaml (`daily_stop_loss_pct` -3, `daily_stop_profit_pct` +5, `weekly_*` -6 / +10). `daily_risk` details name the limit hit, e.g. `daily_stop_loss_pct: day P&L reached -3.10% (...) before entry <= limit -3.0%` (both limits -> both parts joined by `; `).
+- Old keys `daily_stop_loss_pct`, `daily_stop_profit_pct`, `weekly_stop_loss_pct`, `weekly_stop_profit_pct`: `auto`, `deprecated` (labels kept).
+- New manual: `entry_not_by_model` «Вхід не за моделлю входу», `entry_weak_poi` «Вхід від слабкої POI», `entry_against_system` «Вхід не за торговою системою (не дотримуючись контексту H1/H4)».
+- Trade details show each violation's `details` (migrated rows: the original key first); stats group by `rule_key` only.
+
+### Migration (one revision; pre-migration backup via `make migrate`)
+- Adds the columns above (`*_other` TEXT, multi columns VARCHAR(50)[]).
+- `setup_context = yes` -> h1 = h4 = `flow`, setup_context NULL. `no` / `partially` -> new fields empty, setup_context kept (legacy).
+- `poi_type` X -> `poi_types = [X]`, `poi_type_other` -> `poi_types_other`; poi_type / poi_type_other NULL.
+- `fvg_kind` in (fractal_updating, post_manipulation) with poi_type fvg_h1 / fvg_h4 -> `fvg_types_h1` / `fvg_types_h4 = [kind]`, fvg_kind NULL. Otherwise (`na`, or POI not FVG) fvg_kind kept (legacy).
+- `rule_violations` rows with an old daily/weekly key -> `daily_risk` / `weekly_risk`, details `<old key>: <old details>`; two rows of one trade merge into one (details joined by `; `, source = user if either was user).
+- Inserts `journal_field_requirements` rows for the new required keys with `required_since = now()` (ON CONFLICT DO NOTHING); deletes the rows of keys no longer required (setup_context, poi_type, fvg_kind).
+- Downgrade restores the old columns where one value exists (poi_types[1]; h1 = h4 = flow -> yes; one FVG type -> fvg_kind; old violation keys from the details prefix), then drops the new columns. Extra multi values are lost on downgrade (documented).
+- Dry run: `uv run --project backend python -m app.tools.taxonomy_dry_run` dumps the dev DB, restores it into a scratch `*_taxdry_test` DB, upgrades it there, prints counts per mapping (mapped / kept as legacy / violations remapped / merged), drops the scratch DB. The dev DB is not changed. Same output in `logs/taxonomy_dry_run.log`.
+
+### Analytics, filters, AI (merge B)
+- Digest breakdowns for every analytics field; a multi field counts a trade in each selected value; `poi_types` also by combination (sorted values joined « + »); new table H1 × H4 (count, P&L, R, win rate). Each breakdown has coverage «заповнено N/M» (M = strategy trades where the field applies; show_if fields: only trades whose parent includes the option).
+- Journal filters for every new field (multi: any of the chosen values).
+- AI extraction: schema/catalogue from the YAML: multi values as a list, other-text keys, show_if fields kept only when the parent value includes the option (guard drops them otherwise), legacy never. Prompt, glossary examples and fixtures (UA/RU/EN) updated. No live calls; up to 5 proposed at the end.
+
+### Merge B exact shapes (orchestrator 2026-11-19)
+- `GET /api/journal-fields`: each field may carry `show_if: {field, includes}` (or null) and `legacy: bool`; `rule_violations.options` come from violations.yaml (`deprecated` set for deprecated entries) plus `violation_types: {<key>: "auto" | "manual"}` on that field. `violation_types` is informational (the UI marks auto keys); the owner may still tick an auto key by hand, as before.
+- `PUT /api/trades/{id}/journal` -> TradeDetail + `cleared_hidden: string[]` (field keys sent with a value and hidden on save). The UI never sends legacy keys or `poi_type`; before saving it shows «Буде очищено: <labels>» when a hidden field still has a value.
+- `GET /api/trades` journal filter: repeatable `journal=<key>:<value>` (`<value>` = option value, or `null` = empty). Same key = any of; different keys = all. Allowed keys: non-legacy enum / multi_enum / bool fields (bool values `true` / `false`); unknown key, legacy key or unknown option -> 422 validation_error with `details.fields.journal`. Multi fields match when the array contains the value (`null` = NULL array). A show_if field's `null` matches only trades where the field is shown (its parent includes the option) and empty (review 2026-11-19). Combined with the other filters.
+- Digest snapshot `breakdowns` (map, file order): each entry gets `kind` (`field` | `combination` | `matrix`; a snapshot without `kind` = `field`).
+  - `field`: as today; a multi field puts a trade in each of its values (`null` group = empty); `coverage.total` = strategy trades where the field applies (show_if: the parent includes the option), `filled` = those with a value. Hidden-field trades are in no group.
+  - `poi_types__combo` (`combination`): one group per distinct selection, key = values in YAML option order joined « + » (one value = the value itself); empty -> `null`.
+  - `h1_context__x__h4_context` (`matrix`): groups with `key: [h1, h4]` (either part may be null), same numbers per group; `coverage.filled` = trades with both set. UI: table H1 rows × H4 columns, each cell «N угод · P&L · R · WR», empty cells «—».
+- Trade details (Journal dialog, Describe): each violation shows its label and `details`; legacy fields show «Старе значення: <option label>» when not empty.

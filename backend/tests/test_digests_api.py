@@ -19,7 +19,7 @@ Response shape pinned here (additions to api.md are marked NEW):
   numbers use the metric's own format (money 2 dp, rest 4 dp).
 - ``breakdowns``: ``{<field>: {groups: [{key, trades, net_pnl, total_r, win_rate}], coverage:
   {filled, total}}}``; order = symbol, session, hour, weekday, bias_alignment, then the
-  ``analytics: true`` journal fields in file order (columns and ``extra``), skipping relation /
+  ``analytics: true`` journal fields in file order (columns and ``extra``), skipping relation
   multi_enum fields (rule_violations) and bias_alignment (already a trade field) (NEW decision).
 - ``rules``: ``{rules: [{rule_key, violations, trades, pnl}], violated_trades, violated_pnl}``.
 - ``bias``: ``{daily|weekly|monthly: {accuracy: {value, marked, total}, aligned: {trades,
@@ -437,9 +437,15 @@ REAL_BREAKDOWN_ORDER = [
     "hour",
     "weekday",
     "bias_alignment",
-    "setup_context",
-    "poi_type",
-    "fvg_kind",
+    # M8-04..08 merge B: multi fields, the POI combination and the H1 x H4 matrix;
+    # legacy fields (setup_context, fvg_kind) are never analysed.
+    "h1_context",
+    "h4_context",
+    "h1_context__x__h4_context",
+    "poi_types",
+    "poi_types__combo",
+    "fvg_types_h1",
+    "fvg_types_h4",
     "entry_model",
     "exit_reason",
     "followed_plan",

@@ -17,7 +17,7 @@ from app.config_files import reload_config
 from app.config_files.journal_fields import JournalFieldsConfig, load_journal_fields
 from app.config_files.loader import CONFIG_DIR_ENV
 from app.db import make_session_factory
-from app.domain.journal import required_field_keys
+from app.domain.journal import required_field_keys, requirement_keys
 from app.models import ChartLink, JournalRequirementsState, RuleViolation, Trade
 from app.services.journal_requirements import (
     INITIAL_REQUIRED_SINCE,
@@ -283,7 +283,7 @@ def test_worker_job_syncs_and_skips_broken_yaml(
     factory = make_session_factory(db_engine)
     sync_journal_requirements(factory)
     rows = load_requirements(session)
-    assert set(rows) == set(required_field_keys(load_journal_fields()))
+    assert set(rows) == set(requirement_keys(load_journal_fields()))
 
     (tmp_path / "journal_fields.yaml").write_text("fields: []\n", encoding="utf-8")
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -298,8 +298,11 @@ def test_worker_job_syncs_and_skips_broken_yaml(
 
 
 def _all_required(config: JournalFieldsConfig) -> JournalFieldsConfig:
+    """Every field required, except legacy ones (read-only, never required)."""
     return JournalFieldsConfig(
-        fields=tuple(f.model_copy(update={"required": True}) for f in config.fields)
+        fields=tuple(
+            f if f.legacy else f.model_copy(update={"required": True}) for f in config.fields
+        )
     )
 
 
@@ -308,13 +311,21 @@ def test_sql_filter_runs_for_every_real_field(session: Session) -> None:
     with Python (catches a column type without an SQL empty check)."""
     account = add_account(session, "Alpha", 1)
     add_trade(session, account)
-    add_trade(session, account, setup_context="", mistakes="", quality_rating=3)
+    add_trade(session, account, h1_context="", mistakes="", quality_rating=3)
+    # show_if (M8-04..08): FVG H1 types shown and empty / shown and filled / hidden.
+    add_trade(session, account, poi_types=["fvg_h1"])
+    add_trade(session, account, poi_types=["fvg_h1", "fvg_h4"], fvg_types_h1=["other"])
+    add_trade(session, account, poi_types=["fractal_h1"], fvg_types_h4=["other"])
+    # «Інше» text keys (review 2026-11-19): `other` without text / with text / not other.
+    add_trade(session, account, entry_model="other", poi_types=["other", "fvg_h4"])
+    add_trade(session, account, entry_model="other", entry_model_other="own")
+    add_trade(session, account, entry_model="ifvg_m5", h1_context="other")
     cfg = _all_required(load_journal_fields())
-    since = {f.key: LATER for f in cfg.fields}
+    since = dict.fromkeys(requirement_keys(cfg), LATER)
     assert _sql_ids(session, cfg, since) == _python_ids(session, cfg, since)
-    for field in cfg.fields:
-        one = {field.key: LATER}
-        assert _sql_ids(session, cfg, one) == _python_ids(session, cfg, one), field.key
+    for key in requirement_keys(cfg):
+        one = {key: LATER}
+        assert _sql_ids(session, cfg, one) == _python_ids(session, cfg, one), key
 
 
 def test_sql_filter_auto_override(session: Session) -> None:
@@ -352,3 +363,50 @@ def test_sql_filter_key_without_column_is_empty(session: Session) -> None:
     )
     since = {"no_such_column": LATER}
     assert _sql_ids(session, cfg, since) == _python_ids(session, cfg, since) == {trade.id}
+
+
+# --- «Інше» text keys follow required_since too (review 2026-11-19) ---
+
+
+def test_requirement_keys_are_required_fields_plus_other_text_keys() -> None:
+    keys = requirement_keys(load_journal_fields())
+
+    assert set(required_field_keys(load_journal_fields())) <= set(keys)
+    for text_key in (
+        "h1_context_other",
+        "h4_context_other",
+        "poi_types_other",
+        "fvg_types_h1_other",
+        "fvg_types_h4_other",
+        "entry_model_other",
+    ):
+        assert text_key in keys
+    assert "emotion_before_text" not in keys  # an optional note, not an «Інше» text
+    assert keys.index("entry_model") < keys.index("entry_model_other")
+
+
+def test_sync_keeps_and_inserts_the_other_text_rows(session: Session) -> None:
+    real = load_journal_fields()
+
+    first = sync_requirements(session, real, at(T0))
+    second = sync_requirements(session, real, at(LATER))
+
+    assert first["entry_model_other"] == INITIAL_REQUIRED_SINCE
+    assert second == first  # nothing to add: no rewrite
+    assert set(load_requirements(session)) == set(requirement_keys(real))
+
+
+def test_missing_new_fields_lists_a_new_other_text(session: Session) -> None:
+    real = load_journal_fields()
+    account = add_account(session, "Alpha", 1)
+    old_other = add_trade(session, account, entry_model="other")
+    old_named = add_trade(session, account, entry_model="other", entry_model_other="own")
+    since = {"entry_model_other": LATER}
+
+    assert _python_ids(session, real, since) == {old_other.id}
+    assert _sql_ids(session, real, since) == {old_other.id}
+    session.expire_all()
+    view = journal_view(session.get(Trade, old_other.id), real, since)  # type: ignore[arg-type]
+    assert "entry_model_other" in view.missing_new_fields
+    assert "entry_model_other" not in view.missing_required
+    assert old_named.id not in _python_ids(session, real, since)

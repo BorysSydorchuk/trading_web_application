@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config_files import ConfigError, get_journal_fields, get_rules
 from app.config_files.journal_fields import RELATION_FIELDS, JournalField
 from app.domain import digest_metrics as dm
+from app.domain.digest_breakdowns import JournalSpec, ShowIfSpec
 from app.domain.sessions import DEFAULT_TZ
 from app.errors import ApiError, config_error
 from app.models import Account, BiasEntry, BiasNote, Digest, Trade
@@ -42,8 +43,8 @@ logger = logging.getLogger(__name__)
 
 SUGGESTION_HOUR = time(16)
 FRIDAY = 4
-# Journal field types that are not one value per trade (child tables, lists).
-_NON_SCALAR_TYPES = frozenset({"multi_enum", "links"})
+# Journal field types without a digest breakdown (chart links).
+_NO_BREAKDOWN_TYPES = frozenset({"links"})
 _DAILY_BIAS_KINDS = (BiasKind.PRE_LONDON.value, BiasKind.PRE_NY.value)
 _KINDS: tuple[dm.PeriodKind, ...] = ("weekly", "monthly")
 
@@ -76,15 +77,38 @@ def _closed() -> ColumnElement[bool]:
 
 
 def _journal_specs() -> tuple[JournalField, ...]:
-    """Analytics journal fields with one scalar value per trade, in file order."""
-    return tuple(
+    """Fields the digest reads, in file order: the analytics fields with a breakdown
+    (relation fields have their own sections) plus the show_if parents they need."""
+    fields = get_journal_fields().fields
+    analysed = [
         f
-        for f in get_journal_fields().fields
-        if f.analytics and f.type not in _NON_SCALAR_TYPES and f.key not in RELATION_FIELDS
+        for f in fields
+        if f.analytics and f.type not in _NO_BREAKDOWN_TYPES and f.key not in RELATION_FIELDS
+    ]
+    parents = {f.show_if.field for f in analysed if f.show_if is not None}
+    return tuple(f for f in fields if f in analysed or f.key in parents)
+
+
+def breakdown_specs(fields: Sequence[JournalField]) -> tuple[JournalSpec, ...]:
+    """The analytics fields as the digest breakdowns see them (M8-04..08)."""
+    return tuple(
+        JournalSpec(
+            key=f.key,
+            multi=f.type == "multi_enum",
+            options=tuple(f.option_values()),
+            show_if=None if f.show_if is None else ShowIfSpec(f.show_if.field, f.show_if.includes),
+        )
+        for f in fields
+        if f.analytics
     )
 
 
-def _journal_value(value: Any) -> dm.JournalValue:
+def _journal_value(value: Any, multi: bool) -> dm.JournalValue:
+    if multi:
+        if value is None or isinstance(value, str):
+            return (value,) if value else None
+        items = tuple(str(v) for v in value) if isinstance(value, list | tuple) else ()
+        return items or None
     if value is None or isinstance(value, str | int | bool):
         return value
     return str(value)  # e.g. a float or list typed into `extra` by hand
@@ -95,7 +119,10 @@ def _to_digest_trade(
 ) -> dm.DigestTrade:
     extra = trade.extra or {}
     journal = {
-        f.key: _journal_value(extra.get(f.key) if f.storage == "extra" else getattr(trade, f.key))
+        f.key: _journal_value(
+            extra.get(f.key) if f.storage == "extra" else getattr(trade, f.key),
+            f.type == "multi_enum",
+        )
         for f in specs
     }
     close_time, net_pnl = trade.close_time, trade.net_pnl
@@ -263,7 +290,7 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
         account_names={a.id: a.name for a in accounts.values()},
         combined=_scope(period, window, min(firsts.values(), default=None), start),
         by_account=by_account,
-        journal_fields=[f.key for f in specs],
+        journal_fields=breakdown_specs(specs),
         bias_marks=_bias_marks(db, start, end),
         excluded=[ExcludedTrade(trade=t, reason=loaded.reasons[t.id]) for t in excluded],
     )

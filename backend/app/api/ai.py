@@ -45,6 +45,7 @@ from app.services.trade_journal import (
     check_describable,
     journal_config_for,
     requirement_scope,
+    stored_journal,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,8 @@ def extract(
     # M8-02: on an open trade the model is offered (and may fill) pre-entry fields only.
     config = journal_config_for(trade, config)
     scope = requirement_scope(trade, required_since)
+    # M8-04..08: a show_if parent may already be saved (read before the rollback expires it)
+    current = stored_journal(trade, config)
     db.rollback()  # no transaction stays open during the (slow) AI call
     if client is None:
         logger.warning("AI extraction for trade %s: ANTHROPIC_API_KEY is not set", trade_id)
@@ -138,6 +141,7 @@ def extract(
             ),
             usage_log=usage_log,
             scope=scope,
+            current=current,
         )
     except ExtractionFailed as exc:
         raise ai_call_error(exc, key_tracker) from None

@@ -28,6 +28,7 @@ from app.db import make_session_factory
 from app.models import Account, RuleViolation, Trade
 from app.services import risk_base
 from app.services.risk_base import recompute_account, recompute_all
+from tests.domain.test_rules import limit_names
 
 D = Decimal
 MON = datetime(2026, 11, 2, 7, 5, tzinfo=UTC)
@@ -127,10 +128,8 @@ def reload(db: Session, trade: Trade) -> Trade:
 
 def keys(db: Session, trade: Trade) -> set[str]:
     db.expire_all()
-    return {
-        v.rule_key
-        for v in db.scalars(select(RuleViolation).where(RuleViolation.trade_id == trade.id))
-    }
+    rows = db.scalars(select(RuleViolation).where(RuleViolation.trade_id == trade.id))
+    return set().union(*(limit_names(v.rule_key, v.details) for v in rows))
 
 
 def test_recompute_account_updates_percents_and_violations(session: Session) -> None:

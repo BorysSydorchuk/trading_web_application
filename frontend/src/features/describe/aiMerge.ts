@@ -5,10 +5,10 @@
  * marked as AI-filled (the user has not touched it since an earlier extraction). Keys the
  * user typed or changed keep the user's value. AI-filled keys that the new result does not
  * mention keep their earlier AI value and marker. An "other" text (allow_other_text) is only
- * filled when the merged enum value is `other`.
+ * filled when the merged value is or contains `other`. Legacy fields are never filled.
  */
 import type { JournalField, JournalValue } from '@/features/trades/types'
-import { OTHER_OPTION, RULE_VIOLATIONS_KEY, isEditable, isEmptyValue, type FormValues } from './formModel'
+import { RULE_VIOLATIONS_KEY, hasOther, isEditable, isEmptyValue, isLegacy, isShown, type FormValues } from './formModel'
 import type { ExtractResult } from './types'
 
 export interface MergeResult {
@@ -22,6 +22,8 @@ interface Fillable {
   type: string
   /** Enum key whose `other` value this text belongs to (allow_other_text only). */
   otherOf: string | null
+  /** The field (or the text_key's field): a `show_if` field is filled only when it is shown. */
+  field: JournalField
 }
 
 /** Every key the AI may fill; field keys come before text_keys so parents merge first. */
@@ -29,9 +31,9 @@ function fillableKeys(fields: readonly JournalField[]): Map<string, Fillable> {
   const parents = new Map<string, Fillable>()
   const texts = new Map<string, Fillable>()
   for (const field of fields) {
-    if (!isEditable(field) || field.key === RULE_VIOLATIONS_KEY) continue
-    parents.set(field.key, { type: field.type, otherOf: null })
-    if (field.text_key) texts.set(field.text_key, { type: 'text', otherOf: field.allow_other_text ? field.key : null })
+    if (!isEditable(field) || isLegacy(field) || field.key === RULE_VIOLATIONS_KEY) continue
+    parents.set(field.key, { type: field.type, otherOf: null, field })
+    if (field.text_key) texts.set(field.text_key, { type: 'text', otherOf: field.allow_other_text ? field.key : null, field })
   }
   return new Map([...parents, ...texts])
 }
@@ -63,7 +65,8 @@ export function mergeExtraction(
   for (const [key, fillable] of fillableKeys(fields)) {
     const raw = result.fields[key]
     if (raw === undefined) continue
-    if (fillable.otherOf !== null && nextValues[fillable.otherOf] !== OTHER_OPTION) continue
+    if (fillable.otherOf !== null && !hasOther(nextValues[fillable.otherOf])) continue
+    if (!isShown(fillable.field, nextValues)) continue
     const value = toFormValue(fillable.type, raw)
     if (isEmptyValue(value)) continue
     if (!isEmptyValue(values[key]) && !aiFilled.has(key)) continue

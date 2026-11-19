@@ -36,13 +36,19 @@ from sqlalchemy import (
     select,
     true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from sqlalchemy.types import TypeEngine
 
-from app.config_files.journal_fields import JournalFieldsConfig
-from app.domain.journal import RULE_VIOLATIONS_KEY, JournalKey, journal_keys, required_field_keys
+from app.config_files.journal_fields import JournalField, JournalFieldsConfig
+from app.domain.journal import (
+    OTHER_OPTION,
+    RULE_VIOLATIONS_KEY,
+    JournalKey,
+    journal_keys,
+    requirement_keys,
+)
 from app.models import ChartLink, RuleViolation, Trade
 from app.models.enums import ChartLinkKind
 from app.models.journal_requirement import (
@@ -119,9 +125,10 @@ def sync_requirements(
     db: Session, config: JournalFieldsConfig, now: Callable[[], datetime] = _utc_now
 ) -> dict[str, datetime]:
     """Bring the table in line with `config` (commits only when it wrote) and return
-    {key: required_since} for the fields required now. Call it before other work in the
-    session: a write commits the session's transaction."""
-    wanted = required_field_keys(config)
+    {key: required_since} for the fields required now and the «Інше» text keys
+    (`requirement_keys`, review 2026-11-19). Call it before other work in the session: a
+    write commits the session's transaction."""
+    wanted = requirement_keys(config)
     current = load_requirements(db)
     if set(current) == set(wanted):
         return current
@@ -174,6 +181,8 @@ def _empty_sql(spec: JournalKey) -> ColumnElement[bool]:
 def _empty_value(value: ColumnElement[Any], column_type: TypeEngine[Any]) -> ColumnElement[bool]:
     if isinstance(column_type, JSONB):
         return _empty_json(value)
+    if isinstance(column_type, ARRAY):  # multi_enum column: NULL (or a stray '{}')
+        return or_(value.is_(None), func.cardinality(value) == 0)
     if isinstance(column_type, String):  # Text is a String
         return or_(value.is_(None), value == "")
     if isinstance(column_type, Integer | Boolean | Numeric | DateTime):
@@ -181,15 +190,53 @@ def _empty_value(value: ColumnElement[Any], column_type: TypeEngine[Any]) -> Col
     raise TypeError(f"no SQL empty check for column type {column_type!r}")
 
 
+def option_sql(field: JournalField | None, option: str) -> ColumnElement[bool]:
+    """The option field's value equals (enum) / contains (multi_enum) `option`."""
+    if field is None:
+        return false()
+    if field.storage == "extra":
+        value = Trade.extra[field.key]
+        if field.type == "multi_enum":
+            return value.contains(literal([option], JSONB))
+        return value == literal(option, JSONB)
+    column = Trade.__table__.c.get(field.key)
+    if column is None:
+        return false()
+    if isinstance(column.type, ARRAY):
+        return column.contains([option])
+    return column == option
+
+
+def shown_sql(config: JournalFieldsConfig, field: JournalField) -> ColumnElement[bool]:
+    """SQL form of `app.domain.journal.is_shown` (the parent equals / contains the option)."""
+    cond = field.show_if
+    if cond is None:
+        return true()
+    return option_sql(config.get(cond.field), cond.includes)
+
+
+def _blank_sql(spec: JournalKey) -> ColumnElement[bool]:
+    """Empty for missing_new_fields: a required field, or an «Інше» text whose parent is
+    `other` (same rule as `app.domain.journal._other_text_blank`)."""
+    if spec.other_only:
+        return and_(option_sql(spec.field, OTHER_OPTION), _empty_sql(spec))
+    return _empty_sql(spec)
+
+
 def missing_new_fields_condition(
     config: JournalFieldsConfig, required_since: Mapping[str, datetime]
 ) -> ColumnElement[bool]:
     """Closed trades with a non-empty `missing_new_fields` (same rule as
-    `app.domain.journal.missing_new_fields`)."""
+    `app.domain.journal.missing_new_fields`; a field hidden by its show_if never counts)."""
+    keys = set(requirement_keys(config))
     per_field = [
-        and_(Trade.close_time < required_since[spec.key], _empty_sql(spec))
+        and_(
+            Trade.close_time < required_since[spec.key],
+            shown_sql(config, spec.field),
+            _blank_sql(spec),
+        )
         for spec in journal_keys(config)
-        if not spec.is_text_key and spec.field.required and spec.key in required_since
+        if spec.key in keys and spec.key in required_since
     ]
     if not per_field:
         return false()

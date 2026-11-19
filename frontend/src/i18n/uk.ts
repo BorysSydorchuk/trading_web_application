@@ -460,6 +460,7 @@ export const uk = {
       missingR: 'Без R',
       showExcluded: 'Показати виключені',
       described: 'Опис',
+      notFilled: 'не заповнено',
     },
     actionsColumn: 'Дії',
     describedFilter: {
@@ -518,6 +519,7 @@ export const uk = {
     },
     noDeals: 'Угод закриття немає (позиція відкрита).',
     noViolations: 'Порушень немає.',
+    legacyTitle: 'Старі поля',
     describe: 'Описати угоду',
     editDescription: 'Редагувати опис',
     timeZoneNote: 'Час указано за Брюсселем.',
@@ -645,6 +647,10 @@ export const uk = {
       newFieldsHint: 'Нові поля, які ще не заповнені:',
       newFieldsNote:
         'Ці поля стали обовʼязковими після закриття угоди, тому для неї вони необовʼязкові. Заповніть їх, якщо памʼятаєте.',
+      legacyValue: (label: string) => `Старе значення: ${label}`,
+      legacyHint: 'Старе поле: лише для перегляду.',
+      willBeCleared: (labels: string) => `Буде очищено: ${labels}`,
+      willBeClearedHint: 'Ці поля зараз не застосовуються, тому під час збереження їхні значення буде видалено.',
     },
     save: {
       missing: 'Не вистачає:',
@@ -658,6 +664,7 @@ export const uk = {
       savedRecordingUnsent:
         'Опис збережено, але голосовий запис ще не надіслано. Надішліть його ще раз або видаліть, перш ніж іти зі сторінки.',
       fixErrors: 'Виправте позначені поля.',
+      clearedHidden: (labels: string) => `Очищено поля, які не застосовуються: ${labels}`,
       formError: 'Сервер не прийняв частину даних. Перевірте форму та спробуйте ще раз.',
     },
     unsaved: {
@@ -1270,6 +1277,13 @@ export const uk = {
       netPnl: 'P&L нетто',
       totalR: 'R',
       winRate: 'Win rate',
+      multiNote: 'угода рахується в кожному вибраному значенні',
+      combinationTitle: (label: string) => `${label}: комбінації`,
+      matrixTitle: (rows: string, columns: string) => `${rows} × ${columns}`,
+      matrixCorner: (rows: string, columns: string) => `${rows} / ${columns}`,
+      matrixTrades: (n: number) => `${n} угод`,
+      matrixEmpty: '—',
+      matrixLegend: 'У клітинці: угод · P&L · R · WR',
     },
     rules: {
       title: 'Порушення правил',

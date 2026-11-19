@@ -361,7 +361,7 @@ def test_detail(client: TestClient, session: Session, seed: Seed) -> None:
         {"rule_key": "min_planned_rr", "source": "auto", "details": "x"},
     ]
     assert data["violations"] == ["max_risk_pct", "min_planned_rr"]
-    for key in ("setup_context", "entry_model", "followed_plan", "quality_rating", "lesson"):
+    for key in ("h1_context", "entry_model", "followed_plan", "quality_rating", "lesson"):
         assert key not in data
         assert data["journal"][key] is None
     assert data["journal"]["rule_violations"] == ["max_risk_pct", "min_planned_rr"]

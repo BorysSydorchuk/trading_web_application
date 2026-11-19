@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from app import db as app_db
 from app.config import REPO_ROOT
 from app.config_files import (
-    RULE_KEYS,
     ConfigError,
     check_config_files,
     get_journal_fields,
@@ -29,7 +28,7 @@ from app.config_files import (
 )
 from app.config_files.journal_fields import JournalField, load_journal_fields
 from app.config_files.loader import CONFIG_DIR_ENV, read_yaml
-from app.config_files.rules import load_rules
+from app.config_files.rules import ENGINE_RULE_KEYS, load_rules
 from app.main import create_app
 
 REAL_CONFIG = REPO_ROOT / "config"
@@ -48,6 +47,7 @@ def cfg_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         "transcript_glossary.yaml",
         "bias.yaml",
         "symbols.yaml",
+        "violations.yaml",
     ):
         shutil.copy(REAL_CONFIG / name, tmp_path / name)
     monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path))
@@ -133,10 +133,14 @@ def test_real_journal_fields_load() -> None:
 
     keys = [f.key for f in config.fields]
     assert keys == [
-        "setup_context",
-        "poi_type",
-        "fvg_kind",
+        "h1_context",
+        "h4_context",
+        "poi_types",
+        "fvg_types_h1",
+        "fvg_types_h4",
         "entry_model",
+        "setup_context",
+        "fvg_kind",
         "exit_reason",
         "bias_alignment",
         "followed_plan",
@@ -153,13 +157,15 @@ def test_real_journal_fields_load() -> None:
     assert setup is not None
     # `yes`/`no` must stay strings (YAML 1.1 would turn them into booleans).
     assert setup.option_values() == ["yes", "no", "partially"]
-    poi = config.get("poi_type")
+    assert setup.legacy
+    poi = config.get("poi_types")
     assert poi is not None
     assert poi.allow_other_text
-    assert poi.text_key == "poi_type_other"
+    assert poi.text_key == "poi_types_other"
     violations = config.get("rule_violations")
     assert violations is not None
-    assert set(violations.option_values()) == set(RULE_KEYS)
+    # Options come from violations.yaml (M8-04): every engine key plus manual / deprecated.
+    assert set(ENGINE_RULE_KEYS) <= set(violations.option_values())
     quality = config.get("quality_rating")
     assert quality is not None
     assert (quality.min, quality.max) == (1, 5)
@@ -301,9 +307,9 @@ def test_extra_field_is_accepted(cfg_dir: Path) -> None:
 
 def test_missing_text_column(cfg_dir: Path) -> None:
     data = _read(cfg_dir / "journal_fields.yaml")
-    _field(data, "entry_model").update(text_key="entry_model_other", allow_other_text=True)
+    _field(data, "exit_reason").update(text_key="exit_reason_other", allow_other_text=True)
     msg = _fields_error(cfg_dir, data)
-    assert "entry_model: trades has no column 'entry_model_other' for text_key" in msg
+    assert "exit_reason: trades has no column 'exit_reason_other' for text_key" in msg
 
 
 def test_duplicate_option_values(cfg_dir: Path) -> None:
@@ -377,11 +383,42 @@ def test_get_journal_fields(cfg_dir: Path, api: TestClient) -> None:
         "min",
         "max",
         "phase",
+        "show_if",
+        "legacy",
     }
-    assert first["key"] == "setup_context"
+    assert first["key"] == "h1_context"
     assert first["phase"] == "before"
-    assert first["options"][0] == {"value": "yes", "label": "так", "deprecated": False}
+    assert first["options"][0] == {"value": "flow", "label": "Flow", "deprecated": False}
     assert first["storage"] == "column"
+    assert (first["show_if"], first["legacy"]) == (None, False)
+    by_key = {f["key"]: f for f in fields}
+    assert by_key["fvg_types_h1"]["show_if"] == {"field": "poi_types", "includes": "fvg_h1"}
+    assert by_key["setup_context"]["legacy"] is True
+    # rule_violations options are served from violations.yaml (M8-04).
+    assert "daily_risk" in {o["value"] for o in by_key["rule_violations"]["options"]}
+
+
+def test_get_journal_fields_rule_violations_carry_types_and_deprecated(
+    cfg_dir: Path, api: TestClient
+) -> None:
+    # Arrange: the shipped violations.yaml (auto + manual + deprecated entries)
+
+    # Act
+    response = api.get("/api/journal-fields")
+
+    # Assert
+    assert response.status_code == 200
+    by_key = {f["key"]: f for f in response.json()["fields"]}
+    violations = by_key["rule_violations"]
+    options = {o["value"]: o for o in violations["options"]}
+    assert options["daily_stop_loss_pct"]["deprecated"] is True
+    assert options["daily_risk"]["deprecated"] is False
+    types = violations["violation_types"]
+    assert types["daily_risk"] == "auto"
+    assert types["entry_weak_poi"] == "manual"
+    assert types["weekly_stop_profit_pct"] == "auto"
+    assert set(types) == set(options)
+    assert "violation_types" not in by_key["h1_context"]
 
 
 def test_get_rules(cfg_dir: Path, api: TestClient) -> None:

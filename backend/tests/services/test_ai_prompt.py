@@ -31,8 +31,33 @@ def test_system_prompt_has_rules_glossary_and_yaml_options() -> None:
     assert FIELDS_PLACEHOLDER not in prompt
     for phrase in ("Never invent", "verbatim", "Never ask questions", "IFVG", "QM", "Point B"):
         assert phrase in prompt
-    assert "`fvg_kind` (Тип FVG): one option value:" in prompt
+    assert (
+        "`fvg_types_h1` (Тип FVG H1), only when `poi_types` contains `fvg_h1`: "
+        "one or more option values:"
+    ) in prompt
     assert "  - `post_manipulation`: після маніпуляції" in prompt
+
+
+def test_trade_prompt_glossary_covers_the_taxonomy_fields_in_ua_ru_en() -> None:
+    # M8-04..08 merge B: H1/H4 context, POI multi (incl. Fractal H1/H4), FVG type per
+    # timeframe, entry model «інше» with his words; the old setup-context wording is gone.
+    prompt = extract_trade_system_prompt(get_journal_fields())
+    for phrase in (
+        "флоу на H1",
+        "разворот на четырёхчасовике",
+        "H4 range",
+        "`h1_context`",
+        "`h4_context`",
+        "`fractal_h1`",
+        "`fractal_h4`",
+        "`fvg_types_h1`",
+        "`fvg_types_h4`",
+        "`entry_model_other`",
+        "One item per chosen POI",
+    ):
+        assert phrase in prompt, phrase
+    assert "setup context field" not in prompt
+    assert "FVG kind" not in prompt
 
 
 def test_trade_prompt_maps_take_profit_at_point_b_to_point_b() -> None:

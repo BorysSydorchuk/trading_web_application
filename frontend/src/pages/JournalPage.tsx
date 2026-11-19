@@ -15,10 +15,10 @@ import {
 import { JournalFiltersBar } from '@/features/journal/JournalFiltersBar'
 import { Pagination } from '@/features/journal/Pagination'
 import { TradesTable } from '@/features/journal/TradesTable'
-import { useTrades } from '@/features/trades/api'
+import { useJournalFields, useTrades } from '@/features/trades/api'
 import { TradeDetailDialog } from '@/features/trades/TradeDetailDialog'
 import type { TradeSort } from '@/features/trades/types'
-import { useViolationLabel } from '@/features/trades/violations'
+import { violationLabeler } from '@/features/trades/violations'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { brusselsToday } from '@/lib/time'
@@ -32,8 +32,9 @@ function emptyText(filters: JournalFilters): string {
 }
 
 export function JournalPage() {
-  // Fetch labels alongside trades, once per page rather than once per row.
-  const violationLabel = useViolationLabel()
+  // Fetch field definitions alongside trades, once per page (rule labels per row, field filters).
+  const journalFields = useJournalFields()
+  const violationLabel = useMemo(() => violationLabeler(journalFields.data), [journalFields.data])
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])
   // Presets (today, this week…) depend on the Brussels date, so a new day gives a new query.
@@ -138,7 +139,7 @@ export function JournalPage() {
           <ColumnChooser visible={columns} onChange={changeColumns} />
         </div>
       </div>
-      <JournalFiltersBar filters={filters} onChange={setFilters} />
+      <JournalFiltersBar filters={filters} onChange={setFilters} journalFields={journalFields.data?.fields} />
       {body}
       <TradeDetailDialog tradeId={filters.trade} onClose={() => setFilters({ ...filters, trade: null })} />
     </section>
