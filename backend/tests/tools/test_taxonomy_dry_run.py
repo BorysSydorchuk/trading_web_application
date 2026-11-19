@@ -11,9 +11,20 @@ Assumed API (the contract names only the module and the `*_taxdry_test` scratch 
 
 from __future__ import annotations
 
+import io
+from types import SimpleNamespace
+from typing import cast
+
 import pytest
 
-from app.tools.taxonomy_dry_run import assert_safe_scratch, report, scratch_database_name
+from app.config import Settings
+from app.tools import taxonomy_dry_run as dry
+from app.tools.taxonomy_dry_run import (
+    after_counts,
+    assert_safe_scratch,
+    report,
+    scratch_database_name,
+)
 
 COUNTS = {
     "setup_context": {"mapped": 8, "legacy": 3},
@@ -124,3 +135,109 @@ def test_counts_from_before_and_after() -> None:
         "fvg_kind": {"mapped": 6, "legacy": 5},
         "violations": {"remapped": 9, "merged": 2},
     }
+
+
+def test_guard_requires_exactly_the_derived_scratch_name() -> None:
+    with pytest.raises(ValueError, match="exactly"):
+        assert_safe_scratch("trading_journal", "other_db_taxdry_test")
+    with pytest.raises(ValueError, match="exactly"):
+        assert_safe_scratch("trading_journal", "trading_journal_x_test")
+
+
+# --- after-upgrade counts of the new columns (database-reviewer LOW 7) ---
+
+NEW = {
+    "h1_filled": 9,
+    "h1_flow": 8,
+    "h4_filled": 9,
+    "h4_flow": 8,
+    "poi_filled": 14,
+    "fvg_h1_filled": 4,
+    "fvg_h4_filled": 2,
+    "entry_model_other": 1,
+    "legacy_setup_context": 3,
+    "legacy_fvg_kind": 5,
+    "daily_risk": 6,
+    "weekly_risk": 1,
+}
+
+
+def test_after_counts_report_lines() -> None:
+    lines = report(after_counts(NEW, {2: 3, 1: 11}))
+
+    assert lines == [
+        "h1_context: filled=9, flow=8",
+        "h4_context: filled=9, flow=8",
+        "poi_types: filled=14, len_1=11, len_2=3",
+        "fvg_types_h1: filled=4",
+        "fvg_types_h4: filled=2",
+        "entry_model_other: filled=1",
+        "legacy_kept: setup_context=3, fvg_kind=5",
+        "risk_violations: daily_risk=6, weekly_risk=1",
+    ]
+
+
+def test_after_counts_without_poi_values() -> None:
+    lines = report(after_counts(NEW | {"poi_filled": 0}, {}))
+
+    assert "poi_types: filled=0" in lines
+
+
+# --- exit code when the scratch DB cannot be dropped (database-reviewer LOW 6) ---
+
+FAKE_URL = "postgresql+psycopg://user:secret@localhost:5432/trading_journal"
+
+
+def _settings() -> Settings:
+    return cast(Settings, SimpleNamespace(database_url=FAKE_URL, postgres_port=5432))
+
+
+def _no_db(monkeypatch: pytest.MonkeyPatch, *, run_fails: bool, drop_fails: bool) -> list[str]:
+    calls: list[str] = []
+
+    def create(url: str, source: str, scratch: str) -> None:
+        calls.append(f"create {scratch}")
+
+    def run(settings: object, target: object, scratch: str, out: object) -> None:
+        calls.append("run")
+        if run_fails:
+            raise RuntimeError("upgrade failed")
+
+    def drop(url: str, source: str, scratch: str) -> None:
+        calls.append(f"drop {scratch}")
+        if drop_fails:
+            raise RuntimeError("database is being accessed by other users")
+
+    monkeypatch.setattr(dry, "create_scratch", create)
+    monkeypatch.setattr(dry, "_run_on_scratch", run)
+    monkeypatch.setattr(dry, "drop_scratch", drop)
+    return calls
+
+
+def test_clean_run_returns_zero_and_drops(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _no_db(monkeypatch, run_fails=False, drop_fails=False)
+    out, err = io.StringIO(), io.StringIO()
+
+    assert dry.dry_run(_settings(), out, err) == 0
+    assert calls[-1] == "drop trading_journal_taxdry_test"
+    assert err.getvalue() == ""
+
+
+def test_failed_drop_is_a_non_zero_exit_naming_the_leftover_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _no_db(monkeypatch, run_fails=False, drop_fails=True)
+    out, err = io.StringIO(), io.StringIO()
+
+    assert dry.dry_run(_settings(), out, err) == 1
+    assert "trading_journal_taxdry_test" in err.getvalue()
+    assert "Готово" not in out.getvalue()
+
+
+def test_failed_run_still_drops_and_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _no_db(monkeypatch, run_fails=True, drop_fails=False)
+    out, err = io.StringIO(), io.StringIO()
+
+    assert dry.dry_run(_settings(), out, err) == 1
+    assert calls[-1] == "drop trading_journal_taxdry_test"
+    assert "secret" not in err.getvalue() + out.getvalue()

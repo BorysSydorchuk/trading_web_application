@@ -21,10 +21,14 @@ in the old column as a read-only legacy value; old columns are never dropped):
   keeps the 1970 first-fill rule.
 
 Downgrade restores the old columns where one value exists (poi_types[1]; h1 = h4 = flow ->
-yes; the single FVG type of the POI -> fvg_kind), splits daily_risk / weekly_risk back by their
-"; " parts and the old-key prefixes (a part without a known prefix goes to the loss key),
-deletes the requirements rows of the new keys (the M3-07 sync re-stamps the old ones) and
-drops the new columns. Extra multi values, other texts of H1/H4/FVG/entry model are lost.
+yes; the single FVG type of the restored FVG POI fvg_h1 / fvg_h4 -> fvg_kind, never for a
+non-FVG POI), splits daily_risk / weekly_risk back by their "; " parts and the old-key
+prefixes (a part without a known prefix goes to the loss key), deletes the requirements rows of
+the new keys (the M3-07 sync re-stamps the old ones) and drops the new columns. Lost on
+downgrade: extra multi values; the other texts of H1/H4/FVG/entry model; poi_types_other when
+`other` is not the first POI (poi_type_other is restored only for poi_types[1] = 'other');
+and a details text that itself contains "; " is split imprecisely (its fragments without a
+known old-key prefix go to the loss key, joined back with "; ").
 
 Revision ID: d3b9f1a7c2e4
 Revises: c6f2a8d4e173
@@ -95,7 +99,9 @@ SELECT trade_id, new_key,
 FROM old
 GROUP BY trade_id, new_key
 ON CONFLICT (trade_id, rule_key) DO UPDATE
-  SET details = concat_ws('; ', rule_violations.details, EXCLUDED.details)
+  SET details = concat_ws('; ', rule_violations.details, EXCLUDED.details),
+      source = CASE WHEN 'user' IN (rule_violations.source, EXCLUDED.source) THEN 'user'
+                    ELSE EXCLUDED.source END
 """
 _DELETE_OLD_VIOLATIONS = """
 DELETE FROM rule_violations
@@ -161,20 +167,21 @@ _RESTORE_CONTEXT = """
 UPDATE trades SET setup_context = 'yes'
 WHERE setup_context IS NULL AND h1_context = 'flow' AND h4_context = 'flow'
 """
+# The «Інше» text belongs to `other`: restored only when `other` is the first (restored) POI.
 _RESTORE_POI = """
 UPDATE trades
-SET poi_type = poi_types[1], poi_type_other = COALESCE(poi_type_other, poi_types_other)
+SET poi_type = poi_types[1],
+  poi_type_other = CASE WHEN poi_types[1] = 'other'
+                        THEN COALESCE(poi_type_other, poi_types_other) END
 WHERE poi_type IS NULL AND cardinality(poi_types) > 0
 """
-# The single FVG type of the restored POI (or of the only FVG list) becomes fvg_kind.
+# The single FVG type of the restored FVG POI becomes fvg_kind (never for a non-FVG POI).
 _RESTORE_FVG = """
 UPDATE trades SET fvg_kind = t.kind
 FROM (
   SELECT id, CASE
     WHEN poi_type = 'fvg_h1' THEN CASE WHEN cardinality(fvg_types_h1) = 1 THEN fvg_types_h1[1] END
     WHEN poi_type = 'fvg_h4' THEN CASE WHEN cardinality(fvg_types_h4) = 1 THEN fvg_types_h4[1] END
-    WHEN fvg_types_h4 IS NULL AND cardinality(fvg_types_h1) = 1 THEN fvg_types_h1[1]
-    WHEN fvg_types_h1 IS NULL AND cardinality(fvg_types_h4) = 1 THEN fvg_types_h4[1]
   END AS kind
   FROM trades WHERE fvg_kind IS NULL
 ) AS t

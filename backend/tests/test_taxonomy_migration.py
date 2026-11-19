@@ -475,6 +475,12 @@ def test_downgrade_restores_old_columns_where_one_value_exists(db_engine: Engine
             6, poi_types=["fvg_h1"], fvg_types_h1=["fractal_updating", "post_manipulation"]
         )
         ids["legacy_kind"] = new_trade(7, fvg_kind="na", poi_types=["fvg_h1"])
+        ids["other_not_first"] = new_trade(
+            8, poi_types=["fvg_h1", "other"], poi_types_other="OB H4", fvg_types_h1=["other"]
+        )
+        ids["fvg_list_without_fvg_poi"] = new_trade(
+            9, poi_types=["fractal_h1"], fvg_types_h1=["post_manipulation"]
+        )
         _violation(conn, ids["flow_flow"], "daily_risk", "auto", "daily_stop_loss_pct: x")
         _violation(conn, ids["flow_reversal"], "weekly_risk", "user", "weekly_stop_profit_pct: y")
         _violation(conn, ids["legacy_no"], "max_risk_pct", "auto", "risk")
@@ -498,6 +504,12 @@ def test_downgrade_restores_old_columns_where_one_value_exists(db_engine: Engine
         assert old("two_fvg_types")["poi_type"] == "fvg_h1"
         assert old("two_fvg_types")["fvg_kind"] is None  # not one value: not restored
         assert old("legacy_kind")["fvg_kind"] == "na"
+        # the «Інше» text belongs to `other`: lost when `other` is not the first POI
+        assert old("other_not_first")["poi_type"] == "fvg_h1"
+        assert old("other_not_first")["poi_type_other"] is None
+        # fvg_kind only for an FVG POI (the restored poi_type is fractal_h1)
+        assert old("fvg_list_without_fvg_poi")["poi_type"] == "fractal_h1"
+        assert old("fvg_list_without_fvg_poi")["fvg_kind"] is None
         assert _violations(conn, ids["flow_flow"]) == {"daily_stop_loss_pct": ("auto", "x")}
         assert _violations(conn, ids["flow_reversal"]) == {"weekly_stop_profit_pct": ("user", "y")}
         assert _violations(conn, ids["legacy_no"]) == {"max_risk_pct": ("auto", "risk")}
