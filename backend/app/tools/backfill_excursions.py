@@ -5,6 +5,13 @@
 
 Dry run by default: reads MT5 price history, prints one line per trade and the totals,
 writes nothing. ``--apply`` stores the values (same code as the worker's sync step).
+MAE/MFE needs only the symbol's price history, not the account: when an account's own
+terminal does not connect (e.g. an old challenge whose terminal folder was removed), the
+history is read from another configured terminal of the same broker (same MT5 server
+first, then any terminal of the same firm). Each terminal is opened only with the account
+configured for it (as the worker does), never with another account's login. Every result
+line names the terminal and server it came from; the lines also go to
+``logs/backfill_excursions.log``.
 Refuses while the worker runs (a sync in the last few minutes): stop the journal first
 («Торговий журнал — Стоп» or stop.bat), so two processes never use one terminal.
 """
@@ -13,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import logging
 import sys
 from collections import Counter
 from collections.abc import Sequence
@@ -28,7 +36,7 @@ from app.domain.broker_time import BrokerTimeRule, Conversion, choose_conversion
 from app.models import Account, SyncLog, Trade
 from app.models.enums import AccountStatus, ExcursionStatus
 from app.mt5.errors import Mt5Error
-from app.mt5.source import Mt5Source, PriceHistory, connected
+from app.mt5.source import Mt5Source, PriceHistory
 from app.services.excursions import (
     Fetched,
     Series,
@@ -39,6 +47,9 @@ from app.services.excursions import (
 )
 from app.services.sync import PasswordLookup
 
+logger = logging.getLogger(__name__)
+LOG_FILE = "backfill_excursions.log"
+
 # Outside trading hours the worker syncs only every `interval_idle_seconds` (15 min): a sync
 # within that interval plus this slack means the worker may still be running.
 WORKER_SLACK = timedelta(minutes=2)
@@ -46,6 +57,24 @@ WORKER_SLACK = timedelta(minutes=2)
 
 class BackfillError(Exception):
     """Shown to the owner (exit code 2)."""
+
+
+@dataclass(frozen=True)
+class Terminal:
+    """A configured MT5 terminal and the account it is logged into."""
+
+    account_name: str
+    login: int
+    server: str
+    path: str
+
+    @classmethod
+    def of(cls, account: Account) -> Terminal:
+        return cls(account.name, account.login, account.server, account.terminal_path or "")
+
+    @property
+    def label(self) -> str:
+        return f"термінал {self.account_name}, {self.server}"
 
 
 @dataclass
@@ -105,18 +134,45 @@ def _conversion(
     return choice.conversion if choice.conversion is not None else rule
 
 
-def _line(trade: Trade, series: Series, now: datetime) -> tuple[str, str]:
+def same_broker_terminals(session: Session, account: Account) -> list[Terminal]:
+    """Other configured terminals of the account's broker: the same MT5 server first, then
+    the same firm; active accounts first. Archived accounts are never used."""
+    server, firm = account.server.strip().casefold(), account.firm.strip().casefold()
+    others = session.scalars(
+        select(Account)
+        .where(
+            Account.id != account.id,
+            Account.status != AccountStatus.ARCHIVED.value,
+            Account.terminal_path.is_not(None),
+            Account.terminal_path != "",
+        )
+        .order_by(Account.id)
+    ).all()
+
+    def same_server(other: Account) -> bool:
+        return other.server.strip().casefold() == server
+
+    usable = [o for o in others if same_server(o) or o.firm.strip().casefold() == firm]
+    usable.sort(key=lambda o: (not same_server(o), o.status != AccountStatus.ACTIVE.value))
+    return [Terminal.of(o) for o in usable]
+
+
+def _line(trade: Trade, series: Series, now: datetime, terminal: Terminal) -> tuple[str, str]:
     """Same classification as the worker's store (`evaluate`), so the dry run counts exactly
     what --apply writes."""
     outcome, result = evaluate(series, now)
     head = f"#{trade.id} {trade.symbol} {trade.direction} {trade.close_time:%Y-%m-%d %H:%M}Z"
+    origin = f" [{terminal.label}]"
     if outcome == "unavailable" or result is None:
         reason = "неповна історія цін у MT5" if series.samples else "немає історії цін у MT5"
         kind = "unavailable" if outcome == "unavailable" else "retry"
-        return kind, f"{head}: {reason}" + ("" if kind == "unavailable" else " (спробуйте пізніше)")
+        later = "" if kind == "unavailable" else " (спробуйте пізніше)"
+        return kind, f"{head}: {reason}{later}{origin}"
     if result.mfe_r is None:
-        return "no_sl", f"{head}: MFE {result.mfe_points} п., MAE {result.mae_points} п. (без SL)"
-    return "computed", f"{head}: MFE {result.mfe_r} R, MAE {result.mae_r} R ({series.source.value})"
+        points = f"MFE {result.mfe_points} п., MAE {result.mae_points} п. (без SL)"
+        return "no_sl", f"{head}: {points}{origin}"
+    values = f"MFE {result.mfe_r} R, MAE {result.mae_r} R ({series.source.value})"
+    return "computed", f"{head}: {values}{origin}"
 
 
 def backfill_account(
@@ -136,47 +192,80 @@ def backfill_account(
         return
     if not isinstance(source, PriceHistory):
         raise BackfillError("this MT5 source has no price history")
-    try:
-        found = _read_account(source, account, trades, now, totals, password_for)
-    except Mt5Error as exc:  # e.g. the terminal does not connect: count it, go on
-        totals.counts["failed"] += len(trades)
-        totals.lines.append(f"Рахунок {account.name}: помилка MT5: {exc}")
-        return
+    found = _read_from_any_terminal(session, account, source, trades, now, totals, password_for)
     if apply and found:
         store_excursions(session, Fetched(series=found, failed=[]), now)
         session.commit()
 
 
-def _read_account(
-    source: Mt5Source,
+def _read_from_any_terminal(
+    session: Session,
     account: Account,
+    source: Mt5Source,
     trades: Sequence[Trade],
     now: datetime,
     totals: Totals,
     password_for: PasswordLookup,
 ) -> list[Series]:
+    """The account's own terminal, else the first same-broker terminal that connects."""
+    own = Terminal.of(account)
+    refused: list[str] = []
+    for terminal in (own, *same_broker_terminals(session, account)):
+        try:
+            password = password_for(terminal.login)
+            source.connect(terminal.path, terminal.login, password, terminal.server)
+        except Mt5Error as exc:  # e.g. the terminal folder was removed: try the next one
+            source.shutdown()
+            refused.append(f"{terminal.label}: {exc}")
+            continue
+        try:
+            if terminal != own:
+                totals.lines.append(
+                    f"Рахунок {account.name}: власний термінал недоступний, історія цін з "
+                    f"{terminal.label} ({terminal.path})"
+                )
+            return _read_trades(source, terminal, trades, now, totals)
+        except Mt5Error as exc:
+            totals.counts["failed"] += len(trades)
+            totals.lines.append(f"Рахунок {account.name}: помилка MT5 ({terminal.label}): {exc}")
+            return []
+        finally:
+            source.shutdown()
+    totals.counts["failed"] += len(trades)
+    totals.lines.append(
+        f"Рахунок {account.name}: немає доступного термінала цього брокера: " + "; ".join(refused)
+    )
+    return []
+
+
+def _read_trades(
+    source: Mt5Source,
+    terminal: Terminal,
+    trades: Sequence[Trade],
+    now: datetime,
+    totals: Totals,
+) -> list[Series]:
+    """Price series of ``trades`` from the connected ``terminal`` (read-only)."""
     if not isinstance(source, PriceHistory):  # checked by the caller; narrows the type
         raise BackfillError("this MT5 source has no price history")
-    password = password_for(account.login)
     found: list[Series] = []
-    with connected(source, account.terminal_path or "", account.login, password, account.server):
-        symbols = sorted({t.broker_symbol for t in trades})
-        conversion = _conversion(source, symbols, BrokerTimeRule(get_rules().broker_time), now)
-        specs = {s: source.symbol_spec(s) for s in symbols}
-        for trade in trades:
-            spec = specs.get(trade.broker_symbol)
-            try:
-                series = series_for(
-                    source, target_of(trade), conversion, spec.point if spec else None, now
-                )
-            except (Mt5Error, ValueError) as exc:
-                totals.counts["failed"] += 1
-                totals.lines.append(f"#{trade.id}: помилка MT5: {exc}")
-                continue
-            kind, line = _line(trade, series, now)
-            totals.counts[kind] += 1
-            totals.lines.append(line)
-            found.append(series)
+    symbols = sorted({t.broker_symbol for t in trades})
+    conversion = _conversion(source, symbols, BrokerTimeRule(get_rules().broker_time), now)
+    specs = {s: source.symbol_spec(s) for s in symbols}
+    for trade in trades:
+        spec = specs.get(trade.broker_symbol)
+        try:
+            series = series_for(
+                source, target_of(trade), conversion, spec.point if spec else None, now
+            )
+        except (Mt5Error, ValueError) as exc:
+            totals.counts["failed"] += 1
+            totals.lines.append(f"#{trade.id}: помилка MT5 ({terminal.label}): {exc}")
+            continue
+        kind, line = _line(trade, series, now, terminal)
+        totals.counts[kind] += 1
+        totals.lines.append(line)
+        found.append(series)
     return found
 
 
@@ -233,10 +322,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     from app.db import get_session_factory  # lazy: tests build their own session
+    from app.logging_setup import setup_logging
     from app.mt5.real import RealMt5Source
 
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
+    setup_logging(LOG_FILE)
+    _console_warnings_only()
     try:
         with get_session_factory()() as session:
             totals = run(
@@ -248,12 +340,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 retry_unavailable=args.retry_unavailable,
             )
     except (BackfillError, Mt5Error) as exc:
+        logger.error("Backfill MAE/MFE refused: %s", exc)
         print(f"Помилка: {exc}", file=sys.stderr)
         return 2
-    for line in totals.lines:
+    mode = "apply" if args.apply else "dry run"
+    for line in (*totals.lines, summary(totals, args.apply)):
+        logger.info("Backfill MAE/MFE (%s): %s", mode, line)
         print(line)
-    print(summary(totals, args.apply))
     return 0
+
+
+def _console_warnings_only() -> None:
+    """The report is printed to stdout; the console log handler shows only warnings, the
+    log file gets everything (the report lines too)."""
+    for handler in logging.getLogger().handlers:
+        if type(handler) is logging.StreamHandler:
+            handler.setLevel(logging.WARNING)
 
 
 if __name__ == "__main__":

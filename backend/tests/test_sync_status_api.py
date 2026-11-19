@@ -220,9 +220,13 @@ def test_only_active_listed_and_sorted(client: TestClient, session: Session) -> 
     passed = add_account(session, "Passed", status=AccountStatus.PASSED.value)
     add_sync(session, passed, timedelta(hours=2), True)
     add_account(session, "Failed", status=AccountStatus.FAILED.value)
-    add_account(session, "Gone", status=AccountStatus.ARCHIVED.value)
-    names = [i["account_name"] for i in client.get("/api/sync/status").json()["items"]]
-    assert names == ["A", "b"]
+    gone = add_account(session, "Gone", status=AccountStatus.ARCHIVED.value)
+    # an old challenge whose terminal was removed: its last failed sync is never shown
+    add_sync(session, gone, timedelta(seconds=30), False, error_code="terminal_not_found")
+    add_sync(session, passed, timedelta(seconds=20), False, error_code="terminal_not_found")
+    body = client.get("/api/sync/status").json()["items"]
+    assert [i["account_name"] for i in body] == ["A", "b"]
+    assert all(i["error_code"] is None for i in body)
 
 
 def test_expected_interval_from_rules() -> None:
