@@ -136,7 +136,14 @@ def upgrade() -> None:
         op.add_column(
             "trades", sa.Column(name, postgresql.ARRAY(sa.String(length=50)), nullable=True)
         )
-    for sql in (_MAP_CONTEXT, _MAP_FVG, _CLEAR_NA, _MAP_POI, _MERGE_VIOLATIONS, _DELETE_OLD_VIOLATIONS):
+    for sql in (
+        _MAP_CONTEXT,
+        _MAP_FVG,
+        _CLEAR_NA,
+        _MAP_POI,
+        _MERGE_VIOLATIONS,
+        _DELETE_OLD_VIOLATIONS,
+    ):
         op.execute(sa.text(sql))
     op.execute(sa.text(_DELETE_REQUIREMENTS).bindparams(keys=list(REMOVED_REQUIRED_KEYS)))
     op.execute(sa.text(_INSERT_REQUIREMENTS).bindparams(keys=list(NEW_REQUIREMENT_KEYS)))
