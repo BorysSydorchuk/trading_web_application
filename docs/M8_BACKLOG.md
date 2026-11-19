@@ -20,11 +20,11 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-17 | Frontend timeout flakiness under load (shared cause) | after M8-14 | S | — | done 2026-11-19 (worker cap + setupUser), see DECISIONS |
 | M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | TECHNICAL ACCEPTED (PM 2026-11-18), merged `860b4c8` 2026-11-18, owner check pending |
 | M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
-| M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | merged ed979f4 2026-11-19, dev DB migrated, owner check pending |
-| M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | merged ed979f4 2026-11-19, dev DB migrated, owner check pending |
-| M8-06 | Multi-select POI, Fractal H1/H4 | 5th (batch) | L (batch) | M8-02/03 | merged ed979f4 2026-11-19, dev DB migrated, owner check pending |
-| M8-07 | Multi-select, conditional FVG type | 5th (batch) | L (batch) | M8-02/03 | merged ed979f4 2026-11-19, dev DB migrated, owner check pending |
-| M8-08 | Entry model single-select, «Інше» needs text | 5th (batch) | L (batch) | M8-02/03 | merged ed979f4 2026-11-19, dev DB migrated, owner check pending |
+| M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
+| M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
+| M8-06 | Multi-select POI, Fractal H1/H4 | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
+| M8-07 | Multi-select, conditional FVG type | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
+| M8-08 | Entry model single-select, «Інше» needs text | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-09 | Exit reason from MT5 | 2nd | L | M8-11 | merged `eb6e690`, TECHNICAL ACCEPTED, owner check pending (next 3 closed trades) |
 | M8-10 | UI/UX research, redesign, branding | last | TBD | owner design choice | planned (research only) |
 | M8-11 | Footer overscroll | 1st | S | — | accepted (owner PASS, PM 2026-11-17) |
