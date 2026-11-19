@@ -1,5 +1,5 @@
 /** Shared helpers for calculator component tests. */
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Account } from '@/features/accounts/types'
@@ -55,4 +55,13 @@ export function rowValue(label: string): HTMLElement {
   const dd = dt.nextElementSibling
   if (!(dd instanceof HTMLElement)) throw new Error(`No value for ${label}`)
   return dd
+}
+
+/**
+ * Waits until the result row ``label`` shows ``text``. The row is looked up again on every
+ * try: right after a new «Розрахувати» the result region can be briefly re-rendered, so a
+ * row captured once may be gone or stale (race seen under full-suite load, M8-17).
+ */
+export async function findRowText(label: string, text: string): Promise<HTMLElement> {
+  return waitFor(() => within(rowValue(label)).getByText(text))
 }

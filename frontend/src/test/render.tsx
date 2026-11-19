@@ -2,7 +2,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -40,7 +40,7 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions = {
   const { path = '/', url = path, routes = [] } = options
   const queryClient = options.queryClient ?? createTestQueryClient()
   const router = createMemoryRouter([{ path, element: ui }, ...routes], { initialEntries: [url] })
-  const user = userEvent.setup()
+  const user = setupUser()
   const result = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

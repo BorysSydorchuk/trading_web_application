@@ -33,6 +33,17 @@ export default tseslint.config(
     },
   },
   {
+    // M8-17: tests create user-event through setupUser (src/test/user.ts, no per-key timer waits).
+    files: ['src/**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    ignores: ['src/test/user.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: '@testing-library/user-event', message: 'Use setupUser from @/test/user.' }] },
+      ],
+    },
+  },
+  {
     // shadcn/ui primitives export variants next to components.
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },

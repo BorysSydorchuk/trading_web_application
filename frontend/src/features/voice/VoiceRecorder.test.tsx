@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { uk } from '@/i18n/uk'
 import {
@@ -20,7 +20,7 @@ const t = uk.voice.recorder
 
 function setup() {
   const onRecorded = vi.fn()
-  const user = userEvent.setup()
+  const user = setupUser()
   render(<VoiceRecorder onRecorded={onRecorded} />)
   return { user, onRecorded, button: screen.getByRole('button', { name: t.hold }) }
 }
@@ -109,7 +109,7 @@ describe('VoiceRecorder', () => {
     try {
       const mic = installMic()
       const onRecorded = vi.fn()
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const user = setupUser({ advanceTimers: vi.advanceTimersByTime })
       render(<VoiceRecorder onRecorded={onRecorded} />)
       const button = screen.getByRole('button', { name: t.hold })
 
@@ -132,7 +132,7 @@ describe('VoiceRecorder', () => {
   it('drops the recording and frees the mic when unmounted while recording', async () => {
     const mic = installMic()
     const onRecorded = vi.fn()
-    const user = userEvent.setup()
+    const user = setupUser()
     const { unmount } = render(<VoiceRecorder onRecorded={onRecorded} />)
 
     await user.pointer({ keys: '[MouseLeft>]', target: screen.getByRole('button', { name: t.hold }) })
@@ -147,7 +147,7 @@ describe('VoiceRecorder', () => {
   it('frees the mic granted after an unmount during the permission prompt', async () => {
     const mic = installMic({ hold: true })
     const onRecorded = vi.fn()
-    const user = userEvent.setup()
+    const user = setupUser()
     const { unmount } = render(<VoiceRecorder onRecorded={onRecorded} />)
 
     await user.pointer({ keys: '[MouseLeft>]', target: screen.getByRole('button', { name: t.hold }) })
@@ -243,7 +243,7 @@ describe('VoiceRecorder', () => {
 
   it('does not start while disabled', async () => {
     const mic = installMic()
-    const user = userEvent.setup()
+    const user = setupUser()
     render(<VoiceRecorder onRecorded={vi.fn()} disabled />)
     const button = screen.getByRole('button', { name: t.hold })
 

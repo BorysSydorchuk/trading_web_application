@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { describe, expect, it } from 'vitest'
 import { uk } from '@/i18n/uk'
 import { ChartLinksEditor } from './ChartLinksEditor'
@@ -27,7 +27,7 @@ function Harness() {
 }
 
 function setup() {
-  const user = userEvent.setup()
+  const user = setupUser()
   render(<Harness />)
   return user
 }
