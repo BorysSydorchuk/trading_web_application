@@ -17,8 +17,9 @@ Current milestone: **M8 — UX & Functional Improvements, started 2026-11-16 wit
 - [x] M8-15 Home «Потрібен опис» list + Journal filter by description (owner claude, tier S/M, no migration) — merged `860b4c8`. Final make check on 645356f PASS (3428 backend / 1 skipped, 513 frontend). code-reviewer CHANGES REQUESTED -> fixed -> APPROVE. Report `docs/reports/M8-15.md`. Owner check pending.
 - [x] M8-15 TECHNICAL ACCEPTED (PM 2026-11-18). PM authorized M8-12 -> M8-16 -> M8-13 -> M8-14 (continue after each merge).
 - [x] M8-12 run without visible windows (owner claude, tier M) — merged `1d7b765`. Final make check on 6481295 PASS (3460 backend / 1 skipped, 516 frontend). Reviews python APPROVE, code CHANGES REQUESTED -> fixed -> APPROVE. Report `docs/reports/M8-12.md`. Owner check pending (6 steps).
-- [ ] M8-16 MAE/MFE per trade (owner claude, tier L) — branch `m8/mae-mfe`.
-- RESUME FROM HERE (2026-11-18): M8-12 merged; M8-16 next (then M8-13, M8-14). Owner checks pending (one batch): M8-09, M8-02, M8-01b, M8-15, M8-12.
+- [x] M8-16 MAE/MFE per trade (owner claude, tier L) — merged `486e854`. Final make check on b0bf600 PASS (3515 backend / 1 skipped, 520 frontend). Reviews database APPROVE, python + code CHANGES REQUESTED -> fixed -> APPROVE. Dev DB migrated to c6f2a8d4e173 (backup `backups/pre-migration-c6f2a8d4e173-20261119T085051Z.dump`). Report `docs/reports/M8-16.md`. Borys: backfill dry run -> apply, owner check (3 trades).
+- [ ] M8-13 choose the Claude model per call type (owner claude, tier M) — branch `m8/ai-model-choice`.
+- RESUME FROM HERE (2026-11-19): M8-16 merged; M8-13 next, then M8-14. Owner checks pending (one batch): M8-09, M8-02, M8-01b, M8-15, M8-12, M8-16 (+ backfill).
 
 ## M7 closure documentation — owner codex, tier S
 
