@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy.engine import make_url
 
-from tests.conftest import SAFE_DB_NAME, worker_database_url
+from tests.conftest import (
+    SAFE_DB_NAME,
+    drop_statements,
+    run_stamp,
+    stale_worker_databases,
+    worker_database_url,
+)
 
 BASE = "postgresql+psycopg://journal:s3cret@127.0.0.1:5432/trading_journal_test"
 
@@ -33,3 +41,57 @@ def test_base_without_test_suffix_still_ends_in_test() -> None:
 )
 def test_safe_database_name(name: str, safe: bool) -> None:
     assert (SAFE_DB_NAME.fullmatch(name) is not None) is safe
+
+
+NOW = datetime(2026, 11, 19, 22, 0, tzinfo=UTC)
+OWN = "trading_journal_test"
+
+
+def test_run_stamp_of_one_off_and_fixed_names() -> None:
+    assert run_stamp("tj_m705_20261115194506_33f314_gw3_test") == datetime(
+        2026, 11, 15, 19, 45, 6, tzinfo=UTC
+    )
+    assert run_stamp("trading_journal_gw3_test") is None
+    assert run_stamp("tj_x_20261399999999_ab_gw0_test") is None  # not a real time
+
+
+def test_stale_worker_databases_only_old_one_off_worker_copies() -> None:
+    names = [
+        "tj_m705_20261115194506_33f314_gw3_test",  # 4 days old worker copy -> stale
+        "tj_m705_20261119210000_aaaaaa_gw0_test",  # 1 h old, maybe a running QA run -> kept
+        "tj_m705_20261115194506_33f314_test",  # the one-off base itself -> kept
+        "trading_journal_gw3_test",  # fixed gate name -> kept
+        "trading_journal_test",
+        "trading_journal",
+        "trading_journal_qa_m3",
+        "tj_backup_restore_20261114203923_test",  # not a worker copy -> kept
+    ]
+    assert stale_worker_databases(names, NOW, OWN) == ["tj_m705_20261115194506_33f314_gw3_test"]
+
+
+def test_stale_after_is_24_hours() -> None:
+    just_under = "tj_q_20261118220100_ab_gw1_test"
+    just_over = "tj_q_20261118215900_ab_gw1_test"
+    assert stale_worker_databases([just_under, just_over], NOW, OWN) == [just_over]
+
+
+def test_stale_sweep_never_drops_copies_of_its_own_base() -> None:
+    own = "tj_backup_restore_20261114203923_test"  # an old stamped base being re-run
+    names = ["tj_backup_restore_20261114203923_gw1_test", "tj_m705_20261115194506_33f314_gw1_test"]
+    assert stale_worker_databases(names, NOW, own) == ["tj_m705_20261115194506_33f314_gw1_test"]
+
+
+def test_stamped_name_that_is_not_a_worker_copy_is_not_stale() -> None:
+    assert stale_worker_databases(["tj_x_20261101000000_ab_test"], NOW, OWN) == []
+
+
+def test_drop_statements_only_for_worker_copies() -> None:
+    names = [
+        "trading_journal_test",
+        "trading_journal",
+        'x"; DROP',
+        "tj_q_20261101000000_ab_gw2_test",
+    ]
+    assert drop_statements(names) == [
+        'DROP DATABASE IF EXISTS "tj_q_20261101000000_ab_gw2_test" WITH (FORCE)'
+    ]

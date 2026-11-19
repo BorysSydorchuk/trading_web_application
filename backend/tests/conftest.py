@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -41,6 +43,84 @@ def worker_database_url(base_url: str, worker: str | None) -> str:
     name = url.database or ""
     stem = name.removesuffix(TEST_SUFFIX)
     return url.set(database=f"{stem}_{worker}{TEST_SUFFIX}").render_as_string(hide_password=False)
+
+
+# One-off bases (QA/performance runs, e.g. `tj_m705_20261115194506_33f314_test`) carry a UTC
+# run stamp; their per-worker copies are dropped at the end of the run and, if a run died,
+# by the next run once older than STALE_AFTER. Fixed names (`trading_journal_gw3_test`)
+# have no stamp and are reused by every gate.
+RUN_STAMP = re.compile(r"_(\d{14})_")
+WORKER_DB = re.compile(r"[A-Za-z0-9_]+_gw\d+_test")
+STALE_AFTER = timedelta(hours=24)
+
+
+def run_stamp(name: str) -> datetime | None:
+    """UTC time embedded in a one-off database name, or None for a fixed name."""
+    match = RUN_STAMP.search(name)
+    if match is None:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def stale_worker_databases(names: Iterable[str], now: datetime, own_base: str) -> list[str]:
+    """Per-worker copies of one-off bases whose run stamp is older than STALE_AFTER, except
+    the copies of ``own_base`` (a re-run on an old stamped base must not drop its own)."""
+    own_prefix = own_base.removesuffix(TEST_SUFFIX) + "_gw"
+    stale = []
+    for name in names:
+        stamp = run_stamp(name)
+        if (
+            WORKER_DB.fullmatch(name)
+            and not name.startswith(own_prefix)
+            and stamp is not None
+            and now - stamp > STALE_AFTER
+        ):
+            stale.append(name)
+    return sorted(stale)
+
+
+def drop_statements(names: Iterable[str]) -> list[str]:
+    """DROP statements for worker copies only; any other name is skipped (the f-string
+    below needs a safe name, and a base or fixed DB must never be dropped here)."""
+    return [
+        f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'
+        for name in names
+        if WORKER_DB.fullmatch(name)
+    ]
+
+
+def _cleanup_problem(what: str, exc: SQLAlchemyError) -> None:
+    """A cleanup failure never fails the run (the 24 h sweep catches leftovers); it is shown."""
+    orig = getattr(exc, "orig", exc)
+    print(f"[test DB cleanup] {what}: {type(orig).__name__}", file=sys.stderr)
+
+
+def _drop_databases(base_url: str, names: Iterable[str]) -> None:
+    engine = create_engine(base_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            for statement in drop_statements(names):
+                conn.execute(text(statement))
+    finally:
+        engine.dispose()
+
+
+def _drop_stale_worker_databases(base_url: str) -> None:
+    """Startup cleanup (one worker only): stale copies left by runs that died."""
+    own_base = make_url(base_url).database or ""
+    try:
+        engine = create_engine(base_url, isolation_level="AUTOCOMMIT")
+        try:
+            with engine.connect() as conn:
+                names = list(conn.execute(text("SELECT datname FROM pg_database")).scalars())
+        finally:
+            engine.dispose()
+        _drop_databases(base_url, stale_worker_databases(names, datetime.now(UTC), own_base))
+    except SQLAlchemyError as exc:
+        _cleanup_problem("stale worker databases not dropped", exc)
 
 
 def _ensure_database(base_url: str, url: str) -> None:
@@ -101,7 +181,10 @@ def settings() -> Settings:
 @pytest.fixture(scope="session")
 def db_engine() -> Iterator[Engine]:
     """Engine on the test DB; aborts the run with a clear message if it is unreachable."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
     try:
+        if worker in (None, "", "gw0"):
+            _drop_stale_worker_databases(BASE_TEST_DATABASE_URL)
         _ensure_database(BASE_TEST_DATABASE_URL, TEST_DATABASE_URL)
     except (SQLAlchemyError, ValueError) as exc:
         orig = getattr(exc, "orig", exc)
@@ -127,6 +210,12 @@ def db_engine() -> Iterator[Engine]:
     yield engine
     engine.dispose()
     app_db.dispose_engine()
+    name = make_url(TEST_DATABASE_URL).database or ""
+    if TEST_DATABASE_URL != BASE_TEST_DATABASE_URL and run_stamp(name) is not None:
+        try:
+            _drop_databases(BASE_TEST_DATABASE_URL, [name])  # one-off run: leave nothing behind
+        except SQLAlchemyError as exc:
+            _cleanup_problem(f"worker database {name} not dropped", exc)
 
 
 def reset_journal_requirements(engine: Engine) -> None:
