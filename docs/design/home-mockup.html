@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Головна, світла пастельна студія</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F4}
+a{color:#1F1F1F}a:hover{color:#0E6B43}
+.lift{transition:transform .18s ease, box-shadow .18s ease}
+.lift:hover{transform:translateY(-3px);box-shadow:0 16px 32px -20px rgba(40,40,60,.35)}
+.tab{transition:background .15s ease, color .15s ease}
+.live{animation:pulse 1.8s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,160,103,.5)}70%{box-shadow:0 0 0 9px rgba(46,160,103,0)}100%{box-shadow:0 0 0 0 rgba(46,160,103,0)}}
+@media (prefers-reduced-motion: reduce){.live{animation:none}.lift,.tab{transition:none}.lift:hover{transform:none}}
+</style>
+</helmet>
+<div style="min-height: 1600px; background: #F6F6F4; color: #1F1F1F; font-family: Inter, system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column">
+  <div style="display: flex; flex-wrap: wrap; flex: 1">
+    <nav aria-label="Головне меню" style="flex: 1 1 220px; max-width: 236px; padding: 24px 14px; display: flex; flex-direction: column; gap: 4px; background: #EFEFEC; border-right: 1px solid #E4E4E0">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 0 10px 28px">
+        <div style="width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, #CDEFD9 0%, #DCD6F7 100%); color: #1F1F1F; display: flex; align-items: center; justify-content: center; font-family: Manrope, sans-serif; font-weight: 800; font-size: 14px">TJ</div>
+        <div style="font-family: Manrope, sans-serif; font-weight: 700; font-size: 15px">Торговий журнал</div>
+      </div>
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+        <a href="#" style="{{n.style}}"><span>{{n.label}}</span><span style="{{n.badgeStyle}}">{{n.badge}}</span></a>
+      </sc-for>
+    </nav>
+
+    <main style="flex: 999 1 560px; min-width: 0; padding: 26px 32px 32px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+        <div>
+          <div style="color: #6A6A66; font-size: 13px">Чт, 19 листопада · 14:42</div>
+          <h1 style="margin: 4px 0 0; font-family: Manrope, sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -0.02em">Головна</h1>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #E3F4EA; color: #0E6B43; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2EA067"></span>NY · вхід дозволено</span>
+          <span style="padding: 8px 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E4E4E0; font-size: 13px">Лондон: EURUSD ↑ GER40 ↑</span>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; background: #FBE3E1; color: #A3271F; text-decoration: none; font-size: 13px; font-weight: 600">+ Біас NY</a>
+          <a href="#" style="padding: 9px 16px; border-radius: 12px; background: #E7E3FA; color: #3B2F86; text-decoration: none; font-weight: 700; font-size: 13px">Калькулятор</a>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+        <section style="grid-column: span 2; border-radius: 22px; padding: 24px 26px 16px; background: linear-gradient(135deg, #EAF6EF 0%, #F3F1FB 55%, #FCF2EA 100%); border: 1px solid #E6E8E3">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px">
+            <div>
+              <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: #6A6A66">{{c.title}}</div>
+              <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 8px">
+                <div style="{{c.bigStyle}}">{{c.total}}</div>
+                <div style="font-size: 16px; color: #6A6A66">{{c.sub}}</div>
+              </div>
+            </div>
+            <sc-if value="{{c.isPnl}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255,255,255,0.7); border: 1px solid #E4E4E0">
+                <sc-for list="{{ranges}}" as="r" hint-placeholder-count="6">
+                  <button type="button" class="tab" onClick="{{r.pick}}" style="{{r.style}}">{{r.label}}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{c.notPnl}}" hint-placeholder-val="{{ false }}">
+              <button type="button" onClick="{{backToPnl}}" style="padding: 8px 14px; border: 1px solid #E4E4E0; border-radius: 12px; background: rgba(255,255,255,0.8); font-family: inherit; font-size: 13px; font-weight: 600; color: #3B2F86; cursor: pointer">← Крива P&amp;L</button>
+            </sc-if>
+          </div>
+          <div style="position: relative; height: 290px; margin-top: 10px">
+            <svg viewBox="0 0 700 250" preserveAspectRatio="none" role="img" aria-label="{{c.aria}}" style="position: absolute; inset: 0; width: 100%; height: 100%">
+              <defs>
+                <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="{{c.areaColor}}" stop-opacity="0.45"></stop>
+                  <stop offset="1" stop-color="{{c.areaColor}}" stop-opacity="0"></stop>
+                </linearGradient>
+                <linearGradient id="stroke" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#8E86D9"></stop>
+                  <stop offset="1" stop-color="{{c.lineEnd}}"></stop>
+                </linearGradient>
+              </defs>
+              <line x1="64" x2="690" y1="{{c.g0y}}" y2="{{c.g0y}}" stroke="#DADCD6" stroke-dasharray="{{c.g0d}}" vector-effect="non-scaling-stroke"></line>
+              <line x1="64" x2="690" y1="{{c.g1y}}" y2="{{c.g1y}}" stroke="#DADCD6" stroke-dasharray="{{c.g1d}}" vector-effect="non-scaling-stroke"></line>
+              <line x1="64" x2="690" y1="{{c.g2y}}" y2="{{c.g2y}}" stroke="#DADCD6" stroke-dasharray="{{c.g2d}}" vector-effect="non-scaling-stroke"></line>
+              <line x1="64" x2="690" y1="{{c.g3y}}" y2="{{c.g3y}}" stroke="#DADCD6" stroke-dasharray="{{c.g3d}}" vector-effect="non-scaling-stroke"></line>
+              <line x1="64" x2="690" y1="{{c.g4y}}" y2="{{c.g4y}}" stroke="#DADCD6" stroke-dasharray="{{c.g4d}}" vector-effect="non-scaling-stroke"></line>
+              <polygon points="{{c.area}}" fill="url(#area)"></polygon>
+              <polyline points="{{c.line}}" fill="none" stroke="url(#stroke)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline>
+            </svg>
+            <sc-for list="{{c.axis}}" as="a" hint-placeholder-count="5">
+              <span style="{{a.style}}">{{a.text}}</span>
+            </sc-for>
+            <sc-for list="{{c.xs}}" as="x" hint-placeholder-count="4">
+              <span style="{{x.style}}">{{x.text}}</span>
+            </sc-for>
+            <sc-for list="{{c.points}}" as="p" hint-placeholder-count="6">
+              <span style="{{p.dot}}"></span>
+              <span style="{{p.label}}">{{p.text}}</span>
+            </sc-for>
+          </div>
+        </section>
+
+        <section class="lift" style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 22px; padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0 0 4px; font-family: Manrope, sans-serif; font-size: 17px; font-weight: 800">Ліміти</h2>
+          <sc-for list="{{limits}}" as="l" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid #F0F0EC">
+              <div style="display: flex; justify-content: space-between; align-items: baseline">
+                <span style="font-weight: 600">{{l.label}}</span>
+                <span style="{{l.valStyle}}">{{l.val}}</span>
+              </div>
+              <div style="position: relative; height: 12px">
+                <div style="position: absolute; inset: 0; border-radius: 6px; background: #F1F1EE"></div>
+                <div style="{{l.lossZone}}"></div>
+                <div style="{{l.fill}}"></div>
+                <div style="{{l.zero}}"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px">
+                <span style="color: #A3271F">{{l.min}}</span>
+                <span style="color: #0E6B43">{{l.max}}</span>
+              </div>
+            </div>
+          </sc-for>
+          <div style="display: flex; gap: 10px; padding-top: 12px">
+            <div style="flex: 1; border-radius: 14px; background: #F3F1FB; padding: 10px 12px"><div style="font-size: 11px; color: #6A6A66">Угод</div><div style="font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 18px">7<span style="color: #8A8A85; font-size: 13px"> / 10</span></div></div>
+            <div style="flex: 1; border-radius: 14px; background: #EAF6EF; padding: 10px 12px"><div style="font-size: 11px; color: #6A6A66">До стопу дня</div><div style="font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 18px">5.1%</div></div>
+          </div>
+        </section>
+      </div>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <h2 style="margin: 0; font-family: Manrope, sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.01em">Відкриті позиції</h2>
+          <span class="live" style="width: 9px; height: 9px; border-radius: 50%; background: #2EA067"></span>
+          <span style="padding: 4px 10px; border-radius: 999px; background: #E3F4EA; color: #0E6B43; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600">+68 USD</span>
+          <span style="padding: 4px 10px; border-radius: 999px; background: #F3F1FB; color: #3B2F86; font-size: 13px; font-weight: 600">ризик 3%</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+          <sc-for list="{{open}}" as="p" hint-placeholder-count="3">
+            <article class="lift" style="{{p.cardStyle}}">
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.01em">{{p.sym}}</span>
+                    <span style="{{p.sideStyle}}">{{p.side}}</span>
+                  </div>
+                  <div style="font-size: 12px; color: #6A6A66; margin-top: 3px">{{p.vol}} · {{p.acc}} · {{p.age}}</div>
+                </div>
+                <div style="text-align: right">
+                  <div style="{{p.pnlStyle}}">{{p.pnl}}</div>
+                  <div style="{{p.rStyle}}">{{p.r}}</div>
+                </div>
+              </div>
+              <div style="position: relative; height: 66px; margin-top: 10px">
+                <div style="{{p.tagStyle}}">{{p.now}}</div>
+                <div style="position: absolute; left: 0; right: 0; top: 30px; height: 10px; border-radius: 5px; background: #F1F1EE"></div>
+                <div style="{{p.lossTrack}}"></div>
+                <div style="{{p.profitTrack}}"></div>
+                <div style="{{p.excursion}}"></div>
+                <div style="{{p.entryTick}}"></div>
+                <div style="{{p.nowDot}}"></div>
+                <div style="position: absolute; left: 0; top: 48px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A3271F">−1R</div>
+                <div style="{{p.entryLabel}}">0</div>
+                <div style="position: absolute; right: 0; top: 48px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #0E6B43">{{p.tpR}}</div>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 6px">
+                <span style="padding: 5px 10px; border-radius: 10px; background: #FBEDEC; color: #A3271F; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600">↓ {{p.mae}}</span>
+                <span style="padding: 5px 10px; border-radius: 10px; background: #E9F6EF; color: #0E6B43; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600">↑ {{p.mfe}}</span>
+                <span style="flex: 1"></span>
+                <span style="{{p.descStyle}}">{{p.desc}}</span>
+              </div>
+              <a href="#" style="margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: #F3F1FB; color: #3B2F86; text-decoration: none; font-size: 13px; font-weight: 700; text-align: center">Описати</a>
+            </article>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+        <sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+          <button type="button" class="lift" onClick="{{k.pick}}" aria-pressed="{{k.pressed}}" style="{{k.cardStyle}}">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+              <span style="font-size: 13px; color: #6A6A66">{{k.label}}</span>
+              <span style="{{k.hintStyle}}">{{k.hint}}</span>
+            </div>
+            <div style="{{k.valueStyle}}">{{k.value}}</div>
+            <svg viewBox="0 0 120 26" aria-hidden="true" style="width: 100%; height: 26px">
+              <polyline points="{{k.spark}}" fill="none" stroke="{{k.sparkColor}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            </svg>
+          </button>
+        </sc-for>
+      </div>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <h2 style="margin: 0; font-family: Manrope, sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.01em">Потрібен опис</h2>
+          <span style="padding: 3px 10px; border-radius: 999px; background: #FBE3E1; color: #A3271F; font-size: 13px; font-weight: 700">12</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+          <sc-for list="{{need}}" as="x" hint-placeholder-count="5">
+            <a href="#" class="lift" style="{{x.tileStyle}}">
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <span style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 16px">{{x.sym}}</span>
+                <span style="{{x.rStyle}}">{{x.r}}</span>
+              </div>
+              <span style="font-size: 12px; color: #6A6A66">{{x.date}}</span>
+              <span style="margin-top: 8px; padding: 7px 0; border-radius: 10px; background: #FFFFFF; text-align: center; font-size: 13px; font-weight: 700; color: #3B2F86">Описати</span>
+            </a>
+          </sc-for>
+          <a href="#" class="lift" style="border-radius: 16px; border: 1.5px dashed #D6D6D0; padding: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-decoration: none; color: #6A6A66">
+            <span style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 22px; color: #1F1F1F">+7</span>
+            <span style="font-size: 12px">у журналі</span>
+          </a>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+        <section class="lift" style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 20px; padding: 18px 20px">
+          <h2 style="margin: 0 0 8px; font-family: Manrope, sans-serif; font-size: 16px; font-weight: 800">P&amp;L по днях</h2>
+          <svg viewBox="0 0 400 150" role="img" aria-label="P&amp;L по днях: Пн +120, Вт −90, Ср +310, Чт +400" style="width: 100%; height: 150px">
+            <defs>
+              <linearGradient id="barUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7BCFA2"></stop><stop offset="1" stop-color="#CDEFD9"></stop></linearGradient>
+              <linearGradient id="barDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F8D2CE"></stop><stop offset="1" stop-color="#EE958E"></stop></linearGradient>
+            </defs>
+            <line x1="0" y1="96" x2="400" y2="96" stroke="#E4E4E0"></line>
+            <rect x="30" y="68" width="60" height="28" rx="8" fill="url(#barUp)"></rect>
+            <text x="60" y="61" text-anchor="middle" fill="#0E6B43" font-family="JetBrains Mono" font-size="12" font-weight="600">+120</text>
+            <rect x="125" y="96" width="60" height="21" rx="8" fill="url(#barDn)"></rect>
+            <text x="155" y="131" text-anchor="middle" fill="#A3271F" font-family="JetBrains Mono" font-size="12" font-weight="600">−90</text>
+            <rect x="220" y="24" width="60" height="72" rx="8" fill="url(#barUp)"></rect>
+            <text x="250" y="17" text-anchor="middle" fill="#0E6B43" font-family="JetBrains Mono" font-size="12" font-weight="600">+310</text>
+            <rect x="315" y="6" width="60" height="90" rx="8" fill="url(#barUp)" opacity="0.7"></rect>
+            <text x="345" y="114" text-anchor="middle" fill="#0E6B43" font-family="JetBrains Mono" font-size="12" font-weight="600">+400</text>
+            <text x="60" y="146" text-anchor="middle" fill="#6A6A66" font-family="Inter" font-size="11">Пн</text>
+            <text x="155" y="146" text-anchor="middle" fill="#6A6A66" font-family="Inter" font-size="11">Вт</text>
+            <text x="250" y="146" text-anchor="middle" fill="#6A6A66" font-family="Inter" font-size="11">Ср</text>
+            <text x="345" y="146" text-anchor="middle" fill="#6A6A66" font-family="Inter" font-size="11">Чт</text>
+          </svg>
+        </section>
+        <section class="lift" style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 20px; padding: 18px 20px">
+          <h2 style="margin: 0 0 8px; font-family: Manrope, sans-serif; font-size: 16px; font-weight: 800">Форма · 20 угод</h2>
+          <svg viewBox="0 0 400 150" role="img" aria-label="Win rate зріс з 45% до 57%, середній R з +0.6 до +1.3" style="width: 100%; height: 150px">
+            <line x1="0" y1="40" x2="400" y2="40" stroke="#F0F0EC"></line>
+            <line x1="0" y1="80" x2="400" y2="80" stroke="#F0F0EC"></line>
+            <line x1="0" y1="120" x2="400" y2="120" stroke="#F0F0EC"></line>
+            <polyline points="0,96 38,90 76,100 114,78 152,74 190,82 228,64 266,58 304,62 336,52" fill="none" stroke="#8E86D9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            <polyline points="0,122 38,118 76,124 114,110 152,106 190,112 228,98 266,92 304,88 336,84" fill="none" stroke="#2EA067" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round"></polyline>
+            <circle cx="336" cy="52" r="5" fill="#8E86D9"></circle>
+            <text x="346" y="56" fill="#3B2F86" font-family="JetBrains Mono" font-size="12" font-weight="600">57%</text>
+            <circle cx="336" cy="84" r="5" fill="#2EA067"></circle>
+            <text x="346" y="88" fill="#0E6B43" font-family="JetBrains Mono" font-size="12" font-weight="600">+1.3R</text>
+            <text x="0" y="146" fill="#6A6A66" font-family="Inter" font-size="11">● win rate   ● сер. R</text>
+          </svg>
+        </section>
+      </div>
+    </main>
+  </div>
+  <footer style="display: flex; flex-wrap: wrap; gap: 20px; padding: 10px 32px; color: #6A6A66; font-size: 12px; border-top: 1px solid #E4E4E0; background: #EFEFEC">
+    <span><span style="color: #2EA067">●</span> Сервер і БД</span>
+    <span><span style="color: #2EA067">●</span> Funded · 14:41</span>
+    <span><span style="color: #2EA067">●</span> Funded 2 · 14:41</span>
+    <span>Бекап 18.11</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { range: 1, metric: 'pnl' }; }
+  renderVals() {
+    const M = {
+      today: { title: 'Сьогодні · P&L протягом дня', total: '+212', sub: 'USD · +2.1% · 3 угоди', v: [0, 45, 30, 110, 96, 160, 212], x: ['08:00', '10:00', '12:00', '14:42'], kind: 'usd', color: '#0E6B43' },
+      wr: { title: 'Win rate · ковзне вікно 20 угод', total: '57%', sub: '11 з 20 прибуткові', v: [45, 48, 46, 50, 52, 50, 55, 57], x: ['#18', '#22', '#26', '#30'], kind: 'pct', color: '#3B2F86' },
+      r: { title: 'Середній R · ковзне вікно 20 угод', total: '+1.3R', sub: 'очікування на угоду', v: [0.6, 0.7, 0.65, 0.9, 1.0, 0.95, 1.2, 1.3], x: ['#18', '#22', '#26', '#30'], kind: 'r', color: '#3B2F86' },
+      dd: { title: 'Просідання від піку · листопад', total: '−0.7%', sub: 'ліміт FundedNext −10%', v: [0, -0.2, -0.45, -0.7, -0.3, -0.1, 0, -0.2], x: ['01.11', '06.11', '12.11', '19.11'], kind: 'ddpct', color: '#A3271F' }
+    };
+    const D = [
+      { title: 'тиждень', total: '+741', pct: '+2.5%', v: [0, 120, 30, 340, 741], x: ['16.11', '17.11', '18.11', '19.11'] },
+      { title: 'листопад', total: '+1 241', pct: '+4.1%', v: [0, -20, -45, 60, 140, 120, 260, 310, 290, 410, 499, 470, 640, 705, 780, 899, 1010, 1241], x: ['01.11', '06.11', '12.11', '19.11'] },
+      { title: '3 місяці', total: '+2 016', pct: '+6.7%', v: [0, -150, -320, -260, -90, 120, 60, 310, 520, 480, 775, 890, 1240, 1180, 1520, 1760, 2016], x: ['вер', 'жов', 'лис'] },
+      { title: 'рік', total: '+2 016', pct: '+6.7%', v: [0, -150, -320, -260, -90, 120, 60, 310, 520, 480, 775, 890, 1240, 1180, 1520, 1760, 2016], x: ['вер', 'жов', 'лис'] },
+      { title: 'усе', total: '+2 016', pct: '+6.7%', v: [0, -150, -320, -260, -90, 120, 60, 310, 520, 480, 775, 890, 1240, 1180, 1520, 1760, 2016], x: ['вер', 'жов', 'лис'] },
+      { title: 'свої дати', total: '+1 241', pct: '+4.1%', v: [0, -20, -45, 60, 140, 120, 260, 310, 290, 410, 499, 470, 640, 705, 780, 899, 1010, 1241], x: ['01.11', '06.11', '12.11', '19.11'] }
+    ];
+    const metric = this.state.metric;
+    const isPnl = metric === 'pnl';
+    const d = isPnl ? { ...D[this.state.range], kind: 'usd', color: '#0E6B43', title: 'P&L · ' + D[this.state.range].title, sub: 'USD · ' + D[this.state.range].pct } : M[metric];
+    const X0 = 64, X1 = 676, Y0 = 210, Y1 = 40;
+    const lo = Math.min(...d.v), hi = Math.max(...d.v);
+    const steps = d.kind === 'usd' ? [50, 100, 250, 500, 1000] : d.kind === 'pct' ? [2, 5, 10] : d.kind === 'r' ? [0.1, 0.25, 0.5] : [0.25, 0.5, 1];
+    const step = steps.find((s) => (hi - lo) / s <= 4) || steps[steps.length - 1];
+    const gLo = Math.floor(lo / step + 1e-9) * step, gHi = Math.ceil(hi / step - 1e-9) * step;
+    const yOf = (v) => Y0 - (v - gLo) / ((gHi - gLo) || 1) * (Y0 - Y1);
+    const xOf = (i) => X0 + i * (X1 - X0) / (d.v.length - 1);
+    const pts = d.v.map((v, i) => [xOf(i), yOf(v)]);
+    const grp = (a) => (a >= 1000 ? Math.floor(a / 1000) + ' ' + String(a % 1000).padStart(3, '0') : String(a));
+    const sign = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
+    const fmt = (v) => {
+      if (d.kind === 'usd') return sign(v) + grp(Math.round(Math.abs(v)));
+      if (d.kind === 'pct') return Math.round(v) + '%';
+      if (d.kind === 'r') return sign(v) + Math.abs(v).toFixed(1) + 'R';
+      return sign(v) + Math.abs(v).toFixed(1) + '%';
+    };
+    const L = (x) => (x / 700 * 100).toFixed(2) + '%', T = (y) => (y / 250 * 100).toFixed(2) + '%';
+    const mono = "position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 11px; white-space: nowrap; ";
+    const grid = [];
+    for (let v = gLo; v <= gHi + step * 0.001; v += step) grid.push({ y: yOf(v), label: Math.abs(v) < 1e-9 ? '0' : fmt(v), dash: Math.abs(v) < 1e-9 ? '0' : '3 6' });
+    const line = pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const minI = d.v.indexOf(lo), lastI = d.v.length - 1;
+    const every = d.v.length <= 8 ? 1 : 3;
+    const points = d.v.map((v, i) => ({ v, i })).filter(({ i }) => i === lastI || i === minI || (i % every === 0 && i > 0)).map(({ v, i }) => {
+      const isLast = i === lastI, isMin = i === minI && !isLast && lo < (d.kind === 'pct' ? 1e9 : 0);
+      const col = isMin ? '#A3271F' : isLast ? d.color : '#3F3F3B';
+      const below = isMin;
+      return {
+        text: fmt(v),
+        dot: 'position: absolute; transform: translate(-50%, -50%); border-radius: 50%; left: ' + L(pts[i][0]) + '; top: ' + T(pts[i][1]) + '; ' + (isLast ? 'width: 14px; height: 14px; border: 3px solid #FFFFFF; box-shadow: 0 0 0 1px #CDEFD9; background: ' + (d.kind === 'ddpct' ? '#E2665E' : '#2EA067') : 'width: 8px; height: 8px; border: 2px solid #FFFFFF; background: ' + (isMin ? '#E2665E' : '#8E86D9')),
+        label: mono + 'left: ' + L(pts[i][0]) + '; top: ' + T(pts[i][1]) + '; transform: translate(' + (isLast ? '-100%' : '-50%') + ', ' + (below ? '10px' : 'calc(-100% - 10px)') + '); color: ' + col + '; ' + (isLast ? 'font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 10px; background: #FFFFFF; border: 1px solid #E4E4E0; margin-left: -10px' : 'font-weight: 600; padding: 1px 5px; border-radius: 6px; background: rgba(255,255,255,0.75)')
+      };
+    });
+    const xs = d.x.map((text, i) => {
+      const x = X0 + i * (X1 - X0) / (d.x.length - 1);
+      return { text, style: mono + 'color: #8A8A85; top: 92%; left: ' + L(x) + '; transform: translateX(' + (i === 0 ? '0' : i === d.x.length - 1 ? '-100%' : '-50%') + ')' };
+    });
+    const axis = grid.map((g) => ({ text: g.label, style: mono + 'color: #8A8A85; left: ' + L(54) + '; top: ' + T(g.y) + '; transform: translate(-100%, -50%)' }));
+    const c = {
+      title: d.title, total: d.total, sub: d.sub, isPnl, notPnl: !isPnl, line, points, xs, axis,
+      bigStyle: 'font-family: Manrope, sans-serif; font-weight: 800; font-size: 64px; line-height: 1; letter-spacing: -0.045em; color: ' + d.color,
+      areaColor: d.kind === 'ddpct' ? '#EE958E' : d.kind === 'usd' ? '#7BCFA2' : '#B9B2EE',
+      lineEnd: d.kind === 'ddpct' ? '#E2665E' : d.kind === 'usd' ? '#2EA067' : '#3B2F86',
+      area: X0 + ',' + (d.kind === 'ddpct' ? Y1 : Y0) + ' ' + line + ' ' + X1 + ',' + (d.kind === 'ddpct' ? Y1 : Y0),
+      aria: d.title + ': від ' + fmt(d.v[0]) + ' до ' + fmt(d.v[lastI]) + ', мінімум ' + fmt(lo)
+    };
+    for (let i = 0; i < 5; i++) {
+      const g = grid[i];
+      c['g' + i + 'y'] = g ? g.y : -50; c['g' + i + 'd'] = g ? g.dash : '0';
+    }
+    const backToPnl = () => this.setState({ metric: 'pnl' });
+    const rBase = 'padding: 7px 12px; border: 0; border-radius: 9px; font-family: inherit; font-size: 12px; cursor: pointer; ';
+    const ranges = ['Тиждень', 'Місяць', '3 міс', 'Рік', 'Усе', 'Дати'].map((label, i) => ({
+      label, style: rBase + (i === this.state.range ? 'background: #FFFFFF; color: #1F1F1F; font-weight: 700; box-shadow: 0 1px 3px rgba(40,40,60,0.12)' : 'background: transparent; color: #6A6A66'),
+      pick: () => this.setState({ range: i })
+    }));
+
+    const nav = [['Головна', '', true], ['Потрібен опис', '12', false], ['Журнал', '', false], ['Біас', '', false], ['Дайджести', '', false], ['Калькулятор', '', false], ['Налаштування', '', false]]
+      .map(([label, badge, on]) => ({ label, badge,
+        style: 'display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; text-decoration: none; font-size: 14px; ' + (on ? 'background: #FFFFFF; color: #1F1F1F; font-weight: 600; box-shadow: 0 1px 3px rgba(40,40,60,0.08)' : 'color: #6A6A66'),
+        badgeStyle: badge ? 'background: #FBE3E1; color: #A3271F; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700' : 'display: none' }));
+
+    const limits = [['День', 2.1, -3, 5], ['Тиждень', 2.5, -6, 10], ['Місяць', 3.1, -10, 10]].map(([label, cur, lo2, hi2]) => {
+      const z = (-lo2) / (hi2 - lo2) * 100, cp = (cur - lo2) / (hi2 - lo2) * 100, good = cur >= 0;
+      return { label, min: lo2 + '%', max: '+' + hi2 + '%', val: (good ? '+' : '−') + Math.abs(cur).toFixed(1) + '%',
+        valStyle: "font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; color: " + (good ? '#0E6B43' : '#A3271F'),
+        lossZone: 'position: absolute; top: 0; bottom: 0; left: 0; width: ' + z + '%; border-radius: 6px 0 0 6px; background: repeating-linear-gradient(135deg, #FBEDEC 0 6px, #F7DEDB 6px 12px)',
+        fill: 'position: absolute; top: 0; bottom: 0; border-radius: 0 6px 6px 0; left: ' + Math.min(z, cp) + '%; width: ' + Math.abs(cp - z) + '%; background: ' + (good ? 'linear-gradient(90deg, #CDEFD9 0%, #7BCFA2 100%)' : 'linear-gradient(270deg, #F8D2CE 0%, #EE958E 100%)'),
+        zero: 'position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: #8A8A85; left: ' + z + '%' };
+    });
+
+    const pos = (sym, side, vol, acc, age, tpR, now, ePct, nPct, maePct, mfePct, pnl, r, mae, mfe, desc) => {
+      const good = pnl.startsWith('+');
+      return { sym, side, vol, acc, age, tpR, now, pnl, r, mae, mfe, desc,
+        cardStyle: 'background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 20px; padding: 18px 18px 16px; display: flex; flex-direction: column; background-image: linear-gradient(180deg, ' + (good ? '#F2FAF5' : '#FDF3F2') + ' 0%, #FFFFFF 46%)',
+        sideStyle: 'padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; background: ' + (side === 'Buy' ? '#E3F4EA' : '#FBE3E1') + '; color: ' + (side === 'Buy' ? '#0E6B43' : '#A3271F'),
+        pnlStyle: "font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 600; color: " + (good ? '#0E6B43' : '#A3271F'),
+        rStyle: "font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6A6A66",
+        lossTrack: 'position: absolute; top: 30px; height: 10px; left: 0; width: ' + ePct + '%; border-radius: 5px 0 0 5px; background: linear-gradient(90deg, #F4BDB8 0%, #FBEDEC 100%)',
+        profitTrack: 'position: absolute; top: 30px; height: 10px; left: ' + ePct + '%; right: 0; border-radius: 0 5px 5px 0; background: linear-gradient(90deg, #EAF6EF 0%, #A9DFC0 100%)',
+        excursion: 'position: absolute; top: 33px; height: 4px; border-radius: 2px; background: rgba(142,134,217,0.6); left: ' + maePct + '%; width: ' + (mfePct - maePct) + '%',
+        entryTick: 'position: absolute; top: 26px; width: 2px; height: 18px; border-radius: 1px; background: #8A8A85; left: ' + ePct + '%',
+        nowDot: 'position: absolute; top: 25px; width: 20px; height: 20px; border-radius: 50%; transform: translateX(-50%); border: 4px solid #FFFFFF; box-shadow: 0 0 0 1px #E4E4E0, 0 4px 10px -3px rgba(40,40,60,.35); background: ' + (good ? '#2EA067' : '#E2665E') + '; left: ' + nPct + '%',
+        tagStyle: "position: absolute; top: 0; transform: translateX(-50%); padding: 2px 8px; border-radius: 8px; background: #FFFFFF; border: 1px solid #E4E4E0; color: #1F1F1F; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; white-space: nowrap; left: " + nPct + '%',
+        entryLabel: "position: absolute; top: 48px; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6A6A66; left: " + ePct + '%',
+        descStyle: 'font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 10px; ' + (desc === '✓ опис' ? 'background: #E3F4EA; color: #0E6B43' : 'background: #FBE3E1; color: #A3271F')
+      };
+    };
+    const open = [
+      pos('GER40', 'Buy', '0.13', 'Funded', '58 хв', '+1.5R', '26 523', 40, 67, 32, 72, '+64', '+0.7R', '0.2R', '0.8R', '✓ опис'),
+      pos('EURUSD', 'Sell', '0.50', 'Funded 2', '37 хв', '+1.5R', '1.1091', 40, 29, 24, 45, '−28', '−0.3R', '0.4R', '0.1R', 'без опису'),
+      pos('XAUUSD', 'Buy', '0.20', 'Funded', '12 хв', '+1.5R', '4 107', 40, 53, 28, 58, '+32', '+0.3R', '0.3R', '0.4R', '✓ опис')
+    ];
+
+    const kmono = "font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; ";
+    const kpis = [
+      { id: 'today', label: 'Сьогодні', value: '+212', c: '#0E6B43', bg: '#EAF6EF', ring: '#7BCFA2', spark: '0,20 20,18 40,22 60,14 80,12 100,8 120,4', sc: '#2EA067' },
+      { id: 'wr', label: 'Win rate', value: '57%', c: '#3B2F86', bg: '#F3F1FB', ring: '#B9B2EE', spark: '0,18 20,16 40,19 60,13 80,12 100,10 120,8', sc: '#8E86D9' },
+      { id: 'r', label: 'Сер. R', value: '+1.3R', c: '#3B2F86', bg: '#F3F1FB', ring: '#B9B2EE', spark: '0,22 20,20 40,21 60,16 80,14 100,12 120,9', sc: '#8E86D9' },
+      { id: 'dd', label: 'Просідання', value: '−0.7%', c: '#A3271F', bg: '#FCF2EA', ring: '#EE958E', spark: '0,6 20,8 40,14 60,18 80,12 100,9 120,7', sc: '#E2665E' }
+    ].map((k) => {
+      const on = metric === k.id;
+      return { ...k, valueStyle: kmono + 'color: ' + k.c, sparkColor: k.sc, pressed: on ? 'true' : 'false',
+        hint: on ? 'на графіку' : 'графік ↗',
+        hintStyle: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; ' + (on ? 'background: ' + k.c + '; color: #FFFFFF' : 'background: rgba(255,255,255,0.8); color: #8A8A85'),
+        pick: () => this.setState({ metric: on ? 'pnl' : k.id }),
+        cardStyle: 'text-align: left; font-family: inherit; color: inherit; cursor: pointer; background: linear-gradient(160deg, ' + k.bg + ' 0%, #FFFFFF 70%); border: ' + (on ? '2px solid ' + k.ring : '1px solid #E4E4E0') + '; border-radius: 18px; padding: ' + (on ? '15px 17px' : '16px 18px') + '; display: flex; flex-direction: column; gap: 6px' };
+    });
+
+    const need = [['XAUUSD', '19.11', '+2.1R'], ['EURUSD', '18.11', '−1R'], ['GER40', '18.11', '+1.6R'], ['GBPUSD', '17.11', '−1R'], ['GER40', '17.11', '+0.4R']]
+      .map(([sym, date, r]) => {
+        const good = r.startsWith('+');
+        return { sym, date, r,
+          tileStyle: 'border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: #1F1F1F; border: 1px solid #E4E4E0; background: linear-gradient(160deg, ' + (good ? '#EAF6EF' : '#FBEDEC') + ' 0%, #F6F4FC 100%)',
+          rStyle: "font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 8px; background: #FFFFFF; color: " + (good ? '#0E6B43' : '#A3271F') };
+      });
+
+    return { c, ranges, nav, limits, open, kpis, need, backToPnl };
+  }
+}
+</script>
+</body>
+</html>

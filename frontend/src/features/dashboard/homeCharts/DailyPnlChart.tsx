@@ -34,7 +34,7 @@ export function DailyPnlChart({ days, currency }: { days: HomeCharts['daily']; c
               y={top}
               width={width}
               height={Math.max(1, Math.abs(y(value) - y(0)))}
-              className={cn(sign > 0 ? 'fill-profit' : sign < 0 ? 'fill-loss' : 'fill-muted-foreground')}
+              className={cn(sign > 0 ? 'fill-profit-strong' : sign < 0 ? 'fill-loss-strong' : 'fill-faint')}
             >
               <title>{t.dayTitle(d.day, money(d.net_pnl), d.pct === null ? '' : formatPercent(d.pct, true), d.trades)}</title>
             </rect>

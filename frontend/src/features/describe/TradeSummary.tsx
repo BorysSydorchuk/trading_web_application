@@ -102,7 +102,7 @@ export function TradeSummary({ trade }: { trade: TradeDetail }) {
               <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2 gap-y-1">
                 <BiasAlignmentLabel value={trade[key]} />
                 {noteId !== null && (
-                  <Link to={`/bias/${noteId}`} className="text-xs underline underline-offset-2 hover:text-primary">
+                  <Link to={`/bias/${noteId}`} className="text-xs underline underline-offset-2 hover:text-lavender">
                     {uk.bias.alignment.openNote}
                   </Link>
                 )}

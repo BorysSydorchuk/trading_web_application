@@ -5,10 +5,13 @@ import { biasReminderCount, useBiasStatus } from '@/features/bias/api'
 import { pendingCount, useInboxCounts, type InboxCounts } from '@/features/inbox/api'
 import { useNewTradeNotifications } from '@/features/inbox/notifications'
 import { useRefreshTradesOnInboxChange } from '@/features/trades/api'
+import { Pill } from '@/components/studio/Pill'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 
 const INBOX_PATH = '/inbox'
+/** Count badges: loss-soft pill (Pill tone="loss"), pushed to the right edge of the nav item. */
+const BADGE_CLASS = 'ml-auto px-2 py-px leading-4'
 
 export function Sidebar() {
   const { data: counts } = useInboxCounts()
@@ -20,14 +23,17 @@ export function Sidebar() {
   useRefreshTradesOnInboxChange(counts)
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-11 items-center gap-2 border-b border-sidebar-border px-4">
-        <span className="num rounded bg-sidebar-accent px-1.5 py-0.5 text-xs font-semibold text-sidebar-accent-foreground">
+    <aside className="flex w-[236px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3.5 pt-6 text-sidebar-foreground">
+      <div className="flex items-center gap-3 px-2 pb-7">
+        <span
+          aria-hidden
+          className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] bg-(image:--tj-mark-gradient) font-display text-sm font-extrabold text-ink"
+        >
           {uk.app.shortName}
         </span>
-        <span className="truncate text-sm font-medium">{uk.app.name}</span>
+        <span className="truncate font-display text-[15px] font-extrabold">{uk.app.name}</span>
       </div>
-      <nav aria-label={uk.nav.label} className="flex flex-1 flex-col gap-0.5 p-2">
+      <nav aria-label={uk.nav.label} className="flex flex-1 flex-col gap-1">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -35,12 +41,12 @@ export function Sidebar() {
             end={to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+                'flex h-10 items-center gap-2.5 rounded-xl px-3 text-sm transition-colors motion-reduce:transition-none',
                 'hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
-                'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                 isActive
-                  ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/75',
+                  ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground shadow-soft'
+                  : 'text-ink-muted',
               )
             }
           >
@@ -48,9 +54,9 @@ export function Sidebar() {
             <span className="truncate">{label}</span>
             {to === INBOX_PATH && counts && <InboxBadge counts={counts} />}
             {to === '/bias' && reminders > 0 && (
-              <span aria-label={uk.bias.status.badge(reminders)} title={uk.bias.status.badge(reminders)} className="num ml-auto rounded-full bg-primary px-1.5 py-px text-xs leading-4 font-semibold text-primary-foreground">
+              <Pill tone="loss" mono aria-label={uk.bias.status.badge(reminders)} title={uk.bias.status.badge(reminders)} className={BADGE_CLASS}>
                 {reminders}
-              </span>
+              </Pill>
             )}
             {to === '/bias' && bias.isError && (
               <span role="status" className="ml-auto text-xs" title={uk.bias.status.loadError} aria-label={uk.bias.status.loadError}>
@@ -71,12 +77,14 @@ function InboxBadge({ counts }: { counts: InboxCounts }) {
   const label = uk.inbox.badgeLabel(pending)
   const tooltip = counts.draft > 0 ? `${label}\n${uk.inbox.drafts(counts.draft)}` : label
   return (
-    <span
+    <Pill
+      tone="loss"
+      mono
       title={tooltip}
       aria-label={counts.draft > 0 ? `${label}, ${uk.inbox.drafts(counts.draft)}` : label}
-      className="num ml-auto rounded-full bg-primary px-1.5 py-px text-xs leading-4 font-semibold text-primary-foreground"
+      className={BADGE_CLASS}
     >
       {pending}
-    </span>
+    </Pill>
   )
 }

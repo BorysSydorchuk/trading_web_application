@@ -18,14 +18,14 @@ export function AiKeyChip({ state }: { state: unknown }) {
         <button
           type="button"
           aria-label={`${chip.text}. ${chip.hint}`}
-          className="flex shrink-0 items-center gap-1.5 rounded border border-amber-400/40 px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex shrink-0 items-center gap-1.5 rounded border border-warning-strong/50 px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <span className="size-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
-          <span className="whitespace-nowrap text-amber-400">{chip.text}</span>
+          <span className="size-2 shrink-0 rounded-full bg-warning-strong" aria-hidden />
+          <span className="whitespace-nowrap text-warning">{chip.text}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="flex w-80 flex-col gap-2 text-xs">
-        <p className="text-sm font-medium text-amber-400">{chip.text}</p>
+        <p className="text-sm font-medium text-warning">{chip.text}</p>
         <p className="text-muted-foreground">{chip.hint}</p>
         <Link to="/settings" className="self-start underline underline-offset-2 hover:text-foreground">
           {uk.aiKey.chip.openSettings}

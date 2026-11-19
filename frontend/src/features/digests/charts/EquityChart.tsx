@@ -45,7 +45,7 @@ export function EquityChart({ title, points, currency }: EquityChartProps) {
           points={path}
           fill="none"
           strokeWidth={1.5}
-          className={cn(sign > 0 ? 'stroke-profit' : sign < 0 ? 'stroke-loss' : 'stroke-muted-foreground')}
+          className={cn(sign > 0 ? 'stroke-profit-strong' : sign < 0 ? 'stroke-loss-strong' : 'stroke-faint')}
         />
       </svg>
     </figure>

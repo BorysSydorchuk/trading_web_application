@@ -54,8 +54,8 @@ describe('digest SVG charts', () => {
     expect(screen.getByRole('img', { name: c.heatmapSummary(best, worst) })).toBeInTheDocument()
     expect(screen.getByText(SATURDAY)).toBeInTheDocument()
     expect(screen.queryByText(SUNDAY)).not.toBeInTheDocument()
-    expect(container.querySelector('[data-cell="0-9"] rect')).toHaveClass('fill-profit')
-    expect(container.querySelector('[data-cell="5-11"] rect')).toHaveClass('fill-loss')
+    expect(container.querySelector('[data-cell="0-9"] rect')).toHaveClass('fill-profit-mid')
+    expect(container.querySelector('[data-cell="5-11"] rect')).toHaveClass('fill-loss-mid')
   })
 
   it('shows an empty note without data', () => {

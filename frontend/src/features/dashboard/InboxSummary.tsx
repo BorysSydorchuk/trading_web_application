@@ -22,7 +22,7 @@ export function InboxSummary({ counts }: { counts: InboxCounts }) {
             <Link
               to={to}
               aria-label={`${i[key]}: ${counts[key]}`}
-              className="flex items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              className="flex items-center justify-between gap-3 rounded px-1 py-0.5 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <span>{i[key]}</span>
               <span className={cn('num', counts[key] > 0 ? 'font-semibold' : 'text-muted-foreground')}>{counts[key]}</span>

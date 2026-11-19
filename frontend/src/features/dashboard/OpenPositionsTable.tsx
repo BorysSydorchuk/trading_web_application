@@ -58,7 +58,7 @@ export function OpenPositionsTable({ positions }: { positions: readonly OpenPosi
                     <Link
                       to={describePath(row.trade_id)}
                       aria-label={p.describeLabel(row.symbol)}
-                      className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                      className="text-xs font-medium text-lavender underline-offset-2 hover:underline"
                     >
                       {p.describe}
                     </Link>

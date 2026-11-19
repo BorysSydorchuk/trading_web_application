@@ -72,7 +72,7 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
                 height={CELL - 2}
                 rx={3}
                 fillOpacity={opacity}
-                className={sign > 0 ? 'fill-profit' : sign < 0 ? 'fill-loss' : 'fill-muted-foreground'}
+                className={sign > 0 ? 'fill-profit-mid' : sign < 0 ? 'fill-loss-mid' : 'fill-faint'}
               />
               <text x={LEFT + col * CELL + CELL / 2} y={TOP + row * CELL + CELL / 2 + 3} textAnchor="middle" className="num fill-foreground text-[10px]">
                 {cell.trades}

@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { Pill } from '@/components/studio/Pill'
 import { formatPct } from '@/features/dashboard/format'
 import { formatR, formatSignedMoney, pnlClass } from '@/features/trades/format'
 import { uk } from '@/i18n/uk'
@@ -77,5 +78,5 @@ function ReviewBadge({ item }: { item: DigestListItem }) {
     const text = item.reviewed_at ? l.reviewed(formatDateBrussels(item.reviewed_at)) : uk.digests.page.reviewed
     return <span className="text-xs text-muted-foreground">{text}</span>
   }
-  return <span className="rounded-full border border-primary/50 px-2 py-0.5 text-xs">{l.notReviewed}</span>
+  return <Pill tone="accent">{l.notReviewed}</Pill>
 }

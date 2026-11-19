@@ -22,7 +22,7 @@ export function TradeRowMenu({ trade, onExclusion }: TradeRowMenuProps) {
           aria-label={t.menu(trade.symbol)}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
-          className="inline-flex size-6 items-center justify-center rounded hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="inline-flex size-6 items-center justify-center rounded hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <MoreHorizontal className="size-4" aria-hidden />
         </button>

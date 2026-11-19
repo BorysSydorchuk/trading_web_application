@@ -223,7 +223,7 @@ function MultiEnumInput({ field, values, stored, autoViolations, onChange }: Fie
           >
             <input
               type="checkbox"
-              className="size-3.5 accent-primary"
+              className="size-3.5 accent-lavender-mid"
               checked={checked}
               disabled={locked}
               onChange={(e) => toggle(option.value, e.target.checked)}

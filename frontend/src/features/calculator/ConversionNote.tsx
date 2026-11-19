@@ -25,7 +25,7 @@ export function ConversionNote({ conversion, compact }: ConversionNoteProps) {
     <div className="flex flex-col gap-1 text-xs">
       <p className="num text-muted-foreground">{rateLine}</p>
       {conversion.stale && (
-        <p className="flex items-center gap-1.5 text-amber-400">
+        <p className="flex items-center gap-1.5 text-warning">
           <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
           {t.conversionStale}
         </p>

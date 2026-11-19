@@ -21,12 +21,12 @@ export function BackupChip({ status }: { status?: BackupStatus | null }) {
       <PopoverTrigger asChild>
         <button type="button" aria-label={`${t.title}: ${label}`}
           className="flex shrink-0 items-center gap-1.5 rounded border border-sidebar-border px-1.5 py-0.5 hover:bg-sidebar-accent">
-          <span className={warning ? 'text-amber-400' : ''}>{t.title}: {label}</span>
+          <span className={warning ? 'text-warning' : ''}>{t.title}: {label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="flex w-96 max-w-[95vw] flex-col gap-2 text-xs">
         <p className="font-medium">{t.title}</p>
-        {status.overdue && <p className="text-amber-400">{t.overdue}</p>}
+        {status.overdue && <p className="text-warning">{t.overdue}</p>}
         {status.error_code && <p>{message(status.error_code)}</p>}
         <dl className="grid grid-cols-2 gap-2">
           <dt>{t.lastSuccess}</dt><dd>{date(status.last_success_at)}</dd>
