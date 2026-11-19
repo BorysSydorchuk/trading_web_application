@@ -58,8 +58,6 @@ describe('DigestPage editing', () => {
       }),
     )
     const { user } = render()
-    // First render of the file: under full-gate CPU load (right after the backend run) the
-    // digest + bias editor can take longer than the 1 s default (M8-01 gate, 2 failures).
     const section = await screen.findByRole('region', { name: SECTION })
     const text = await within(section).findByDisplayValue('Старий біас')
     expect(await within(section).findAllByRole('listitem')).toHaveLength(1)

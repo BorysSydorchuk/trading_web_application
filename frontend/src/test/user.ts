@@ -7,7 +7,7 @@
  * flows crossed the 5 s test timeout (BiasNotePage, DigestPageEditing, DescribePage).
  * `delay: null` dispatches the same events per key (keydown, input, keyup, each wrapped in
  * act) without the timer waits: same behaviour under test, about 3x faster, load-independent.
- * Tests with fake timers still pass `advanceTimers`.
+ * `advanceTimers` only matters for a test that overrides `delay` (there are no per-key waits).
  */
 import userEvent from '@testing-library/user-event'
 

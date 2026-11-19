@@ -39,7 +39,7 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': [
         'error',
-        { paths: [{ name: '@testing-library/user-event', message: 'Use setupUser from @/test/user.' }] },
+        { paths: [{ name: '@testing-library/user-event', message: 'Use setupUser from @/test/user.', allowTypeImports: true }] },
       ],
     },
   },
