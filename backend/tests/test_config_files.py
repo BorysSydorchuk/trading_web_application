@@ -398,6 +398,29 @@ def test_get_journal_fields(cfg_dir: Path, api: TestClient) -> None:
     assert "daily_risk" in {o["value"] for o in by_key["rule_violations"]["options"]}
 
 
+def test_get_journal_fields_rule_violations_carry_types_and_deprecated(
+    cfg_dir: Path, api: TestClient
+) -> None:
+    # Arrange: the shipped violations.yaml (auto + manual + deprecated entries)
+
+    # Act
+    response = api.get("/api/journal-fields")
+
+    # Assert
+    assert response.status_code == 200
+    by_key = {f["key"]: f for f in response.json()["fields"]}
+    violations = by_key["rule_violations"]
+    options = {o["value"]: o for o in violations["options"]}
+    assert options["daily_stop_loss_pct"]["deprecated"] is True
+    assert options["daily_risk"]["deprecated"] is False
+    types = violations["violation_types"]
+    assert types["daily_risk"] == "auto"
+    assert types["entry_weak_poi"] == "manual"
+    assert types["weekly_stop_profit_pct"] == "auto"
+    assert set(types) == set(options)
+    assert "violation_types" not in by_key["h1_context"]
+
+
 def test_get_rules(cfg_dir: Path, api: TestClient) -> None:
     response = api.get("/api/rules")
     assert response.status_code == 200

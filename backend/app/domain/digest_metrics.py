@@ -46,8 +46,13 @@ NORM_MIN_TRADING_DAYS = 20
 type PeriodKind = Literal["weekly", "monthly"]
 PERIOD_KINDS: tuple[str, ...] = get_args(PeriodKind.__value__)
 
-type GroupKey = str | int | bool | None
-type JournalValue = str | int | bool | None
+type ScalarKey = str | int | bool | None
+# A matrix group (M8-04..08): (row value, column value), stored as a JSON list.
+type MatrixKey = tuple[ScalarKey, ScalarKey]
+type GroupKey = ScalarKey | MatrixKey
+# A multi_enum journal field holds a tuple of option values (empty = not filled).
+type JournalValue = str | int | bool | tuple[str, ...] | None
+type BreakdownKind = Literal["field", "combination", "matrix"]
 type Deviation = Literal["worse", "better"]
 type BiasScope = Literal["daily", "weekly", "monthly"]
 
@@ -145,6 +150,7 @@ class Breakdown:
     groups: tuple[BreakdownGroup, ...]
     filled: int
     total: int
+    kind: BreakdownKind = "field"
 
 
 @dataclass(frozen=True)
@@ -364,11 +370,13 @@ def compute_metrics(
 # --- breakdowns ------------------------------------------------------------------------------
 
 
-def _field_value(t: DigestTrade, name: str, journal: bool) -> GroupKey:
+def _field_value(t: DigestTrade, name: str, journal: bool) -> ScalarKey:
     if journal:
-        return t.journal.get(name)
-    value: GroupKey = getattr(t, name)
-    return value
+        value = t.journal.get(name)
+        # a multi value reaches here only by mistake: digest_breakdowns handles multi fields
+        return (" + ".join(value) or None) if isinstance(value, tuple) else value
+    scalar: ScalarKey = getattr(t, name)
+    return scalar
 
 
 def _key_order(key: str | int | bool) -> tuple[int, int, str]:
@@ -378,14 +386,16 @@ def _key_order(key: str | int | bool) -> tuple[int, int, str]:
     return (1, 0, key)
 
 
-def _sorted_keys(keys: Sequence[GroupKey]) -> list[GroupKey]:
+def sorted_keys(keys: Sequence[ScalarKey]) -> list[ScalarKey]:
+    """Numbers, then strings, None last."""
     present: list[str | int | bool] = [k for k in keys if k is not None]
     ordered = sorted(present, key=_key_order)
-    tail: list[GroupKey] = [None] if None in keys else []
+    tail: list[ScalarKey] = [None] if None in keys else []
     return [*ordered, *tail]
 
 
-def _group(key: GroupKey, members: Sequence[DigestTrade]) -> BreakdownGroup:
+def group_stats(key: GroupKey, members: Sequence[DigestTrade]) -> BreakdownGroup:
+    """Count, net P&L, total R and win rate of one breakdown group."""
     return BreakdownGroup(
         key=key,
         trades=len(members),
@@ -400,10 +410,10 @@ def breakdown(trades: Iterable[DigestTrade], field: str, *, journal: bool = Fals
     if not journal and field not in TRADE_BREAKDOWN_FIELDS:
         raise ValueError(f"unknown breakdown field: {field!r}")
     items = tuple(trades)
-    by_key: dict[GroupKey, list[DigestTrade]] = {}
+    by_key: dict[ScalarKey, list[DigestTrade]] = {}
     for t in items:
         by_key.setdefault(_field_value(t, field, journal), []).append(t)
-    groups = tuple(_group(k, by_key[k]) for k in _sorted_keys(list(by_key)))
+    groups = tuple(group_stats(k, by_key[k]) for k in sorted_keys(list(by_key)))
     filled = sum(1 for t in items if _field_value(t, field, journal) is not None)
     return Breakdown(field=field, groups=groups, filled=filled, total=len(items))
 

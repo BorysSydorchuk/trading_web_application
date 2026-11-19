@@ -109,6 +109,15 @@ def test_replays_all_fixtures_and_reports_totals(
     assert "cost USD 0.0058" in report
     assert f"{n} attempts): total {0.0058 * n:.4f}, mean per extraction 0.0058" in report
     assert "chart_links (not_fillable)" in report  # tradingview_link
+    # M8-04..08 taxonomy fixtures (UA / RU / EN): the show_if guard drops hidden FVG types
+    stems = {p.stem for p in paths}
+    assert {
+        "ua_flow_h1_other_h4_poi_multi",
+        "ru_reversal_h4_fvg_types_entry_other",
+        "en_h4_range_poi_other",
+    } <= stems
+    assert "fvg_types_h4 (parent_not_selected)" in report
+    assert "fvg_types_h1_other (parent_not_selected)" in report
     lines = usage_lines(tmp_path)
     assert len(lines) == n
     assert {(line["purpose"], line["trade_id"]) for line in lines} == {("eval", None)}

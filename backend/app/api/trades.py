@@ -30,6 +30,7 @@ from app.services.bias_alignment import alignment_settings, lookup_for, trade_bi
 from app.services.digests import recompute_for_trade
 from app.services.fx_values import stored_spec_tick_values
 from app.services.inbox import count_inbox
+from app.services.journal_filters import JournalFilterError, journal_conditions
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_exclusion import exclude_trade, include_trade
 from app.services.trade_journal import journal_view, save_journal
@@ -249,6 +250,13 @@ def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
     return row[0], row[1]
 
 
+def _journal_filter(values: Sequence[str]) -> list[ColumnElement[bool]]:
+    try:
+        return journal_conditions(values, journal_config())
+    except JournalFilterError as exc:
+        raise _validation_error("journal", str(exc)) from None
+
+
 @router.get("/trades", response_model=schemas.TradeList)
 def list_trades(
     account_id: list[int] = Query(default_factory=list),
@@ -269,9 +277,13 @@ def list_trades(
     described: bool | None = Query(default=None),
     # M8-15: false = leave out archived accounts (the inbox count rule, Home «Потрібен опис»).
     archived: bool = Query(default=True),
+    # M8-04..08: repeatable `<key>:<value>`; same key = any of, different keys = all.
+    journal: list[str] = Query(default_factory=list),
     db: Session = Depends(get_db),
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
+    if journal:
+        conditions.extend(_journal_filter(journal))
     if excluded is not None:
         conditions.append(Trade.excluded_from_stats.is_(excluded))
     if not archived:

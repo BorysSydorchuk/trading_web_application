@@ -1,0 +1,61 @@
+{
+  "description": "M8-04..08 RU: «на часовике флоу» -> h1 flow, «разворот на четырёхчасовике» -> h4 reversal; POI FVG H4 + Fractal H1; FVG H4 has two types (fractal_updating, post_manipulation); entry model «другое» with his words as entry_model_other",
+  "text": "XAUUSD, Нью-Йорк. На часовике флоу, разворот на четырёхчасовике. POI FVG H4 и фрактал H1. FVG H4 обновляет фрактал и после манипуляции. Вход другое: по слому структуры на M1. Выбило по стопу, не по плану.",
+  "model_output": {
+    "h1_context": {
+      "value": "flow",
+      "evidence": "На часовике флоу"
+    },
+    "h4_context": {
+      "value": "reversal",
+      "evidence": "разворот на четырёхчасовике"
+    },
+    "poi_types": {
+      "value": [
+        "fvg_h4",
+        "fractal_h1"
+      ],
+      "evidence": "POI FVG H4 и фрактал H1"
+    },
+    "fvg_types_h4": {
+      "value": [
+        "fractal_updating",
+        "post_manipulation"
+      ],
+      "evidence": "FVG H4 обновляет фрактал и после манипуляции"
+    },
+    "entry_model": {
+      "value": "other",
+      "evidence": "Вход другое"
+    },
+    "entry_model_other": {
+      "value": "по слому структуры на M1",
+      "evidence": "по слому структуры на M1"
+    },
+    "exit_reason": {
+      "value": "sl",
+      "evidence": "Выбило по стопу"
+    },
+    "followed_plan": {
+      "value": false,
+      "evidence": "не по плану"
+    }
+  },
+  "expected_fields": {
+    "h1_context": "flow",
+    "h4_context": "reversal",
+    "poi_types": [
+      "fvg_h4",
+      "fractal_h1"
+    ],
+    "fvg_types_h4": [
+      "fractal_updating",
+      "post_manipulation"
+    ],
+    "entry_model": "other",
+    "entry_model_other": "по слому структуры на M1",
+    "exit_reason": "sl",
+    "followed_plan": false
+  },
+  "expected_dropped": []
+}

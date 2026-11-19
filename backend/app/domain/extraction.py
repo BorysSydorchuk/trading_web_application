@@ -28,6 +28,7 @@ from app.domain.journal import (
     RequirementScope,
     ai_fillable_keys,
     has_other,
+    is_shown,
     missing_required,
     normalise_value,
 )
@@ -45,6 +46,9 @@ DropReason = Literal[
     "invalid_option",
     "out_of_range",
     "parent_not_other",
+    # M8-04..08: a show_if field (or its text) whose parent neither in the answer nor on the
+    # trade includes the option
+    "parent_not_selected",
     "question",
     "not_fillable",  # key not in the schema (auto, links, rule_violations, unknown)
 ]
@@ -189,8 +193,18 @@ def answer_entries(config: JournalFieldsConfig, answer: Mapping[str, Any]) -> di
 # --- prompt field catalogue ---
 
 
-def _catalogue_lines(spec: JournalKey) -> list[str]:
-    head = f"- `{spec.key}` ({spec.field.label})"
+def _show_if_note(spec: JournalKey, config: JournalFieldsConfig) -> str:
+    """`, only when <parent> contains <option>` for a show_if field and its text key."""
+    cond = spec.field.show_if
+    if cond is None:
+        return ""
+    parent = config.get(cond.field)
+    verb = "contains" if parent is None or parent.type == "multi_enum" else "is"
+    return f", only when `{cond.field}` {verb} `{cond.includes}`"
+
+
+def _catalogue_lines(spec: JournalKey, config: JournalFieldsConfig) -> list[str]:
+    head = f"- `{spec.key}` ({spec.field.label}){_show_if_note(spec, config)}"
     if spec.other_only:
         verb = "contains" if spec.field.type == "multi_enum" else "is"
         return [f"{head}: free text, only when `{spec.field.key}` {verb} `{OTHER_OPTION}`."]
@@ -216,7 +230,7 @@ def render_field_catalogue(config: JournalFieldsConfig) -> str:
     Deterministic: the same YAML always gives the same text (prompt caching)."""
     lines: list[str] = []
     for spec in ai_fillable_keys(config):
-        lines.extend(_catalogue_lines(spec))
+        lines.extend(_catalogue_lines(spec, config))
     return "\n".join(lines)
 
 
@@ -334,16 +348,34 @@ def text_value_issue(value: str, evidence: str, normalised_text: str) -> DropRea
     return None
 
 
+def _drop_hidden(
+    specs: Mapping[str, JournalKey],
+    kept: dict[str, Any],
+    current: Mapping[str, Any],
+    dropped: list[Dropped],
+) -> None:
+    """Remove (in place) the show_if fields and texts whose parent includes the option
+    neither in the answer nor on the trade (`current`)."""
+    for key in list(kept):
+        field = specs[key].field
+        if field.show_if is None or is_shown(field, kept) or is_shown(field, current):
+            continue
+        del kept[key]
+        dropped.append(Dropped(key, "parent_not_selected"))
+
+
 def apply_guards(
     config: JournalFieldsConfig,
     output: Mapping[str, Any],
     text: str,
     number_words: NumberWords,
+    current: Mapping[str, Any] | None = None,
 ) -> GuardResult:
     """Drop every value the text does not support (docs/api.md "Guards").
 
     `output` is the parsed model answer (an object); `text` is the user's input;
-    `number_words` comes from config/extraction.yaml (the int guard).
+    `number_words` comes from config/extraction.yaml (the int guard); `current` = the
+    trade's stored journal values (a show_if parent may already be saved, M8-04..08).
     """
     specs = {spec.key: spec for spec in ai_fillable_keys(config)}
     order = {key: i for i, key in enumerate(specs)}
@@ -361,6 +393,7 @@ def apply_guards(
             dropped.append(Dropped(key, reason))
         elif value is not None:
             kept[key] = value
+    _drop_hidden(specs, kept, current or {}, dropped)
     for key in list(kept):
         spec = specs[key]
         if spec.other_only and not has_other(kept.get(spec.field.key)):

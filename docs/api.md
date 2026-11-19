@@ -274,6 +274,7 @@ Everything journal-related is driven by `config/journal_fields.yaml`: no field l
   - `evidence_not_in_text`: every value must come with an `evidence` quote that appears in the input text (case-insensitive, whitespace-normalised);
   - `invalid_option`: enum values must be valid, non-deprecated options; `out_of_range`: ints within `min`/`max`;
   - `parent_not_other`: a `text_key` with `allow_other_text` is dropped when its enum was not filled as `other`;
+  - `parent_not_selected` (M8-04..08): a `show_if` field (or its `text_key`) is dropped when its parent includes the option neither in the answer nor in the trade's saved journal;
   - `question`: a text value containing `?` while its evidence does not;
   - `not_fillable`: a key the model returned that is not in the schema (auto, links, `rule_violations`, unknown) is dropped;
   - the output has no free-form message field, so the model cannot ask questions.

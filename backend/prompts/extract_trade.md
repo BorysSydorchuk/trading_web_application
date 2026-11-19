@@ -39,31 +39,46 @@ You do not talk to him. Your answer is read by a program, not by a person.
 
 He trades a liquidity / smart-money style strategy. Terms and the spellings he uses:
 
-- **Flow H1 / H4** ("флоу", "флов", "flow", "потік", "структура"): the direction of market
-  structure on the H1 and H4 timeframes. The setup context field says whether the H1 flow is
-  in sync with the H4 flow. In sync: "синхрон", "синхронно", "в одну сторону", "збігається",
-  "совпадает", "H1 і H4 разом", "aligned". Not in sync: "не синхрон", "розсинхрон", "проти H4",
-  "не совпадает", "против". Partially: "частково", "частично", "наполовину", "partially".
-  A setup named as H4 together with H1 Flow ("Сетап H4, H1 Flow", "сетап H4 і H1 флоу",
-  "H4 + H1 Flow") also means in sync: the setup context is `yes`, unless he also says
-  they are not in sync (for example "проти H4"): then the not-in-sync words win.
-- **POI** (point of interest, "поі", "пои", "зона інтересу"): the zone where he expected the
-  reaction. Usually an FVG on H4 or H1. Anything else (for example an order block) is the
-  `other` POI type, with his words (e.g. "OB H4") as the other-text.
+- **Context H1 / H4** (`h1_context`, `h4_context`): what the market structure does on that
+  timeframe, one value per timeframe. Fill each only for the timeframe he names; when one
+  phrase names both timeframes with the same word ("H1 і H4 флоу", "Flow синхронно, H1 і
+  H4", "Сетап H4, H1 Flow" = both flow), fill both from that phrase.
+  - `flow` ("флоу", "флов", "flow", "потік", "по структурі"): e.g. "флоу на H1",
+    "на часовике флоу", "H1 flow", "четырёхчасовик во флоу".
+  - `reversal` ("разворот", "розворот", "reversal", "зміна структури"): e.g.
+    "разворот на четырёхчасовике", "на H4 розворот", "H4 reversal".
+  - `range` ("рендж", "рейндж", "флет", "боковик", "range"): e.g. "на H1 рендж",
+    "H4 в боковике", "H4 range".
+  - `other` ("інше", "другое", "other"): something that is clearly none of these; put his
+    words in `h1_context_other` / `h4_context_other`.
+  Timeframes: H1 = "H1", "1H", "годинник", "часовик", "часовой"; H4 = "H4", "4H",
+  "чотиригодинний", "четырёхчасовик", "четырёхчасовой".
+- **POI** (`poi_types`, point of interest, "поі", "пои", "зона інтересу"): the zones where he
+  expected the reaction; one or more of FVG H4 (`fvg_h4`), FVG H1 (`fvg_h1`), Fractal H1
+  (`fractal_h1`, "фрактал H1", "фрактал на часовике"), Fractal H4 (`fractal_h4`, "фрактал
+  H4", "фрактал на четырёхчасовике"). One item per chosen POI ("POI FVG H1 і фрактал H4" =
+  `fvg_h1` and `fractal_h4`). Anything else (for example an order block "OB H4", a level) is
+  `other`, with his words in `poi_types_other`.
 - **FVG** (fair value gap, "фвг", "ФВГ", "гэп", "гап", "імбаланс", "имбаланс", "дисбаланс"):
-  a three-candle price gap. Timeframe is said as "H4"/"H1", "4H"/"1H", "чотиригодинний",
-  "четырёхчасовой", "годинний", "часовой".
-- **FVG kind**: "fractal-updating" means the FVG was created by the move that updated
-  (took out) a fractal ("оновлює фрактал", "обновляет фрактал", "на оновленні фракталу");
-  "post-manipulation" means the FVG formed after a manipulation / liquidity sweep
-  ("після маніпуляції", "после манипуляции", "зняли ліквідність", "сняли ликвидность",
-  "свіп", "sweep", "зібрали стопи"). "n/a" only when he says it does not apply.
+  a three-candle price gap.
+- **FVG type per timeframe** (`fvg_types_h1` for an FVG H1 POI, `fvg_types_h4` for an FVG H4
+  POI; one or more values each): fill a timeframe's FVG type only when that FVG is one of the
+  POI (the type of the FVG H1 never goes into `fvg_types_h4`). `fractal_updating`: the FVG was
+  created by the move that updated (took out) a fractal ("оновлює фрактал", "обновляет
+  фрактал", "на оновленні фракталу", "updates the fractal"); `post_manipulation`: the FVG
+  formed after a manipulation / liquidity sweep ("після маніпуляції", "после манипуляции",
+  "зняли ліквідність", "сняли ликвидность", "свіп", "sweep", "зібрали стопи"); `other` with
+  his words in the matching `_other` field.
 - **IFVG** ("іфвг", "ІФВГ", "iFVG", "інверсія", "инверсия", "інвертований FVG"): an inverted
   FVG, a gap that price closed through and that is then used from the other side. His entry
   model "IFVG M5" is an entry on an IFVG on the M5 timeframe ("п'ятихвилинка", "пятиминутка",
   "M5", "5m").
 - **QM** ("квазімодо", "квазимодо", "квазік", "QM", "кюем"): the quasimodo pattern. His entry
   model "QM M5" is a quasimodo entry on M5.
+- **Entry model «інше»** ("інше", "другое", "other", "своя модель", "не по моделі"): an
+  entry that is neither IFVG M5 nor QM M5 is `entry_model` `other`, with his words for it
+  in `entry_model_other` (e.g. "Вход другое: по слому структуры на M1" -> `other` and
+  "по слому структуры на M1").
 - **Fractal** ("фрактал", "свінг", "swing high/low"): a local swing high or low.
   **Fractal update** ("оновлення фракталу", "обновление фрактала", "перебив фрактал",
   "зняв фрактал", "оновив хай/лоу"): price takes out the latest fractal. As an exit reason it

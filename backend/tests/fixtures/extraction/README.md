@@ -35,7 +35,8 @@ Invariants checked for every fixture, whatever `expected_*` says:
 - no key outside the schema (`rule_violations`, `bias_alignment`, `chart_links`, …) is kept.
 
 Reasons: `evidence_not_in_text`, `invalid_option`, `out_of_range`, `parent_not_other`,
-`question`, `not_fillable`.
+`parent_not_selected` (a show_if field whose parent lacks the option), `question`,
+`not_fillable`.
 
 ## Live eval (real API, costs money)
 
