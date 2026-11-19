@@ -2,6 +2,8 @@ import { AlertCircle, Info, Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
+import { ModelPicker } from '@/features/ai/ModelPicker'
+import { useOneOffModel } from '@/features/ai/models'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { formatShortDateTimeBrussels } from '@/lib/time'
@@ -12,7 +14,7 @@ import type { Digest } from './types'
 const t = uk.digests.ai
 
 /** Transient AI failures reuse the shared texts; the form-oriented ones get summary-specific wording. */
-const SHARED_AI_KINDS = new Set(['auth', 'rate_limit', 'overloaded', 'timeout', 'connection', 'api'])
+const SHARED_AI_KINDS = new Set(['auth', 'rate_limit', 'overloaded', 'timeout', 'connection', 'api', 'model_not_found'])
 
 /** Readable Ukrainian text for a failed summary call (docs/api.md: ai_not_configured / ai_error as M2). */
 function aiSummaryErrorText(error: unknown): string {
@@ -29,10 +31,11 @@ function aiSummaryErrorText(error: unknown): string {
 /** «Підсумок ШІ»: always visible on a created digest; the Claude call runs only on button press. */
 export function AiSummarySection({ digest }: { digest: Digest }) {
   const summary = useAiSummary()
+  const pick = useOneOffModel('digest_summary')
   const hasSummary = Boolean(digest.ai_summary)
 
   function run() {
-    summary.mutate(digest, {
+    summary.mutate({ digest, model: pick.model }, {
       onError: (error) => {
         const id = isApiError(error) ? `digest-ai:${error.code}` : 'digest-ai:unknown'
         toast.error(aiSummaryErrorText(error), { id })
@@ -46,7 +49,10 @@ export function AiSummarySection({ digest }: { digest: Digest }) {
         <h2 id="digest-ai" className="text-sm font-semibold">
           {uk.digests.page.aiSummary}
         </h2>
-        <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={run} disabled={summary.isPending}>
+        <div className="ml-auto">
+          <ModelPicker {...pick} disabled={summary.isPending} />
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={run} disabled={summary.isPending}>
           {summary.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
           {summary.isPending ? t.generating : hasSummary ? t.refresh : t.generate}
         </Button>

@@ -18,14 +18,17 @@ from app.api.ai import (
 )
 from app.clock import utc_now
 from app.config import get_settings
+from app.config_files import get_ai_models
 from app.db import get_db
 from app.errors import ApiError
+from app.schemas import ai as schemas_ai
 from app.schemas import digests as schemas
 from app.services import digests as service
 from app.services.ai.client import ModelClient
 from app.services.ai.digest_summary import summarise_digest
 from app.services.ai.extraction import ExtractionFailed
 from app.services.ai.key_status import KeyStatusTracker
+from app.services.ai.model_choice import resolve
 from app.services.ai.usage_log import UsageLog
 
 logger = logging.getLogger(__name__)
@@ -88,6 +91,7 @@ def patch_digest(
 @router.post("/{digest_id}/ai-summary", response_model=schemas.DigestOut)
 def create_ai_summary(
     digest_id: int,
+    body: schemas_ai.AiSummaryInput | None = None,
     db: Session = Depends(get_db),
     client: ModelClient | None = Depends(get_model_client),
     usage_log: UsageLog = Depends(get_usage_log),
@@ -102,7 +106,9 @@ def create_ai_summary(
     if client is None:
         logger.warning("AI digest summary %s: ANTHROPIC_API_KEY is not set", digest_id)
         raise ApiError(503, "ai_not_configured", "ANTHROPIC_API_KEY is not set")
-    settings = replace(extraction_settings(), primary_model=get_settings().anthropic_model_summary)
+    requested = body.model if body is not None else None
+    model = resolve("digest_summary", requested, get_settings(), get_ai_models)
+    settings = replace(extraction_settings(), primary_model=model)
     try:
         outcome = summarise_digest(
             summary_input, client=client, settings=settings, usage_log=usage_log

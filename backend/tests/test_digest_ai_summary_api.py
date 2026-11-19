@@ -318,3 +318,23 @@ def test_prompt_requires_incomplete_metric_coverage_without_advice() -> None:
         "Describe, never prescribe",
     ):
         assert required in prompt
+
+
+def test_a_one_off_model_for_the_summary(
+    app: FastAPI,
+    client: TestClient,
+    session: Session,
+    week: dict[str, Trade],
+    usage_log: UsageLog,
+) -> None:
+    created = digest(client)
+    model = use_model(app, FakeClient([answer(model="claude-sonnet-5-5")]))
+
+    response = client.post(
+        f"/api/digests/{created['id']}/ai-summary", json={"model": "claude-sonnet-5-5"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert model.requests[0].model == "claude-sonnet-5-5"
+    unknown = client.post(f"/api/digests/{created['id']}/ai-summary", json={"model": "x"})
+    assert unknown.status_code == 422

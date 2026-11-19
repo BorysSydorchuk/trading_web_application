@@ -1,0 +1,25 @@
+# Claude models the owner can choose (M8-13): Settings → ШІ (default per call type) and the
+# small selector next to «Заповнити з тексту» / «Підсумок від ШІ». A new model needs only a
+# new entry here (and its prices in ai_pricing.yaml for the cost in logs/ai_usage.jsonl).
+#
+#   id          Anthropic model id (sent to the API)
+#   label       name shown in the UI
+#   approx_usd  approximate cost of ONE call per call type, shown next to the selector
+#               (from logs/ai_usage.jsonl averages, 2026-11-19). Quote the numbers.
+#
+# Call types: trade_extraction («Заповнити з тексту» on a trade), bias_extraction (bias
+# note), digest_summary («Підсумок від ШІ»).
+
+models:
+  - id: claude-sonnet-5-5
+    label: "Claude Sonnet 5.5"
+    approx_usd:
+      trade_extraction: "0.01"
+      bias_extraction: "0.014"
+      digest_summary: "0.023"
+  - id: claude-opus-5-5
+    label: "Claude Opus 5.5"
+    approx_usd:
+      trade_extraction: "0.021"
+      bias_extraction: "0.028"
+      digest_summary: "0.046"

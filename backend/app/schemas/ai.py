@@ -18,6 +18,8 @@ class ExtractInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     text: str = Field(min_length=1, max_length=EXTRACT_TEXT_MAX_LENGTH)
+    # M8-13: a one-off model (an id from config/ai_models.yaml); None = the default.
+    model: str | None = Field(default=None, min_length=1, max_length=100)
 
     @field_validator("text")
     @classmethod
@@ -91,3 +93,46 @@ class AiKeyOut(BaseModel):
 
     state: KeyState
     checked_at: UtcDatetime | None
+
+
+class AiSummaryInput(BaseModel):
+    """POST /api/digests/{id}/ai-summary body (optional, M8-13): a one-off model."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    model: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class AiApproxCostOut(BaseModel):
+    trade_extraction: Decimal
+    bias_extraction: Decimal
+    digest_summary: Decimal
+
+
+class AiModelOut(BaseModel):
+    id: str
+    label: str
+    approx_usd: AiApproxCostOut
+
+
+class AiModelDefaults(BaseModel):
+    trade_extraction: str
+    bias_extraction: str
+    digest_summary: str
+
+
+class AiModelsOut(BaseModel):
+    """GET /api/ai/models (M8-13): the choosable models and the default per call type."""
+
+    models: list[AiModelOut]
+    defaults: AiModelDefaults
+
+
+class AiDefaultsInput(BaseModel):
+    """PUT /api/ai/models/defaults: change one or more call types."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    trade_extraction: str | None = Field(default=None, min_length=1, max_length=100)
+    bias_extraction: str | None = Field(default=None, min_length=1, max_length=100)
+    digest_summary: str | None = Field(default=None, min_length=1, max_length=100)

@@ -711,3 +711,13 @@ Trade fields: `symbol` (canonical, e.g. GER40), `session`, `hour` (Brussels hour
 ### API / UI
 - `TradeRow` / `TradeDetail` add `mfe_r`, `mae_r`, `excursion_status`; `TradeDetail` adds `mfe_price`, `mae_price`, `mfe_points`, `mae_points`, `mfe_time`, `mae_time`, `excursion_source`, `excursion_at`. Journal: optional columns «MAE, R» / «MFE, R» (column chooser); trade details: both values with points and Brussels times, «поточні» for an open trade.
 - Digest snapshot (strategy trades, M8-01 exclusions apply): `excursions: {winners_avg_mfe_r, losers_avg_mfe_r, losers_reached_1r, losers_reached_1r_share, n_winners, n_losers}` over trades with a final `mfe_r` (win/loss as in the digest's breakeven rule).
+
+## M8-13 - Choose the Claude model (PM 2026-11-18)
+
+- `config/ai_models.yaml`: `models: [{id, label, approx_usd: {trade_extraction, bias_extraction, digest_summary}}]` (strict; approx USD of one call). A new model = a new entry (plus prices in ai_pricing.yaml for the logged cost).
+- `GET /api/ai/models` -> `{models: [{id, label, approx_usd}], defaults: {trade_extraction, bias_extraction, digest_summary}}`. Default per call type = the owner's choice (`DATA_DIR/ai_models.json`), else `.env` (ANTHROPIC_MODEL_EXTRACTION for trade and bias extraction, ANTHROPIC_MODEL_SUMMARY for the summary): nothing changes until the owner chooses.
+- `PUT /api/ai/models/defaults {trade_extraction?, bias_extraction?, digest_summary?}` -> same shape; an id not in the list -> 422 `validation_error` (`details.fields.model`).
+- One-off model: `POST /api/trades/{id}/extract` and `POST /api/bias/notes/extract` accept `model` in the body; `POST /api/digests/{id}/ai-summary` accepts an optional body `{model}`. Unknown id -> 422, no call. Without `model` and with a missing or broken ai_models.yaml the `.env` model is used (logged).
+- `logs/ai_usage.jsonl` records `requested_model` and the `model` the API actually used (format unchanged).
+- A model the API does not know (HTTP 404) -> 502 `ai_error` kind `model_not_found` (no fallback); UI: «Сервіс ШІ не знає вибраної моделі…».
+- UI: Settings → «Моделі ШІ» (three selects with the approximate cost); a small selector «Модель ШІ для цього виклику» next to «Заповнити з тексту» (Describe and bias) and «Підсумок від ШІ».

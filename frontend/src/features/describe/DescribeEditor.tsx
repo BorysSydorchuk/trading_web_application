@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Info, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ModelPicker } from '@/features/ai/ModelPicker'
+import { useOneOffModel } from '@/features/ai/models'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
 import type { AudioNote } from '@/features/voice/types'
 import { uk } from '@/i18n/uk'
@@ -46,6 +48,7 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
   const unsentRecordingRef = useRef(false)
   const actions = useDescribeActions(trade.id, form, unsentRecordingRef)
   const { save, extract } = actions
+  const pick = useOneOffModel('trade_extraction')
   const links = linksField(fields)
 
   function setUnsentRecording(unsent: boolean) {
@@ -70,7 +73,8 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
             rawText={form.rawText}
             onRawText={form.setRawText}
             rawTextError={form.saveErrors.rawText}
-            onExtract={actions.runExtract}
+            onExtract={() => actions.runExtract(pick.model)}
+            modelPicker={<ModelPicker {...pick} disabled={extract.isPending} />}
             extracting={extract.isPending}
             startedAt={actions.extractStartedAt}
             extractError={extract.isError ? extract.error : null}

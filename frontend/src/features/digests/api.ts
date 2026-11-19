@@ -91,9 +91,13 @@ export function useSaveReview(id: number) {
 }
 
 /** A client-side timeout is shown as the AI timeout, not as "server unavailable" (as in M2 extraction). */
-async function requestAiSummary(id: number): Promise<Digest> {
+async function requestAiSummary(id: number, model?: string): Promise<Digest> {
   try {
-    return await apiRequest<Digest>(`/digests/${id}/ai-summary`, { method: 'POST', timeoutMs: AI_SUMMARY_TIMEOUT_MS })
+    return await apiRequest<Digest>(`/digests/${id}/ai-summary`, {
+      method: 'POST',
+      timeoutMs: AI_SUMMARY_TIMEOUT_MS,
+      ...(model === undefined ? {} : { body: { model } }),
+    })
   } catch (error) {
     if (isApiError(error) && error.code === 'timeout') {
       throw new ApiError('ai_error', error.message, 0, { kind: 'timeout' })
@@ -106,7 +110,7 @@ async function requestAiSummary(id: number): Promise<Digest> {
 export function useAiSummary() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (digest: Digest) => requestAiSummary(digest.id),
+    mutationFn: ({ digest, model }: { digest: Digest; model?: string }) => requestAiSummary(digest.id, model),
     // The section shows the error inline and raises its own toast with the summary-specific text.
     meta: { silentError: true },
     onSuccess: (digest) => afterWrite(queryClient, digest),

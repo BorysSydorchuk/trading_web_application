@@ -11,6 +11,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from app.config_files.ai_models import (
+    AiModelsConfig,
+    clear_ai_models_cache,
+    get_ai_models,
+)
 from app.config_files.ai_pricing import (
     AiPricingConfig,
     ModelPrice,
@@ -64,6 +69,7 @@ def reload_config() -> None:
     clear_rules_cache()
     clear_journal_fields_cache()
     clear_ai_pricing_cache()
+    clear_ai_models_cache()
     clear_extraction_cache()
     clear_transcription_cache()
     clear_transcript_glossary_cache()
@@ -78,6 +84,7 @@ def check_config_files() -> list[ConfigError]:
         get_rules,
         get_journal_fields,
         get_ai_pricing,
+        get_ai_models,
         get_number_words,
         get_transcription,
         get_transcript_glossary,
@@ -98,6 +105,7 @@ def check_config_files() -> list[ConfigError]:
 
 __all__ = [
     "RULE_KEYS",
+    "AiModelsConfig",
     "AiPricingConfig",
     "BiasConfig",
     "BiasSymbol",
@@ -114,6 +122,7 @@ __all__ = [
     "TranscriptionConfig",
     "check_config_files",
     "config_dir",
+    "get_ai_models",
     "get_ai_pricing",
     "get_bias_config",
     "get_journal_fields",

@@ -23,6 +23,8 @@ interface DescriptionInputProps {
   lastApplied: number | null
   /** Voice recorder and notes, shown under the text box. */
   voice?: ReactNode
+  /** M8-13: one-off model selector shown next to «Заповнити з тексту». */
+  modelPicker?: ReactNode
   /** Text box label and placeholder (default: the trade description's). */
   label?: string
   placeholder?: string
@@ -59,6 +61,7 @@ export function DescriptionInput(props: DescriptionInputProps) {
           {extracting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
           {extracting ? t.extracting : t.extract}
         </Button>
+        {props.modelPicker}
         <ExtractStatus {...props} />
       </div>
     </div>

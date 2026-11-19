@@ -32,11 +32,11 @@ export function useDescribeActions(tradeId: number, form: DescribeForm, unsentRe
   const allowLeaveRef = useRef(false)
   const [extractStartedAt, setExtractStartedAt] = useState<number | null>(null)
 
-  function runExtract() {
+  function runExtract(model?: string) {
     const text = form.rawText.trim()
     if (text === '') return
     setExtractStartedAt(Date.now())
-    extract.mutate(text, {
+    extract.mutate({ text, model }, {
       onSuccess: (result) => form.applyExtraction(result),
       onSettled: () => setExtractStartedAt(null),
     })
