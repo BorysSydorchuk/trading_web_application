@@ -121,7 +121,7 @@ function PasswordCell({ account }: { account: Account }) {
         {account.password_configured ? (
           <KeyRound className="size-3.5 text-muted-foreground" aria-hidden />
         ) : (
-          <TriangleAlert className="size-3.5 text-amber-400" aria-hidden />
+          <TriangleAlert className="size-3.5 text-warning" aria-hidden />
         )}
         {account.password_configured ? p.configured : p.missing}
       </span>

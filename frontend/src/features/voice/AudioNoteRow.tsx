@@ -81,7 +81,7 @@ function Progress({ note, index }: { note: AudioNote; index: number }) {
         aria-valuenow={percent}
         className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"
       >
-        <span className="block h-full bg-primary transition-[width]" style={{ width: `${percent}%` }} />
+        <span className="block h-full bg-lavender-mid transition-[width]" style={{ width: `${percent}%` }} />
       </span>
     </span>
   )

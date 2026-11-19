@@ -11,7 +11,7 @@ export function ExcludedBadge({ reason, className }: { reason: string | null; cl
       title={title}
       aria-label={title}
       className={cn(
-        'inline-flex items-center rounded-full border border-amber-500/50 px-1.5 py-0.5 text-[11px] leading-none text-amber-600 dark:text-amber-400',
+        'inline-flex items-center rounded-full border border-warning-strong/60 px-1.5 py-0.5 text-[11px] leading-none text-warning',
         className,
       )}
     >

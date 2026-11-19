@@ -6,6 +6,8 @@ const port = 5197
 
 export default defineConfig({
   testDir: './e2e',
+  // Design screenshots run on demand only (playwright.screens.config.ts, npm run e2e:screens).
+  testIgnore: ['**/screens.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,

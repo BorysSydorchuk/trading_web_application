@@ -49,7 +49,7 @@ export default tseslint.config(
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
-    files: ['vite.config.ts', 'eslint.config.js', 'playwright.config.ts'],
+    files: ['vite.config.ts', 'eslint.config.js', 'playwright.config.ts', 'playwright.screens.config.ts'],
     languageOptions: { globals: globals.node },
   },
 )

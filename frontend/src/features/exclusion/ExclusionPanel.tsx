@@ -20,7 +20,7 @@ export function ExclusionPanel({ trade }: { trade: TradeDetail }) {
       aria-label={excluded ? t.panelExcluded : t.panelCounted}
       className={cn(
         'flex flex-wrap items-start gap-x-4 gap-y-2 rounded-lg border px-4 py-3 text-sm',
-        excluded && 'border-amber-500/50',
+        excluded && 'border-warning-strong/60',
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">

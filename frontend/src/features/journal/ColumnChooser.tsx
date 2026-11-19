@@ -40,7 +40,7 @@ export function ColumnChooser({ visible, onChange }: ColumnChooserProps) {
                 <input
                   id={`${id}-${key}`}
                   type="checkbox"
-                  className="size-3.5 accent-primary"
+                  className="size-3.5 accent-lavender-mid"
                   checked={visibleSet.has(key)}
                   onChange={() => toggle(key)}
                 />

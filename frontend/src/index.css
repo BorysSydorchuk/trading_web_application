@@ -1,75 +1,117 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* «Студія» fonts, self-hosted (offline, no CDN; DECISIONS 2026-11-20). Only the weights in use:
+   Manrope 800 (titles, symbols, hero), Inter 400/500/600 (body), JetBrains Mono 500/600 (numbers).
+   Each file declares all subsets with unicode-range: the browser downloads only latin/cyrillic. */
+@import '@fontsource/manrope/800.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+/* Kept so a dark set can return later (`<html class="dark">` + a `.dark { --tj-*: ... }` block). */
 @custom-variant dark (&:is(.dark *));
 
-/* Light palette kept for completeness; the app ships dark by default (<html class="dark">). */
+/*
+ * Layer 1: raw «Студія» palette (docs/design/DESIGN_SYSTEM.md). A future theme overrides only
+ * these --tj-* variables under its own selector; layers 2 and 3 follow automatically.
+ */
 :root {
-  --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --profit: oklch(0.627 0.17 149);
-  --loss: oklch(0.577 0.215 27);
-  --ai: oklch(0.55 0.12 250);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-}
+  color-scheme: light;
 
-.dark {
-  --background: oklch(0.16 0.004 286);
-  --foreground: oklch(0.93 0.003 286);
-  --card: oklch(0.2 0.005 286);
-  --card-foreground: oklch(0.93 0.003 286);
-  --popover: oklch(0.2 0.005 286);
-  --popover-foreground: oklch(0.93 0.003 286);
-  --primary: oklch(0.88 0.005 286);
-  --primary-foreground: oklch(0.2 0.006 286);
-  --secondary: oklch(0.26 0.006 286);
-  --secondary-foreground: oklch(0.93 0.003 286);
-  --muted: oklch(0.24 0.006 286);
-  --muted-foreground: oklch(0.65 0.015 286);
-  --accent: oklch(0.26 0.006 286);
-  --accent-foreground: oklch(0.96 0 0);
-  --destructive: oklch(0.65 0.19 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.55 0.015 286);
-  /* P&L and deviations only. */
-  --profit: oklch(0.72 0.16 152);
-  --loss: oklch(0.66 0.2 25);
+  --tj-page: #f6f6f4;
+  --tj-chrome: #efefec; /* sidebar, footer */
+  --tj-surface: #ffffff;
+  --tj-border: #e4e4e0;
+  --tj-input: #d6d6d0; /* form control borders: a step darker than card borders */
+  --tj-divider: #f0f0ec;
+  --tj-track: #f1f1ee;
+  --tj-text: #1f1f1f;
+  --tj-muted: #6a6a66; /* small/secondary text; never on loss-soft or button backgrounds */
+  --tj-faint: #8a8a85; /* non-text graphics only (gridlines, ticks, dashed borders) */
+
+  --tj-profit-text: #0e6b43;
+  --tj-profit-strong: #2ea067;
+  --tj-profit-mid: #7bcfa2;
+  --tj-profit-light: #cdefd9;
+  --tj-profit-soft: #e3f4ea;
+  --tj-profit-wash: #eaf6ef;
+
+  --tj-loss-text: #a3271f;
+  --tj-loss-strong: #e2665e;
+  --tj-loss-mid: #ee958e;
+  --tj-loss-light: #f8d2ce;
+  --tj-loss-soft: #fbe3e1;
+  --tj-loss-wash: #fbedec;
+
+  --tj-accent-text: #3b2f86;
+  --tj-accent-mid: #8e86d9;
+  --tj-accent-ring: #b9b2ee;
+  --tj-accent-soft: #f3f1fb;
+  --tj-accent-button: #e7e3fa;
+  --tj-accent-button-hover: #dcd6f7;
+
+  --tj-peach-soft: #fcf2ea;
+
+  /* Warnings (sync/backup/AI key chips). Not in the PM palette: amber text readable on light
+     backgrounds (6.3:1 on surface, 5.5:1 on chrome) plus a dot colour. */
+  --tj-warning-text: #8a5300;
+  --tj-warning-strong: #e0a030;
+
+  --tj-hero-gradient: linear-gradient(135deg, #eaf6ef 0%, #f3f1fb 55%, #fcf2ea 100%);
+  --tj-mark-gradient: linear-gradient(135deg, #cdefd9 0%, #dcd6f7 100%);
+  --tj-chart-line-from: #8e86d9;
+  --tj-chart-line-to: #2ea067;
+  --tj-chart-area: #7bcfa2; /* area fill: 45% opacity at the top to 0% at the base */
+
+  --tj-shadow-lift: 0 16px 32px -20px rgb(40 40 60 / 0.35);
+  --tj-shadow-soft: 0 1px 3px rgb(40 40 60 / 0.08);
+  --tj-shadow-segment: 0 1px 3px rgb(40 40 60 / 0.12);
+  --tj-motion-lift: 180ms;
+
+  /* Layer 2: shadcn/ui semantic variables mapped onto the palette (every page picks these up). */
+  --radius: 0.625rem;
+  --background: var(--tj-page);
+  --foreground: var(--tj-text);
+  --card: var(--tj-surface);
+  --card-foreground: var(--tj-text);
+  --popover: var(--tj-surface);
+  --popover-foreground: var(--tj-text);
+  --primary: var(--tj-accent-button);
+  --primary-foreground: var(--tj-accent-text);
+  --secondary: var(--tj-track);
+  --secondary-foreground: var(--tj-text);
+  --muted: var(--tj-track);
+  --muted-foreground: var(--tj-muted);
+  --accent: var(--tj-accent-soft);
+  --accent-foreground: var(--tj-text);
+  --destructive: var(--tj-loss-text);
+  --border: var(--tj-border);
+  --input: var(--tj-input);
+  --ring: var(--tj-accent-ring);
+  /* P&L and deviations only. Text colours; dots and bars use the -strong / -mid shades. */
+  --profit: var(--tj-profit-text);
+  --loss: var(--tj-loss-text);
   /* Marks AI-prefilled journal fields until the user touches them (not a P&L colour). */
-  --ai: oklch(0.74 0.1 250);
-  --sidebar: oklch(0.18 0.005 286);
-  --sidebar-foreground: oklch(0.85 0.005 286);
-  --sidebar-accent: oklch(0.25 0.006 286);
-  --sidebar-accent-foreground: oklch(0.97 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
+  --ai: var(--tj-accent-text);
+  --sidebar: var(--tj-chrome);
+  --sidebar-foreground: var(--tj-text);
+  --sidebar-accent: var(--tj-surface);
+  --sidebar-accent-foreground: var(--tj-text);
+  --sidebar-border: var(--tj-border);
 }
 
+/* Layer 3: Tailwind utilities (bg-*, text-*, border-*, fill-*, stroke-*). */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-tile: 14px;
+  --radius-card: 20px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -96,7 +138,44 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
-  --font-mono: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, 'SFMono-Regular', monospace;
+
+  /* «Студія» palette names. `lavender` = the PM's "accent" (shadcn already owns `accent`). */
+  --color-page: var(--tj-page);
+  --color-chrome: var(--tj-chrome);
+  --color-surface: var(--tj-surface);
+  --color-line: var(--tj-border);
+  --color-divider: var(--tj-divider);
+  --color-track: var(--tj-track);
+  --color-ink: var(--tj-text);
+  --color-ink-muted: var(--tj-muted);
+  --color-faint: var(--tj-faint);
+  --color-profit-strong: var(--tj-profit-strong);
+  --color-profit-mid: var(--tj-profit-mid);
+  --color-profit-light: var(--tj-profit-light);
+  --color-profit-soft: var(--tj-profit-soft);
+  --color-profit-wash: var(--tj-profit-wash);
+  --color-loss-strong: var(--tj-loss-strong);
+  --color-loss-mid: var(--tj-loss-mid);
+  --color-loss-light: var(--tj-loss-light);
+  --color-loss-soft: var(--tj-loss-soft);
+  --color-loss-wash: var(--tj-loss-wash);
+  --color-lavender: var(--tj-accent-text);
+  --color-lavender-mid: var(--tj-accent-mid);
+  --color-lavender-ring: var(--tj-accent-ring);
+  --color-lavender-soft: var(--tj-accent-soft);
+  --color-lavender-button: var(--tj-accent-button);
+  --color-lavender-button-hover: var(--tj-accent-button-hover);
+  --color-peach-soft: var(--tj-peach-soft);
+  --color-warning: var(--tj-warning-text);
+  --color-warning-strong: var(--tj-warning-strong);
+
+  --shadow-lift: var(--tj-shadow-lift);
+  --shadow-soft: var(--tj-shadow-soft);
+  --shadow-segment: var(--tj-shadow-segment);
+
+  --font-sans: 'Inter', system-ui, 'Segoe UI', sans-serif;
+  --font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 /* Numbers: monospace, tabular digits, right-aligned where used in columns. */
@@ -106,12 +185,89 @@
   font-feature-settings: 'tnum' 1;
 }
 
+/* Typography scale (DESIGN_SYSTEM.md). Display styles: Manrope 800. */
+@utility type-page-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+@utility type-section-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+@utility type-card-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+@utility type-symbol {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+@utility type-hero {
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+@utility type-kpi {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card hover lift (opt-in). Motion is off under prefers-reduced-motion. */
+@utility lift {
+  transition:
+    transform var(--tj-motion-lift) ease,
+    box-shadow var(--tj-motion-lift) ease;
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--tj-shadow-lift);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+/* Pulsing dot for live (open) positions. */
+@utility live-pulse {
+  animation: tj-live-pulse 1.8s ease-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes tj-live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(46 160 103 / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgb(46 160 103 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(46 160 103 / 0);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
-  }
-  html {
-    color-scheme: dark;
   }
   /* The app shell fills the viewport and scrolls only inside <main>; the document itself never
      scrolls, so the status bar cannot float above a blank area (M8-11). */
@@ -122,6 +278,11 @@
     overflow: hidden;
   }
   body {
-    @apply bg-background text-foreground text-sm antialiased;
+    @apply bg-background font-sans text-sm text-foreground antialiased;
+  }
+  /* Headings take the display face; their sizes stay as each page sets them (M8-10c restyles). */
+  h1,
+  h2 {
+    font-family: var(--font-display);
   }
 }

@@ -58,7 +58,7 @@ export function AiSummarySection({ digest }: { digest: Digest }) {
         </Button>
       </div>
       {hasSummary && digest.ai_summary_stale_at && (
-        <p role="status" className="flex w-fit items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs">
+        <p role="status" className="flex w-fit items-center gap-1.5 rounded-md border border-warning-strong/50 bg-peach-soft px-2 py-0.5 text-xs">
           <AlertCircle className="size-3.5 shrink-0" aria-hidden />
           {t.stale(formatShortDateTimeBrussels(digest.ai_summary_stale_at))}
         </p>

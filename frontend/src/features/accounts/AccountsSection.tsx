@@ -99,7 +99,7 @@ export function AccountsSection() {
           <input
             id={archivedToggleId}
             type="checkbox"
-            className="size-3.5 accent-primary"
+            className="size-3.5 accent-lavender-mid"
             checked={includeArchived}
             onChange={(e) => setIncludeArchived(e.target.checked)}
           />

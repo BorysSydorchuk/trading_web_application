@@ -136,7 +136,7 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
         <input
           id={`${id}-missing-new`}
           type="checkbox"
-          className="size-3.5 accent-primary"
+          className="size-3.5 accent-lavender-mid"
           checked={filters.missingNewFields}
           onChange={(e) => update({ missingNewFields: e.target.checked })}
         />
@@ -152,7 +152,7 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
         <input
           id={`${id}-missing-r`}
           type="checkbox"
-          className="size-3.5 accent-primary"
+          className="size-3.5 accent-lavender-mid"
           checked={filters.missingR}
           onChange={(e) => update({ missingR: e.target.checked })}
         />
@@ -168,7 +168,7 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
         <input
           id={`${id}-show-excluded`}
           type="checkbox"
-          className="size-3.5 accent-primary"
+          className="size-3.5 accent-lavender-mid"
           checked={filters.showExcluded}
           onChange={(e) => update({ showExcluded: e.target.checked })}
         />

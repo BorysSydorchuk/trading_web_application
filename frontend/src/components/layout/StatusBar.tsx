@@ -10,9 +10,9 @@ import { cn } from '@/lib/utils'
 type Tone = 'ok' | 'down' | 'pending'
 
 const dotClass: Record<Tone, string> = {
-  ok: 'bg-profit',
-  down: 'bg-loss',
-  pending: 'bg-muted-foreground animate-pulse',
+  ok: 'bg-profit-strong',
+  down: 'bg-loss-strong',
+  pending: 'bg-faint animate-pulse motion-reduce:animate-none',
 }
 
 export function StatusBar() {
@@ -44,7 +44,7 @@ export function StatusBar() {
   return (
     <footer
       aria-label={uk.statusBar.label}
-      className="flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-sidebar-border bg-sidebar px-3 text-xs text-muted-foreground"
+      className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-sidebar-border bg-sidebar px-3 py-1.5 text-xs text-muted-foreground"
     >
       {/* Only the server/DB state is announced; sync chips and the clock would be noise every poll. */}
       <span role="status" aria-live="polite" className="flex shrink-0 items-center gap-2">

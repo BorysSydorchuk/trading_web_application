@@ -9,27 +9,27 @@ import { syncErrorText } from './errors'
 
 const s = uk.sync
 
-// Status dots, not P&L: kept small and muted except for problems.
+// Status dots, not P&L: kept small and muted except for problems («Студія» strong shades).
 const dotClass: Record<SyncState, string> = {
-  ok: 'bg-profit/70',
-  warning: 'bg-amber-400',
-  running: 'bg-muted-foreground animate-pulse',
-  never: 'bg-muted-foreground/40',
-  stale: 'bg-amber-400',
-  error: 'bg-loss',
+  ok: 'bg-profit-strong',
+  warning: 'bg-warning-strong',
+  running: 'bg-faint animate-pulse motion-reduce:animate-none',
+  never: 'bg-faint/50',
+  stale: 'bg-warning-strong',
+  error: 'bg-loss-strong',
 }
 
 const textClass: Record<SyncState, string> = {
   ok: 'text-muted-foreground',
-  warning: 'text-amber-400',
+  warning: 'text-warning',
   running: 'text-muted-foreground',
   never: 'text-muted-foreground',
-  stale: 'text-amber-400',
+  stale: 'text-warning',
   error: 'text-loss',
 }
 
 /** Unknown (future) states: neutral grey. */
-const NEUTRAL_DOT = 'bg-muted-foreground/60'
+const NEUTRAL_DOT = 'bg-faint'
 const NEUTRAL_TEXT = 'text-muted-foreground'
 
 function minutesSince(isoUtc: string, nowMs: number): number | null {
@@ -111,7 +111,7 @@ function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
           className={cn(
             'flex items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
             state === 'error' && 'border-loss/40',
-            state === 'warning' && 'border-amber-400/40',
+            state === 'warning' && 'border-warning-strong/50',
           )}
           aria-label={`${row.account_name}: ${text}`}
         >
@@ -165,10 +165,10 @@ function SyncDetails({ row }: { row: SyncStatusRow }) {
         <div
           className={cn(
             'flex flex-col gap-0.5 rounded border px-2 py-1.5',
-            isWarning ? 'border-amber-400/40' : 'border-loss/40',
+            isWarning ? 'border-warning-strong/50' : 'border-loss/40',
           )}
         >
-          <p className={isWarning ? 'text-amber-400' : 'text-loss'}>
+          <p className={isWarning ? 'text-warning' : 'text-loss'}>
             {isWarning ? d.warning : d.error}
             {': '}
             {problemText}

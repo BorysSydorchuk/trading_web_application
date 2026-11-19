@@ -77,7 +77,7 @@ export function NeedsDescriptionList() {
                     <Link
                       to={describePath(trade.id)}
                       aria-label={n.describeLabel(trade.symbol, trade.close_time ? formatShortDateTimeBrussels(trade.close_time) : '')}
-                      className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                      className="text-xs font-medium text-lavender underline-offset-2 hover:underline"
                     >
                       {n.describe}
                     </Link>

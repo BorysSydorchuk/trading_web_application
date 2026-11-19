@@ -1,11 +1,11 @@
 import type { CSSProperties } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 
-/** shadcn/ui Sonner wrapper. Dark theme is fixed (no next-themes in this app). */
+/** shadcn/ui Sonner wrapper. Light «Студія» theme is fixed (no next-themes in this app). */
 function Toaster(props: ToasterProps) {
   return (
     <Sonner
-      theme="dark"
+      theme="light"
       className="toaster group"
       style={
         {
