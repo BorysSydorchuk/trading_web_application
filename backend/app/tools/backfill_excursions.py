@@ -207,7 +207,9 @@ def _read_from_any_terminal(
     totals: Totals,
     password_for: PasswordLookup,
 ) -> list[Series]:
-    """The account's own terminal, else the first same-broker terminal that connects."""
+    """The account's own terminal, else the first same-broker terminal that connects. Only
+    a refused connect moves on to the next terminal; an MT5 error after connecting counts
+    the account's trades as errors (the next run tries again)."""
     own = Terminal.of(account)
     refused: list[str] = []
     for terminal in (own, *same_broker_terminals(session, account)):
@@ -224,7 +226,7 @@ def _read_from_any_terminal(
                     f"Рахунок {account.name}: власний термінал недоступний, історія цін з "
                     f"{terminal.label} ({terminal.path})"
                 )
-            return _read_trades(source, terminal, trades, now, totals)
+            return _read_trades(source, terminal, trades, now, totals, own=terminal == own)
         except Mt5Error as exc:
             totals.counts["failed"] += len(trades)
             totals.lines.append(f"Рахунок {account.name}: помилка MT5 ({terminal.label}): {exc}")
@@ -244,8 +246,12 @@ def _read_trades(
     trades: Sequence[Trade],
     now: datetime,
     totals: Totals,
+    *,
+    own: bool,
 ) -> list[Series]:
-    """Price series of ``trades`` from the connected ``terminal`` (read-only)."""
+    """Price series of ``trades`` from the connected ``terminal`` (read-only). From another
+    terminal (``own`` False) only real values are kept: a missing symbol or (incomplete)
+    history counts as an error and writes nothing."""
     if not isinstance(source, PriceHistory):  # checked by the caller; narrows the type
         raise BackfillError("this MT5 source has no price history")
     found: list[Series] = []
@@ -254,6 +260,12 @@ def _read_trades(
     specs = {s: source.symbol_spec(s) for s in symbols}
     for trade in trades:
         spec = specs.get(trade.broker_symbol)
+        if not own and spec is None:
+            totals.counts["failed"] += 1
+            totals.lines.append(
+                f"#{trade.id}: символ {trade.broker_symbol} відсутній ({terminal.label})"
+            )
+            continue
         try:
             series = series_for(
                 source, target_of(trade), conversion, spec.point if spec else None, now
@@ -263,6 +275,12 @@ def _read_trades(
             totals.lines.append(f"#{trade.id}: помилка MT5 ({terminal.label}): {exc}")
             continue
         kind, line = _line(trade, series, now, terminal)
+        if not own and kind in ("unavailable", "retry"):
+            # another terminal's local history may just be shallower: never a permanent
+            # «немає даних MT5» from it; the trade stays as it is
+            totals.counts["failed"] += 1
+            totals.lines.append(f"{line}: не записано (історія іншого термінала)")
+            continue
         totals.counts[kind] += 1
         totals.lines.append(line)
         found.append(series)
