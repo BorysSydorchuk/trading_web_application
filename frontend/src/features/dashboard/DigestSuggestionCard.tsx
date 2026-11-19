@@ -22,7 +22,7 @@ export function DigestSuggestionCard() {
         <article
           key={item.kind}
           aria-label={item.text}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/40 px-4 py-3"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-lavender-ring px-4 py-3"
         >
           <p className="text-sm font-medium">{item.text}</p>
           <Button asChild size="sm" variant="outline">

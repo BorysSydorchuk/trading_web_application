@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useBiasNotes } from '@/features/bias/api'
 import { BiasNoteList } from '@/features/bias/BiasNoteList'
 import { BIAS_KINDS, isBiasKind, type BiasKind } from '@/features/bias/types'
+import { selectedToggleClass } from '@/components/studio/tones'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -50,10 +51,10 @@ interface KindFilterProps {
 }
 
 const FILTER_BUTTON =
-  'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+  'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring'
 
 function filterClass(active: boolean) {
-  return cn(FILTER_BUTTON, active ? 'border-primary/60 bg-primary text-primary-foreground' : 'border-input hover:bg-accent dark:bg-input/30')
+  return cn(FILTER_BUTTON, active ? selectedToggleClass : 'border-input hover:bg-accent')
 }
 
 function KindFilter({ kinds, onToggle, onAll }: KindFilterProps) {

@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react'
 import { Sparkles } from 'lucide-react'
 import type { Mt5FillSource } from './mt5Prefill'
+import { selectedToggleClass } from '@/components/studio/tones'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { fieldDomId } from './formModel'
@@ -124,10 +125,10 @@ export function Segmented({ id, options, value, onChange, invalid, mono }: Segme
             aria-pressed={active}
             onClick={() => onChange(active ? null : option.value)}
             className={cn(
-              'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
               mono && 'num min-w-8',
               active
-                ? 'border-primary/60 bg-primary text-primary-foreground'
+                ? selectedToggleClass
                 : 'border-input bg-transparent text-foreground hover:bg-accent dark:bg-input/30',
               invalid && !active && 'border-destructive/60',
             )}

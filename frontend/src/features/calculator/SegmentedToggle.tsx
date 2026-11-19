@@ -27,7 +27,7 @@ export function SegmentedToggle<T extends string>({ label, value, options, onCha
           onClick={() => onChange(option.value)}
           className={cn(
             'flex-1 rounded-sm px-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none',
-            'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
+            'focus-visible:ring-[3px] focus-visible:ring-ring disabled:opacity-50',
             option.value === value ? 'bg-secondary text-secondary-foreground' : 'hover:text-foreground',
           )}
         >

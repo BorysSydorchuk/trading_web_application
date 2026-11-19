@@ -1,13 +1,14 @@
 import { Check, Loader2, RotateCcw, X } from 'lucide-react'
 import { uk } from '@/i18n/uk'
 import { showErrorToast } from '@/lib/errors'
+import { selectedToggleClass } from '@/components/studio/tones'
 import { cn } from '@/lib/utils'
 import { useSetBiasResult } from './api'
 import type { BiasEntry } from './types'
 
 const r = uk.bias.result
 
-const BUTTON = 'inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
+const BUTTON = 'inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:opacity-50'
 
 /** "Біас справдився?" так / ні / скинути → PATCH /api/bias/entries/{id}/result (neutral colours). */
 export function BiasResultControl({ entry }: { entry: BiasEntry }) {
@@ -26,7 +27,7 @@ export function BiasResultControl({ entry }: { entry: BiasEntry }) {
         aria-pressed={active}
         disabled={busy}
         onClick={() => mark(active ? null : value)}
-        className={cn(BUTTON, active ? 'border-primary/60 bg-primary text-primary-foreground' : 'border-input hover:bg-accent')}
+        className={cn(BUTTON, active ? selectedToggleClass : 'border-input hover:bg-accent')}
       >
         <Icon className="size-3" aria-hidden />
         {label}

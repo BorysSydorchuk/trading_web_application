@@ -30,7 +30,7 @@ export function RDistributionChart({ buckets }: { buckets: readonly RBucket[] })
           return (
             <g key={bucket.lower} data-bucket={label}>
               <title>{c.bucket(label, bucket.count)}</title>
-              <rect x={x} y={TOP + PLOT - h} width={BAR} height={h} className={negative ? 'fill-loss/70' : 'fill-profit/70'} />
+              <rect x={x} y={TOP + PLOT - h} width={BAR} height={h} className={negative ? 'fill-loss-strong' : 'fill-profit-strong'} />
               <text x={x + BAR / 2} y={TOP + PLOT - h - 3} textAnchor="middle" className="num fill-foreground text-[10px]">
                 {bucket.count}
               </text>

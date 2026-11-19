@@ -34,7 +34,9 @@ function targetIndex(key: string, current: number, count: number): number | null
  */
 export function SegmentedControl<T extends string>({ label, value, options, onChange, disabled, className }: SegmentedControlProps<T>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
-  const selected = Math.max(0, options.findIndex((option) => option.value === value))
+  // -1 when `value` is not among the options: nothing is checked, the first option keeps the tab stop.
+  const selected = options.findIndex((option) => option.value === value)
+  const tabStop = selected === -1 ? 0 : selected
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const next = targetIndex(event.key, index, options.length)
@@ -65,14 +67,14 @@ export function SegmentedControl<T extends string>({ label, value, options, onCh
             type="button"
             role="radio"
             aria-checked={checked}
-            tabIndex={checked ? 0 : -1}
+            tabIndex={index === tabStop ? 0 : -1}
             disabled={disabled}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
               'rounded-[9px] px-3 py-1.5 text-xs whitespace-nowrap outline-none',
               'transition-colors duration-150 motion-reduce:transition-none',
-              'focus-visible:ring-[3px] focus-visible:ring-ring/60 disabled:opacity-50',
+              'focus-visible:ring-[3px] focus-visible:ring-ring disabled:opacity-50',
               checked ? 'bg-surface font-semibold text-ink shadow-segment' : 'text-ink-muted hover:text-ink',
             )}
           >

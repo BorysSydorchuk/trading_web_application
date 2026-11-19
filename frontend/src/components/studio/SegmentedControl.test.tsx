@@ -69,4 +69,11 @@ describe('SegmentedControl', () => {
     render(<Harness />)
     expect(radio('Місяць')).toHaveClass('motion-reduce:transition-none')
   })
+
+  it('checks nothing when the value is not an option; the first option keeps the tab stop', () => {
+    render(<SegmentedControl label="Період" value="year" options={[...OPTIONS, { value: 'other', label: 'Інше' }]} onChange={() => undefined} />)
+    for (const name of ['Тиждень', 'Місяць', 'Усе', 'Інше']) expect(radio(name)).not.toBeChecked()
+    expect(radio('Тиждень')).toHaveAttribute('tabindex', '0')
+    expect(radio('Місяць')).toHaveAttribute('tabindex', '-1')
+  })
 })

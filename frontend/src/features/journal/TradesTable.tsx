@@ -54,7 +54,7 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                     onClick={() => onSort(sortField)}
                     title={uk.journal.sortBy(label)}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+                      'inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                       NUMERIC_COLUMNS.has(key) && 'flex-row-reverse',
                       active && 'text-foreground',
                     )}

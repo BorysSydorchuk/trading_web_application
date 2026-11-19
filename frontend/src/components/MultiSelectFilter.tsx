@@ -49,7 +49,7 @@ export function MultiSelectFilter({ label, options, selected, onChange, mono }: 
         <button
           type="button"
           className={cn(
-            'flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs shadow-xs hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+            'flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs shadow-xs hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none',
             selected.length > 0 && 'border-ring',
           )}
         >

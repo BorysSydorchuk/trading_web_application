@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 
 const INBOX_PATH = '/inbox'
 /** Count badges: loss-soft pill (Pill tone="loss"), pushed to the right edge of the nav item. */
-const BADGE_CLASS = 'ml-auto px-2 py-px leading-4 font-bold'
+const BADGE_CLASS = 'ml-auto px-2 py-px leading-4'
 
 export function Sidebar() {
   const { data: counts } = useInboxCounts()

@@ -36,20 +36,20 @@ Decisions: `docs/DECISIONS.md` 2026-11-20 (display rounding, contrast rule, font
 | `--tj-muted` | `text-ink-muted`, `text-muted-foreground` | `#6A6A66` | Secondary and small text, chart labels |
 | `--tj-faint` | `bg-faint`, `stroke-faint` | `#8A8A85` | **Non-text graphics only** (gridlines, ticks, zero lines, dashed borders, idle dots) |
 | `--tj-profit-text` | `text-profit` | `#0E6B43` | P&L gain text |
-| `--tj-profit-strong` | `bg-profit-strong` | `#2EA067` | Status dots, live dot, chart line end |
-| `--tj-profit-mid` | `*-profit-mid` | `#7BCFA2` | Bars, area fill, selected KPI ring |
+| `--tj-profit-strong` | `bg-profit-strong`, `fill-`/`stroke-profit-strong` | `#2EA067` | Status dots, live dot, chart lines and bars (>= 3:1 on white) |
+| `--tj-profit-mid` | `*-profit-mid` | `#7BCFA2` | Area fill, heatmap cells (ink text stays readable on them), selected KPI ring |
 | `--tj-profit-light` | `*-profit-light` | `#CDEFD9` | Bar gradient end |
 | `--tj-profit-soft` | `bg-profit-soft` | `#E3F4EA` | Profit pills |
 | `--tj-profit-wash` | `bg-profit-wash` | `#EAF6EF` | Profit tiles, KPI wash |
 | `--tj-loss-text` | `text-loss`, `text-destructive` | `#A3271F` | P&L loss text, errors |
-| `--tj-loss-strong` | `bg-loss-strong` | `#E2665E` | Status dots (down), drawdown line |
-| `--tj-loss-mid` | `*-loss-mid` | `#EE958E` | Bars, selected drawdown KPI ring |
+| `--tj-loss-strong` | `bg-loss-strong`, `fill-`/`stroke-loss-strong` | `#E2665E` | Status dots (down), chart lines and bars |
+| `--tj-loss-mid` | `*-loss-mid` | `#EE958E` | Heatmap cells, selected drawdown KPI ring |
 | `--tj-loss-light` | `*-loss-light` | `#F8D2CE` | Bar gradient end, destructive button hover |
 | `--tj-loss-soft` | `bg-loss-soft` | `#FBE3E1` | Loss pills, sidebar badges, destructive button |
 | `--tj-loss-wash` | `bg-loss-wash` | `#FBEDEC` | Loss tiles |
-| `--tj-accent-text` | `text-lavender`, `text-primary-foreground`, `text-ai` | `#3B2F86` | Accent text, links, primary button text, AI marks |
+| `--tj-accent-text` | `text-lavender`, `text-primary-foreground`, `text-ai`, `ring-ring`, `border-lavender` | `#3B2F86` | Accent text, links, primary button text, AI marks, **focus ring** (`--ring`), selected toggle border |
 | `--tj-accent-mid` | `*-lavender-mid` | `#8E86D9` | Chart line start, checkboxes, progress bars |
-| `--tj-accent-ring` | `border-lavender-ring`, `ring-ring` | `#B9B2EE` | Focus ring, selected KPI ring |
+| `--tj-accent-ring` | `border-lavender-ring` | `#B9B2EE` | Decorative borders (digest suggestion card, «не переглянуто» badge), selected KPI ring. Not a focus ring (1.97:1 on white) |
 | `--tj-accent-soft` | `bg-lavender-soft`, `bg-accent` | `#F3F1FB` | Accent pills, hover background |
 | `--tj-accent-button` | `bg-lavender-button`, `bg-primary` | `#E7E3FA` | Primary button, active filter |
 | `--tj-accent-button-hover` | `bg-lavender-button-hover` | `#DCD6F7` | Primary button hover |
@@ -62,7 +62,8 @@ Decisions: `docs/DECISIONS.md` 2026-11-20 (display rounding, contrast rule, font
 | `--tj-chart-area` | — | `#7BCFA2` | Area fill, 45% opacity at the top to 0% at the base |
 
 Rules: no black or dark buttons/badges. Green/red only for P&L, deviations and status. Status pills
-are soft background + their own text colour.
+are soft background + their own text colour. Chart marks use the -strong (lines, bars) or -mid
+(heatmap cells under ink text) shades, never the -text shades.
 
 ## 3. Contrast (WCAG 2.x, AA = 4.5:1 for text)
 
@@ -81,8 +82,25 @@ Rules (DECISIONS 2026-11-20):
 - Small text, including chart labels and axis ticks, uses **muted**.
 - **muted** never sits on loss-soft or button backgrounds; those use their own text colours
   (loss text, accent text).
-- Non-text contrast: form control borders use `--tj-input` (1.46:1 on white, visual cue only;
-  the focus ring is the accessible state indicator). Checkboxes use lavender-mid (3.20:1 on white).
+- Non-text contrast (WCAG 1.4.11, 3:1). Measured graphics colours:
+
+  | Graphic colour | white | page | chrome | accent-soft | button |
+  |---|---|---|---|---|---|
+  | accent text `#3B2F86` (focus ring, selected toggle border) | 10.84 | 10.02 | 9.41 | 9.70 | 8.66 |
+  | lavender-mid `#8E86D9` | 3.20 | **2.96** | **2.78** | **2.86** | **2.55** |
+  | accent-ring `#B9B2EE` | **1.97** | **1.82** | **1.71** | **1.76** | **1.57** |
+  | profit-strong `#2EA067` | 3.31 | 3.06 | — | **2.96** | — |
+  | loss-strong `#E2665E` | 3.34 | 3.08 | — | **2.98** | — |
+
+- **Focus ring**: `--ring` = accent text `#3B2F86`, always at full opacity (`ring-ring`,
+  `outline-ring`, never `ring-ring/50`). lavender-mid and accent-ring fail 3:1 on page/chrome.
+- **Selected toggle buttons** (filters, presets, choice chips): `selectedToggleClass` in `tones.ts` =
+  accent-text border + button fill + semibold accent text. Unselected = `border-input`, hover =
+  `bg-accent` only, so hover never looks selected. Keep `aria-pressed`.
+- Form control borders use `--tj-input` (1.46:1 on white, visual cue only; the focus ring is the
+  accessible state indicator). Checkboxes use lavender-mid (3.20:1 on white, the card surface).
+- Known gap (M8-10b): the selected KPI rings (profit-mid / loss-mid / accent-ring) are below 3:1; the
+  pressed state is also shown by the hint pill text. Revisit when Home is rebuilt.
 
 ## 4. Typography
 
@@ -102,9 +120,12 @@ downloads only the latin/cyrillic subsets it needs. Works offline.
 | Chart labels | `num text-[11px]`..`text-[13px]` | JetBrains Mono | 11-13px / 500-600 | colour muted, never faint |
 | KPI value | `type-kpi` | JetBrains Mono | 26px / 600 | -0.02em |
 
-Imported weights: Manrope 800; Inter 400/500/600; JetBrains Mono 500/600. Do not use other weights
-(the browser would substitute the nearest one). `h1`/`h2` default to Manrope; pages keep their own
-sizes until M8-10c.
+Imported weights: Manrope 700/800; Inter 400/500/600; JetBrains Mono 500/600. Do not use other
+weights (the browser would substitute the nearest one); in particular no `font-bold` on `num`/mono
+text (no JetBrains Mono 700), use `font-semibold`.
+Decision (M8-10a review): `h1`/`h2` default to Manrope; existing pages keep their own sizes and
+`font-semibold` until M8-10c, which renders as Manrope 700 (imported for this). New «Студія» titles
+use the `type-*` utilities (800).
 
 ## 5. Shape and motion
 
@@ -131,13 +152,14 @@ query; transitions in components use `motion-reduce:transition-none` / `motion-r
 | `Tile` | `tone?: Tone`, div props | 14px radius, tone wash |
 | `Pill` | `tone?: Tone`, `size?: 'sm' \| 'md'`, `mono?: boolean`, `dot?: boolean`, span props | Soft bg + own text colour; `dot` adds a strong-shade status dot (decorative) |
 | `HeaderChip` | as `Pill` without `size` | Medium pill for the page header (session, bias, quick links) |
-| `SegmentedControl<T>` | `label`, `value`, `options: {value,label}[]`, `onChange`, `disabled?`, `className?` | `role="radiogroup"`, roving tab stop, Arrow keys / Home / End move and select |
-| `KpiCard` | `label`, `value` (formatted), `hint?`, `tone?: 'profit' \| 'loss' \| 'accent' \| 'neutral'`, `selected?`, `onClick?`, `sparkline?: ReactNode`, `className?` | `<button aria-pressed>`; tone sets wash, value colour, selected 2px ring; `lift` hover |
+| `SegmentedControl<T>` | `label`, `value`, `options: {value,label}[]`, `onChange`, `disabled?`, `className?` | `role="radiogroup"`, roving tab stop, Arrow keys / Home / End move and select; a `value` not in `options` checks nothing and the first option keeps the tab stop |
+| `KpiCard` | `label`, `value` (formatted), `hint?`, `tone?: 'profit' \| 'loss' \| 'accent' \| 'neutral'`, `selected?`, `onClick?`, `sparkline?: ReactNode`, `className?` | With `onClick`: `<button aria-pressed>`, `lift` hover, selected 2px ring. Without: a static `<div>` (no pressed state, no lift). Tone sets wash and value colour |
 | `SectionHeader` | `title`, `level?: 2 \| 3`, `id?`, `children?` (pills/LiveDot), `actions?` | Manrope 20px title; actions right-aligned |
 | `LiveDot` | `label?`, `className?` | Pulsing profit-strong dot; decorative unless `label` is given (`role="img"`) |
 | `Button` (`components/ui/button`) | shadcn variants | `default` = pastel primary (`#E7E3FA` / `#3B2F86`); `secondary` and `outline` = white with border; `destructive` = loss-soft / loss text; `ghost`; `link` = lavender text |
 
-`Tone` = `'neutral' | 'profit' | 'loss' | 'accent' | 'peach'`. Class maps are in `tones.ts`.
+`Tone` = `'neutral' | 'profit' | 'loss' | 'accent' | 'peach'`. Class maps are in `tones.ts`, plus
+`selectedToggleClass` for the selected state of pressed toggle buttons outside `SegmentedControl`.
 
 App shell: sidebar 236px (`#EFEFEC`, TJ mark gradient, active item white + soft shadow, count badges
 `Pill tone="loss"`); footer status bar on `#EFEFEC` with status dots in profit-strong / loss-strong

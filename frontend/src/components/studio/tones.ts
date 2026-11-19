@@ -50,3 +50,11 @@ export const kpiToneClass: Record<KpiTone, KpiToneClasses> = {
   accent: { card: 'bg-linear-160 from-lavender-soft to-surface to-70%', ring: 'border-lavender-ring', value: 'text-lavender' },
   neutral: { card: 'bg-surface', ring: 'border-lavender-ring', value: 'text-ink' },
 }
+
+/**
+ * Selected state of pressed toggle buttons (filters, presets, choice chips). The border is accent
+ * text (>= 8.6:1 on every background; lavender-mid fails 3:1 on page and chrome) and the label goes
+ * semibold, so selected differs from hover (`hover:bg-accent`, no border change) and from the
+ * unselected `border-input` without relying on the pastel fill.
+ */
+export const selectedToggleClass = 'border-lavender bg-lavender-button font-semibold text-lavender'

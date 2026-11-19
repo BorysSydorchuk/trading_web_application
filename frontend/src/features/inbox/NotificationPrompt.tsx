@@ -56,7 +56,7 @@ export function NotificationPrompt({ variant = 'statusBar' }: { variant?: 'statu
         onClick={() => void enable()}
         disabled={requesting}
         title={n.enableHint}
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
       >
         <Bell className="size-3" aria-hidden />
         {n.enable}
@@ -66,7 +66,7 @@ export function NotificationPrompt({ variant = 'statusBar' }: { variant?: 'statu
         onClick={rememberPromptDismissed}
         aria-label={n.dismiss}
         title={n.dismiss}
-        className="rounded p-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="rounded p-0.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <X className="size-3" aria-hidden />
       </button>

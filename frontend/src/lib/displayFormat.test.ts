@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { formatMoney, formatPercent, formatPrice as priceExact, formatR as rExact, formatSignedMoney, formatVolume } from '@/features/trades/format'
 import { formatLots, formatPct, formatPrice, formatR, formatUsd, pricePlaces, toDecimalString } from './displayFormat'
 
-const MINUS = '−'
-const NNBSP = ' '
+const MINUS = '−' // U+2212 minus sign
+const NNBSP = ' ' // U+202F narrow no-break space
 const EMPTY = '—'
 
 describe('toDecimalString', () => {

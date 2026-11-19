@@ -18,7 +18,7 @@ export function AiKeyChip({ state }: { state: unknown }) {
         <button
           type="button"
           aria-label={`${chip.text}. ${chip.hint}`}
-          className="flex shrink-0 items-center gap-1.5 rounded border border-warning-strong/50 px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex shrink-0 items-center gap-1.5 rounded border border-warning-strong/50 px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <span className="size-2 shrink-0 rounded-full bg-warning-strong" aria-hidden />
           <span className="whitespace-nowrap text-warning">{chip.text}</span>

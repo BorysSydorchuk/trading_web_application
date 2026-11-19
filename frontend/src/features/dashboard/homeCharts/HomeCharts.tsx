@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { isApiError } from '@/api/client'
+import { selectedToggleClass } from '@/components/studio/tones'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { EquityChart } from '@/features/digests/charts/EquityChart'
@@ -49,7 +50,7 @@ export function HomeCharts({ accounts }: { accounts: readonly DashboardAccount[]
               onClick={() => setSelection({ preset })}
               className={cn(
                 'rounded-md border px-2 py-1 text-xs',
-                selection.preset === preset ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
+                selection.preset === preset ? selectedToggleClass : 'border-input hover:bg-accent',
               )}
             >
               {t.presets[preset]}

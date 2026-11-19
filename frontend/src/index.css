@@ -2,8 +2,9 @@
 @import 'tw-animate-css';
 
 /* «Студія» fonts, self-hosted (offline, no CDN; DECISIONS 2026-11-20). Only the weights in use:
-   Manrope 800 (titles, symbols, hero), Inter 400/500/600 (body), JetBrains Mono 500/600 (numbers).
+   Manrope 700/800 (700: legacy semibold headings until M8-10c; 800: titles, symbols, hero), Inter 400/500/600 (body), JetBrains Mono 500/600 (numbers).
    Each file declares all subsets with unicode-range: the browser downloads only latin/cyrillic. */
+@import '@fontsource/manrope/700.css';
 @import '@fontsource/manrope/800.css';
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
@@ -90,7 +91,8 @@
   --destructive: var(--tj-loss-text);
   --border: var(--tj-border);
   --input: var(--tj-input);
-  --ring: var(--tj-accent-ring);
+  /* Focus ring: accent text (>= 8.6:1 on every background); accent-ring/-mid fail 3:1 on page/chrome. */
+  --ring: var(--tj-accent-text);
   /* P&L and deviations only. Text colours; dots and bars use the -strong / -mid shades. */
   --profit: var(--tj-profit-text);
   --loss: var(--tj-loss-text);
@@ -267,7 +269,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   /* The app shell fills the viewport and scrolls only inside <main>; the document itself never
      scrolls, so the status bar cannot float above a blank area (M8-11). */

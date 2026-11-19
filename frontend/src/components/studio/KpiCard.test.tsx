@@ -29,14 +29,24 @@ describe('KpiCard', () => {
     ['loss', 'text-loss', 'border-loss-mid', 'from-peach-soft'],
     ['accent', 'text-lavender', 'border-lavender-ring', 'from-lavender-soft'],
   ] as const)('%s tone colours the value, ring and wash', (tone, valueClass, ringClass, washClass) => {
-    render(<KpiCard label="KPI" value="+212" tone={tone} selected />)
+    render(<KpiCard label="KPI" value="+212" tone={tone} selected onClick={() => undefined} />)
     expect(screen.getByRole('button', { name: /KPI/ })).toHaveClass(ringClass, washClass)
     expect(screen.getByText('+212')).toHaveClass('type-kpi', valueClass)
   })
 
   it('renders the sparkline slot and lifts on hover (lift utility, off under reduced motion)', () => {
-    render(<KpiCard label="KPI" value="1" sparkline={<svg data-testid="spark" aria-hidden />} />)
+    render(<KpiCard label="KPI" value="1" onClick={() => undefined} sparkline={<svg data-testid="spark" aria-hidden />} />)
     expect(screen.getByTestId('spark')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /KPI/ })).toHaveClass('lift')
+  })
+
+  it('without onClick is a static block: no button, no pressed state, no lift', () => {
+    const { container } = render(<KpiCard label="KPI" value="1" selected />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    const card = container.firstElementChild
+    expect(card?.tagName).toBe('DIV')
+    expect(card).not.toHaveAttribute('aria-pressed')
+    expect(card).not.toHaveClass('lift')
+    expect(card).toHaveClass('border-line')
   })
 })

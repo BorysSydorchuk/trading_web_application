@@ -109,7 +109,7 @@ function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
         <button
           type="button"
           className={cn(
-            'flex items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+            'flex items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
             state === 'error' && 'border-loss/40',
             state === 'warning' && 'border-warning-strong/50',
           )}

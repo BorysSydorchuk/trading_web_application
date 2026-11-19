@@ -72,7 +72,7 @@ function DigestHeader({ digest }: { digest: Digest }) {
       <span
         className={cn(
           'rounded-full border px-2 py-0.5 text-xs',
-          digest.reviewed ? 'text-muted-foreground' : 'border-primary/50 text-foreground',
+          digest.reviewed ? 'text-muted-foreground' : 'border-lavender-ring bg-lavender-soft font-semibold text-lavender',
         )}
       >
         {reviewedText(digest)}
