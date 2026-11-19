@@ -180,6 +180,8 @@ def migrated(db_engine: Engine) -> dict[str, int]:
             conn, 7, setup_context="yes", poi_type="fvg_h4", fvg_kind="fractal_updating"
         )
         ids["kind_without_poi"] = _trade(conn, 8, fvg_kind="fractal_updating")
+        ids["other_na"] = _trade(conn, 90, poi_type="other", fvg_kind="na")
+        ids["no_poi_na"] = _trade(conn, 91, fvg_kind="na")
         _violation(conn, ids["yes_h1_updating"], "weekly_stop_loss_pct", "auto", "week d")
         _violation(conn, ids["yes_h1_updating"], "max_risk_pct", "auto", "risk 2%")
         _violation(conn, ids["no_h4_post"], "daily_stop_loss_pct", "auto", "loss detail")
@@ -295,6 +297,17 @@ def test_fvg_kind_that_cannot_be_mapped_exactly_is_kept_as_legacy(
         row = _row(conn, migrated[name], "fvg_types_h1", "fvg_types_h4", "fvg_kind")
 
     assert row == {"fvg_types_h1": None, "fvg_types_h4": None, "fvg_kind": kind}
+
+
+@pytest.mark.parametrize("name", ["other_na", "no_poi_na"])
+def test_na_fvg_kind_without_an_fvg_poi_is_cleared_without_legacy(
+    db_engine: Engine, migrated: dict[str, int], name: str
+) -> None:
+    # PM 2026-11-19: «н/з» on a non-FVG POI carries no information -> empty, no badge.
+    with db_engine.connect() as conn:
+        row = _row(conn, migrated[name], "fvg_types_h1", "fvg_types_h4", "fvg_kind")
+
+    assert row == {"fvg_types_h1": None, "fvg_types_h4": None, "fvg_kind": None}
 
 
 def test_blank_trade_stays_blank(db_engine: Engine, migrated: dict[str, int]) -> None:

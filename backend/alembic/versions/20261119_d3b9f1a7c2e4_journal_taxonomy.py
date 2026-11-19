@@ -9,7 +9,9 @@ Data (pure SQL; exactly mapped old values move and the old column is emptied, th
 in the old column as a read-only legacy value; old columns are never dropped):
 - setup_context ``yes`` -> h1 = h4 = ``flow``, setup_context NULL; ``no`` / ``partially`` kept;
 - fvg_kind fractal_updating / post_manipulation with poi_type fvg_h1 / fvg_h4 -> fvg_types_h1 /
-  fvg_types_h4 = [kind], fvg_kind NULL; otherwise kept (``na``, or the POI is not an FVG);
+  fvg_types_h4 = [kind], fvg_kind NULL; ``na`` on a trade whose POI is not an FVG (or empty)
+  -> NULL without a legacy value (PM 2026-11-19: «н/з» carries no information there; not
+  restored on downgrade); otherwise kept (``na`` on an FVG POI, or a kind on a non-FVG POI);
 - poi_type X -> poi_types = [X], poi_type_other -> poi_types_other; both old columns NULL;
 - rule_violations with daily_stop_loss_pct / daily_stop_profit_pct -> ``daily_risk``, the
   weekly ones -> ``weekly_risk``; details ``<old key>: <old details>`` (``<old key>`` when
@@ -74,6 +76,10 @@ UPDATE trades SET
   fvg_kind = NULL
 WHERE fvg_kind IN ('fractal_updating', 'post_manipulation') AND poi_type IN ('fvg_h1', 'fvg_h4')
 """
+_CLEAR_NA = """
+UPDATE trades SET fvg_kind = NULL
+WHERE fvg_kind = 'na' AND (poi_type IS NULL OR poi_type NOT IN ('fvg_h1', 'fvg_h4'))
+"""
 _MAP_POI = """
 UPDATE trades SET
   poi_types = CASE WHEN poi_type IS NOT NULL THEN ARRAY[poi_type] END,
@@ -130,7 +136,7 @@ def upgrade() -> None:
         op.add_column(
             "trades", sa.Column(name, postgresql.ARRAY(sa.String(length=50)), nullable=True)
         )
-    for sql in (_MAP_CONTEXT, _MAP_FVG, _MAP_POI, _MERGE_VIOLATIONS, _DELETE_OLD_VIOLATIONS):
+    for sql in (_MAP_CONTEXT, _MAP_FVG, _CLEAR_NA, _MAP_POI, _MERGE_VIOLATIONS, _DELETE_OLD_VIOLATIONS):
         op.execute(sa.text(sql))
     op.execute(sa.text(_DELETE_REQUIREMENTS).bindparams(keys=list(REMOVED_REQUIRED_KEYS)))
     op.execute(sa.text(_INSERT_REQUIREMENTS).bindparams(keys=list(NEW_REQUIREMENT_KEYS)))
