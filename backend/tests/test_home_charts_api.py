@@ -156,11 +156,10 @@ def test_a_range_across_the_dst_change_uses_brussels_midnights(
     client: TestClient, session: Session, account: Account
 ) -> None:
     # Brussels leaves summer time on Sun 2026-10-25 (03:00 -> 02:00).
-    inside = closed(session, account, datetime(2026, 10, 25, 22, 30, tzinfo=UTC), "10.00", "0.1")
+    closed(session, account, datetime(2026, 10, 25, 22, 30, tzinfo=UTC), "10.00", "0.1")
     closed(session, account, datetime(2026, 10, 25, 23, 30, tzinfo=UTC), "20.00", "0.2")  # 26.10
 
     data = charts(client, **{"from": "2026-10-25", "to": "2026-10-25"})
 
     assert data["trades"] == 1  # 25.10 22:30 UTC = 23:30 Brussels (winter time)
     assert data["equity"][0]["time"] == "2026-10-24T22:00:00Z"  # 00:00 summer time
-    assert inside.id is not None

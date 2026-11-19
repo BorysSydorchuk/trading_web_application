@@ -120,7 +120,24 @@ describe('M8-14 HomeCharts', () => {
     expect(asked.at(-1)?.get('to')).toBe('2026-11-10')
   })
 
-  it('shows a readable message for mixed currencies and other errors', async () => {
+  it('a failed refresh keeps the charts and says so', async () => {
+    let fail = false
+    mockApi(
+      http.get('/api/dashboard/charts', () =>
+        fail ? HttpResponse.json({ error: { code: 'internal_error', message: 'boom' } }, { status: 500 }) : HttpResponse.json(DATA),
+      ),
+    )
+    const { queryClient } = renderWithProviders(<HomeCharts accounts={ACCOUNTS} />)
+    await screen.findAllByTestId('daily-bar')
+
+    fail = true
+    await queryClient.invalidateQueries()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.refreshError)
+    expect(screen.getAllByTestId('daily-bar')).toHaveLength(2)
+  })
+
+  it('shows a readable message for mixed currencies on the first load', async () => {
     mockApi(
       http.get('/api/dashboard/charts', () =>
         HttpResponse.json({ error: { code: 'mixed_currency', message: 'x', details: {} } }, { status: 409 }),

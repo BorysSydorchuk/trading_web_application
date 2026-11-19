@@ -15,6 +15,9 @@ import { RANGE_PRESETS, loadSelection, rangeOf, saveSelection, type ChartSelecti
 import { RollingChart } from './RollingChart'
 
 const t = uk.dashboard.charts
+/** The API accepts these dates only (docs/api.md M8-14). */
+const MIN_DATE = '2000-01-01'
+const MAX_DATE = '2100-12-31'
 
 /** M8-14: three charts on «Головна» with a shared range and account selector. */
 export function HomeCharts({ accounts }: { accounts: readonly DashboardAccount[] }) {
@@ -74,9 +77,9 @@ export function HomeCharts({ accounts }: { accounts: readonly DashboardAccount[]
       {selection.preset === 'custom' && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <label htmlFor={`${id}-from`}>{t.from}</label>
-          <Input id={`${id}-from`} type="date" className="h-8 w-40 text-xs" value={selection.from} onChange={(e) => setSelection({ from: e.target.value })} />
+          <Input id={`${id}-from`} type="date" min={MIN_DATE} max={MAX_DATE} className="h-8 w-40 text-xs" value={selection.from} onChange={(e) => setSelection({ from: e.target.value })} />
           <label htmlFor={`${id}-to`}>{t.to}</label>
-          <Input id={`${id}-to`} type="date" className="h-8 w-40 text-xs" value={selection.to} onChange={(e) => setSelection({ to: e.target.value })} />
+          <Input id={`${id}-to`} type="date" min={MIN_DATE} max={MAX_DATE} className="h-8 w-40 text-xs" value={selection.to} onChange={(e) => setSelection({ to: e.target.value })} />
           {range === null && <span className="text-muted-foreground">{t.customHint}</span>}
         </div>
       )}
