@@ -9,7 +9,7 @@ import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
 import { account, marginRequest, result, spec } from './calculator.fixture'
 import type { CalculateInput } from './types'
-import { f, fillForm, input, r, resultView, rowValue, selectSymbol, serveSetup, submit } from './testUtils'
+import { f, fillForm, input, r, resultView, findRowText, rowValue, selectSymbol, serveSetup, submit } from './testUtils'
 
 const e = uk.calculator.errors
 const s = uk.calculator.states
@@ -142,7 +142,7 @@ describe('CalculatorForm result', () => {
     expect(rowValue(r.riskBudget)).toHaveTextContent(r.riskBase('100 000.00', 'USD'))
     expect(within(resultView()).queryByText(/Поточний баланс/)).not.toBeInTheDocument()
     expect(within(resultView()).getByText(r.specsAt(formatDateTimeBrussels('2026-11-10T06:00:00Z')), { exact: false })).toBeInTheDocument()
-    expect(await within(rowValue(r.margin)).findByText('5 300.00 USD')).toBeInTheDocument()
+    expect(await findRowText(r.margin, '5 300.00 USD')).toBeInTheDocument()
   })
 
   it('sizes from the account size and shows the current balance as info in Brussels time', async () => {

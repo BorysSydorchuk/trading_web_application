@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -50,6 +51,11 @@ export default defineConfig({
     },
   },
   test: {
+    // M8-17: half the logical CPUs (8 on the 16-thread dev laptop). Vitest's default (all but
+    // one) starved every jsdom worker: typing flows took ~4.7 s against the 5 s timeout and
+    // the whole run was slower (23 s at 15 workers, 18 s at 8). `--maxWorkers` still wins
+    // (trading hours: make check VITEST_WORKERS=2).
+    maxWorkers: Math.max(1, Math.floor(os.availableParallelism() / 2)),
     // Explicit imports from 'vitest' (no globals). Two projects, one `vitest run`:
     // pure-logic tests (*.test.ts) in Node, component tests (*.test.tsx) in jsdom with MSW.
     projects: [

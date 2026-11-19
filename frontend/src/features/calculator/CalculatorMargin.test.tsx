@@ -9,7 +9,7 @@ import { mockApi } from '@/test/server'
 import { marginRequest, NO_MARGIN, result } from './calculator.fixture'
 import type { CalculateResult, MarginRequest } from './types'
 import { MARGIN_MAX_POLLS, MARGIN_POLL_MS } from './useLiveMargin'
-import { fillForm, input, f, r, rowValue, serveSetup, submit } from './testUtils'
+import { fillForm, input, f, r, findRowText, rowValue, serveSetup, submit } from './testUtils'
 
 // Only the polling interval runs on a fake clock; network, React and user-event stay real.
 beforeEach(() => {
@@ -134,7 +134,7 @@ describe('CalculatorForm live margin', () => {
       http.post('/api/calculator/margin-requests', () => HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 })),
     )
     await calculate()
-    expect(await within(rowValue(r.margin)).findByText(r.marginLiveFailed.error)).toBeInTheDocument()
+    expect(await findRowText(r.margin, r.marginLiveFailed.error)).toBeInTheDocument()
     expect(rowValue(r.volume)).toHaveTextContent('2.00')
   })
 
@@ -159,7 +159,7 @@ describe('CalculatorForm live margin', () => {
     const { user } = await calculate()
     await nextPoll()
     await submit(user)
-    expect(await within(rowValue(r.margin)).findByText('1 111.00 USD')).toBeInTheDocument()
+    expect(await findRowText(r.margin, '1 111.00 USD')).toBeInTheDocument()
     release()
     await nextPoll()
     expect(screen.queryByText('9 999.00 USD')).not.toBeInTheDocument()

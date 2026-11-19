@@ -1,5 +1,5 @@
 import { screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { setupUser } from '@/test/user'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { fixtureTrade } from '@/features/describe/trade.fixture'
@@ -37,7 +37,7 @@ function serveExclusion(trade: TradeDetail) {
 
 describe('ExclusionPanel (Describe screen)', () => {
   it('requires a reason before excluding, then sends the trimmed reason', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     const trade = fixtureTrade()
     const calls = serveExclusion(trade)
     renderWithProviders(<ExclusionPanel trade={trade} />)
@@ -56,7 +56,7 @@ describe('ExclusionPanel (Describe screen)', () => {
   })
 
   it('shows the excluded state, reason and history, and returns the trade without a reason', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     const trade = excludedTrade()
     const calls = serveExclusion(trade)
     renderWithProviders(<ExclusionPanel trade={trade} />)
@@ -74,7 +74,7 @@ describe('ExclusionPanel (Describe screen)', () => {
   })
 
   it('shows a server error inside the dialog', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     const trade = fixtureTrade()
     mockApi(
       http.post(`/api/trades/${trade.id}/exclude`, () =>
@@ -94,7 +94,7 @@ describe('ExclusionPanel (Describe screen)', () => {
 
 describe('Journal row', () => {
   it('shows the badge and opens the dialog from the row menu without opening the row', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     const opened: number[] = []
     renderWithProviders(
       <TradesTable

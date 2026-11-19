@@ -17,7 +17,7 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | accepted (backfill 17/17, owner PASS, PM 2026-11-19) |
 | M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | merged `0d0ec58` 2026-11-19, owner check pending |
 | M8-14 | Charts on «Головна» | 4th of batch | M | — | merged `22e654b` 2026-11-19, owner check pending |
-| M8-17 | Frontend timeout flakiness under load (shared cause) | after M8-14 | S | — | authorized 2026-11-19 (PM), planned |
+| M8-17 | Frontend timeout flakiness under load (shared cause) | after M8-14 | S | — | done 2026-11-19 (worker cap + setupUser), see DECISIONS |
 | M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | TECHNICAL ACCEPTED (PM 2026-11-18), merged `860b4c8` 2026-11-18, owner check pending |
 | M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | planned |
