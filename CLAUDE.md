@@ -15,6 +15,11 @@ Claude Code is the only active agent; Codex is paused since 2026-11-16.
   `main готовий до push: <sha>`.
 - No live AI (Claude API) or Whisper runs without Borys's explicit permission and a
   call budget; log every call. MT5 strictly read-only: no `order_send` / `order_check`.
+- Trading-hours load rule (owner/PM 2026-11-19): Borys trades weekdays 08:00-16:00 Brussels.
+  In that window run the full gate with limited parallelism:
+  `make check PYTEST_WORKERS=2 VITEST_WORKERS=2`; outside it use plain `make check`. Never run
+  backfills, Whisper or other heavy jobs in trading hours without asking. Never ask Borys to
+  close TradingView or other trading tools. Raise a test timeout only per test, with a reason.
 - Current gate: M8 started with M8-11 only (see `docs/M8_BACKLOG.md`); every other M8
   item needs separate PM authorization.
 
