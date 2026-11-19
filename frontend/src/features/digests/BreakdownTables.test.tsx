@@ -78,6 +78,20 @@ describe('BreakdownTables (M8-04..08)', () => {
     expect(within(range).getAllByRole('cell')[1]).toHaveTextContent(t.matrixTrades(1))
   })
 
+  it('shows an old `poi_type` breakdown with the POI field label and option labels', async () => {
+    render({
+      poi_type: {
+        groups: [group('fvg_h1', 2, '40.00', '1.0000', '50.0000'), group(null, 1, '-10.00', '-0.2000', '0.0000')],
+        coverage: { filled: 2, total: 3 },
+      },
+    })
+    const table = await screen.findByRole('article', { name: 'POI' })
+    expect(await within(table).findByText('FVG H1')).toBeInTheDocument()
+    expect(within(table).getByText(t.coverage(2, 3))).toBeInTheDocument()
+    // A single-choice old breakdown: no «each value» note.
+    expect(within(table).queryByText(t.multiNote)).not.toBeInTheDocument()
+  })
+
   it('treats a snapshot entry without kind as a field breakdown (old digests)', async () => {
     render({
       entry_model: {

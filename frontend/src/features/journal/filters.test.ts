@@ -113,6 +113,12 @@ describe('M8-04..08 journal field filters', () => {
     expect(parseFilters(params)).toEqual(f)
   })
 
+  it('drops keys that are not offered filters (bookmarked legacy key → no 422)', () => {
+    const f = parse('journal=setup_context:no&journal=poi_type:fvg_h1&journal=h4_context:flow')
+    expect(f.journal).toEqual({ h4_context: ['flow'] })
+    expect(toTradeQuery(f, TODAY).journal).toEqual(['h4_context:flow'])
+  })
+
   it('is absent from the query by default and cleared by «Скинути фільтри»', () => {
     expect(toTradeQuery(parse(''), TODAY)).not.toHaveProperty('journal')
     expect(clearedFilters(parse('journal=h4_context:flow')).journal).toEqual({})

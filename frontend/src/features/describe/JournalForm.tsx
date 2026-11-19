@@ -341,7 +341,7 @@ function TextKeyBlock({ field, textKey, values, aiFilled, missing, errors, onCha
     <FieldShell
       fieldKey={textKey}
       label={isOther ? f.otherTextLabel : f.noteLabel(field.label)}
-      required={isOther}
+      required={isOther && field.other_text_optional !== true}
       aiFilled={aiFilled.has(textKey)}
       missing={missing.has(textKey)}
       error={errors[textKey] ?? null}

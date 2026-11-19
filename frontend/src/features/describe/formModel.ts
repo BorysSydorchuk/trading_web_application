@@ -62,7 +62,17 @@ export function hasOther(value: JournalValue | undefined): boolean {
 export function fieldsForTrade(fields: readonly JournalField[], newFields: readonly string[]): readonly JournalField[] {
   if (newFields.length === 0) return fields
   const exempt = new Set(newFields)
-  return fields.map((field) => (exempt.has(field.key) && field.required ? { ...field, required: false } : field))
+  return fields.map((field) => {
+    const fieldExempt = exempt.has(field.key) && field.required === true
+    // Same rule for an «Інше» text that became required after the trade closed (M8-04..08).
+    const textExempt = field.text_key !== undefined && field.allow_other_text === true && exempt.has(field.text_key)
+    if (!fieldExempt && !textExempt) return field
+    return {
+      ...field,
+      ...(fieldExempt ? { required: false } : {}),
+      ...(textExempt ? { other_text_optional: true } : {}),
+    }
+  })
 }
 
 /** M8-02: the pre-entry fields only (phase before): what an open position can carry. */
@@ -146,7 +156,7 @@ export function missingKeys(
     }
     if (isLegacy(field) || !isShown(field, values)) continue
     if (field.required && isEmptyValue(values[field.key])) missing.push(field.key)
-    if (field.text_key && otherTextActive(field, values) && isEmptyValue(values[field.text_key])) {
+    if (field.text_key && !field.other_text_optional && otherTextActive(field, values) && isEmptyValue(values[field.text_key])) {
       missing.push(field.text_key)
     }
   }

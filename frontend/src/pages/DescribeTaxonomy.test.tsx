@@ -150,6 +150,40 @@ describe('Describe taxonomy (M8-04..08)', () => {
     expect(within(rules).getByRole('checkbox', { name: 'Вхід від слабкої POI' })).not.toBeChecked()
   })
 
+  it('migrated old trade: a new show_if field in missing_new_fields does not block completing', async () => {
+    const trade = taxonomyTrade(
+      { h1_context: 'flow', h4_context: 'flow', poi_types: ['fvg_h4'], entry_model: 'qm_m5', fvg_kind: 'na' },
+      { status: 'draft', missing_new_fields: ['fvg_types_h4'], missing_required: [] },
+    )
+    const saved = serve(trade)
+    const { user } = renderPage(trade)
+    await control('poi_types')
+    const hint = screen.getByText(f.newFieldsHint).closest('p')
+    expect(hint).toHaveTextContent('Тип FVG H4')
+    expect(screen.getByText(f.legacyValue('н/з'))).toBeInTheDocument()
+    expect(screen.queryByText(t.save.missing)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: t.save.complete }))
+    expect(await screen.findByTestId('inbox-page')).toBeInTheDocument()
+    expect(saved[0]).toMatchObject({ complete: true, fields: { poi_types: ['fvg_h4'], fvg_types_h4: null } })
+    expect(saved[0]?.fields).not.toHaveProperty('fvg_kind')
+  })
+
+  it('old trade: an «Інше» text in missing_new_fields does not block completing', async () => {
+    const trade = taxonomyTrade(
+      { h1_context: 'flow', h4_context: 'range', poi_types: ['fractal_h1'], entry_model: 'other' },
+      { status: 'draft', missing_new_fields: ['entry_model_other'], missing_required: [] },
+    )
+    const saved = serve(trade)
+    const { user } = renderPage(trade)
+    await control('entry_model_other')
+    expect(screen.queryByText(t.save.missing)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: t.save.complete }))
+    expect(await screen.findByTestId('inbox-page')).toBeInTheDocument()
+    expect(saved[0]).toMatchObject({ complete: true, fields: { entry_model: 'other', entry_model_other: null } })
+  })
+
   it('does not offer a deprecated violation on a trade without it', async () => {
     serve(taxonomyTrade())
     renderPage(taxonomyTrade())

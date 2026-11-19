@@ -17,6 +17,8 @@ const NUM = `${TD} num text-right`
 /** `poi_types__combo`: one group per distinct selection, values joined « + » (docs/api.md M8-04..08). */
 const COMBO_SUFFIX = '__combo'
 const COMBO_JOIN = ' + '
+/** Snapshots from before M8-04..08 have a single-choice `poi_type` breakdown: same options as `poi_types`. */
+const RENAMED_FIELDS: Readonly<Record<string, string>> = { poi_type: 'poi_types' }
 
 /** Trade fields of the snapshot; every other breakdown is a journal field with «заповнено N/M». */
 const TRADE_FIELD_LABELS: Readonly<Record<string, string>> = {
@@ -95,13 +97,15 @@ function tableView(name: string, breakdown: Breakdown, fields: FieldMap): TableV
   if (Object.hasOwn(TRADE_FIELD_LABELS, name)) {
     return { title: TRADE_FIELD_LABELS[name] ?? name, label: (key) => tradeKeyLabel(name, key), showCoverage: false, note: null }
   }
-  const field = fields.get(name)
+  const renamed = Object.hasOwn(RENAMED_FIELDS, name) && !fields.has(name)
+  const field = fields.get(renamed ? (RENAMED_FIELDS[name] ?? name) : name)
   return {
     title: field?.label ?? name,
     label: (key) => journalKeyLabel(field, key),
     showCoverage: true,
     // A multi field counts a trade once in each of its values, so the rows add up to more trades.
-    note: field?.type === 'multi_enum' ? t.multiNote : null,
+    // An old single-choice breakdown shown with the new field's labels does not.
+    note: field?.type === 'multi_enum' && !renamed ? t.multiNote : null,
   }
 }
 

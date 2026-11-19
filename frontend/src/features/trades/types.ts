@@ -207,6 +207,11 @@ export interface JournalField {
   show_if?: JournalShowIf | null
   /** M8-04..08: old read-only field, shown as «Старе значення» only when the trade has a value. */
   legacy?: boolean
+  /**
+   * Client-only (set by fieldsForTrade): the «Інше» text is in the trade's missing_new_fields,
+   * so it does not block `complete` for this trade.
+   */
+  other_text_optional?: boolean
   /** `rule_violations` only (M8-04): violation key → detected by the rules engine or chosen. */
   violation_types?: Record<string, 'auto' | 'manual'>
 }
