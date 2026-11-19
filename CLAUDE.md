@@ -54,6 +54,7 @@ Classify every task at the start and write the tier next to it in `docs/STATUS.m
 - After each task: run `make check` (lint + type check + tests). Never mark a task done with failing checks.
 - Commit after every completed task with a clear message (`feat(sync): ...`, `fix(ui): ...`). Small commits.
 - **Start of every session:** run `git status` and `git log --all --oneline -20` and compare with `docs/STATUS.md`. Report anything unexplained (unknown commits, untracked files, code not described in STATUS) to Borys before building on it.
+- **One agent session per checkout (owner/PM 2026-11-19):** only one agent session works in this checkout at a time. Parallel work uses a separate git worktree: `git worktree add ../WEB_application-<topic> <branch>`. At session start, if the checkout has uncommitted changes you did not make or the branch changed unexpectedly, stop and report to Borys; do not delete or switch anything. Never `git switch`/`checkout` in a checkout another session may be using.
 - **Codex (OpenAI) and any other non-Claude-Code agent** (paused since 2026-11-16; works only when Borys asks; its instructions: `AGENTS.md`):
   - Works only on its own branch `codex/<topic>`, one task at a time; the task is listed in `docs/STATUS.md` with owner `codex`.
   - Never merges to `main`. The orchestrator reviews its branch like a subagent task: `make check`, `code-reviewer` (plus the required specialist reviewers), then `git merge --no-ff`.
