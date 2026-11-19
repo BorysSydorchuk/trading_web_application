@@ -126,3 +126,40 @@ def test_retry_unavailable_recomputes_trades_marked_unavailable(
     assert totals.computed == 3
     session.expire_all()
     assert trades_by_pid(session, synced.id)[SHORT_PID].excursion_status == "final"
+
+
+def without_exit_ticks() -> dict[str, object]:
+    from tests.test_excursions_sync import OPEN
+
+    fixture = data(NOW_SERVER)
+    long_close = OPEN + 3 * 3600 + 30
+    ticks = fixture["tick_history"]["EURUSD"]
+    fixture["tick_history"] = {
+        "EURUSD": [t for t in ticks if t["time_msc"] < (long_close - 60) * 1000]
+    }
+    return fixture
+
+
+@pytest.mark.parametrize(
+    ("later", "kind", "stored"),
+    [(timedelta(minutes=30), "retry", None), (timedelta(days=2), "unavailable", "unavailable")],
+)
+def test_dry_run_counts_exactly_what_apply_writes(
+    session: Session, synced: Account, later: timedelta, kind: str, stored: str | None
+) -> None:
+    from tests.test_excursions_sync import LONG_PID
+
+    when = NOW + later
+    dry = run(
+        session, FixtureMt5Source(without_exit_ticks()), when, apply=False, password_for=password
+    )
+    # both 3 h trades (long and short) close in the minute whose ticks are missing
+    assert dry.counts[kind] == 2
+    assert dry.computed == 1
+
+    applied = run(
+        session, FixtureMt5Source(without_exit_ticks()), when, apply=True, password_for=password
+    )
+    assert applied.counts == dry.counts
+    session.expire_all()
+    assert trades_by_pid(session, synced.id)[LONG_PID].excursion_status == stored

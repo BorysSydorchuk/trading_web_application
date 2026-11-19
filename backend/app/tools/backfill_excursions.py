@@ -25,12 +25,18 @@ from sqlalchemy.orm import Session
 from app.config import mt5_password_for
 from app.config_files import get_rules
 from app.domain.broker_time import BrokerTimeRule, Conversion, choose_conversion, detect_offset
-from app.domain.excursion import compute_excursion
 from app.models import Account, SyncLog, Trade
 from app.models.enums import AccountStatus, ExcursionStatus
 from app.mt5.errors import Mt5Error
 from app.mt5.source import Mt5Source, PriceHistory, connected
-from app.services.excursions import Fetched, Series, series_for, store_excursions, target_of
+from app.services.excursions import (
+    Fetched,
+    Series,
+    evaluate,
+    series_for,
+    store_excursions,
+    target_of,
+)
 from app.services.sync import PasswordLookup
 
 # Outside trading hours the worker syncs only every `interval_idle_seconds` (15 min): a sync
@@ -99,20 +105,15 @@ def _conversion(
     return choice.conversion if choice.conversion is not None else rule
 
 
-def _line(trade: Trade, series: Series) -> tuple[str, str]:
-    target = series.target
-    result = compute_excursion(
-        target.direction,
-        target.entry_price,
-        target.initial_sl,
-        target.open_time,
-        series.end_time,
-        series.samples,
-        series.point,
-    )
+def _line(trade: Trade, series: Series, now: datetime) -> tuple[str, str]:
+    """Same classification as the worker's store (`evaluate`), so the dry run counts exactly
+    what --apply writes."""
+    outcome, result = evaluate(series, now)
     head = f"#{trade.id} {trade.symbol} {trade.direction} {trade.close_time:%Y-%m-%d %H:%M}Z"
-    if result is None:
-        return "unavailable", f"{head}: немає історії цін у MT5"
+    if outcome == "unavailable" or result is None:
+        reason = "неповна історія цін у MT5" if series.samples else "немає історії цін у MT5"
+        kind = "unavailable" if outcome == "unavailable" else "retry"
+        return kind, f"{head}: {reason}" + ("" if kind == "unavailable" else " (спробуйте пізніше)")
     if result.mfe_r is None:
         return "no_sl", f"{head}: MFE {result.mfe_points} п., MAE {result.mae_points} п. (без SL)"
     return "computed", f"{head}: MFE {result.mfe_r} R, MAE {result.mae_r} R ({series.source.value})"
@@ -172,7 +173,7 @@ def _read_account(
                 totals.counts["failed"] += 1
                 totals.lines.append(f"#{trade.id}: помилка MT5: {exc}")
                 continue
-            kind, line = _line(trade, series)
+            kind, line = _line(trade, series, now)
             totals.counts[kind] += 1
             totals.lines.append(line)
             found.append(series)
@@ -219,6 +220,7 @@ def summary(totals: Totals, apply: bool) -> str:
         f"Угод без MAE/MFE: {totals.trades}; пораховано з R: {totals.counts['computed']}; "
         f"без SL (лише пункти): {totals.counts['no_sl']}; "
         f"без історії MT5: {totals.counts['unavailable']}; "
+        f"спробувати пізніше: {totals.counts['retry']}; "
         f"помилки: {totals.counts['failed']} ({mode})"
     )
 

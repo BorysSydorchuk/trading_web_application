@@ -24,13 +24,14 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.domain.broker_time import Conversion, server_msc_to_wall, server_to_utc, utc_to_server
-from app.domain.excursion import PriceSample, bar, compute_excursion, tick
+from app.domain.excursion import Excursion, PriceSample, bar, compute_excursion, tick
 from app.models import Trade
 from app.models.enums import Direction, ExcursionSource, ExcursionStatus
 from app.mt5.convert import server_epoch
@@ -238,7 +239,11 @@ def fetch_series(
     return fetched
 
 
-def _store_one(trade: Trade, series: Series, now: datetime) -> None:
+Outcome = Literal["final", "running", "retry", "unavailable"]
+
+
+def evaluate(series: Series, now: datetime) -> tuple[Outcome, Excursion | None]:
+    """The one rule for what a series gives (worker store and backfill dry run alike)."""
     target = series.target
     result = compute_excursion(
         target.direction,
@@ -249,15 +254,27 @@ def _store_one(trade: Trade, series: Series, now: datetime) -> None:
         series.samples,
         series.point,
     )
+    close = target.close_time
+    if close is None:
+        return ("running", result) if result is not None else ("retry", None)
+    if result is None or not series.complete:
+        # fresh history may still be downloading; after a day it will not come any more
+        return ("unavailable" if now - close > UNAVAILABLE_AFTER else "retry"), None
+    return "final", result
+
+
+def _store_one(trade: Trade, series: Series, now: datetime) -> None:
+    outcome, result = evaluate(series, now)
     trade.excursion_at = now  # the attempt, also when nothing is stored
-    closed = target.close_time is not None
-    if result is None or (closed and not series.complete):
-        if closed and target.close_time is not None and now - target.close_time > UNAVAILABLE_AFTER:
-            trade.excursion_status = ExcursionStatus.UNAVAILABLE.value
-            logger.warning("MAE/MFE of trade %s: MT5 has no (complete) history", trade.id)
-        return  # retried later (fresh history may still be downloading)
+    if outcome == "unavailable":
+        trade.excursion_status = ExcursionStatus.UNAVAILABLE.value
+        logger.warning("MAE/MFE of trade %s: MT5 has no (complete) history", trade.id)
+    if result is None:
+        return  # retry later, or unavailable
     trade.excursion_source = series.source.value
-    trade.excursion_status = (ExcursionStatus.FINAL if closed else ExcursionStatus.RUNNING).value
+    trade.excursion_status = (
+        ExcursionStatus.FINAL if outcome == "final" else ExcursionStatus.RUNNING
+    ).value
     trade.mfe_price, trade.mfe_time = result.mfe_price, result.mfe_time
     trade.mfe_points, trade.mfe_r = result.mfe_points, result.mfe_r
     trade.mae_price, trade.mae_time = result.mae_price, result.mae_time
