@@ -1,4 +1,4 @@
-# M8 backlog — UX & Functional Improvements
+# M8 backlog — UX & Functional Improvements (CLOSED 2026-11-20: all items accepted)
 
 Source: PM review 2026-11-16 (owner feedback from normal use) and section 5 of the PM handoff `docs/handoff/PM_HANDOFF_2026-11-16.md` (owner dictation 2026-11-16, filled in 2026-11-18). Each item needs a separate PM go before implementation.
 Order (owner/PM): M8-11 -> M8-09 -> M8-01 -> M8-02 + M8-03 -> M8-04..M8-08 (one taxonomy batch, one migration) -> M8-10 (after the owner picks a design direction).
@@ -11,21 +11,21 @@ Owner wording below is copied from handoff §5 (labels in «» are the owner's U
 | ID | Topic | Priority | Tier | Depends on | Status |
 |----|-------|----------|------|------------|--------|
 | M8-01 | Exclude a trade from strategy statistics | 3rd (HIGH) | L | M8-09 | accepted (owner PASS, PM 2026-11-18) |
-| M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
-| M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | merged `71e599b` 2026-11-18, owner check + PM review pending |
-| M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | merged `1d7b765` 2026-11-18, owner check pending |
+| M8-02 | Describe an OPEN trade, complete it after close | 4th (HIGH) | L | M8-01 | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
+| M8-01b | Auto-recompute saved digests on exclude/include | after M8-02 | L (migration) | M8-01 | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
+| M8-12 | Run without visible windows: tray, autostart, shortcuts, hidden MT5 terminals | 1st of batch | M | — | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
 | M8-16 | MAE / MFE per trade in R | 2nd of batch | L | M8-12 | accepted (backfill 17/17, owner PASS, PM 2026-11-19) |
-| M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | merged `0d0ec58` 2026-11-19, owner check pending |
-| M8-14 | Charts on «Головна» | 4th of batch | M | — | merged `22e654b` 2026-11-19, owner check pending |
+| M8-13 | Choose the Claude model per call type | 3rd of batch | M | — | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
+| M8-14 | Charts on «Головна» | 4th of batch | M | — | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
 | M8-17 | Frontend timeout flakiness under load (shared cause) | after M8-14 | S | — | done 2026-11-19 (worker cap + setupUser), see DECISIONS |
-| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | TECHNICAL ACCEPTED (PM 2026-11-18), merged `860b4c8` 2026-11-18, owner check pending |
-| M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | merged `5a05b6a`, TECHNICAL ACCEPTED (PM 2026-11-18), owner check pending |
+| M8-15 | «Головна» lists «Потрібен опис» with «Описати»; Journal filter open with/without description | after M8-01b | S/M | M8-02 | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
+| M8-03 | Before/after chart link defaults | 4th (with M8-02) | L (with M8-02, no migration) | M8-02 | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
 | M8-04 | Rule violation taxonomy | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-05 | Independent H1 / H4 context | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-06 | Multi-select POI, Fractal H1/H4 | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-07 | Multi-select, conditional FVG type | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
 | M8-08 | Entry model single-select, «Інше» needs text | 5th (batch) | L (batch) | M8-02/03 | accepted (owner PASS, PM 2026-11-19) |
-| M8-09 | Exit reason from MT5 | 2nd | L | M8-11 | merged `eb6e690`, TECHNICAL ACCEPTED, owner check pending (next 3 closed trades) |
+| M8-09 | Exit reason from MT5 | 2nd | L | M8-11 | ACCEPTED (owner checks PASS 2026-11-19, PM 2026-11-20) |
 | M8-10 | UI/UX research, redesign, branding | last | M | owner design choice | accepted: 10a, 10b, 10c (owner PASS, PM 2026-11-20) |
 | M8-11 | Footer overscroll | 1st | S | — | accepted (owner PASS, PM 2026-11-17) |
 

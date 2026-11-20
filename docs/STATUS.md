@@ -1,6 +1,6 @@
 # STATUS
 
-Current milestone: **M8 — UX & Functional Improvements, technically complete 2026-11-20, waiting for the PM** (summary `docs/reports/M8.md`). M0–M7 technical closed; live validation 0/5 transferred to M8. Claude Code is lead engineer and sole merge owner; Codex paused. Backlog and order: `docs/M8_BACKLOG.md`.
+Current milestone: **M8 CLOSED 2026-11-20** (all items accepted; summary `docs/reports/M8.md`). Next: native PostgreSQL 16 (tier L, owner YES), then AI prefill of manual violations (tier S, owner YES), live validation from Monday (`docs/reports/live-validation.md`). M0–M7 technical closed; live validation 0/5 transferred to M8. Claude Code is lead engineer and sole merge owner; Codex paused. Backlog and order: `docs/M8_BACKLOG.md`.
 
 ## M8 tasks
 
@@ -37,7 +37,10 @@ Current milestone: **M8 — UX & Functional Improvements, technically complete 2
 - [x] M8-10b owner check item 3 fix + per-account firm limits (tier S/M) — branch `m8/home-chart-span`: chart spans the data, collision-free labels, Playwright at 1280/1440; max-loss limit and month bar from Settings firm rules (8 %), rules.yaml fallback. Gate on 3a4ae65 PASS (3921/1 skipped, 714); code-reviewer APPROVE (LOW -> BACKLOG). Owner check item 3 PASS; **PM: M8-10b ACCEPTED** 2026-11-20 (firm rules 8 % / 4 % confirmed in the FundedNext dashboard).
 - [x] Starting-balance suggestion from the MT5 first deposit (tier S, PM 2026-11-20) — branch `m8/starting-balance-suggestion`: worker reads the deal history once per account (read-only) into DATA_DIR/starting_balance_suggestions.json; Settings shows the suggestion when it differs and applies it with one click. Gate on f54d43a PASS (3947/1 skipped, 717); code-reviewer APPROVE (MEDIUM fixed, LOW -> BACKLOG). Owner check PASS 2026-11-20.
 - [x] M8-10c «Студія» restyle of the other pages (owner claude, tier M) — branch `m8/pages-restyle`: Journal, Потрібен опис, Describe, Settings, Bias, Digests, Calculator; before/after screenshots, report `docs/reports/M8-10c.md`. Final make check on fb8cd51 (2 workers) PASS (3947/1 skipped, 719 frontend). code-reviewer on the actual diff APPROVE (2 MEDIUM fixed, LOW -> BACKLOG). PM answers recorded. Owner check PASS, **PM: M8-10c ACCEPTED** 2026-11-20.
-- RESUME FROM HERE (2026-11-20): M8 technically complete; summary docs/reports/M8.md. STOP and wait for the PM. Pending owner decisions: AI prefill of manual violations (YES/NO), native PostgreSQL (not authorized). Owner checks open: M8-09, M8-01b, M8-02+03, M8-15, M8-12, M8-13, M8-14.
+- [x] M8 owner checks 2026-11-19 all PASS (M8-01b, M8-02, M8-03, M8-09, M8-12 incl. reboot/autostart, M8-13, M8-14, M8-15); M8 CLOSED (PM 2026-11-20).
+- [ ] Native PostgreSQL 16 instead of Docker (owner claude, **tier L**, owner YES 2026-11-20) — branch `infra/native-postgres`.
+- [ ] AI prefill of MANUAL violations (tier S, owner YES 2026-11-20) — after native PostgreSQL.
+- RESUME FROM HERE (2026-11-20): native PostgreSQL move in progress (Borys not trading until reported done).
 
 ## M7 closure documentation — owner codex, tier S
 
