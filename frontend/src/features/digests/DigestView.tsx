@@ -8,7 +8,7 @@ import { AiSummarySection } from './AiSummarySection'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
 import { DigestCharts } from './charts/DigestCharts'
-import { ExcludedTrades } from './ExcludedTrades'
+import { AccountTotalLine, ExcludedTrades } from './ExcludedTrades'
 import { ExcursionsCard } from './ExcursionsCard'
 import { formatDateBrussels, formatPeriod, missingRPath } from './format'
 import { MetricBlockCard } from './MetricBlockCard'
@@ -44,6 +44,7 @@ export function DigestView({ digest }: { digest: Digest }) {
           />
         ))}
       </div>
+      {snapshot.excluded && <AccountTotalLine block={snapshot.excluded} currency={snapshot.currency} />}
       {snapshot.excluded && <ExcludedTrades block={snapshot.excluded} currency={snapshot.currency} />}
       {snapshot.excursions && <ExcursionsCard block={snapshot.excursions} />}
       <DigestCharts snapshot={snapshot} />

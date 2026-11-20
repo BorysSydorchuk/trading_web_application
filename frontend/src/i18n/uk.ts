@@ -1224,7 +1224,7 @@ export const uk = {
       title: 'Виключені угоди',
       summary: (n: number, pnl: string) => `Виключені угоди: ${n}, P&L ${pnl}`,
       hint: 'Не входять у показники стратегії вище, але входять у P&L рахунку.',
-      accountTotal: 'P&L рахунку разом з виключеними',
+      accountTotal: 'Разом по рахунках (з виключеними)',
       accountPct: (pct: string) => `(${pct})`,
       date: 'Дата',
       account: 'Рахунок',

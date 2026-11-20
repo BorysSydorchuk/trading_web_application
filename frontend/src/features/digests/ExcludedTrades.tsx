@@ -17,8 +17,8 @@ function money(value: string, currency: string | null): string {
 }
 
 /**
- * M8-01 «Виключені угоди: N, P&L X»: trades left out of the strategy numbers above, listed so the
- * digest still reconciles with the account (strategy P&L + excluded = account P&L).
+ * M8-01 «Виключені угоди: N, P&L X»: the excluded trades themselves (count, their P&L, list). The
+ * account total with them is a separate line under the strategy result (`AccountTotalLine`).
  */
 export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; currency: string | null }) {
   if (block.trades === 0) return null
@@ -27,20 +27,7 @@ export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; curr
       <h2 id="digest-excluded" className="text-sm font-semibold">
         {x.summary(block.trades, money(block.net_pnl, currency))}
       </h2>
-      <p className="text-xs text-muted-foreground">
-        {x.hint}{' '}
-        <span>
-          {x.accountTotal}:{' '}
-          <span className={cn('num font-medium', pnlClass(block.account_net_pnl))}>
-            {money(block.account_net_pnl, currency)}
-          </span>
-          {block.account_net_pnl_pct != null && (
-            <span data-testid="excluded-account-pct" className={cn('num ml-1', pnlClass(block.account_net_pnl_pct))}>
-              {x.accountPct(formatPct(block.account_net_pnl_pct))}
-            </span>
-          )}
-        </span>
-      </p>
+      <p className="text-xs text-muted-foreground">{x.hint}</p>
       <div className="overflow-x-auto rounded-lg border">
         <table aria-label={x.title} className="w-full text-sm">
           <thead className="bg-muted/40 text-xs text-muted-foreground">
@@ -70,5 +57,24 @@ export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; curr
         </table>
       </div>
     </section>
+  )
+}
+
+/**
+ * «Разом по рахунках (з виключеними)» under the strategy result (PM 2026-11-20): strategy P&L +
+ * excluded P&L, same % base as Home, so it matches «Головна». Only when something is excluded.
+ */
+export function AccountTotalLine({ block, currency }: { block: ExcludedBlock; currency: string | null }) {
+  if (block.trades === 0) return null
+  return (
+    <p data-testid="digest-account-total" className="text-sm">
+      {x.accountTotal}:{' '}
+      <span className={cn('num font-semibold', pnlClass(block.account_net_pnl))}>{money(block.account_net_pnl, currency)}</span>
+      {block.account_net_pnl_pct != null && (
+        <span data-testid="excluded-account-pct" className={cn('num ml-1', pnlClass(block.account_net_pnl_pct))}>
+          {x.accountPct(formatPct(block.account_net_pnl_pct))}
+        </span>
+      )}
+    </p>
   )
 }
