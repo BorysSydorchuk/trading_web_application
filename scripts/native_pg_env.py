@@ -151,6 +151,28 @@ def write_env_text(path: Path, text: str) -> None:
             tmp.unlink(missing_ok=True)
 
 
+BACKUP_INFIX = ".bak-"  # `.env.bak-<UTC stamp>`: covered by `.env.*` in .gitignore
+KEEP_ENV_BACKUPS = 10
+
+
+def backup_env_file(path: Path, stamp: str) -> Path:
+    """Byte copy of ``path`` to ``<name>.bak-<stamp>`` before a switch; keeps the newest
+    KEEP_ENV_BACKUPS. Raises NativePgError (nothing changed) if the copy fails."""
+    backup = path.with_name(f"{path.name}{BACKUP_INFIX}{stamp}")
+    try:
+        backup.write_bytes(path.read_bytes())
+    except OSError as exc:
+        raise NativePgError(
+            f"Не вдалося зберегти копію {path.name}: {exc.strerror or type(exc).__name__}. "
+            "Нічого не змінено."
+        ) from None
+    old = sorted(path.parent.glob(f"{path.name}{BACKUP_INFIX}*"))[:-KEEP_ENV_BACKUPS]
+    for extra in old:
+        with contextlib.suppress(OSError):
+            extra.unlink()
+    return backup
+
+
 def update_env_file(path: Path, updates: Mapping[str, str], remove: Collection[str] = ()) -> None:
     write_env_text(path, set_env(read_env_text(path), updates, remove))
 
