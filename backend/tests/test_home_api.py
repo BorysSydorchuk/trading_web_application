@@ -417,6 +417,7 @@ def test_open_position_with_a_fresh_snapshot(
         "mfe_r": "0.9000",
         "risk_pct": "1.0000",
         "described": True,
+        "close_unconfirmed": False,
     }
     assert data["open_totals"] == {
         "pnl": "250.50",
@@ -438,6 +439,31 @@ def test_stale_snapshot_keeps_only_the_price_time(
     assert item["price_time"] == "2026-11-12T13:54:00Z"
     assert item["tp_r"] == "2.0000"  # from the stored SL / TP, not the snapshot
     assert data["open_totals"]["pnl"] is None
+
+
+def test_position_mt5_no_longer_reports_is_close_unconfirmed(
+    client: TestClient, data_dir: Path, alpha: Account, position: Trade
+) -> None:
+    """Owner bug 2026-11-20: the last sync of the account saw no such position (its close is
+    not in the history yet): never a live card, the UI says the close is unconfirmed."""
+    write_snapshot(data_dir, {str(alpha.id): {}})
+
+    data = home(client)
+
+    [item] = data["open_positions"]
+    assert item["close_unconfirmed"] is True
+    assert (item["current_price"], item["price_time"], item["pnl"]) == (None, None, None)
+    assert data["open_totals"]["pnl"] is None
+
+
+def test_account_without_snapshot_entry_is_not_unconfirmed(
+    client: TestClient, data_dir: Path, alpha: Account, position: Trade
+) -> None:
+    """No entry for the account (never synced since the file exists): unknown, not «closed»."""
+    write_snapshot(data_dir, {str(alpha.id + 999): {}})
+
+    [item] = home(client)["open_positions"]
+    assert item["close_unconfirmed"] is False
 
 
 @pytest.mark.parametrize("content", [None, "{broken", "[]"])

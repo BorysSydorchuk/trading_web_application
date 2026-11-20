@@ -262,3 +262,16 @@ def test_failed_sync_keeps_the_previous_snapshot(
     )
 
     assert sorted(snap.read_snapshot(path)) == [(account.id, 5)]
+
+
+def test_reported_accounts_include_empty_entries(tmp_path: Path) -> None:
+    path = snap.snapshot_path(tmp_path)
+    assert snap.reported_accounts(path) == frozenset()  # missing file
+    snap.write_account(path, 3, [], datetime(2026, 11, 20, 21, 15, tzinfo=UTC))
+    path.write_text(
+        json.dumps({**json.loads(path.read_text(encoding="utf-8")), "x": {}, "7": []}),
+        encoding="utf-8",
+    )
+    assert snap.reported_accounts(path) == frozenset({3})  # empty entry counts; junk does not
+    path.write_text("{broken", encoding="utf-8")
+    assert snap.reported_accounts(path) == frozenset()

@@ -135,6 +135,8 @@ class OpenPositionOut(BaseModel):
     mfe_r: R | None
     risk_pct: Pct | None
     described: bool
+    # MT5 no longer reports the position; its close is not in the history yet (no live values).
+    close_unconfirmed: bool = False
 
 
 class OpenTotalsOut(BaseModel):

@@ -419,9 +419,18 @@ def _kpis(
 
 
 def _position(
-    trade: Trade, account: Account, live: snapshot.LiveValue | None, now: datetime
+    trade: Trade,
+    account: Account,
+    live: snapshot.LiveValue | None,
+    now: datetime,
+    *,
+    close_unconfirmed: bool = False,
 ) -> schemas.OpenPositionOut:
+    """``close_unconfirmed``: MT5 no longer reports the position but its close is not in the
+    history yet (owner bug 2026-11-20): no live values, the UI says so instead."""
     fresh = live if live is not None and snapshot.is_fresh(live, now) else None
+    if close_unconfirmed:
+        live = fresh = None
     price = fresh.price_current if fresh is not None else None
     return schemas.OpenPositionOut(
         trade_id=trade.id,
@@ -443,6 +452,7 @@ def _position(
         mfe_r=trade.mfe_r,
         risk_pct=trade.risk_pct,
         described=trade.described_at is not None,
+        close_unconfirmed=close_unconfirmed,
     )
 
 
@@ -485,8 +495,19 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
     trades = _closed_since(db, ids, since)
     opened = _open_trades(db, accounts)
     _check_currency(accounts, trades)
-    live = snapshot.read_snapshot(snapshot.snapshot_path(data_dir)) if opened else {}
-    positions = [_position(t, a, live.get((a.id, t.position_id)), now) for t, a in opened]
+    path = snapshot.snapshot_path(data_dir)
+    live = snapshot.read_snapshot(path) if opened else {}
+    reported = snapshot.reported_accounts(path) if opened else frozenset()
+    positions = [
+        _position(
+            t,
+            a,
+            live.get((a.id, t.position_id)),
+            now,
+            close_unconfirmed=a.id in reported and (a.id, t.position_id) not in live,
+        )
+        for t, a in opened
+    ]
     one = account_id is not None
     return schemas.Home(
         now=now,

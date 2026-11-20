@@ -160,3 +160,23 @@ def read_snapshot(path: Path) -> dict[tuple[int, int], LiveValue]:
         _warn_once("broken", "Open positions snapshot %s unreadable: not a mapping", path)
         return {}
     return _parse(data)
+
+
+def reported_accounts(path: Path) -> frozenset[int]:
+    """Accounts the snapshot has an entry for (an empty entry = MT5 reported no positions at
+    the last successful sync). A position of such an account that is missing from its entry
+    is not reported by MT5. Never raises (unreadable file: no accounts)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return frozenset()  # read_snapshot already warns about a missing/broken file
+    if not isinstance(data, dict):
+        return frozenset()
+    ids: set[int] = set()
+    for key, positions in data.items():
+        if isinstance(positions, dict):
+            try:
+                ids.add(int(key))
+            except ValueError:
+                continue
+    return frozenset(ids)

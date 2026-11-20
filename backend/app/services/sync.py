@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import time as monotonic_time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -130,6 +130,8 @@ class Fetched:
     orders: dict[int, RawOrder]  # opening orders by ticket
     positions: list[RawPosition]
     position_ids: set[int] = field(default_factory=set)
+    # DB-open positions MT5 does not report whose close is not in the history (yet).
+    unconfirmed_closes: frozenset[int] = frozenset()
     fx: FxFetched | None = None  # None: no FX step (no cross-currency data fetched)
     # M8-16: price series of trades whose MAE/MFE is due (read in the same connection).
     excursions: ExcursionFetched = field(default_factory=lambda: ExcursionFetched([], []))
@@ -137,6 +139,67 @@ class Fetched:
     # ``first_deposit`` is the answer, None = no deposit in the history).
     deposit_checked: bool = False
     first_deposit: FirstDeposit | None = None
+
+
+# A terminal the worker has just started answers history/positions calls with empty lists
+# until it has downloaded them (owner bug 2026-11-20: 0 deals, 0 positions ~10 ms after
+# connect, all there 3 s later). Retry only when a DB-open position's own history is empty:
+# a real position always has its entry deal, so empty means "not loaded yet".
+HISTORY_READ_ATTEMPTS = 4
+HISTORY_READ_PAUSE_S = 2.0
+
+
+@dataclass(frozen=True)
+class TradingRead:
+    by_ticket: dict[int, RawDeal]  # window deals by ticket
+    positions: list[RawPosition]
+    pids: set[int]  # positions to build: window trade deals + open + DB-open missing ones
+    own: dict[int, list[RawDeal]]  # every deal of each pid (history_deals_get(position=))
+    unconfirmed: frozenset[int]  # DB-open, not reported by MT5, no closing deal in history
+
+
+def _has_exit(deals: Iterable[RawDeal]) -> bool:
+    return any(_is_trade_deal(d) and not _is_entry(d) for d in deals)
+
+
+def read_trading(
+    source: Mt5Source,
+    lo: int,
+    hi: int,
+    open_pids: Collection[int],
+    *,
+    pause: Callable[[float], None] = monotonic_time.sleep,
+    attempts: int = HISTORY_READ_ATTEMPTS,
+) -> TradingRead:
+    """Window deals, open positions and the full history of every position to build.
+
+    Reconciliation: a position the DB has open but ``positions_get`` does not report is
+    always read by position id, so it is closed from its exit deals however old they are.
+    If its history is still empty (terminal not ready), everything is read again after
+    ``HISTORY_READ_PAUSE_S``; after ``attempts`` it stays open in the DB and is reported in
+    ``unconfirmed`` (retried next sync, never shown as a live position).
+    """
+    for attempt in range(1, attempts + 1):
+        by_ticket = {d.ticket: d for d in source.deals(lo, hi)}
+        positions = source.open_positions()
+        live = {p.identifier for p in positions}
+        missing = set(open_pids) - live
+        pids = {d.position_id for d in by_ticket.values() if _is_trade_deal(d)} | live | missing
+        own = {pid: source.deals_for_position(pid) for pid in sorted(pids)}
+        not_loaded = {pid for pid in missing if not own[pid]}
+        if not not_loaded or attempt == attempts:
+            break
+        logger.info(
+            "MT5 history not loaded yet for %s open position(s); reading again (%s/%s)",
+            len(not_loaded),
+            attempt,
+            attempts - 1,
+        )
+        pause(HISTORY_READ_PAUSE_S)
+    unconfirmed = frozenset(pid for pid in missing if not _has_exit(own[pid]))
+    # A position without any deal cannot be built; keep it out of the build set.
+    pids -= {pid for pid in missing if not own[pid]}
+    return TradingRead(by_ticket, positions, pids, own, unconfirmed)
 
 
 def _is_trade_deal(raw: RawDeal) -> bool:
@@ -214,8 +277,14 @@ def fetch(
     excursions: Sequence[ExcursionTarget] = (),
     *,
     read_first_deposit: bool = False,
+    open_pids: Collection[int] = (),
+    pause: Callable[[float], None] = monotonic_time.sleep,
 ) -> Fetched:
     """Everything the write phase needs, read while connected. Raises `Mt5Error`.
+
+    ``open_pids``: positions the DB still has open; each one MT5 no longer reports is read
+    from its own deal history (no time window) so its close is never missed (see
+    `read_trading`).
 
     ``excursions``: trades whose MAE/MFE price series is read last (never raises, M8-16).
     ``read_first_deposit``: also read the full deal history for the starting balance
@@ -229,14 +298,12 @@ def fetch(
         conversion, detected = _detect(source, watch, rules, now)
 
         lo, hi = server_epoch_range(window_from, now, conversion)
-        by_ticket = {d.ticket: d for d in source.deals(lo, hi)}
-        positions = source.open_positions()
-        pids = {d.position_id for d in by_ticket.values() if _is_trade_deal(d)}
-        pids |= {p.identifier for p in positions}
+        read = read_trading(source, lo, hi, open_pids, pause=pause)
+        by_ticket, positions, pids = read.by_ticket, read.positions, read.pids
 
         orders: dict[int, RawOrder] = {}
         for pid in sorted(pids):
-            own = source.deals_for_position(pid)
+            own = read.own[pid]
             by_ticket.update((d.ticket, d) for d in own)
             entries = sorted((d for d in own if _is_entry(d)), key=lambda d: (d.time, d.ticket))
             if entries and entries[0].order not in orders:
@@ -274,6 +341,7 @@ def fetch(
         orders=orders,
         positions=positions,
         position_ids=pids,
+        unconfirmed_closes=read.unconfirmed,
         fx=fx,
         excursions=found,
         deposit_checked=checked,
@@ -616,6 +684,17 @@ def write(
 # --- orchestration ---------------------------------------------------------------------
 
 
+def open_position_ids(session: Session, account_id: int) -> set[int]:
+    """Positions the DB still has open for this account (reconciled every sync)."""
+    return set(
+        session.scalars(
+            select(Trade.position_id).where(
+                Trade.account_id == account_id, Trade.close_time.is_(None)
+            )
+        )
+    )
+
+
 def history_window_start(
     session: Session, account_id: int, sync: SyncConfig, now: datetime
 ) -> datetime:
@@ -650,6 +729,7 @@ def sync_account(
     symbols: SymbolsConfig | None = None,
     positions_sink: PositionsSink | None = None,
     deposit_sink: DepositSink | None = None,
+    pause: Callable[[float], None] = monotonic_time.sleep,
 ) -> SyncLog:
     """One sync cycle for one account; never raises for MT5/data errors (see module doc).
 
@@ -657,6 +737,7 @@ def sync_account(
     ``positions_sink`` gets the open positions after a successful sync (M8-10b).
     ``deposit_sink``: when set, the full deal history is read and its first deposit goes
     there after a successful sync (starting balance suggestion).
+    ``pause``: wait between history re-reads of a terminal not ready yet (tests: no-op).
     Commits. Returns the completed sync_log row (``ok`` True or False).
     """
     started = monotonic_time.monotonic()
@@ -680,7 +761,13 @@ def sync_account(
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
         targets = excursion_targets(session, account_id, now_utc)
         args = (source, account, password, rules, now_utc, window_from, config)
-        fetched = fetch(*args, excursions=targets, read_first_deposit=deposit_sink is not None)
+        fetched = fetch(
+            *args,
+            excursions=targets,
+            read_first_deposit=deposit_sink is not None,
+            open_pids=open_position_ids(session, account_id),
+            pause=pause,
+        )
         counters = write(session, account, fetched, rules, now_utc, config)
         log.ok = True
         log.finished_at = finished()
@@ -690,6 +777,14 @@ def sync_account(
         log.open_positions = counters.open_positions
         log.symbols_synced = counters.symbols_synced
         log.server_offset_hours = offset_hours(now_utc, fetched.conversion)
+        if fetched.unconfirmed_closes:
+            logger.warning(
+                "Account %s: %s open trade(s) not reported by MT5 and no close in the history "
+                "yet (positions %s); kept open, retried next sync",
+                account_id,
+                len(fetched.unconfirmed_closes),
+                ", ".join(str(pid) for pid in sorted(fetched.unconfirmed_closes)),
+            )
         if counters.skipped:
             # A successful sync with a warning: shown as `warning` in the sync status.
             log.error_code = POSITIONS_SKIPPED
