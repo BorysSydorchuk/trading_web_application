@@ -678,3 +678,22 @@ def test_max_loss_is_null_without_account_limits_or_accounts(
 
 def test_max_loss_is_null_without_any_account(client: TestClient) -> None:
     assert home(client)["kpis"]["max_loss"] is None
+
+
+def test_max_loss_and_month_bar_use_the_account_firm_rules_from_settings(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    """Real accounts: Settings «макс. просідання» 8 %, no profit target (funded) -> floor
+    9 200 instead of the rules.yaml -10 % fallback; the month bar has no target."""
+    alpha.max_drawdown_pct = D("8.0000")
+    alpha.profit_target_pct = None
+    session.commit()
+    closed(session, alpha, OCT_20, "56.25")
+    synced(session, alpha, "10056.25", NOW - timedelta(minutes=1))
+
+    data = home(client, account_id=alpha.id)
+
+    kpi = data["kpis"]["max_loss"]
+    assert (kpi["limit_pct"], kpi["pct"]) == ("-8.0000", "8.5625")  # (10056.25 - 9200) / 10000
+    month = data["limits"]["month"]
+    assert (month["loss_pct"], month["profit_pct"]) == ("-8.0000", None)

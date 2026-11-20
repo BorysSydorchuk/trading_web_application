@@ -114,12 +114,19 @@ export function HeroCard({ metric, onBack, selection, onSelection, range, charts
           </div>
         </div>
         {isPnl ? (
-          <SegmentedControl<RangePreset>
-            label={t.range}
-            value={selection.preset}
-            options={RANGE_OPTIONS}
-            onChange={(preset) => onSelection({ preset })}
-          />
+          <div className="flex flex-col items-end gap-1.5">
+            <SegmentedControl<RangePreset>
+              label={t.range}
+              value={selection.preset}
+              options={RANGE_OPTIONS}
+              onChange={(preset) => onSelection({ preset })}
+            />
+            {view.note && (
+              <p data-testid="hero-data-from" className="num text-xs text-ink-muted">
+                {view.note}
+              </p>
+            )}
+          </div>
         ) : (
           <button
             type="button"

@@ -191,3 +191,22 @@ def test_pick_closest_to_the_floor_uses_the_lowest_pct() -> None:
     items = [("a", D("10.5")), ("b", D("4.2")), ("c", D("4.2"))]
 
     assert home.closest_to_daily_stop(items, lambda item: item[1]) == ("b", D("4.2"))
+
+
+D_ = Decimal
+
+
+@pytest.mark.parametrize(
+    ("account_dd", "account_target", "expected"),
+    [
+        (D_("8.0000"), None, (D_("-8.0000"), None)),  # funded FundedNext: own 8 %, no target
+        (D_("8.0000"), D_("4.0000"), (D_("-8.0000"), D_("4.0000"))),
+        (None, None, (D_("-10.0"), D_("10.0"))),  # no firm rules on the account -> rules.yaml
+        (D_("0"), None, (D_("-10.0"), D_("10.0"))),  # 0 = not set
+    ],
+)
+def test_firm_limits_prefer_the_account_rules_over_the_config_fallback(
+    account_dd: Decimal | None, account_target: Decimal | None, expected: tuple[object, object]
+) -> None:
+    got = home.firm_limits(account_dd, account_target, D_("-10.0"), D_("10.0"))
+    assert (got.max_loss_pct, got.profit_target_pct) == expected

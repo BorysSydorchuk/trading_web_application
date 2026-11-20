@@ -506,39 +506,66 @@ describe('HomePage bias status', () => {
   })
 })
 
-/** The P&L curve of `homeCharts` at the given instants. */
-function chartsAt(times: readonly string[]): HomeCharts {
+/** The P&L curve of `homeCharts` at the given instants (`from`: the range start the API echoes). */
+function chartsAt(times: readonly string[], from = '2026-11-01'): HomeCharts {
   const base = homeCharts(times.map((_, i) => `${i * 10}.00`))
-  return { ...base, equity: base.equity.map((p, i) => ({ ...p, time: times[i] ?? p.time })) }
+  return { ...base, from, equity: base.equity.map((p, i) => ({ ...p, time: times[i] ?? p.time })) }
 }
 
 const xLabelTexts = () => screen.getAllByTestId('hero-x-label').map((el) => el.textContent)
 
-describe('HomePage hero x labels (M8-10b follow-up)', () => {
+describe('HomePage hero x labels (M8-10b follow-up, owner fix)', () => {
   const quarter = ['2026-08-18T22:00:00Z', '2026-09-03T10:00:00Z', '2026-09-15T10:00:00Z', '2026-10-02T10:00:00Z', '2026-10-20T10:00:00Z', '2026-11-05T10:00:00Z', '2026-11-18T10:00:00Z']
 
-  it('«3 міс» and «Рік» label month starts with short Ukrainian names', async () => {
+  it('«3 міс» and «Рік» label month starts of the actual span (from the first trade)', async () => {
     serveCharts(chartsAt(quarter))
     const { user } = renderWithProviders(<HomePage />)
     await screen.findByText('+60', { selector: TOTAL })
     await user.click(screen.getByRole('radio', { name: h.hero.ranges.months3 }))
-    await waitFor(() => expect(xLabelTexts()).toEqual(['сер', 'вер', 'жов', 'лис']))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['вер', 'жов', 'лис']))
     await user.click(screen.getByRole('radio', { name: h.hero.ranges.year }))
-    await waitFor(() => expect(xLabelTexts()).toEqual(['сер', 'вер', 'жов', 'лис']))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['вер', 'жов', 'лис']))
   })
 
   it('«Усе» adds the year when the points span years', async () => {
-    serveCharts(chartsAt(['2026-11-30T23:00:00Z', '2026-12-10T10:00:00Z', '2027-01-05T10:00:00Z', '2027-01-20T10:00:00Z']))
+    serveCharts(chartsAt(['2026-11-30T23:00:00Z', '2026-12-10T10:00:00Z', '2027-01-05T10:00:00Z', '2027-01-20T10:00:00Z', '2027-02-20T10:00:00Z'], '2026-12-01'))
     const { user } = renderWithProviders(<HomePage />)
     await user.click(await screen.findByRole('radio', { name: h.hero.ranges.all }))
-    await waitFor(() => expect(xLabelTexts()).toEqual(['гру 26', 'січ 27']))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['гру 26', 'січ 27', 'лют 27']))
   })
 
-  it('«Місяць» keeps DD.MM labels', async () => {
+  it('«Місяць» keeps DD.MM labels from the first trade', async () => {
     serveCharts(chartsAt(quarter))
     renderWithProviders(<HomePage />)
     await screen.findByText('+60', { selector: TOTAL })
-    expect(xLabelTexts()).toEqual(['19.08', '15.09', '20.10', '18.11'])
+    expect(xLabelTexts()).toEqual(['03.09', '15.09', '02.10', '20.10', '18.11'])
+    expect(screen.queryByTestId('hero-data-from')).not.toBeInTheDocument()
+  })
+
+  it('the «дані з» note needs the data to start at least 7 days after the range start', async () => {
+    serveCharts(chartsAt(['2026-10-31T23:00:00Z', '2026-11-07T10:00:00Z', '2026-11-12T10:00:00Z']))
+    const first = renderWithProviders(<HomePage />)
+    await screen.findByText('+20', { selector: TOTAL })
+    expect(screen.queryByTestId('hero-data-from')).not.toBeInTheDocument()
+    first.unmount()
+
+    serveCharts(chartsAt(['2026-10-31T23:00:00Z', '2026-11-08T10:00:00Z', '2026-11-12T10:00:00Z']))
+    renderWithProviders(<HomePage />)
+    expect(await screen.findByTestId('hero-data-from')).toHaveTextContent(h.hero.dataFrom('08.11'))
+  })
+
+  it('a short history in «Рік»: DD.MM labels without repeats and the muted «дані з 28.10» note', async () => {
+    const trades = Array.from({ length: 16 }, (_, i) => new Date(Date.UTC(2026, 9, 28 + Math.floor(i * 1.5), 10)).toISOString())
+    serveCharts(chartsAt(['2025-11-19T23:00:00Z', ...trades], '2025-11-20'))
+    const { user } = renderWithProviders(<HomePage />)
+    await user.click(await screen.findByRole('radio', { name: h.hero.ranges.year }))
+    const note = await screen.findByTestId('hero-data-from')
+    expect(note).toHaveTextContent(h.hero.dataFrom('28.10'))
+    expect(note).toHaveClass('text-ink-muted')
+    const texts = xLabelTexts()
+    expect(texts[0]).toBe('28.10')
+    expect(texts.every((text) => /^\d{2}\.\d{2}$/.test(text ?? ''))).toBe(true)
+    expect(new Set(texts).size).toBe(texts.length)
   })
 })
 

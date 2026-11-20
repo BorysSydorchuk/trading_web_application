@@ -4,7 +4,9 @@ import type { ChartSelection, RangePreset } from '@/features/dashboard/homeChart
 import { uk } from '@/i18n/uk'
 import { decimalSign } from '@/lib/decimal'
 import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
-import { evenIndices, MAX_LOSS_WARN_PCT, monthBoundaryIndices } from './chartMath'
+import { addDays, brusselsToday } from '@/lib/time'
+import { type AxisCandidate, dateCandidates, pointCandidates } from './axisLabels'
+import { MAX_LOSS_WARN_PCT } from './chartMath'
 import { brusselsDayMonth, brusselsHourMinute, brusselsMonth } from './dates'
 import type { ChartKind, ChartPoint } from './HeroChart'
 import type { HomeData } from './types'
@@ -15,7 +17,6 @@ export type KpiMetric = Exclude<HeroMetric, 'pnl'>
 
 const t = uk.home.hero
 const k = uk.home.kpis
-const X_LABELS = 4
 
 export type ValueTone = 'profit' | 'loss' | 'accent' | 'neutral'
 
@@ -26,7 +27,10 @@ export interface HeroView {
   sub: string
   kind: ChartKind
   points: ChartPoint[]
-  xLabels: { index: number; text: string }[]
+  /** Date / time label candidates; the chart keeps those that fit its width. */
+  xLabels: AxisCandidate[]
+  /** Muted note when the data starts after the range start («дані з 28.10»), else ''. */
+  note: string
   format: (value: string) => string
   /** Shown instead of the chart when there are no points. */
   empty: string
@@ -47,22 +51,29 @@ function toPoints(raws: readonly string[]): ChartPoint[] {
   return raws.map((raw) => ({ raw, value: Number(raw) })).filter((p) => Number.isFinite(p.value))
 }
 
-function xLabels(times: readonly string[], label: (iso: string) => string) {
-  return evenIndices(times.length, X_LABELS).map((index) => ({ index, text: label(times[index] ?? '') }))
-}
-
-/** Long ranges label month starts («вер», «жов»; «січ 27» when the points span years). */
+/** Long ranges label month starts when the actual span is long enough (axisLabels.ts). */
 const MONTH_LABEL_PRESETS: ReadonlySet<RangePreset> = new Set(['months3', 'year', 'all'])
 
-function monthLabels(times: readonly string[]) {
-  const months = times.map(brusselsMonth)
-  const withYear = new Set(months.flatMap((m) => (m ? [m.year] : []))).size > 1
-  const keys = months.map((m) => (m ? `${m.year}-${m.month}` : ''))
-  return monthBoundaryIndices(keys).map((index) => {
-    const m = months[index]
-    const name = m ? (t.monthsShort[m.month - 1] ?? '') : ''
-    return { index, text: m && withYear ? t.monthYear(name, String(m.year % 100).padStart(2, '0')) : name }
-  })
+/**
+ * Times the P&L curve is labelled by: the API's start point (0 at midnight of the range start) moves
+ * to the first trade, so the axis spans the actual data, not the empty part of the range.
+ */
+function spanTimes(equity: HomeCharts['equity']): string[] {
+  const times = equity.map((p) => p.time)
+  const firstTrade = times[1]
+  return firstTrade === undefined ? times : [firstTrade, ...times.slice(1)]
+}
+
+/** The note shows only when the data starts at least this many days after the range start. */
+const DATA_FROM_MIN_DAYS = 7
+
+/** «дані з 28.10» when the first trade's Brussels day is a week or more after the range start. */
+function dataFromNote(charts: HomeCharts | undefined): string {
+  const firstTrade = charts?.equity[1]?.time
+  if (!charts || charts.trades === 0 || firstTrade === undefined) return ''
+  const date = new Date(firstTrade)
+  if (Number.isNaN(date.getTime()) || brusselsToday(date) < addDays(charts.from, DATA_FROM_MIN_DAYS)) return ''
+  return t.dataFrom(brusselsDayMonth(firstTrade))
 }
 
 /** Room to the max-loss floor: loss colour near the limit (<= 2 %), otherwise ink. */
@@ -99,7 +110,8 @@ export function pnlView(charts: HomeCharts | undefined, period: string, preset: 
     sub: t.pnlSub(charts?.currency ?? '', last?.cum_pct ? pctSigned(last.cum_pct) : ''),
     kind: 'money',
     points: toPoints(equity.map((p) => p.cum_pnl)),
-    xLabels: MONTH_LABEL_PRESETS.has(preset) ? monthLabels(equity.map((p) => p.time)) : xLabels(equity.map((p) => p.time), brusselsDayMonth),
+    xLabels: dateCandidates(spanTimes(equity), MONTH_LABEL_PRESETS.has(preset)),
+    note: dataFromNote(charts),
     format: usd,
     empty: uk.dashboard.charts.empty,
   }
@@ -108,7 +120,7 @@ export function pnlView(charts: HomeCharts | undefined, period: string, preset: 
 function maxLossView({ kpis }: HomeData): HeroView {
   const m = kpis.max_loss
   if (m === null) {
-    return { title: t.maxLossTitle(''), total: uk.common.empty, totalTone: 'neutral', sub: '', kind: 'max_loss', points: [], xLabels: [], format: pct, empty: k.maxLossNoLimits }
+    return { title: t.maxLossTitle(''), total: uk.common.empty, totalTone: 'neutral', sub: '', kind: 'max_loss', points: [], xLabels: [], note: '', format: pct, empty: k.maxLossNoLimits }
   }
   const sub = [k.maxLossLimit(maxLossLimit(m.limit_pct)), m.equity_source === 'mt5' ? '' : k.maxLossNoFloating].filter(Boolean).join(' · ')
   return {
@@ -118,7 +130,8 @@ function maxLossView({ kpis }: HomeData): HeroView {
     sub,
     kind: 'max_loss',
     points: toPoints(m.series.map((p) => p.pct)),
-    xLabels: xLabels(m.series.map((p) => p.time), brusselsDayMonth),
+    xLabels: pointCandidates(m.series.map((p) => p.time)),
+    note: '',
     format: pct,
     empty: t.maxLossEmpty,
   }
@@ -137,7 +150,8 @@ export function kpiView(metric: KpiMetric, data: HomeData): HeroView {
         sub: t.todaySub(currency, kpis.today.pct === null ? '' : pctSigned(kpis.today.pct), kpis.today.trades),
         kind: 'money',
         points: toPoints(kpis.today.series.map((p) => p.cum_pnl)),
-        xLabels: xLabels(kpis.today.series.map((p) => p.time), brusselsHourMinute),
+        xLabels: pointCandidates(kpis.today.series.map((p) => p.time), brusselsHourMinute),
+        note: '',
         format: usd,
         empty: t.todayEmpty,
       }
@@ -149,7 +163,8 @@ export function kpiView(metric: KpiMetric, data: HomeData): HeroView {
         sub: t.winRateSub(kpis.win_rate.n),
         kind: 'rate',
         points: toPoints(kpis.win_rate.series.map((p) => p.value)),
-        xLabels: xLabels(kpis.win_rate.series.map((p) => p.time), brusselsDayMonth),
+        xLabels: pointCandidates(kpis.win_rate.series.map((p) => p.time)),
+        note: '',
         format: pct,
         empty: t.rollingEmpty,
       }
@@ -161,7 +176,8 @@ export function kpiView(metric: KpiMetric, data: HomeData): HeroView {
         sub: t.avgRSub,
         kind: 'r',
         points: toPoints(kpis.avg_r.series.map((p) => p.value)),
-        xLabels: xLabels(kpis.avg_r.series.map((p) => p.time), brusselsDayMonth),
+        xLabels: pointCandidates(kpis.avg_r.series.map((p) => p.time)),
+        note: '',
         format: r,
         empty: t.rollingEmpty,
       }

@@ -135,6 +135,35 @@ class MaxLossPoint:
     pct: Decimal  # distance to the floor, percent of the account size (0 = failed)
 
 
+@dataclass(frozen=True)
+class FirmLimits:
+    """Month / max-loss limits of one account, signed like rules.yaml (loss < 0)."""
+
+    max_loss_pct: Decimal | None
+    profit_target_pct: Decimal | None
+
+
+def _set(value: Decimal | None) -> bool:
+    return value is not None and value.is_finite() and value > 0
+
+
+def firm_limits(
+    account_max_drawdown: Decimal | None,
+    account_profit_target: Decimal | None,
+    config_max_loss: Decimal | None,
+    config_profit_target: Decimal | None,
+) -> FirmLimits:
+    """The account's own firm rules (Settings, positive percents) when it has any of them,
+    else the rules.yaml `account_limits` fallback. A funded account without a profit target
+    has none (the fallback target is not mixed in)."""
+    if _set(account_max_drawdown) or _set(account_profit_target):
+        return FirmLimits(
+            -account_max_drawdown if account_max_drawdown and _set(account_max_drawdown) else None,
+            account_profit_target if _set(account_profit_target) else None,
+        )
+    return FirmLimits(config_max_loss, config_profit_target)
+
+
 def usable_size(size: Decimal | None) -> Decimal | None:
     """The account size when finite and > 0, else None."""
     if size is None or not size.is_finite() or size <= 0:

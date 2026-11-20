@@ -1103,6 +1103,8 @@ export const uk = {
       maxLossLimitLine: 'ліміт',
       monthsShort: ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'],
       monthYear: (month: string, year: string) => `${month} ${year}`,
+      /** Muted note when the range starts before the first trade (the chart starts at the data). */
+      dataFrom: (date: string) => `дані з ${date}`,
       chartLabel: (title: string, from: string, to: string, min: string) => `${title}: від ${from} до ${to}, мінімум ${min}`,
       todayEmpty: 'Сьогодні закритих угод ще немає.',
       rollingEmpty: 'Ще немає угод стратегії.',
