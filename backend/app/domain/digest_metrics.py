@@ -11,8 +11,9 @@ Conventions (DECISIONS 2026-11-12):
   breakeven; otherwise net_pnl > 0 win, < 0 loss, 0 breakeven. Win rate = wins / all trades
   x 100. Profit factor stays money-based (net_pnl sign).
 - R metrics only over trades with ``r_multiple``; ``r_n`` = trades used.
-- Percent base = sum of the sizes of the accounts that have a trade; None when any of them has
-  no positive size.
+- Percent base = `app.domain.period_base.period_base`: sum of the sizes of the accounts with
+  a trade in the period, M8-01 excluded trades included (passed as ``excluded``); None when
+  any of them has no positive size (PM 2026-11-20).
 - Max drawdown = largest peak-to-trough fall of the running net P&L from 0 in
   (close_time, id) order.
 - Norm = mean and population SD of the per-period values; < 3 periods -> no norm.
@@ -33,6 +34,7 @@ from types import MappingProxyType
 from typing import Literal, get_args
 from zoneinfo import ZoneInfo
 
+from app.domain.period_base import period_base
 from app.domain.sessions import DEFAULT_TZ, to_local
 
 ZERO = Decimal(0)
@@ -292,17 +294,14 @@ def _total_r(trades: Iterable[DigestTrade]) -> Decimal:
     return sum((t.r_multiple for t in trades if t.r_multiple is not None), ZERO)
 
 
-def _percent_base(trades: Sequence[DigestTrade], sizes: Mapping[int, Decimal]) -> Decimal | None:
-    """Sum of sizes of the accounts with a trade; None when empty or any size is unusable."""
-    if not trades:
-        return None
-    base = ZERO
-    for account_id in {t.account_id for t in trades}:
-        size = sizes.get(account_id)
-        if size is None or size <= 0:
-            return None
-        base += size
-    return base
+def _percent_base(
+    trades: Sequence[DigestTrade],
+    sizes: Mapping[int, Decimal],
+    excluded: Iterable[DigestTrade] = (),
+) -> Decimal | None:
+    """The shared period base over the accounts of ``trades`` and ``excluded`` trades."""
+    traded = {t.account_id for t in trades} | {t.account_id for t in excluded}
+    return period_base(sizes, traded)
 
 
 def _pct(value: Decimal, base: Decimal | None) -> Decimal | None:
@@ -335,15 +334,19 @@ def _worst(trades: Sequence[DigestTrade]) -> DigestTrade | None:
 
 
 def compute_metrics(
-    trades: Iterable[DigestTrade], account_sizes: Mapping[int, Decimal]
+    trades: Iterable[DigestTrade],
+    account_sizes: Mapping[int, Decimal],
+    excluded: Iterable[DigestTrade] = (),
 ) -> DigestMetrics:
+    """Strategy metrics of ``trades``; ``excluded`` (M8-01, same period) only widen the
+    percent base to the accounts whose trades are all excluded."""
     items = tuple(trades)
     with_r = [t for t in items if t.r_multiple is not None]
     win_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and outcome(t) == "win"]
     loss_rs = [t.r_multiple for t in with_r if t.r_multiple is not None and outcome(t) == "loss"]
     total_r = _total_r(with_r)
     net_pnl = sum((t.net_pnl for t in items), ZERO)
-    base = _percent_base(items, account_sizes)
+    base = _percent_base(items, account_sizes, excluded)
     max_dd = _max_drawdown(items)
     return DigestMetrics(
         trades=len(items),
@@ -548,15 +551,22 @@ def metric_series(
     kind: PeriodKind,
     account_sizes: Mapping[int, Decimal],
     metric: str,
+    excluded: Iterable[DigestTrade] = (),
 ) -> tuple[Decimal, ...]:
-    """``metric`` per period of ``kind`` that has >= 1 trade, oldest first, None dropped."""
+    """``metric`` per period of ``kind`` that has >= 1 trade, oldest first, None dropped.
+    ``excluded`` trades only widen each period's percent base (they are no period)."""
     _check_kind(kind)
     _check_metric(metric)
     by_period: dict[date, list[DigestTrade]] = {}
     for t in trades:
         by_period.setdefault(period_start(kind, brussels_date(t.close_time)), []).append(t)
+    excluded_by: dict[date, list[DigestTrade]] = {}
+    for t in excluded:
+        excluded_by.setdefault(period_start(kind, brussels_date(t.close_time)), []).append(t)
     values = (
-        _metric_value(compute_metrics(by_period[start], account_sizes), metric)
+        _metric_value(
+            compute_metrics(by_period[start], account_sizes, excluded_by.get(start, ())), metric
+        )
         for start in sorted(by_period)
     )
     return tuple(v for v in values if v is not None)

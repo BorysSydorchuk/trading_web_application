@@ -198,6 +198,9 @@ def test_limits_of_one_account(client: TestClient, session: Session, alpha: Acco
         "trades_week": 4,  # 3 closed this week (one excluded) + the open one
         "max_trades_week": 10,
         "to_daily_stop_pct": "5.1000",
+        # an open position without a worker balance sync: closed P&L only, flagged
+        "floating_pnl": None,
+        "floating_included": False,
     }
 
 
@@ -451,9 +454,10 @@ def test_missing_or_broken_snapshot_never_fails(
     assert data["open_totals"] == {"pnl": None, "risk_pct": "1.0000", "price_time": None}
 
 
-def test_open_positions_of_the_selected_account_only(
+def test_open_positions_of_every_active_account_whatever_the_selection(
     client: TestClient, session: Session, alpha: Account, position: Trade
 ) -> None:
+    """M8-10b fixes A: an open position is live risk, never hidden by the account filter."""
     beta = add_account(session, "Beta", 2, reference_balance=D("20000.00"))
     other = open_position(session, beta, symbol="EURUSD", initial_sl=None, risk_pct=None,
                           described_at=None)  # fmt: skip
@@ -462,6 +466,121 @@ def test_open_positions_of_the_selected_account_only(
     only_beta = home(client, account_id=beta.id)
 
     assert [p["trade_id"] for p in every] == [position.id, other.id]
-    [item] = only_beta["open_positions"]
+    assert [p["trade_id"] for p in only_beta["open_positions"]] == [position.id, other.id]
+    item = only_beta["open_positions"][1]
     assert (item["tp_r"], item["risk_pct"], item["described"]) == (None, None, False)
     assert only_beta["open_totals"]["risk_pct"] is None
+
+
+# --- M8-10b fixes 2026-11-20 -----------------------------------------------------------------
+
+
+def test_open_position_of_another_account_shows_on_a_one_account_request(
+    client: TestClient, session: Session, data_dir: Path
+) -> None:
+    """Real case: «FN Stellar Funded» selected, the only open position is on account 3."""
+    funded = add_account(session, "FN Stellar Funded", 2, reference_balance=D("10000.00"))
+    other = add_account(session, "FN Stellar 2-Step", 3, reference_balance=D("10000.00"))
+    closed(session, funded, TODAY, "120.00")
+    trade = open_position(session, other)
+    at = NOW - timedelta(minutes=1)
+    write_snapshot(data_dir, {str(other.id): {str(trade.position_id): live("2655", "77.76", at)}})
+
+    data = home(client, account_id=funded.id)
+
+    [item] = data["open_positions"]
+    assert (item["trade_id"], item["account_id"]) == (trade.id, other.id)
+    assert (item["account_name"], item["pnl"]) == ("FN Stellar 2-Step", "77.76")
+    assert data["open_totals"]["pnl"] == "77.76"
+    assert data["limits"]["account_id"] == funded.id
+    assert data["kpis"]["today"]["pnl"] == "120.00"  # closed money stays the selection's
+
+
+def test_open_positions_in_two_currencies_have_no_pnl_total_instead_of_409(
+    client: TestClient, session: Session, data_dir: Path, alpha: Account
+) -> None:
+    euro = add_account(session, "Euro", 2, reference_balance=D("10000.00"))
+    euro.currency = "EUR"
+    session.commit()
+    closed(session, alpha, TODAY, "10.00")
+    usd, eur = open_position(session, alpha), open_position(session, euro)
+    at = NOW - timedelta(minutes=1)
+    write_snapshot(
+        data_dir,
+        {
+            str(alpha.id): {str(usd.position_id): live("2655", "10", at)},
+            str(euro.id): {str(eur.position_id): live("2655", "20", at)},
+        },
+    )
+
+    data = home(client, account_id=alpha.id)
+
+    assert [p["pnl"] for p in data["open_positions"]] == ["10.00", "20.00"]
+    assert data["open_totals"]["pnl"] is None
+    assert data["open_totals"]["risk_pct"] == "2.0000"
+
+
+def synced(session: Session, account: Account, equity: str, at: datetime) -> None:
+    account.balance = D("10000.00")
+    account.equity = D(equity)
+    account.balance_synced_at = at
+    session.commit()
+
+
+def test_limits_add_the_floating_pnl_of_a_fresh_balance_sync(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, TODAY, "250.00")
+    closed(session, alpha, MON, "100.00")
+    open_position(session, alpha)
+    synced(session, alpha, "10077.76", NOW - timedelta(minutes=1))
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert (limits["floating_pnl"], limits["floating_included"]) == ("77.76", True)
+    assert limits["day"]["pct"] == "3.2776"  # (250 + 77.76) / 10000
+    assert limits["week"]["pct"] == "4.2776"
+    assert limits["month"]["pct"] == "4.2776"
+    assert limits["to_daily_stop_pct"] == "6.2776"  # 3.2776 - (-3)
+
+
+def test_limits_with_a_stale_balance_sync_use_closed_trades_only(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, TODAY, "250.00")
+    open_position(session, alpha)
+    synced(session, alpha, "10077.76", NOW - timedelta(minutes=6))
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert (limits["floating_pnl"], limits["floating_included"]) == (None, False)
+    assert (limits["day"]["pct"], limits["to_daily_stop_pct"]) == ("2.5000", "5.5000")
+
+
+def test_limits_without_an_open_position_are_unchanged(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, TODAY, "250.00")
+    synced(session, alpha, "10000.00", NOW - timedelta(minutes=1))
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert (limits["floating_pnl"], limits["floating_included"]) == ("0.00", True)
+    assert (limits["day"]["pct"], limits["to_daily_stop_pct"]) == ("2.5000", "5.5000")
+
+
+@pytest.mark.parametrize(
+    ("at", "missing"),
+    [
+        (datetime(2026, 11, 12, 9, 59, tzinfo=UTC), False),  # 10:59 Brussels (UTC+1)
+        (datetime(2026, 11, 12, 10, 0, tzinfo=UTC), True),  # 11:00
+        (datetime(2026, 7, 16, 8, 59, tzinfo=UTC), False),  # Thu 10:59 Brussels (UTC+2)
+        (datetime(2026, 7, 16, 9, 0, tzinfo=UTC), True),  # 11:00
+    ],
+)
+def test_pre_ny_is_missing_only_from_the_premarket_start(
+    client: TestClient, clock: list[datetime], at: datetime, missing: bool
+) -> None:
+    clock[0] = at
+
+    assert home(client)["bias_today"]["pre_ny_missing"] is missing

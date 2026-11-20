@@ -784,3 +784,29 @@ def test_results_are_frozen() -> None:
         m.trades = 1  # type: ignore[misc]
     with pytest.raises(AttributeError):
         replace(week()[0]).id = 5  # type: ignore[misc]
+
+
+# --- shared percent base (PM 2026-11-20) -----------------------------------------------------
+
+
+def test_excluded_trades_widen_the_percent_base_only() -> None:
+    sizes = {1: D("10000"), 2: D("10000"), 3: D("10000")}
+    strategy = [trade(1, "1000"), trade(2, "457.57", account=2)]
+    excluded = [trade(3, "-13.95", account=3)]
+
+    m = compute_metrics(strategy, sizes, excluded)
+
+    assert (m.trades, m.net_pnl) == (2, D("1457.57"))  # strategy numbers unchanged
+    close(m.net_pnl_pct, "4.8586")  # 1457.57 / 30000 (was / 20000 = 7.2879)
+    close(compute_metrics(strategy, sizes).net_pnl_pct, "7.2879")
+
+
+def test_metric_series_counts_excluded_accounts_per_period() -> None:
+    sizes = {1: D("10000"), 2: D("10000")}
+    week1, week2 = utc(3, 2, 9), utc(3, 9, 9)
+    trades = [trade(1, "100", when=week1), trade(2, "100", when=week2)]
+    excluded = [trade(3, "-5", when=week1, account=2)]  # only in the first week
+
+    series = metric_series(trades, "weekly", sizes, "net_pnl_pct", excluded)
+
+    assert series == (D("0.5"), D("1"))  # 100 / 20000, then 100 / 10000

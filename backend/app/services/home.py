@@ -2,10 +2,13 @@
 
 Accounts: one (``account_id``, any non-archived account, else 404) or every active account.
 Money side (today P&L, limits, drawdown, open P&L) includes M8-01 excluded trades; the win
-rate / average R KPIs use strategy trades only (M8-14 rolling rule, reused). Percents are of
-the account size (one account) or of the combined size of the accounts with a trade in the
-period (all accounts, the digest rule; every selected account when none traded). Open
-positions get live values from the worker's snapshot file (never fails the endpoint).
+rate / average R KPIs use strategy trades only (M8-14 rolling rule, reused). Percents use
+`app.domain.period_base` (one account: its size; all: the accounts with a trade in the
+period, excluded ones included; every selected account when none traded). Open positions are
+those of every active account whatever ``account_id`` is (live risk is never hidden), with
+live values from the worker's snapshot file (never fails the endpoint). The limit bars add
+the floating P&L (accounts.equity - balance) when the worker's balance sync is fresh; the
+rules engine / «СТОП» stay on closed trades (DECISIONS M8-01). Fixes 2026-11-20.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from pathlib import Path
 from typing import Final, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config_files import ConfigError, get_rules
@@ -26,6 +29,7 @@ from app.config_files.rules import WEEKDAYS as RULE_WEEKDAYS
 from app.config_files.rules import DecimalRule, RulesConfig
 from app.domain import home as dh
 from app.domain import home_charts as hc
+from app.domain.period_base import period_base
 from app.domain.period_pnl import local_day, period_extremes, week_start
 from app.domain.sessions import find_window, to_local
 from app.errors import ApiError, config_error
@@ -33,7 +37,6 @@ from app.models import Account, BiasNote, Trade
 from app.models.enums import AccountStatus, BiasKind
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
-from app.services.home_charts import percent_base
 
 OUTSIDE: Final = "outside"
 WEEKDAYS = range(5)  # Monday..Friday, as the bias reminders (app.services.bias_status)
@@ -135,13 +138,16 @@ def _last_strategy_trades(db: Session, account_ids: list[int]) -> list[hc.ChartT
     ]
 
 
-def _open_trades(db: Session, account_ids: list[int]) -> list[tuple[Trade, Account]]:
-    if not account_ids:
-        return []
+def _open_trades(db: Session, accounts: Sequence[Account]) -> list[tuple[Trade, Account]]:
+    """Open trades of every active account plus the selected ones (live risk, never hidden)."""
+    selected = [a.id for a in accounts]
     rows = db.execute(
         select(Trade, Account)
         .join(Account, Account.id == Trade.account_id)
-        .where(Trade.account_id.in_(account_ids), Trade.close_time.is_(None))
+        .where(
+            Trade.close_time.is_(None),
+            or_(Account.status == AccountStatus.ACTIVE.value, Account.id.in_(selected)),
+        )
         .order_by(Trade.open_time, Trade.id)
     ).all()
     return [(trade, account) for trade, account in rows]
@@ -175,7 +181,16 @@ def _session(rules: RulesConfig, now: datetime) -> schemas.SessionNow:
     return schemas.SessionNow(key=key, entries_allowed=window.entries_allowed)
 
 
-def _bias_today(db: Session, period: _Period) -> schemas.BiasToday:
+def _pre_ny_due(rules: RulesConfig, period: _Period) -> bool:
+    """Weekdays from the start of the rules.yaml ``premarket`` session (11:00 Brussels) on;
+    without a premarket session, the whole weekday."""
+    if period.today.weekday() not in WEEKDAYS:
+        return False
+    premarket = rules.session("premarket")
+    return premarket is None or to_local(period.now, period.tz).time() >= premarket.start
+
+
+def _bias_today(db: Session, rules: RulesConfig, period: _Period) -> schemas.BiasToday:
     notes = {
         note.kind: note
         for note in db.scalars(
@@ -192,7 +207,7 @@ def _bias_today(db: Session, period: _Period) -> schemas.BiasToday:
         pre_london=None
         if london is None
         else [schemas.BiasEntryOut(symbol=e.symbol, direction=e.direction) for e in london.entries],
-        pre_ny_missing=period.today.weekday() in WEEKDAYS and BiasKind.PRE_NY.value not in notes,
+        pre_ny_missing=_pre_ny_due(rules, period) and BiasKind.PRE_NY.value not in notes,
     )
 
 
@@ -207,13 +222,27 @@ def _bar(
     trades: Sequence[_Keyed],
     key_fn: Callable[[datetime], date],
     start: date,
-    size: Decimal,
+    size: Decimal | None,
     limits: tuple[Decimal | None, Decimal | None],
+    floating: Decimal,
 ) -> schemas.LimitBar:
     extremes = period_extremes(trades, key_fn, start, size)
     loss, profit = limits
-    pct = extremes.pct if extremes is not None else None
+    pct = dh.with_floating(extremes.pnl, floating, size) if extremes is not None else None
     return schemas.LimitBar(pct=pct, loss_pct=loss, profit_pct=profit)
+
+
+def _floating(account: Account, has_open: bool, now: datetime) -> tuple[Decimal | None, bool]:
+    """(floating P&L, included). Fresh worker sync (<= the snapshot staleness limit):
+    equity - balance. Stale / unknown: 0 when the account has no open trade (closed P&L is
+    then the whole result), else None and not included."""
+    synced, equity, balance = account.balance_synced_at, account.equity, account.balance
+    fresh = synced is not None and now - synced <= snapshot.STALE_AFTER
+    if fresh and equity is not None and balance is not None:
+        return equity - balance, True
+    if not has_open:
+        return Decimal(0), True
+    return None, False
 
 
 def _period_keys(tz: str) -> tuple[Callable[[datetime], date], ...]:
@@ -235,10 +264,14 @@ def _account_limits(
     account: Account,
     trades: Sequence[hc.ChartTrade],
     trades_week: int,
+    has_open: bool,
     rules: RulesConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut:
-    cfg, size = rules.rules, account.reference_balance
+    cfg = rules.rules
+    size = period_base({account.id: account.reference_balance}, (), account_id=account.id)
+    floating, included = _floating(account, has_open, period.now)
+    extra = floating if floating is not None else Decimal(0)
     keyed = [_Keyed(t.id, t.close_time, t.net_pnl) for t in trades if t.account_id == account.id]
     day_key, week_key, month_key = _period_keys(period.tz)
     month_limits = rules.account_limits
@@ -249,15 +282,17 @@ def _account_limits(
     )
     day_range = (_rule(cfg.daily_stop_loss_pct), _rule(cfg.daily_stop_profit_pct))
     week_range = (_rule(cfg.weekly_stop_loss_pct), _rule(cfg.weekly_stop_profit_pct))
-    day = _bar(keyed, day_key, period.today, size, day_range)
+    day = _bar(keyed, day_key, period.today, size, day_range, extra)
     max_trades = cfg.max_trades_per_week
     return schemas.AccountLimitsOut(
         account_id=account.id,
         account_name=account.name,
         currency=account.currency,
         day=day,
-        week=_bar(keyed, week_key, period.monday, size, week_range),
-        month=_bar(keyed, month_key, period.month, size, month_range),
+        week=_bar(keyed, week_key, period.monday, size, week_range, extra),
+        month=_bar(keyed, month_key, period.month, size, month_range, extra),
+        floating_pnl=floating,
+        floating_included=included,
         trades_week=trades_week,
         max_trades_week=max_trades.value if max_trades.enabled else None,
         to_daily_stop_pct=dh.to_daily_stop(day.pct, day.loss_pct),
@@ -268,12 +303,16 @@ def _limits(
     db: Session,
     accounts: Sequence[Account],
     trades: Sequence[hc.ChartTrade],
+    open_ids: set[int],
     rules: RulesConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut | None:
     """One account: the selected one, or the one closest to its daily stop."""
     counts = _trades_this_week(db, [a.id for a in accounts], period)
-    items = [_account_limits(a, trades, counts.get(a.id, 0), rules, period) for a in accounts]
+    items = [
+        _account_limits(a, trades, counts.get(a.id, 0), a.id in open_ids, rules, period)
+        for a in accounts
+    ]
     return dh.closest_to_daily_stop(items, lambda item: item.to_daily_stop_pct)
 
 
@@ -283,12 +322,14 @@ def _limits(
 def _size(
     accounts: Sequence[Account], trades: Sequence[hc.ChartTrade], one: bool
 ) -> Decimal | None:
-    """One account: its size. All: the accounts with a trade (all selected when none)."""
-    if one:
-        return percent_base(accounts)
-    traded = {t.account_id for t in trades}
-    counted = [a for a in accounts if a.id in traded]
-    return percent_base(counted or accounts)
+    """`period_base`: one account its size; all: the accounts with a trade (excluded ones
+    included), every selected account when none traded."""
+    return period_base(
+        {a.id: a.reference_balance for a in accounts},
+        {t.account_id for t in trades},
+        account_id=accounts[0].id if one and accounts else None,
+        fallback_to_all=True,
+    )
 
 
 def _today(
@@ -399,22 +440,22 @@ def _position(
     )
 
 
-def _open_totals(positions: Sequence[schemas.OpenPositionOut]) -> schemas.OpenTotalsOut:
+def _open_totals(
+    positions: Sequence[schemas.OpenPositionOut], currencies: set[str]
+) -> schemas.OpenTotalsOut:
+    """Sum of the open positions; never USD + EUR: mixed currencies -> pnl None (no 409)."""
     totals = dh.open_totals(
         [p.pnl for p in positions],
         [p.risk_pct for p in positions],
         [p.price_time for p in positions],
     )
-    return schemas.OpenTotalsOut(
-        pnl=totals.pnl, risk_pct=totals.risk_pct, price_time=totals.price_time
-    )
+    pnl = totals.pnl if len(currencies) <= 1 else None
+    return schemas.OpenTotalsOut(pnl=pnl, risk_pct=totals.risk_pct, price_time=totals.price_time)
 
 
-def _check_currency(
-    accounts: Sequence[Account], trades: Sequence[hc.ChartTrade], open_ids: set[int]
-) -> None:
-    """Never add USD and EUR together (409 like the digest and the Home charts)."""
-    used = {t.account_id for t in trades} | open_ids
+def _check_currency(accounts: Sequence[Account], trades: Sequence[hc.ChartTrade]) -> None:
+    """Never add closed P&L in USD and EUR together (409 like the digest and Home charts)."""
+    used = {t.account_id for t in trades}
     currencies = {a.currency for a in accounts if a.id in used}
     if len(currencies) > 1:
         raise ApiError(
@@ -436,8 +477,8 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
     ids = [a.id for a in accounts]
     since = min(period.midnight(period.month), period.midnight(period.monday))
     trades = _closed_since(db, ids, since)
-    opened = _open_trades(db, ids)
-    _check_currency(accounts, trades, {a.id for _, a in opened})
+    opened = _open_trades(db, accounts)
+    _check_currency(accounts, trades)
     live = snapshot.read_snapshot(snapshot.snapshot_path(data_dir)) if opened else {}
     positions = [_position(t, a, live.get((a.id, t.position_id)), now) for t, a in opened]
     one = account_id is not None
@@ -445,9 +486,9 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
         now=now,
         timezone=rules.timezone,
         session=_session(rules, now),
-        bias_today=_bias_today(db, period),
-        limits=_limits(db, accounts, trades, rules, period),
+        bias_today=_bias_today(db, rules, period),
+        limits=_limits(db, accounts, trades, {a.id for _, a in opened}, rules, period),
         kpis=_kpis(db, accounts, trades, rules, period, one),
         open_positions=positions,
-        open_totals=_open_totals(positions),
+        open_totals=_open_totals(positions, {a.currency for _, a in opened}),
     )

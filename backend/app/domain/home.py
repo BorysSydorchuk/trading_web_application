@@ -84,6 +84,13 @@ def tp_r(
     return (tp - entry) * _sign(direction) / distance
 
 
+def with_floating(closed_pnl: Decimal, floating: Decimal, size: Decimal | None) -> Decimal | None:
+    """(closed net P&L of the period + floating P&L) / size x 100; None without a size."""
+    if size is None or not size.is_finite() or size <= 0:
+        return None
+    return (closed_pnl + floating) / size * HUNDRED
+
+
 def to_daily_stop(day_pct: Decimal | None, loss_pct: Decimal | None) -> Decimal | None:
     """Room to the daily stop: day pct - daily_stop_loss_pct (+2.1 - (-3.0) = 5.1)."""
     if day_pct is None or loss_pct is None:

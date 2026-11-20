@@ -241,14 +241,33 @@ def _currency(period: Sequence[dm.DigestTrade], accounts: Mapping[int, Account])
     return every.pop() if len(every) == 1 else None
 
 
-def _scope(
-    period: Sequence[dm.DigestTrade],
-    window: Sequence[dm.DigestTrade],
-    first: date | None,
-    start: date,
-) -> Scope:
+@dataclass(frozen=True)
+class _Trades:
+    """Strategy and M8-01 excluded trades of the period and of the norm window."""
+
+    period: Sequence[dm.DigestTrade]
+    window: Sequence[dm.DigestTrade]
+    excluded: Sequence[dm.DigestTrade]
+    window_excluded: Sequence[dm.DigestTrade]
+
+    def of(self, account_id: int) -> _Trades:
+        def mine(trades: Sequence[dm.DigestTrade]) -> list[dm.DigestTrade]:
+            return [t for t in trades if t.account_id == account_id]
+
+        return _Trades(
+            mine(self.period), mine(self.window), mine(self.excluded), mine(self.window_excluded)
+        )
+
+
+def _scope(trades: _Trades, first: date | None, start: date) -> Scope:
     days = 0 if first is None else dm.weekdays_between(first, start)
-    return Scope(period=period, window=window, norm_available=days >= dm.NORM_MIN_TRADING_DAYS)
+    return Scope(
+        period=trades.period,
+        window=trades.window,
+        norm_available=days >= dm.NORM_MIN_TRADING_DAYS,
+        excluded=trades.excluded,
+        window_excluded=trades.window_excluded,
+    )
 
 
 def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
@@ -263,21 +282,19 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
     loaded = _load_trades(db, dm.norm_window_start(kind, start), end, specs, breakeven_r)
     # M8-01: every strategy number (period, norm window, sections, charts) skips excluded
     # trades; they are listed apart so the totals reconcile with the account.
+    # Excluded trades still widen the percent base (app.domain.period_base, PM 2026-11-20).
     period = dm.trades_in_period(loaded.strategy, kind, start)
-    window = dm.norm_window_trades(loaded.strategy, kind, start)
     excluded = dm.trades_in_period(loaded.excluded, kind, start)
+    trades = _Trades(
+        period=period,
+        window=dm.norm_window_trades(loaded.strategy, kind, start),
+        excluded=excluded,
+        window_excluded=dm.norm_window_trades(loaded.excluded, kind, start),
+    )
     currency = _currency([*period, *excluded], accounts)
     firsts = _first_close_by_account(db)
     period_accounts = sorted({t.account_id for t in period})
-    by_account = {
-        a: _scope(
-            [t for t in period if t.account_id == a],
-            [t for t in window if t.account_id == a],
-            firsts.get(a),
-            start,
-        )
-        for a in period_accounts
-    }
+    by_account = {a: _scope(trades.of(a), firsts.get(a), start) for a in period_accounts}
     inp = SnapshotInput(
         kind=kind,
         start=start,
@@ -288,7 +305,7 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
             a.id: a.reference_balance for a in accounts.values() if a.reference_balance.is_finite()
         },
         account_names={a.id: a.name for a in accounts.values()},
-        combined=_scope(period, window, min(firsts.values(), default=None), start),
+        combined=_scope(trades, min(firsts.values(), default=None), start),
         by_account=by_account,
         journal_fields=breakdown_specs(specs),
         bias_marks=_bias_marks(db, start, end),
