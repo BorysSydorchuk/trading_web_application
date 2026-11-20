@@ -47,3 +47,10 @@ rules:
 # A closed trade with |R| below this counts as breakeven («в нуль») in digests: not a win,
 # not a loss (Borys/PM 2026-11-14). 0 = only an exact 0 P&L is breakeven.
 breakeven_r_threshold: 0.1
+
+# Account limits for the month bar of the «Ліміти» card on «Головна» (M8-10b): display only,
+# no violations. FundedNext: max drawdown -10 %, profit target +10 % of the account size.
+# Optional section; remove it to show the month bar without limits.
+account_limits:
+  max_drawdown_pct: -10.0    # must be < 0
+  profit_target_pct: 10.0    # must be > 0

@@ -94,6 +94,9 @@ POSITIONS_SKIPPED = "positions_skipped"
 MAX_ERROR_MESSAGE = 500
 
 PasswordLookup = Callable[[int], SecretStr | None]
+# M8-10b: receives (account_id, positions read by this sync, sync time UTC) after a
+# successful sync, e.g. to write the open-positions snapshot. Its failure is only logged.
+PositionsSink = Callable[[int, Sequence[RawPosition], datetime], None]
 
 
 # --- cadence ---------------------------------------------------------------------------
@@ -626,10 +629,12 @@ def sync_account(
     *,
     password_for: PasswordLookup = mt5_password_for,
     symbols: SymbolsConfig | None = None,
+    positions_sink: PositionsSink | None = None,
 ) -> SyncLog:
     """One sync cycle for one account; never raises for MT5/data errors (see module doc).
 
     ``symbols`` defaults to config/symbols.yaml (a broken file fails this sync, recorded).
+    ``positions_sink`` gets the open positions after a successful sync (M8-10b).
     Commits. Returns the completed sync_log row (``ok`` True or False).
     """
     started = monotonic_time.monotonic()
@@ -680,6 +685,7 @@ def sync_account(
             f", {len(counters.skipped)} positions skipped" if counters.skipped else "",
         )
         _store_excursions(session, account_id, fetched, now_utc)
+        _sink_positions(positions_sink, account_id, fetched, now_utc)
         return log
     except Exception as exc:
         session.rollback()
@@ -711,6 +717,18 @@ def _store_excursions(session: Session, account_id: int, fetched: Fetched, now: 
     except Exception:
         session.rollback()
         logger.exception("Account %s: MAE/MFE not stored", account_id)
+
+
+def _sink_positions(
+    sink: PositionsSink | None, account_id: int, fetched: Fetched, now: datetime
+) -> None:
+    """M8-10b, after the sync committed: a failure here is logged, never fails the sync."""
+    if sink is None:
+        return
+    try:
+        sink(account_id, fetched.positions, now)
+    except Exception:
+        logger.exception("Account %s: open positions snapshot not written", account_id)
 
 
 # Half the 60 s job interval: an account's start time drifts with the connect time of the

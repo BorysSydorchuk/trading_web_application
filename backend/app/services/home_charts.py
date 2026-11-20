@@ -10,6 +10,7 @@ a trade in the range (the digest's combined rule).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -84,7 +85,7 @@ def _check_range(start: date, end: date) -> None:
         raise _invalid("to", "before from")
 
 
-def _percent_base(accounts: list[Account]) -> Decimal | None:
+def percent_base(accounts: Sequence[Account]) -> Decimal | None:
     """The digest's rule: every counted account needs a finite size > 0, else no percent."""
     if not accounts:
         return None
@@ -114,7 +115,7 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
             "The range has trades in more than one account currency",
             {"currencies": sorted(currencies)},
         )
-    size = _percent_base(counted)
+    size = percent_base(counted)
     rolling = [p for p in hc.rolling(every, breakeven_r=breakeven_r) if p.time >= lo]
     return schemas.HomeCharts(
         from_=start,

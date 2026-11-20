@@ -1,0 +1,467 @@
+"""M8-10b ``GET /api/home`` (docs/api.md "M8-10b - «Головна» rebuild").
+
+Pinned here (also in docs/api.md / DECISIONS): ``account_id`` may name any non-archived
+account (archived / unknown -> 404); all accounts = active ones. Session is ``outside`` on
+non-trading days (rules.yaml sync.trading_days). ``pre_ny_missing`` only Mon-Fri.
+``price_time`` stays set for a stale snapshot entry (the «дані застаріли HH:MM» note).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
+
+from app.clock import utc_now
+from app.config import REPO_ROOT, Settings, get_settings
+from app.config_files import reload_config
+from app.config_files.loader import CONFIG_DIR_ENV
+from app.db import make_session_factory
+from app.models import Account, BiasEntry, BiasNote, Trade
+from app.models.enums import AccountStatus, BiasKind
+from app.services import open_positions_snapshot as snap
+from tests.test_dashboard_api import closed, open_position
+from tests.test_trades_api import add_account
+
+D = Decimal
+# Thu 2026-11-12 14:00 UTC = 15:00 Brussels (UTC+1): NY session, week Mon 9th, month Nov.
+NOW = datetime(2026, 11, 12, 14, 0, tzinfo=UTC)
+TODAY = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
+MON = datetime(2026, 11, 9, 9, 0, tzinfo=UTC)
+NOV_3 = datetime(2026, 11, 3, 9, 0, tzinfo=UTC)
+OCT_20 = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
+MIDNIGHT = "2026-11-11T23:00:00Z"  # Brussels midnight of the 12th
+# M8-01: an excluded trade (strategy statistics out, account money in).
+EXCLUDED: dict[str, Any] = {
+    "excluded_from_stats": True,
+    "excluded_reason": "test trade",
+    "excluded_at": TODAY,
+}
+
+
+@pytest.fixture(autouse=True)
+def _clean(db_engine: Engine) -> Iterator[None]:
+    def truncate() -> None:
+        with db_engine.begin() as conn:
+            conn.execute(text("TRUNCATE accounts, bias_notes RESTART IDENTITY CASCADE"))
+
+    truncate()
+    yield
+    truncate()
+
+
+@pytest.fixture
+def session(db_engine: Engine) -> Iterator[Session]:
+    db = make_session_factory(db_engine)()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def clock(app: FastAPI) -> list[datetime]:
+    now = [NOW]
+    app.dependency_overrides[utc_now] = lambda: now[0]
+    return now
+
+
+@pytest.fixture(autouse=True)
+def data_dir(tmp_path: Path, app: FastAPI, settings: Settings, clock: list[datetime]) -> Path:
+    custom = settings.model_copy(update={"data_dir": tmp_path.resolve()})
+    app.dependency_overrides[get_settings] = lambda: custom
+    snap._warned.clear()
+    return tmp_path.resolve()
+
+
+@pytest.fixture
+def alpha(session: Session) -> Account:
+    return add_account(session, "Alpha", 1, reference_balance=D("10000.00"))
+
+
+def home(client: TestClient, **params: Any) -> dict[str, Any]:
+    response = client.get("/api/home", params=params)
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+def write_snapshot(data_dir: Path, values: dict[str, Any]) -> None:
+    (data_dir / snap.SNAPSHOT_FILE).write_text(json.dumps(values), encoding="utf-8")
+
+
+def live(price: str, profit: str, at: datetime) -> dict[str, str]:
+    return {"price_current": price, "profit": profit, "time": at.isoformat()}
+
+
+def rules_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: Any) -> Iterator[None]:
+    config = tmp_path / "config"
+    shutil.copytree(REPO_ROOT / "config", config)
+    path = config / "rules.yaml"
+    path.write_text(edit(path.read_text(encoding="utf-8")), encoding="utf-8")
+    monkeypatch.setenv(CONFIG_DIR_ENV, str(config))
+    reload_config()
+    yield
+    reload_config()
+
+
+# --- header ----------------------------------------------------------------------------------
+
+
+def test_now_timezone_and_the_ny_session(client: TestClient) -> None:
+    data = home(client)
+
+    assert (data["now"], data["timezone"]) == ("2026-11-12T14:00:00Z", "Europe/Brussels")
+    assert data["session"] == {"key": "ny", "entries_allowed": True}
+
+
+@pytest.mark.parametrize(
+    ("at", "key", "allowed"),
+    [
+        (datetime(2026, 11, 12, 7, 30, tzinfo=UTC), "london", True),
+        (datetime(2026, 11, 12, 10, 30, tzinfo=UTC), "premarket", False),
+        (datetime(2026, 11, 12, 15, 0, tzinfo=UTC), "outside", False),
+        (datetime(2026, 11, 14, 8, 0, tzinfo=UTC), "outside", False),  # Saturday 09:00
+    ],
+)
+def test_session_follows_brussels_time_and_trading_days(
+    client: TestClient, clock: list[datetime], at: datetime, key: str, allowed: bool
+) -> None:
+    clock[0] = at
+
+    assert home(client)["session"] == {"key": key, "entries_allowed": allowed}
+
+
+def add_note(session: Session, kind: BiasKind, day: Any, entries: dict[str, str]) -> None:
+    note = BiasNote(kind=kind.value, period_date=day)
+    note.entries = [BiasEntry(symbol=s, direction=d) for s, d in entries.items()]
+    session.add(note)
+    session.commit()
+
+
+def test_bias_today_without_notes(client: TestClient) -> None:
+    assert home(client)["bias_today"] == {"pre_london": None, "pre_ny_missing": True}
+
+
+def test_bias_today_lists_the_pre_london_entries(client: TestClient, session: Session) -> None:
+    today = TODAY.date()
+    add_note(session, BiasKind.PRE_LONDON, today, {"EURUSD": "bullish", "GER40": "bearish"})
+    add_note(session, BiasKind.PRE_LONDON, today - timedelta(days=1), {"XAUUSD": "bullish"})
+    add_note(session, BiasKind.PRE_NY, today, {"XAUUSD": "neutral"})
+
+    assert home(client)["bias_today"] == {
+        "pre_london": [
+            {"symbol": "EURUSD", "direction": "bullish"},
+            {"symbol": "GER40", "direction": "bearish"},
+        ],
+        "pre_ny_missing": False,
+    }
+
+
+def test_pre_ny_is_not_missing_at_the_weekend(client: TestClient, clock: list[datetime]) -> None:
+    clock[0] = datetime(2026, 11, 15, 12, 0, tzinfo=UTC)  # Sunday
+
+    assert home(client)["bias_today"]["pre_ny_missing"] is False
+
+
+# --- limits ----------------------------------------------------------------------------------
+
+
+def test_limits_of_one_account(client: TestClient, session: Session, alpha: Account) -> None:
+    closed(session, alpha, TODAY, "250.00")
+    closed(session, alpha, TODAY + timedelta(hours=1), "-40.00", **EXCLUDED)
+    closed(session, alpha, MON, "100.00")
+    closed(session, alpha, NOV_3, "-300.00")
+    closed(session, alpha, OCT_20, "999.00")  # last month: never counted
+    open_position(session, alpha)
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert limits == {
+        "account_id": alpha.id,
+        "account_name": "Alpha",
+        "currency": "USD",
+        "day": {"pct": "2.1000", "loss_pct": "-3.0000", "profit_pct": "5.0000"},
+        "week": {"pct": "3.1000", "loss_pct": "-6.0000", "profit_pct": "10.0000"},
+        "month": {"pct": "0.1000", "loss_pct": "-10.0000", "profit_pct": "10.0000"},
+        "trades_week": 4,  # 3 closed this week (one excluded) + the open one
+        "max_trades_week": 10,
+        "to_daily_stop_pct": "5.1000",
+    }
+
+
+def test_week_starting_in_the_previous_month_counts_its_trades(
+    client: TestClient, session: Session, alpha: Account, clock: list[datetime]
+) -> None:
+    clock[0] = datetime(2026, 12, 1, 14, 0, tzinfo=UTC)  # Tue; the week began Mon 30 Nov
+    closed(session, alpha, datetime(2026, 11, 30, 9, 0, tzinfo=UTC), "100.00")
+
+    limits = home(client)["limits"]
+
+    assert (limits["week"]["pct"], limits["month"]["pct"], limits["trades_week"]) == (
+        "1.0000",
+        "0.0000",
+        1,
+    )
+
+
+def test_all_accounts_show_the_one_closest_to_its_daily_stop(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    beta = add_account(session, "Beta", 2, reference_balance=D("20000.00"))
+    gone = add_account(session, "Old", 3, status=AccountStatus.PASSED.value)
+    closed(session, alpha, TODAY, "210.00")  # +2.1 % -> 5.1 to the stop
+    closed(session, beta, TODAY, "-500.00")  # -2.5 % -> 0.5 to the stop
+    closed(session, gone, TODAY, "-2900.00")  # not active: not a candidate
+
+    assert home(client)["limits"]["account_id"] == beta.id
+    assert home(client)["limits"]["to_daily_stop_pct"] == "0.5000"
+    assert home(client, account_id=alpha.id)["limits"]["account_id"] == alpha.id
+    assert home(client, account_id=gone.id)["limits"]["account_name"] == "Old"
+
+
+def test_no_accounts_means_no_limits(client: TestClient) -> None:
+    data = home(client)
+
+    assert data["limits"] is None
+    assert data["open_positions"] == []
+    assert data["open_totals"] == {"pnl": "0.00", "risk_pct": "0.0000", "price_time": None}
+
+
+def test_unknown_or_archived_account_is_404(client: TestClient, session: Session) -> None:
+    old = add_account(session, "Old", 3, status=AccountStatus.ARCHIVED.value)
+
+    for account_id in (old.id, 999):
+        response = client.get("/api/home", params={"account_id": account_id})
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+
+@pytest.fixture
+def no_account_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    def edit(source: str) -> str:
+        return re.sub(r"^account_limits:\n(  .*\n)+", "", source, flags=re.MULTILINE)
+
+    yield from rules_copy(tmp_path, monkeypatch, edit)
+
+
+def test_month_bar_without_account_limits(
+    client: TestClient, alpha: Account, no_account_limits: None
+) -> None:
+    data = home(client)
+
+    assert data["limits"]["month"] == {"pct": "0.0000", "loss_pct": None, "profit_pct": None}
+    assert data["kpis"]["drawdown"]["limit_pct"] is None
+
+
+@pytest.fixture
+def broken_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    yield from rules_copy(tmp_path, monkeypatch, lambda _: "timezone: [not, valid\n")
+
+
+def test_broken_rules_yaml_is_a_config_error(client: TestClient, broken_rules: None) -> None:
+    response = client.get("/api/home")
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "config_error"
+
+
+def test_mixed_currencies_are_409(client: TestClient, session: Session, alpha: Account) -> None:
+    euro = add_account(session, "Euro", 2, reference_balance=D("10000.00"))
+    euro.currency = "EUR"
+    session.commit()
+    closed(session, alpha, TODAY, "10.00")
+    closed(session, euro, TODAY, "10.00")
+
+    response = client.get("/api/home")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "mixed_currency"
+    assert client.get("/api/home", params={"account_id": euro.id}).status_code == 200
+
+
+# --- KPIs ------------------------------------------------------------------------------------
+
+
+def test_today_kpi_runs_from_zero_at_brussels_midnight(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, TODAY, "250.00")
+    closed(session, alpha, TODAY + timedelta(hours=1), "-50.00", **EXCLUDED)
+    closed(session, alpha, MON, "100.00")
+
+    today = home(client)["kpis"]["today"]
+
+    assert (today["pnl"], today["pct"], today["trades"]) == ("200.00", "2.0000", 2)
+    assert today["series"] == [
+        {"time": MIDNIGHT, "cum_pnl": "0.00"},
+        {"time": "2026-11-12T09:00:00Z", "cum_pnl": "250.00"},
+        {"time": "2026-11-12T10:00:00Z", "cum_pnl": "200.00"},
+    ]
+
+
+def test_win_rate_and_avg_r_are_the_last_20_rolling_points(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    # 5 losses (-1R) then 20 wins (+1R): the last window holds only wins.
+    for i in range(25):
+        win = i >= 5
+        closed(session, alpha, OCT_20 + timedelta(hours=i), "100.00" if win else "-100.00",
+               r_multiple=D(1) if win else D(-1))  # fmt: skip
+    closed(session, alpha, TODAY, "-500.00", r_multiple=D(-5), **EXCLUDED)
+
+    kpis = home(client)["kpis"]
+
+    win_rate, avg_r = kpis["win_rate"], kpis["avg_r"]
+    assert (win_rate["value"], win_rate["n"], win_rate["window"]) == ("100.0000", 20, 20)
+    assert (avg_r["value"], avg_r["n"], avg_r["window"]) == ("1.0000", 20, 20)
+    assert len(win_rate["series"]) == len(avg_r["series"]) == 20
+    # The first shown point is trade 6: window 1..6 = 5 losses + 1 win.
+    assert win_rate["series"][0] == {"time": "2026-10-20T14:00:00Z", "value": "16.6667"}
+    assert avg_r["series"][0]["value"] == "-0.6667"
+    assert win_rate["series"][-1]["time"] == "2026-10-21T09:00:00Z"  # excluded trade out
+
+
+def test_rolling_kpis_without_trades(client: TestClient, alpha: Account) -> None:
+    kpis = home(client)["kpis"]
+
+    assert kpis["win_rate"] == {"value": None, "n": 0, "window": 20, "series": []}
+    assert kpis["avg_r"] == {"value": None, "n": 0, "window": 20, "series": []}
+
+
+def test_drawdown_from_the_running_peak_this_month(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, OCT_20, "-999.00")  # last month
+    closed(session, alpha, NOV_3, "200.00")
+    closed(session, alpha, MON, "-500.00", **EXCLUDED)  # real money
+    closed(session, alpha, TODAY, "100.00")
+
+    drawdown = home(client)["kpis"]["drawdown"]
+
+    assert (drawdown["pct"], drawdown["limit_pct"]) == ("-4.0000", "-10.0000")
+    assert drawdown["series"] == [
+        {"time": "2026-10-31T23:00:00Z", "pct": "0.0000"},
+        {"time": "2026-11-03T09:00:00Z", "pct": "0.0000"},
+        {"time": "2026-11-09T09:00:00Z", "pct": "-5.0000"},
+        {"time": "2026-11-12T09:00:00Z", "pct": "-4.0000"},
+    ]
+
+
+def test_drawdown_without_a_size_is_null(client: TestClient, session: Session) -> None:
+    add_account(session, "Sizeless", 5, reference_balance=D("0"))
+
+    drawdown = home(client)["kpis"]["drawdown"]
+
+    assert (drawdown["pct"], drawdown["series"]) == (None, [])
+
+
+# --- open positions --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def position(session: Session, alpha: Account) -> Trade:
+    # buy 2650, initial SL 2640 (10 points = 1R), TP 2670 (2R)
+    return open_position(
+        session,
+        alpha,
+        mae_r=D("-0.4"),
+        mfe_r=D("0.9"),
+        excursion_status="running",
+        described_at=TODAY,
+    )
+
+
+def test_open_position_with_a_fresh_snapshot(
+    client: TestClient, data_dir: Path, alpha: Account, position: Trade
+) -> None:
+    at = NOW - timedelta(minutes=1)
+    write_snapshot(
+        data_dir, {str(alpha.id): {str(position.position_id): live("2655", "250.5", at)}}
+    )
+
+    data = home(client)
+
+    [item] = data["open_positions"]
+    assert item == {
+        "trade_id": position.id,
+        "symbol": "XAUUSD",
+        "direction": "buy",
+        "volume": "0.50000000",
+        "account_id": alpha.id,
+        "account_name": "Alpha",
+        "open_time": "2026-11-12T09:00:00Z",
+        "entry_price": "2650.00000000",
+        "initial_sl": "2640.00000000",
+        "tp": "2670.00000000",
+        "current_price": "2655",
+        "price_time": "2026-11-12T13:59:00Z",
+        "pnl": "250.50",
+        "r_now": "0.5000",
+        "tp_r": "2.0000",
+        "mae_r": "-0.4000",
+        "mfe_r": "0.9000",
+        "risk_pct": "1.0000",
+        "described": True,
+    }
+    assert data["open_totals"] == {
+        "pnl": "250.50",
+        "risk_pct": "1.0000",
+        "price_time": "2026-11-12T13:59:00Z",
+    }
+
+
+def test_stale_snapshot_keeps_only_the_price_time(
+    client: TestClient, data_dir: Path, alpha: Account, position: Trade
+) -> None:
+    at = NOW - timedelta(minutes=6)
+    write_snapshot(data_dir, {str(alpha.id): {str(position.position_id): live("2655", "250", at)}})
+
+    data = home(client)
+
+    [item] = data["open_positions"]
+    assert (item["current_price"], item["pnl"], item["r_now"]) == (None, None, None)
+    assert item["price_time"] == "2026-11-12T13:54:00Z"
+    assert item["tp_r"] == "2.0000"  # from the stored SL / TP, not the snapshot
+    assert data["open_totals"]["pnl"] is None
+
+
+@pytest.mark.parametrize("content", [None, "{broken", "[]"])
+def test_missing_or_broken_snapshot_never_fails(
+    client: TestClient, data_dir: Path, position: Trade, content: str | None
+) -> None:
+    if content is not None:
+        (data_dir / snap.SNAPSHOT_FILE).write_text(content, encoding="utf-8")
+
+    data = home(client)
+
+    [item] = data["open_positions"]
+    assert (item["current_price"], item["price_time"], item["pnl"]) == (None, None, None)
+    assert data["open_totals"] == {"pnl": None, "risk_pct": "1.0000", "price_time": None}
+
+
+def test_open_positions_of_the_selected_account_only(
+    client: TestClient, session: Session, alpha: Account, position: Trade
+) -> None:
+    beta = add_account(session, "Beta", 2, reference_balance=D("20000.00"))
+    other = open_position(session, beta, symbol="EURUSD", initial_sl=None, risk_pct=None,
+                          described_at=None)  # fmt: skip
+
+    every = home(client)["open_positions"]
+    only_beta = home(client, account_id=beta.id)
+
+    assert [p["trade_id"] for p in every] == [position.id, other.id]
+    [item] = only_beta["open_positions"]
+    assert (item["tp_r"], item["risk_pct"], item["described"]) == (None, None, False)
+    assert only_beta["open_totals"]["risk_pct"] is None
