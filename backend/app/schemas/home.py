@@ -91,11 +91,28 @@ class DrawdownKpi(BaseModel):
     series: list[PctPoint]
 
 
+EquitySource = Literal["mt5", "balance", "trades"]
+
+
+class MaxLossKpi(BaseModel):
+    """«До макс. збитку» (follow-up 2026-11-20): distance of equity to the FundedNext static
+    floor size x (1 + limit_pct / 100), percent of the size."""
+
+    account_id: int
+    account_name: str
+    pct: Pct
+    limit_pct: Pct
+    equity: Money
+    equity_source: EquitySource
+    series: list[PctPoint]
+
+
 class Kpis(BaseModel):
     today: TodayKpi
     win_rate: RollingKpi
     avg_r: RollingKpi
-    drawdown: DrawdownKpi
+    drawdown: DrawdownKpi  # kept for compatibility; the UI shows max_loss instead
+    max_loss: MaxLossKpi | None  # None: no account_limits or no account with a size
 
 
 class OpenPositionOut(BaseModel):

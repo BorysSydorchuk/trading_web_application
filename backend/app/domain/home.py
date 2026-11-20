@@ -122,3 +122,51 @@ def open_totals(
         risk_pct=None if None in risks else sum((r for r in risks if r is not None), ZERO),
         price_time=min(known_times) if known_times and len(known_times) == len(times) else None,
     )
+
+
+# --- max loss (FundedNext static floor; follow-up 2026-11-20) --------------------------------
+
+MAX_LOSS_POINTS = 60  # sparkline cap; the final «now» point is always kept
+
+
+@dataclass(frozen=True)
+class MaxLossPoint:
+    time: datetime
+    pct: Decimal  # distance to the floor, percent of the account size (0 = failed)
+
+
+def usable_size(size: Decimal | None) -> Decimal | None:
+    """The account size when finite and > 0, else None."""
+    if size is None or not size.is_finite() or size <= 0:
+        return None
+    return size
+
+
+def max_loss_floor(size: Decimal, limit_pct: Decimal) -> Decimal:
+    """Equity at which the account fails: size x (1 + limit_pct / 100), 10 000 at -10 -> 9 000."""
+    return size * (1 + limit_pct / HUNDRED)
+
+
+def max_loss_distance(equity: Decimal, size: Decimal, limit_pct: Decimal) -> Decimal:
+    """(equity - floor) / size x 100: 10 056.25 on 10 000 at -10 -> 10.5625."""
+    return (equity - max_loss_floor(size, limit_pct)) / size * HUNDRED
+
+
+def max_loss_series(
+    size: Decimal,
+    limit_pct: Decimal,
+    start: datetime,
+    closed: Iterable[tuple[datetime, int, Decimal]],
+    now: datetime,
+    equity_now: Decimal,
+) -> list[MaxLossPoint]:
+    """Start point (balance = size, distance -limit_pct), one point per closed trade
+    ``(close_time, id, net_pnl)`` on the running balance size + cumulative P&L, then ``now``
+    at ``equity_now``. The last ``MAX_LOSS_POINTS`` points, the final one included."""
+    points = [MaxLossPoint(start, max_loss_distance(size, size, limit_pct))]
+    running = size
+    for close_time, _, pnl in sorted(closed, key=lambda row: (row[0], row[1])):
+        running += pnl
+        points.append(MaxLossPoint(close_time, max_loss_distance(running, size, limit_pct)))
+    points.append(MaxLossPoint(now, max_loss_distance(equity_now, size, limit_pct)))
+    return points[-MAX_LOSS_POINTS:]

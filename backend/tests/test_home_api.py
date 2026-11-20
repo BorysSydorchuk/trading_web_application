@@ -602,3 +602,79 @@ def test_limits_count_the_entry_commission_an_open_trade_already_took_from_the_b
     assert limits["day"]["pct"] == "0.0353"  # (-96.91 + 108.00 - 7.56) / 10000
     assert limits["week"]["pct"] == "0.0153"  # the Monday trade's -2.00 is this week's cash
     assert limits["to_daily_stop_pct"] == "3.0353"
+
+
+# --- max loss KPI (follow-up 2026-11-20) -----------------------------------------------------
+
+
+def test_max_loss_from_a_fresh_mt5_equity(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    """Real-like case: size 10 000, equity 10 056.25 -> floor 9 000, 10.5625 % to the limit."""
+    closed(session, alpha, OCT_20, "56.25")
+    synced(session, alpha, "10056.25", NOW - timedelta(minutes=1))
+
+    kpi = home(client, account_id=alpha.id)["kpis"]["max_loss"]
+
+    assert kpi == {
+        "account_id": alpha.id,
+        "account_name": "Alpha",
+        "pct": "10.5625",
+        "limit_pct": "-10.0000",
+        "equity": "10056.25",
+        "equity_source": "mt5",
+        "series": [
+            {"time": "2026-10-20T08:30:00Z", "pct": "10.0000"},
+            {"time": "2026-10-20T09:00:00Z", "pct": "10.5625"},
+            {"time": "2026-11-12T14:00:00Z", "pct": "10.5625"},
+        ],
+    }
+
+
+def test_max_loss_with_a_stale_sync_uses_the_balance(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    synced(session, alpha, "10300.00", NOW - timedelta(minutes=6))  # balance 10 000
+
+    kpi = home(client, account_id=alpha.id)["kpis"]["max_loss"]
+
+    assert (kpi["equity"], kpi["equity_source"], kpi["pct"]) == ("10000.00", "balance", "10.0000")
+
+
+def test_max_loss_never_synced_adds_every_closed_trade_and_open_trade_cash(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    closed(session, alpha, OCT_20, "-200.00")
+    closed(session, alpha, TODAY, "-40.00", **EXCLUDED)  # real money: counts
+    open_position(session, alpha, net_pnl=D("-7.56"), commission=D("-7.56"))
+
+    kpi = home(client, account_id=alpha.id)["kpis"]["max_loss"]
+
+    assert (kpi["equity"], kpi["equity_source"]) == ("9752.44", "trades")
+    assert kpi["pct"] == "7.5244"  # (9752.44 - 9000) / 10000
+    assert [p["pct"] for p in kpi["series"]] == ["10.0000", "8.0000", "7.6000", "7.5244"]
+
+
+def test_max_loss_of_all_accounts_is_the_one_closest_to_its_floor(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    beta = add_account(session, "Beta", 2, reference_balance=D("20000.00"))
+    gone = add_account(session, "Old", 3, status=AccountStatus.PASSED.value)
+    add_account(session, "No size", 4, reference_balance=D("0.00"))
+    closed(session, alpha, TODAY, "-300.00")  # 7 %
+    closed(session, beta, TODAY, "-1000.00")  # 5 %: closest
+    closed(session, gone, TODAY, "-1900.00")  # not active: not a candidate
+
+    assert home(client)["kpis"]["max_loss"]["account_id"] == beta.id
+    assert home(client)["kpis"]["max_loss"]["pct"] == "5.0000"
+    assert home(client, account_id=gone.id)["kpis"]["max_loss"]["account_name"] == "Old"
+
+
+def test_max_loss_is_null_without_account_limits_or_accounts(
+    client: TestClient, alpha: Account, no_account_limits: None
+) -> None:
+    assert home(client)["kpis"]["max_loss"] is None
+
+
+def test_max_loss_is_null_without_any_account(client: TestClient) -> None:
+    assert home(client)["kpis"]["max_loss"] is None
