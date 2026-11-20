@@ -137,10 +137,17 @@ def test_closed_while_away_is_closed_from_position_history(
     assert t7.lesson == "my note"  # the journal survives the close
 
 
-def test_cold_terminal_is_read_again(session: Session, rules: RulesConfig) -> None:
+def test_cold_terminal_skips_the_cycle_then_the_next_sync_closes_the_trade(
+    session: Session, rules: RulesConfig
+) -> None:
+    """Readiness gate: empty first read, real deals on the second -> «термінал ще
+    завантажується» for this cycle (no cursor moves); the next sync loses nothing."""
     rules = no_overlap(rules)
     src = Terminal()
     account_id = _open_then_close_elsewhere(session, src, rules)
+    window_before = sync_service.history_window_start(
+        session, account_id, rules.sync, WEEK_STEP1_NOW + timedelta(minutes=15)
+    )
     src.cold = True
     pauses: list[float] = []
 
@@ -150,13 +157,59 @@ def test_cold_terminal_is_read_again(session: Session, rules: RulesConfig) -> No
 
     account = session.get(Account, account_id)
     assert account is not None
+    at = WEEK_STEP1_NOW + timedelta(minutes=15)
     log = sync_account(
-        session, account, src, rules, WEEK_STEP1_NOW + timedelta(minutes=15),
-        password_for=password, symbols=SYMBOLS, pause=warm_up,
+        session, account, src, rules, at, password_for=password, symbols=SYMBOLS, pause=warm_up
+    )
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert pauses == [sync_service.READY_PAUSE_S]
+    assert trades_by_pid(session, account_id)[T7].close_time is None  # nothing written
+    later = at + timedelta(minutes=1)
+    assert sync_service.history_window_start(session, account_id, rules.sync, later) == (
+        window_before
+    )  # the failed attempt did not move the cursor
+    assert sync_service.is_due(session, account_id, rules, later)  # retried next cycle
+
+    log = sync_account(
+        session, account, src, rules, later, password_for=password, symbols=SYMBOLS,
+        pause=pauses.append,
     )  # fmt: skip
     assert log.ok is True, log.error_message
-    assert pauses == [sync_service.HISTORY_READ_PAUSE_S]
     assert trades_by_pid(session, account_id)[T7].close_time is not None
+
+
+def test_empty_history_while_the_journal_has_trades_in_the_window_is_loading(
+    session: Session, rules: RulesConfig
+) -> None:
+    """Both reads empty and consistent, but trades of this window are in the journal."""
+    src = Terminal()
+    account = add_account(session, WEEK_LOGIN)
+    first = sync_account(
+        session, account, src, rules, WEEK_NOW, password_for=password, symbols=SYMBOLS
+    )
+    assert first.ok is True, first.error_message
+    before = len(trades_by_pid(session, account.id))
+    src.cold = True  # never warms up
+    pauses: list[float] = []
+    log = sync_account(
+        session, account, src, rules, WEEK_NOW + timedelta(minutes=1), password_for=password,
+        symbols=SYMBOLS, pause=pauses.append,
+    )  # fmt: skip
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert log.error_message is not None
+    assert "journal has trades" in log.error_message
+    assert len(trades_by_pid(session, account.id)) == before
+
+
+def test_terminal_not_connected_is_loading(session: Session, rules: RulesConfig) -> None:
+    src = Terminal()
+    account = add_account(session, WEEK_LOGIN)
+    src.terminal_connected = lambda: False  # type: ignore[method-assign]
+    log = sync_account(
+        session, account, src, rules, WEEK_NOW, password_for=password, symbols=SYMBOLS
+    )
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert trades_by_pid(session, account.id) == {}
 
 
 def test_warm_terminal_without_the_history_does_not_wait(
@@ -193,8 +246,9 @@ def test_terminal_that_stays_cold_is_retried_a_bounded_number_of_times(
     src.cold = True  # never warms up
     pauses: list[float] = []
     log = _sync(session, src, rules, pauses)
-    assert log.ok is True, log.error_message
-    assert len(pauses) == sync_service.HISTORY_READ_ATTEMPTS - 1
+    assert log.ok is True, log.error_message  # nothing in the window and nothing expected
+    # one readiness pause, then the bounded re-reads for the missing open position
+    assert len(pauses) == 1 + sync_service.HISTORY_READ_ATTEMPTS - 1
     assert trades_by_pid(session, account_id)[T7].close_time is None  # retried next sync
 
 

@@ -48,6 +48,7 @@ class FakeMt5:
         self.select_calls: list[str] = []
         self.deals_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
         self.hang: threading.Event | None = None
+        self.terminal: Any = SimpleNamespace(connected=True)
 
     def initialize(self, path: str, **kwargs: Any) -> bool:
         self.init_calls += 1
@@ -69,6 +70,9 @@ class FakeMt5:
 
     def account_info(self) -> Any:
         return self.account
+
+    def terminal_info(self) -> Any:
+        return self._result(self.terminal)
 
     def symbol_info(self, symbol: str) -> Any:
         return self._result(next((s for s in self.symbols if s.name == symbol), None))
@@ -315,6 +319,24 @@ def test_deals_for_position_uses_position_filter(fake: FakeMt5, terminal: Path) 
     connect(src, terminal)
     assert len(src.deals_for_position(10)) == 1
     assert fake.deals_calls[-1] == ((), {"position": 10})
+
+
+@pytest.mark.parametrize(
+    ("info", "expected"),
+    [
+        (SimpleNamespace(connected=True), True),
+        (SimpleNamespace(connected=False), False),
+        (SimpleNamespace(), False),  # no attribute: not ready
+        (None, False),  # terminal_info() returned nothing
+    ],
+)
+def test_terminal_connected_reads_terminal_info(
+    fake: FakeMt5, terminal: Path, info: Any, expected: bool
+) -> None:
+    fake.terminal = info
+    src, _ = make_source(fake)
+    connect(src, terminal)
+    assert src.terminal_connected() is expected
 
 
 def test_none_with_success_code_is_empty(fake: FakeMt5, terminal: Path) -> None:

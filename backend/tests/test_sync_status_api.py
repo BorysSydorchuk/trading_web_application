@@ -156,6 +156,26 @@ def test_error_keeps_last_success(client: TestClient, session: Session) -> None:
 
 
 @pytest.mark.usefixtures("clock")
+def test_terminal_loading_is_a_warning_and_keeps_last_success(
+    client: TestClient, session: Session
+) -> None:
+    account = add_account(session, "A")
+    add_sync(session, account, timedelta(minutes=2), True, open_positions=1)
+    add_sync(
+        session,
+        account,
+        timedelta(seconds=40),
+        False,
+        error_code="terminal_loading",
+        error_message="deal history still loading (0 then 6 deals)",
+    )
+    item = status_of(client, account)
+    assert item["state"] == "warning"
+    assert item["error_code"] == "terminal_loading"
+    assert item["last_success_utc"] == "2026-11-04T09:58:02Z"
+
+
+@pytest.mark.usefixtures("clock")
 def test_running(client: TestClient, session: Session) -> None:
     account = add_account(session, "A")
     add_sync(session, account, timedelta(minutes=1), True, open_positions=3)

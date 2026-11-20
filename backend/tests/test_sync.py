@@ -647,6 +647,9 @@ class Wrapped:
     def symbol_spec(self, symbol: str) -> RawSymbolSpec | None:
         return self.base.symbol_spec(symbol)
 
+    def terminal_connected(self) -> bool:
+        return self.base.terminal_connected()
+
     def symbols_matching(self, prefixes: Iterable[str]) -> list[RawSymbolSpec]:
         return self.base.symbols_matching(prefixes)
 
