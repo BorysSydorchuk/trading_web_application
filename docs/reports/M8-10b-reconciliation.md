@@ -50,3 +50,33 @@ Fix (one shared definition, `backend/app/domain/period_base.py`, used by Home, H
   - Its «Виключені угоди» block shows the account total with the same base: 1 443.62 / 4.81 %. This is exactly Home's number.
 - **Test:** Home month == digest month (account total) for all accounts and for one account.
 - **Stored digests keep their old numbers until «Оновити».**
+
+## C. «Ліміти» vs MT5 account data (2026-11-20 ~09:42 Brussels)
+
+Source:
+- **Balance and equity:** MT5 `account_info`, stored by the worker in `accounts.balance` / `accounts.equity`, synced 09:41.
+- **Period P&L:** trades synced from MT5 deal history.
+- **Start balance** = balance − net P&L closed since the period start (Brussels).
+- **Result** = (equity − start balance) / account size.
+
+| Account | Period | Start balance | Equity | Result % | Home (before fix) | Difference |
+|---|---|---|---|---|---|---|
+| FN Stellar Funded | day | 10 327.62 | 10 327.62 | 0.0000 | 0.0000 | 0.0000 |
+| FN Stellar Funded | week | 9 883.61 | 10 327.62 | 4.4401 | 4.4401 | 0.0000 |
+| FN Stellar Funded | month | 9 431.09 | 10 327.62 | 8.9653 | 8.9653 | 0.0000 |
+| FN Stellar Funded 2 | day | 9 978.49 | 10 056.25 | 0.7776 | 0.0000 | −0.7776 |
+| FN Stellar Funded 2 | week | 9 978.49 | 10 056.25 | 0.7776 | 0.0000 | −0.7776 |
+| FN Stellar Funded 2 | month | 9 992.44 | 10 056.25 | 0.6381 | −0.1395 | −0.7776 |
+
+**Bug (> 0.05 %):** Home counted closed trades only. The open GBPUSD position (floating +77.76 = equity − balance) was missing.
+
+Fix:
+- Each bar is now (closed in the period + floating) / size.
+- Floating = equity − balance from the last balance sync, if it is not older than 5 min. Otherwise Home uses closed only, and `floating_included: false`.
+- `to_daily_stop_pct` follows the new day %.
+- The rules engine and the «СТОП» banner are unchanged: they still use closed trades only (M8-01 decision).
+- Tests: fresh, stale, and no open position.
+
+Known small difference (LOW): MT5 takes the entry commission from the balance at open, so the day % is slightly high until the trade closes (about 0.04 % on a 1-lot forex trade).
+
+**Still to check:** the raw MT5 deal history (`history_deals_get`), for balance operations not in the trades table. «FN Stellar Funded 2»: the stored start balance 9 986.05 is 6.39 below the balance implied by its trades. It runs read-only after 16:00 Brussels, so it can't clash with the worker's MT5 connections in trading hours. The result is added here.
