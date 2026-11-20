@@ -12,7 +12,8 @@ dev:
 stop:
 	python scripts/dev.py --stop
 
-# Start PostgreSQL if needed (Docker) and apply migrations; no-op when already up.
+# db-ensure: make sure PostgreSQL is up (native service postgresql-x64-16 on 5433, or the
+# Docker fallback) and apply migrations (pg_dump backup first); no-op when already up.
 # M8-12: desktop shortcuts «Старт»/«Стоп» + autostart at login (NO_AUTOSTART=1 to turn it off)
 NO_AUTOSTART ?=
 shortcuts:
@@ -21,6 +22,7 @@ shortcuts:
 db-ensure:
 	python scripts/dev.py --ensure-db
 
+# Docker fallback only (docs/native-postgres.md «Як повернутися на Docker»).
 db-up:
 	docker compose up -d --wait db
 
@@ -42,7 +44,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck
@@ -54,7 +56,9 @@ test: test-backend test-frontend
 # Trading hours (weekdays 08:00-16:00 Brussels, CLAUDE.md): make check PYTEST_WORKERS=2 VITEST_WORKERS=2
 PYTEST_WORKERS ?= auto
 VITEST_WORKERS ?=
-test-backend: db-up
+# No Docker prerequisite since the native PostgreSQL move (2026-11-20): the native service starts
+# with Windows; on the Docker fallback run `make db-up` first. An unreachable DB fails visibly.
+test-backend:
 	cd backend && uv run pytest -n $(PYTEST_WORKERS)
 
 test-frontend:

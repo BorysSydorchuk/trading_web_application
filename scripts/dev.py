@@ -6,7 +6,9 @@ Stdlib only, Python 3.12.x. Steps:
   2. prerequisite checks (Python, Node/npm, uv),
   3. `.env` from `.env.example` if missing,
   4. `uv sync` / `npm install` when dependencies are missing or stale,
-  5. PostgreSQL reachable (starts Docker Desktop and the `db` service if needed) +
+  5. PostgreSQL reachable (on the native port NATIVE_PG_PORT, default 5433: starts the native
+     Windows service postgresql-x64-16 if installed; otherwise starts Docker Desktop and
+     the `db` service if needed) +
      migrations via `python -m app.tools.migrate` (pg_dump backup to `backups/` first),
   6. starts API, worker and Vite dev server with prefixed output,
   7. waits for http://127.0.0.1:8000/api/health and http://127.0.0.1:5173/, opens the browser.
@@ -74,6 +76,21 @@ WEB_URL = f"http://{API_HOST}:{WEB_PORT}/"
 READY_TIMEOUT_S = 60.0
 DOCKER_START_TIMEOUT_S = 60.0
 DB_TCP_TIMEOUT_S = 30.0
+# Native PostgreSQL 16 Windows service (decision 2026-11-20); Docker stays the fallback.
+NATIVE_PG_SERVICE = "postgresql-x64-16"
+NATIVE_PG_DEFAULT_PORT = 5433
+SC_TIMEOUT_S = 30.0
+SC_SERVICE_MISSING = 1060  # ERROR_SERVICE_DOES_NOT_EXIST
+SERVICE_UNKNOWN = "UNKNOWN"  # sc failed or printed no recognizable state
+SERVICE_STATES = {
+    "1": "STOPPED",
+    "2": "START_PENDING",
+    "3": "STOP_PENDING",
+    "4": "RUNNING",
+    "5": "CONTINUE_PENDING",
+    "6": "PAUSE_PENDING",
+    "7": "PAUSED",
+}
 GRACEFUL_STOP_S = 15.0  # a running launcher gets this long to stop its children itself
 PROCESS_EXIT_TIMEOUT_S = 10.0
 PORT_FREE_TIMEOUT_S = 15.0
@@ -130,6 +147,23 @@ MSG: dict[str, str] = {
     "step_uv_sync": "Встановлюю залежності бекенду (uv sync)",
     "step_npm_install": "Встановлюю залежності фронтенду (npm install)",
     "step_compose_up": "Запускаю PostgreSQL у Docker (docker compose up -d --wait db)",
+    # native PostgreSQL service
+    "native_starting": "Служба PostgreSQL «{service}» зупинена — запускаю, чекаю до {seconds} с…",
+    "native_waiting": "Служба PostgreSQL «{service}» у стані {state}, чекаю до {seconds} с…",
+    "native_start_failed": (
+        "Не вдалося запустити службу PostgreSQL «{service}» (код {code}; можливо, потрібні "
+        "права адміністратора). Запустіть її вручну: Win+R → services.msc → «{service}» → "
+        "Запустити, або один раз запустіть start.bat від імені адміністратора."
+    ),
+    "native_state_unknown": (
+        "Не вдалося визначити стан служби PostgreSQL «{service}» (sc.exe query). Перевірте її: "
+        "Win+R → services.msc → «{service}» → Запустити; див. docs/native-postgres.md."
+    ),
+    "native_unreachable": (
+        "Служба PostgreSQL «{service}» у стані {state}, але {host}:{port} недоступний. "
+        "Перевірте службу в services.msc (Запустити/Перезапустити) і порт у DATABASE_URL; "
+        "див. docs/native-postgres.md."
+    ),
     "step_migrate": "Застосовую міграції БД (з резервною копією в backups/)",
     # database / Docker
     "db_url_missing": "DATABASE_URL не задано в .env (див. .env.example).",
@@ -300,6 +334,26 @@ def parse_node_version(text: str) -> tuple[int, int]:
 
 def is_local_host(host: str) -> bool:
     return host.lower() in LOCAL_HOSTS
+
+
+def parse_sc_state(output: str) -> str | None:
+    """Service state from `sc query` output (`STATE : 4  RUNNING`), or None.
+
+    Matched by the numeric code and English state word, not the label, which is localized.
+    """
+    for line in output.splitlines():
+        _label, sep, value = line.partition(":")
+        parts = value.split()
+        if sep and len(parts) >= 2 and SERVICE_STATES.get(parts[0]) == parts[1].upper():
+            return parts[1].upper()
+    return None
+
+
+def native_pg_port(env: Mapping[str, str]) -> int:
+    try:
+        return int(env.get("NATIVE_PG_PORT", "") or NATIVE_PG_DEFAULT_PORT)
+    except ValueError:
+        return NATIVE_PG_DEFAULT_PORT
 
 
 # --------------------------------------------------------------------------- process queries
@@ -1097,6 +1151,54 @@ def ensure_docker_daemon(docker: str, host: str, port: int) -> None:
     raise LauncherError(MSG["docker_timeout"].format(seconds=seconds))
 
 
+def run_sc(args: Sequence[str]) -> tuple[int, str]:
+    """`sc.exe <args>` -> (exit code, stdout). Not Windows or cannot run -> (-1, "")."""
+    if not IS_WINDOWS:
+        return -1, ""
+    try:
+        result = subprocess.run(
+            ["sc.exe", *args],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=SC_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return -1, ""
+    return result.returncode, result.stdout.decode("utf-8", errors="replace")
+
+
+def native_service_state(service: str) -> str | None:
+    """State of the native PostgreSQL service; None only when it is not installed (1060) or
+    sc.exe cannot run (not Windows). Any other sc failure or unparsable output: UNKNOWN."""
+    code, out = run_sc(["query", service])
+    if code == SC_SERVICE_MISSING or code < 0:
+        return None
+    if code != 0:
+        return SERVICE_UNKNOWN
+    return parse_sc_state(out) or SERVICE_UNKNOWN
+
+
+def ensure_native_service(service: str, state: str, host: str, port: int) -> None:
+    """Start the stopped service (may need admin) and wait for TCP; LauncherError if not."""
+    seconds = f"{DB_TCP_TIMEOUT_S:.0f}"
+    if state == SERVICE_UNKNOWN:
+        raise LauncherError(MSG["native_state_unknown"].format(service=service))
+    if state == "STOPPED":
+        say(MSG["native_starting"].format(service=service, seconds=seconds))
+        code, _out = run_sc(["start", service])
+        if code != 0:
+            raise LauncherError(MSG["native_start_failed"].format(service=service, code=code))
+    elif state != "RUNNING":
+        say(MSG["native_waiting"].format(service=service, state=state, seconds=seconds))
+    if not wait_tcp(host, port, DB_TCP_TIMEOUT_S):
+        now = native_service_state(service) or state
+        raise LauncherError(
+            MSG["native_unreachable"].format(service=service, state=now, host=host, port=port)
+        )
+    say(MSG["db_reachable"].format(host=host, port=port))
+
+
 def ensure_db(env: Mapping[str, str]) -> None:
     url = env.get("DATABASE_URL", "")
     if not url:
@@ -1113,6 +1215,12 @@ def ensure_db(env: Mapping[str, str]) -> None:
 
     if not is_local_host(host):
         raise LauncherError(MSG["db_remote"].format(host=host, port=port))
+    if port == native_pg_port(env):
+        service = env.get("NATIVE_PG_SERVICE", "") or NATIVE_PG_SERVICE
+        state = native_service_state(service)
+        if state is not None:
+            ensure_native_service(service, state, host, port)
+            return
     docker = shutil.which("docker")
     if not docker:
         raise LauncherError(MSG["db_no_docker"].format(host=host, port=port))

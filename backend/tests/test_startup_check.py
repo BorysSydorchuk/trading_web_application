@@ -115,6 +115,25 @@ def test_native_tools_only_request_versions(
     ]
 
 
+def test_native_install_tools_found_without_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """EDB install under %PROGRAMFILES%\\PostgreSQL\\16\\bin is used when PATH lacks it."""
+    bin_dir = tmp_path / "pf" / "PostgreSQL" / "16" / "bin"
+    bin_dir.mkdir(parents=True)
+    for tool in ("pg_dump", "pg_restore"):
+        (bin_dir / f"{tool}.exe").write_bytes(b"")
+    monkeypatch.setattr("app.system.pg_tools.default_program_files", lambda: str(tmp_path / "pf"))
+    monkeypatch.setattr("app.tools.startup_check.shutil.which", lambda name: None)
+    run = Mock(return_value=Mock(returncode=0, stdout=b"pg_dump (PostgreSQL) 16.6"))
+    monkeypatch.setattr("app.tools.startup_check.subprocess.run", run)
+    startup.check_backup_tools(settings_for(tmp_path))
+    assert [c.args[0] for c in run.call_args_list] == [
+        [str(bin_dir / "pg_dump.exe"), "--version"],
+        [str(bin_dir / "pg_restore.exe"), "--version"],
+    ]
+
+
 def test_docker_rejects_foreign_cluster_without_requesting_tools(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -34,6 +34,7 @@ from sqlalchemy.engine import make_url
 from app.config import REPO_ROOT, Settings, get_settings
 from app.logging_setup import setup_logging
 from app.services.backups import PostgresTools
+from app.system.pg_tools import pg_tool
 from app.tools.migrate import (
     COMPOSE_DB_SERVICE,
     CONNECT_TIMEOUT_S,
@@ -195,7 +196,7 @@ def drop_scratch(source_url: str, source_db: str, scratch_db: str) -> None:
 
 
 def _restore_argv(target: DbTarget, scratch_db: str, dump: Path, compose_port: int) -> list[str]:
-    tool = shutil.which("pg_restore")
+    tool = pg_tool("pg_restore")
     common = ["--no-owner", "--no-privileges", "--exit-on-error"]
     if tool:
         return [
@@ -217,7 +218,7 @@ def restore(target: DbTarget, scratch_db: str, dump: Path, compose_port: int) ->
     env = {k: v for k, v in os.environ.items() if k != "PGPASSWORD"}
     if target.password:
         env["PGPASSWORD"] = target.password
-    via_docker = argv[0] != shutil.which("pg_restore")
+    via_docker = argv[0] != pg_tool("pg_restore")
     try:
         with dump.open("rb") as stream:
             result = subprocess.run(  # noqa: S603 - fixed argv, no shell, no password in argv

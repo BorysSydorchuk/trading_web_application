@@ -15,9 +15,10 @@
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | доступний як `uv` або `python -m uv`; перевірено 0.13.1 |
 | PostgreSQL | **16**, один із двох способів нижче |
 
-Типовий спосіб БД: [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/),
-Linux containers і робочий WSL 2/backend згідно з вимогами Docker; потрібна команда
-`docker compose`. Альтернатива — native PostgreSQL 16 з `pg_dump` і `pg_restore`.
+Типовий спосіб БД: native PostgreSQL 16 — служба Windows `postgresql-x64-16` на
+`127.0.0.1:5433` (встановлення і перенос даних: [docs/native-postgres.md](docs/native-postgres.md)).
+Запасний варіант — [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+(`docker compose`, порт 5432, Linux containers і WSL 2 згідно з вимогами Docker).
 GNU make необов'язковий для запуску; потрібний лише для розробницьких `make`-команд.
 MT5, ключ Claude і модель Whisper **не потрібні** для першого запуску UI.
 
@@ -59,8 +60,10 @@ notepad.exe .\.env
 ```
 
 Редагуйте й збережіть `.env` локально як UTF-8; не надсилайте його, не комітьте й не
-показуйте у терміналі/скриншотах. Існуючий файл цей блок не перезаписує. Для **нового**
-Docker-встановлення узгодьте ключі нижче; кутові дужки — позначки для ваших локальних
+показуйте у терміналі/скриншотах. Існуючий файл цей блок не перезаписує. Для native
+PostgreSQL (типово) ключі `NATIVE_*`, `DATABASE_URL` і `TEST_DATABASE_URL` записує
+`scripts/native_pg.py` (`secrets`, потім `switch`; §3) — вручну їх не редагуйте. Для
+**нового** Docker-встановлення (запасний варіант) узгодьте ключі нижче; кутові дужки — позначки для ваших локальних
 значень, не готові паролі:
 
 ```dotenv
@@ -86,9 +89,35 @@ ANTHROPIC_API_KEY=
 
 ## 3. PostgreSQL — оберіть один спосіб
 
-### Docker Desktop (типово)
+### Native PostgreSQL 16 (типово)
 
-Запустіть Docker Desktop, дочекайтеся готового Linux engine:
+Служба Windows `postgresql-x64-16`, лише `localhost`, порт **5433**. Усе робить
+`scripts/native_pg.py`; повні кроки (з командами від імені адміністратора) —
+[docs/native-postgres.md](docs/native-postgres.md). Коротко, з кореня репозиторію:
+
+```powershell
+python -m uv run --project backend python scripts/native_pg.py secrets
+python -m uv run --project backend python scripts/native_pg.py install-command   # вставити в PowerShell (адмін)
+python -m uv run --project backend python scripts/native_pg.py configure --restart  # PowerShell (адмін)
+python -m uv run --project backend python scripts/native_pg.py copy      # лише при переносі з Docker
+python -m uv run --project backend python scripts/native_pg.py switch
+python -m uv run --project backend python scripts/native_pg.py status
+```
+
+`configure` створює роль `journal` (LOGIN, CREATEDB — для ізольованих тестових БД; не
+SUPERUSER) і бази `trading_journal` та `trading_journal_test` (UTF8, ICU en-US), вмикає
+автозапуск служби і змінює пароль `postgres`. Паролі генеруються в `.env` і ніде не
+друкуються. `pg_dump`/`pg_restore` launcher і backup-інструменти знаходять самі в
+`%PROGRAMFILES%\PostgreSQL\16\bin` — змінювати PATH не потрібно (див. §8, якщо в PATH є
+старіша версія). Якщо служба зупинена, `start.bat` намагається її запустити; без прав
+адміністратора — запустіть «postgresql-x64-16» у `services.msc`.
+
+### Docker Desktop (запасний варіант)
+
+Повернення на Docker: `stop.bat`, потім
+`python -m uv run --project backend python scripts/native_pg.py switch-back`, запустіть
+Docker Desktop (дочекайтеся «Engine running») і `start.bat`. Для нового встановлення без
+native-сервера:
 
 ```powershell
 docker --version
@@ -96,40 +125,13 @@ docker compose version
 docker compose up -d --wait db
 ```
 
-Compose використовує `postgres:16`, loopback `127.0.0.1`, постійний volume `pgdata`.
-На **першій ініціалізації порожнього volume** створює БД із `POSTGRES_DB` і окрему
-`trading_journal_test` через `docker/postgres-init/01-test-db.sql`. Схему застосунку
-створить launcher. Інтернет потрібний для першого завантаження образу.
-Не запускайте інший checkout із тією самою БД/Compose-конфігурацією паралельно.
-Якщо порт 5432 уже використовується, для **нового окремого** встановлення оберіть
-вільний порт (наприклад 5433) й однаково змініть `POSTGRES_PORT` та порти обох URL.
-
-### Native PostgreSQL 16 (альтернатива Docker)
-
-Встановіть сервер і command-line tools через [офіційний Windows installer](https://www.postgresql.org/download/windows/).
-Запустіть службу PostgreSQL. Команди нижче — **лише для нового сервера/нових імен**;
-якщо роль/БД уже існують, не створюйте їх повторно і нічого не видаляйте.
-Паролі вводяться в інтерактивних запитах, а не в аргументах чи SQL-файлі;
-параметри [createuser описані PostgreSQL](https://www.postgresql.org/docs/16/app-createuser.html).
-
-```powershell
-$pgBin = 'C:\Program Files\PostgreSQL\16\bin'
-& "$pgBin\createuser.exe" -h 127.0.0.1 -U postgres --pwprompt --createdb journal
-& "$pgBin\createdb.exe" -h 127.0.0.1 -U postgres --owner=journal trading_journal
-& "$pgBin\createdb.exe" -h 127.0.0.1 -U postgres --owner=journal trading_journal_test
-$env:Path = "$pgBin;$env:Path"
-pg_dump --version
-pg_restore --version
-```
-
-`--createdb` потрібний локальним розробницьким тестам для їхніх ізольованих БД;
-SUPERUSER для ролі застосунку не потрібний. Обидві БД належать `journal`.
-Налаштуйте URL у `.env` на цей сервер і його пароль; `POSTGRES_PORT` — той самий порт.
-Запускайте застосунок із PowerShell, у якому `pg_dump`/`pg_restore` доступні в PATH;
-для інших вікон/ярликів також налаштуйте PATH. Клієнти мають бути версії 16 або новішої,
-сумісними із сервером. Якщо БД доступна, launcher не запускає Docker.
-Цей native-спосіб звірено з кодом і документацією PostgreSQL, але **не перевірено
-повним встановленням native-сервера** у M7-06; див. звіт.
+Compose використовує `postgres:16`, loopback `127.0.0.1:5432`, постійний volume `pgdata`
+(ніколи не видаляйте його — це копія даних до переносу). На **першій ініціалізації
+порожнього volume** створює БД із `POSTGRES_DB` і окрему `trading_journal_test` через
+`docker/postgres-init/01-test-db.sql`. Схему застосунку створить launcher. Не запускайте
+інший checkout із тією самою БД/Compose-конфігурацією паралельно. Launcher запускає
+Docker лише тоді, коли `DATABASE_URL` вказує не на порт native-сервера (`NATIVE_PG_PORT`,
+типово 5433) або native-служба не встановлена.
 
 ## 4. Залежності та перший запуск
 
@@ -144,8 +146,9 @@ npm.cmd --prefix frontend ci --no-audit --no-fund
 
 Початкове завантаження Python/npm-пакетів і Docker може зайняти кілька хвилин;
 це не warm startup. Launcher перевіряє версії, npm/uv, SQL-з'єднання та ідентичність
-БД, YAML/налаштування, права запису data/logs/backups та backup tools. Для локального
-Docker клієнти `pg_dump`/`pg_restore` беруться з перевіреного контейнера `db`.
+БД, YAML/налаштування, права запису data/logs/backups та backup tools. Клієнти
+`pg_dump`/`pg_restore` беруться з PATH, інакше з `%PROGRAMFILES%\PostgreSQL\16\bin`; лише
+без них (Docker-варіант) — з перевіреного контейнера `db`.
 
 Після перевірок launcher застосовує наявні міграції. Перед pending-міграцією кожної
 **не-тестової** БД обов'язковий custom-format `pg_dump` у repo `backups/`, перевірений
@@ -294,7 +297,9 @@ CLI виводить шлях до `archive.dump`; поруч `manifest.json` і
 | `npm.ps1 cannot be loaded` | Використати `npm.cmd`; не послаблювати ExecutionPolicy |
 | Docker engine недоступний / не стартував за 60 с | Відкрити Docker Desktop, перевірити Linux engine/WSL 2 і `docker compose version`, повторити старт |
 | PostgreSQL недоступний / неправильна ідентичність | Перевірити службу/контейнер, узгоджені URL/порт і чинні локальні credentials; не скидати БД/volume |
-| Немає pg_dump/pg_restore | Native: bin у PATH поточного вікна; Docker: власний `db` доступний і cluster identity збігається |
+| Немає pg_dump/pg_restore | Native: перевірити `C:\Program Files\PostgreSQL\16\bin\pg_dump.exe` (компонент command-line tools); Docker: власний `db` доступний і cluster identity збігається |
+| pg_dump/pg_restore «версія 15 або старша» / server version mismatch | У PATH є старіший `pg_dump` (він має пріоритет над `%PROGRAMFILES%\PostgreSQL\16\bin`): `where.exe pg_dump`, приберіть старий шлях із PATH або оновіть ту інсталяцію |
+| Служба «postgresql-x64-16» не стартує / 127.0.0.1:5433 недоступний | `services.msc` → «postgresql-x64-16» → Запустити; або `start.bat` від імені адміністратора; `native_pg.py status` |
 | Порт 8000/5173 зайнятий іншою програмою | Закрити її штатно або погодити зміну конфігурації; launcher чужі процеси не завершує |
 | Невалідний YAML/.env, немає запису або місця на диску | Виправити вказаний файл локальним UTF-8 редактором/права/місце, зберігши дані; не показувати секрети в логах |
 | Pre-migration backup failed | Міграція не застосовується; виправити tool/доступ/місце, зберегти наявні архіви, повторити через launcher |
@@ -306,6 +311,7 @@ CLI виводить шлях до `archive.dump`; поруч `manifest.json` і
 Ізольований clone/нові venv і node_modules, окрема synthetic PostgreSQL БД,
 fixture MT5/AI disabled, readiness, «Налаштування» → «Рахунки» і owned shutdown:
 [звіт M7-06](docs/reports/M7-06.md). У ньому окремо позначені неперевірені native
-installation, чиста Windows VM, перше internet-завантаження й реальний MT5.
+installation, чиста Windows VM, перше internet-завантаження й реальний MT5. Перенос на
+native PostgreSQL 16 (`docs/native-postgres.md`) власник виконав і перевірив 2026-11-20.
 Warm performance на репрезентативній історії — [M7-05](docs/reports/M7-05.md);
 це не обіцянка такої самої швидкості cold install.

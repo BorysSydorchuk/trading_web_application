@@ -167,6 +167,7 @@ def db_down(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     monkeypatch.setattr(dev, "docker_daemon_running", lambda _d: False)
     monkeypatch.setattr(dev, "docker_desktop_exe", lambda: None)
     monkeypatch.setattr(dev.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(dev, "native_service_state", lambda _s: None)
 
     def forbidden(*_a: object, **_k: object) -> bool:
         raise AssertionError("no setup command expected")
@@ -241,6 +242,146 @@ def test_ensure_db_starts_compose_when_daemon_up(db_down: pytest.MonkeyPatch) ->
 def test_ensure_db_empty_url(db_down: pytest.MonkeyPatch) -> None:
     with pytest.raises(dev.LauncherError, match="DATABASE_URL не задано"):
         dev.ensure_db({"DATABASE_URL": ""})
+
+
+# --------------------------------------------------------------------------- native PostgreSQL
+
+NATIVE_URL = "postgresql+psycopg://u:p@127.0.0.1:5433/db"
+SC_RUNNING = """
+SERVICE_NAME: postgresql-x64-16
+        TYPE               : 10  WIN32_OWN_PROCESS
+        STATE              : 4  RUNNING
+                                (STOPPABLE, PAUSABLE, ACCEPTS_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+"""
+SC_STOPPED_LOCALIZED = """
+SERVICE_NAME: postgresql-x64-16
+        ТИП                : 10  WIN32_OWN_PROCESS
+        СОСТОЯНИЕ          : 1  STOPPED
+"""
+
+
+@pytest.mark.parametrize(
+    ("output", "state"),
+    [(SC_RUNNING, "RUNNING"), (SC_STOPPED_LOCALIZED, "STOPPED"), ("", None), ("garbage", None)],
+)
+def test_parse_sc_state(output: str, state: str | None) -> None:
+    assert dev.parse_sc_state(output) == state
+
+
+class FakeSc:
+    """`run_sc` fake: replies per verb, records calls."""
+
+    def __init__(self, replies: dict[str, list[tuple[int, str]]]) -> None:
+        self.replies = replies
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str]) -> tuple[int, str]:
+        self.calls.append(list(args))
+        return self.replies[args[0]].pop(0)
+
+
+def test_native_stopped_service_started(db_down: pytest.MonkeyPatch) -> None:
+    sc = FakeSc({"query": [(0, SC_STOPPED_LOCALIZED)], "start": [(0, "")]})
+    reachable = iter([False, False, True])
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev.time, "sleep", lambda _s: None)
+    db_down.setattr(dev, "run_sc", sc)
+    db_down.setattr(dev.shutil, "which", lambda _n: pytest.fail("docker path not expected"))
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert sc.calls == [["query", "postgresql-x64-16"], ["start", "postgresql-x64-16"]]
+
+
+def test_native_start_fails_with_services_msc_hint(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(
+        dev, "run_sc", FakeSc({"query": [(0, SC_STOPPED_LOCALIZED)], "start": [(5, "")]})
+    )
+    with pytest.raises(dev.LauncherError) as error:
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    text = str(error.value)
+    assert "«postgresql-x64-16»" in text
+    assert "services.msc" in text
+    assert "від імені адміністратора" in text
+
+
+def test_native_running_but_port_closed(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(dev, "DB_TCP_TIMEOUT_S", 0.01)
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(0, SC_RUNNING), (0, SC_RUNNING)]}))
+    with pytest.raises(dev.LauncherError, match=r"у стані RUNNING, але 127.0.0.1:5433"):
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+
+
+def test_no_native_service_uses_docker_path(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    calls: list[list[str]] = []
+    reachable = iter([False, True])
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(dev.SC_SERVICE_MISSING, "")]}))
+    db_down.setattr(dev.shutil, "which", lambda _n: "docker")
+    db_down.setattr(dev, "docker_daemon_running", lambda _d: True)
+    db_down.setattr(dev, "run_step", lambda cmd, *_a, **_k: calls.append(list(cmd)))
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert calls == [["docker", "compose", "up", "-d", "--wait", "db"]]
+
+
+@pytest.mark.parametrize(
+    ("reply", "state"),
+    [
+        ((dev.SC_SERVICE_MISSING, ""), None),
+        ((-1, ""), None),
+        ((5, ""), "UNKNOWN"),
+        ((1072, "garbage"), "UNKNOWN"),
+        ((0, "no state line here"), "UNKNOWN"),
+        ((0, SC_RUNNING), "RUNNING"),
+    ],
+)
+def test_native_service_state_only_missing_means_none(
+    monkeypatch: pytest.MonkeyPatch, reply: tuple[int, str], state: str | None
+) -> None:
+    monkeypatch.setattr(dev, "run_sc", lambda _args: reply)
+    assert dev.native_service_state("postgresql-x64-16") == state
+
+
+def test_native_sc_failure_never_falls_back_to_docker(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(5, "")]}))
+    db_down.setattr(dev.shutil, "which", lambda _n: pytest.fail("docker path not expected"))
+    with pytest.raises(dev.LauncherError) as error:
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert "«postgresql-x64-16»" in str(error.value)
+    assert "services.msc" in str(error.value)
+
+
+def test_native_start_pending_waits_without_sc_start(db_down: pytest.MonkeyPatch) -> None:
+    pending = "        STATE              : 2  START_PENDING"
+    sc = FakeSc({"query": [(0, pending)]})
+    reachable = iter([False, False, True])
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev.time, "sleep", lambda _s: None)
+    db_down.setattr(dev, "run_sc", sc)
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert sc.calls == [["query", "postgresql-x64-16"]]
+
+
+def test_docker_port_never_queries_native_service(db_down: pytest.MonkeyPatch) -> None:
+    """DATABASE_URL on the Docker port (5432): Docker path even if the service exists."""
+    db_down.setattr(dev, "native_service_state", lambda _s: pytest.fail("no sc query expected"))
+    db_down.setattr(dev.shutil, "which", lambda _n: None)
+    with pytest.raises(dev.LauncherError, match="Встановіть Docker Desktop"):
+        dev.ensure_db({"DATABASE_URL": LOCAL_URL})
+
+
+def test_native_port_from_env() -> None:
+    assert dev.native_pg_port({}) == 5433
+    assert dev.native_pg_port({"NATIVE_PG_PORT": "6000"}) == 6000
+    assert dev.native_pg_port({"NATIVE_PG_PORT": "x"}) == 5433
 
 
 # --------------------------------------------------------------------------- children

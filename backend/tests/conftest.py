@@ -234,6 +234,15 @@ def _fresh_journal_requirements(request: pytest.FixtureRequest) -> None:
         reset_journal_requirements(request.getfixturevalue("db_engine"))
 
 
+@pytest.fixture(autouse=True)
+def _no_native_pg_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real native PostgreSQL under %PROGRAMFILES% must not leak into tests that fake
+    `shutil.which`; tests of app.system.pg_tools pass `program_files` explicitly."""
+    from app.system import pg_tools
+
+    monkeypatch.setattr(pg_tools, "default_program_files", lambda: None)
+
+
 @pytest.fixture
 def db_session(db_engine: Engine) -> Iterator[Session]:
     session = app_db.make_session_factory(db_engine)()
