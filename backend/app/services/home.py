@@ -37,6 +37,7 @@ from app.models import Account, BiasNote, Trade
 from app.models.enums import AccountStatus, BiasKind
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
+from app.services.home_max_loss import max_loss
 
 OUTSIDE: Final = "outside"
 WEEKDAYS = range(5)  # Monday..Friday, as the bias reminders (app.services.bias_status)
@@ -414,6 +415,7 @@ def _kpis(
         win_rate=win_rate,
         avg_r=avg_r,
         drawdown=_drawdown(accounts, trades, rules, period, one),
+        max_loss=max_loss(db, accounts, rules, period.now),
     )
 
 

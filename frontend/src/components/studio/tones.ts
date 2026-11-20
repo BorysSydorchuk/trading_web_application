@@ -47,7 +47,7 @@ interface KpiToneClasses {
   value: string
 }
 
-/** KPI cards: P&L green, drawdown red on peach, rates/R lavender (mockup docs/design/home-mockup.html). */
+/** KPI cards: P&L green, loss / near-limit red on peach, rates/R lavender (mockup docs/design/home-mockup.html). */
 export const kpiToneClass: Record<KpiTone, KpiToneClasses> = {
   // Selected rings use the tone's text shade: >= 5.8:1 on the page and the card washes (WCAG 1.4.11
   // asks 3:1; the pastel -mid / accent-ring shades of the mockup were 1.6-2.3:1, M8-10a review gap).

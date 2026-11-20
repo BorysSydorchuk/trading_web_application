@@ -65,7 +65,14 @@ export function HomePage() {
 
   return (
     <div className="flex flex-col gap-[22px]">
-      <HomeHeader now={data?.now ?? new Date().toISOString()} session={data?.session ?? null} bias={data?.bias_today ?? null} />
+      <HomeHeader
+        now={data?.now ?? new Date().toISOString()}
+        session={data?.session ?? null}
+        bias={data?.bias_today ?? null}
+        accounts={accounts}
+        accountId={accountId}
+        onAccount={(id) => setSelection({ accountId: id })}
+      />
       {dashboard.data && <StopBanner stop={dashboard.data.stop} />}
       {dashboard.isError && (
         <LoadError title={d.loadError} error={dashboard.error} stale={dashboard.data !== undefined} busy={dashboard.isFetching} onRetry={() => void dashboard.refetch()} />
@@ -85,7 +92,10 @@ export function HomePage() {
         />
         <LimitsCard
           limits={data ? data.limits : undefined}
-          error={home.isError && !data ? homeErrorText(home.error) : null} accounts={accounts} accountId={accountId} onAccount={(id) => setSelection({ accountId: id })} />
+          error={home.isError && !data ? homeErrorText(home.error) : null}
+          accountCount={accounts.length}
+          accountId={accountId}
+        />
       </div>
       {home.isPending && <p role="status" className="text-sm text-ink-muted">{d.loading}</p>}
       {data && <OpenPositions data={data} />}

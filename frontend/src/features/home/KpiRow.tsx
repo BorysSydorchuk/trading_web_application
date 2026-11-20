@@ -3,7 +3,8 @@ import type { KpiTone } from '@/components/studio/tones'
 import { uk } from '@/i18n/uk'
 import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
 import { sparkPoints } from './chartMath'
-import { signTone, type HeroMetric, type KpiMetric } from './heroSeries'
+import type { ReactNode } from 'react'
+import { maxLossLimit, maxLossTone, signTone, type HeroMetric, type KpiMetric } from './heroSeries'
 import type { HomeKpis } from './types'
 
 const t = uk.home.kpis
@@ -32,6 +33,7 @@ interface KpiItem {
   value: string
   tone: KpiTone
   series: number[]
+  caption?: ReactNode
 }
 
 const numbers = (raws: readonly string[]) => raws.map(Number).filter(Number.isFinite)
@@ -48,14 +50,28 @@ function items(kpis: HomeKpis): KpiItem[] {
     },
     { metric: 'win_rate', label: t.winRate, value: formatPct(kpis.win_rate.value, 'overview'), tone: 'accent', series: numbers(kpis.win_rate.series.map((p) => p.value)) },
     { metric: 'avg_r', label: t.avgR, value: formatR(kpis.avg_r.value, 'overview'), tone: 'accent', series: numbers(kpis.avg_r.series.map((p) => p.value)) },
-    {
-      metric: 'drawdown',
-      label: t.drawdown,
-      value: formatPct(kpis.drawdown.pct, 'overview', { signed: true }),
-      tone: 'loss',
-      series: numbers(kpis.drawdown.series.map((p) => p.pct)),
-    },
+    maxLossItem(kpis.max_loss),
   ]
+}
+
+/** «До макс. збитку»: room to the FundedNext floor; loss colour only near the limit. */
+function maxLossItem(m: HomeKpis['max_loss']): KpiItem {
+  if (m === null) {
+    return { metric: 'max_loss', label: t.maxLoss, value: uk.common.empty, tone: 'neutral', series: [], caption: t.maxLossNoLimits }
+  }
+  return {
+    metric: 'max_loss',
+    label: t.maxLoss,
+    value: formatPct(m.pct, 'overview'),
+    tone: maxLossTone(m.pct),
+    series: numbers(m.series.map((p) => p.pct)),
+    caption: (
+      <>
+        <span>{t.maxLossCaption(m.account_name, maxLossLimit(m.limit_pct))}</span>
+        {m.equity_source !== 'mt5' && <span data-testid="kpi-no-floating" className="text-ink-muted">{t.maxLossNoFloating}</span>}
+      </>
+    ),
+  }
 }
 
 export interface KpiRowProps {
@@ -80,6 +96,7 @@ export function KpiRow({ kpis, metric, onPick }: KpiRowProps) {
             hint={selected ? t.hintOn : t.hintIdle}
             selected={selected}
             onClick={() => onPick(selected ? 'pnl' : item.metric)}
+            caption={item.caption}
             sparkline={<Sparkline values={item.series} tone={item.tone} />}
           />
         )

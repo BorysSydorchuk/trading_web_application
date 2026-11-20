@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evenIndices, ladderGeometry, limitBarGeometry, niceGrid, sparkPoints, valueLabelIndices } from './chartMath'
+import { evenIndices, ladderGeometry, limitBarGeometry, monthBoundaryIndices, niceGrid, sparkPoints, valueLabelIndices } from './chartMath'
 
 describe('valueLabelIndices (hero value labels)', () => {
   it('labels every point up to 8 points (the start point only when it is the minimum, as in the mockup)', () => {
@@ -85,5 +85,25 @@ describe('small helpers', () => {
 
   it('sparkPoints fits the box', () => {
     expect(sparkPoints([0, 10], 120, 26)).toBe('0.0,24.0 120.0,2.0')
+  })
+})
+
+describe('monthBoundaryIndices', () => {
+  it('labels the first point and each month start', () => {
+    expect(monthBoundaryIndices(['8', '9', '9', '10', '10', '11'])).toEqual([0, 1, 3, 5])
+  })
+
+  it('drops the first point when the first boundary is too close, and thins to the maximum', () => {
+    const keys = Array.from({ length: 120 }, (_, i) => String(Math.floor((i + 1) / 10)))
+    // Starts at 9, 19, ..., 119 plus index 0 (gap 9): 13 labels thinned evenly to 6, the last kept.
+    const indices = monthBoundaryIndices(keys, 6)
+    expect(indices).toHaveLength(6)
+    expect(indices[indices.length - 1]).toBe(119)
+    expect(monthBoundaryIndices(['8', '9', ...Array.from({ length: 30 }, () => '9')], 6)).toEqual([1])
+  })
+
+  it('returns [] for no points and [0] for a single month', () => {
+    expect(monthBoundaryIndices([])).toEqual([])
+    expect(monthBoundaryIndices(['9', '9', '9'])).toEqual([0])
   })
 })

@@ -140,3 +140,54 @@ def test_open_totals_are_none_when_a_part_is_unknown() -> None:
 
 def test_open_totals_without_positions_are_zero() -> None:
     assert home.open_totals([], [], []) == home.OpenTotals(D(0), D(0), None)
+
+
+# --- max loss --------------------------------------------------------------------------------
+
+LIMIT = D("-10.0")
+
+
+def test_max_loss_floor_is_size_times_one_plus_the_limit() -> None:
+    assert home.max_loss_floor(SIZE, LIMIT) == D(9000)
+
+
+def test_max_loss_distance_is_equity_minus_floor_over_size() -> None:
+    assert home.max_loss_distance(D("10056.25"), SIZE, LIMIT) == D("10.5625")
+    assert home.max_loss_distance(SIZE, SIZE, LIMIT) == D(10)
+    assert home.max_loss_distance(D(9000), SIZE, LIMIT) == D(0)  # failed at the floor
+
+
+@pytest.mark.parametrize("size", [None, D(0), D(-1), D("NaN")])
+def test_usable_size_rejects_missing_or_non_positive(size: Decimal | None) -> None:
+    assert home.usable_size(size) is None
+
+
+def test_max_loss_series_runs_the_balance_from_the_start_to_now() -> None:
+    now = T0 + timedelta(days=1)
+    closed = [(T0 + timedelta(hours=2), 2, D("-300")), (T0 + timedelta(hours=1), 1, D("100"))]
+
+    points = home.max_loss_series(SIZE, LIMIT, T0, closed, now, D("9850"))
+
+    assert [(p.time, p.pct) for p in points] == [
+        (T0, D(10)),
+        (T0 + timedelta(hours=1), D(11)),
+        (T0 + timedelta(hours=2), D(8)),
+        (now, D("8.5")),
+    ]
+
+
+def test_max_loss_series_keeps_the_last_points_and_the_now_point() -> None:
+    now = T0 + timedelta(days=30)
+    closed = [(T0 + timedelta(hours=i), i, D(1)) for i in range(1, 100)]
+
+    points = home.max_loss_series(SIZE, LIMIT, T0, closed, now, D(0))
+
+    assert len(points) == home.MAX_LOSS_POINTS
+    assert points[-1] == home.MaxLossPoint(now, D(-90))
+    assert points[-2].time == T0 + timedelta(hours=99)
+
+
+def test_pick_closest_to_the_floor_uses_the_lowest_pct() -> None:
+    items = [("a", D("10.5")), ("b", D("4.2")), ("c", D("4.2"))]
+
+    assert home.closest_to_daily_stop(items, lambda item: item[1]) == ("b", D("4.2"))

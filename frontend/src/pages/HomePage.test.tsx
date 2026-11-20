@@ -8,7 +8,7 @@ import { dashboardAccount, emptyDashboard } from '@/features/dashboard/dashboard
 import { fixtureTrade } from '@/features/describe/trade.fixture'
 import type { HomeCharts } from '@/features/dashboard/homeCharts/api'
 import { homeKeys } from '@/features/home/api'
-import { HOME_NOW, homeCharts, homeData, homeLimits, homePosition } from '@/features/home/home.fixture'
+import { HOME_NOW, homeCharts, homeData, homeLimits, homeMaxLoss, homePosition } from '@/features/home/home.fixture'
 import type { HomeData } from '@/features/home/types'
 import { uk } from '@/i18n/uk'
 import { createQueryClient } from '@/lib/query-client'
@@ -134,13 +134,17 @@ describe('HomePage hero and KPI toggles', () => {
     expect(today).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByTestId('hero-total')).toHaveTextContent('+741')
 
-    const drawdown = screen.getByRole('button', { name: new RegExp(`^${h.kpis.drawdown}`) })
-    await user.click(drawdown)
-    expect(screen.getByRole('heading', { level: 2, name: h.hero.drawdownTitle('листопад') })).toBeInTheDocument()
-    expect(screen.getByTestId('hero-total')).toHaveTextContent(`${MINUS}0.7%`)
-    expect(screen.getByText(h.hero.drawdownSub(`${MINUS}10%`))).toBeInTheDocument()
+    const maxLoss = screen.getByRole('button', { name: new RegExp(`^${h.kpis.maxLoss}`) })
+    await user.click(maxLoss)
+    expect(screen.getByRole('heading', { level: 2, name: h.hero.maxLossTitle('Funded') })).toBeInTheDocument()
+    expect(screen.getByTestId('hero-total')).toHaveTextContent('10.6%')
+    expect(screen.getByTestId('hero-total')).toHaveClass('text-ink')
+    expect(screen.getByText(h.kpis.maxLossLimit(`${MINUS}10%`))).toBeInTheDocument()
+    // The 0 line is always drawn and labelled as the limit.
+    expect(screen.getByText(h.hero.maxLossLimitLine)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: h.hero.chartLabel(h.hero.maxLossTitle('Funded'), '10%', '10.6%', '9.8%') })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: h.hero.back }))
-    expect(drawdown).toHaveAttribute('aria-pressed', 'false')
+    expect(maxLoss).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('radiogroup', { name: h.hero.range })).toBeInTheDocument()
   })
 
@@ -217,7 +221,7 @@ describe('HomePage «Ліміти»', () => {
     expect(within(card).getByText(h.limits.toStop).nextElementSibling).toHaveTextContent('5.1%')
   })
 
-  it('a month without account_limits has no loss zone; the account switch scopes the whole page', async () => {
+  it('a month without account_limits has no loss zone; the header account chip scopes the page, the card has no switch', async () => {
     const asked: URLSearchParams[] = []
     serveHome(homeData({ limits: homeLimits({ month: { pct: '3.1000', loss_pct: null, profit_pct: null } }) }), asked)
     mockApi(http.get('/api/dashboard', () => HttpResponse.json(emptyDashboard({
@@ -230,8 +234,21 @@ describe('HomePage «Ліміти»', () => {
     expect(await screen.findByText(`Funded · ${h.limits.closest}`)).toBeInTheDocument()
     expect(asked[0]?.has('account_id')).toBe(false)
 
-    await user.selectOptions(screen.getByLabelText(h.limits.account), '2')
+    const card = screen.getByRole('heading', { name: h.limits.title }).closest('section')
+    if (!card) throw new Error('limits card expected')
+    expect(within(card).queryByRole('combobox')).not.toBeInTheDocument()
+    const chips = screen.getByRole('navigation', { name: h.header.chips })
+    const select = within(chips).getByRole('combobox', { name: h.header.account })
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([h.header.allAccounts, 'Funded', 'Funded 2'])
+    await user.selectOptions(select, '2')
     await waitFor(() => expect(asked.at(-1)?.get('account_id')).toBe('2'))
+    expect(JSON.parse(window.localStorage.getItem('tj.home.charts') ?? '{}')).toMatchObject({ accountId: 2 })
+    // A native select: reachable by keyboard; back to «Усі рахунки».
+    select.focus()
+    expect(select).toHaveFocus()
+    await user.selectOptions(select, '')
+    expect(select).toHaveValue('')
+    expect(JSON.parse(window.localStorage.getItem('tj.home.charts') ?? '{}')).toMatchObject({ accountId: null })
   })
 })
 
@@ -489,6 +506,103 @@ describe('HomePage bias status', () => {
   })
 })
 
+/** The P&L curve of `homeCharts` at the given instants. */
+function chartsAt(times: readonly string[]): HomeCharts {
+  const base = homeCharts(times.map((_, i) => `${i * 10}.00`))
+  return { ...base, equity: base.equity.map((p, i) => ({ ...p, time: times[i] ?? p.time })) }
+}
+
+const xLabelTexts = () => screen.getAllByTestId('hero-x-label').map((el) => el.textContent)
+
+describe('HomePage hero x labels (M8-10b follow-up)', () => {
+  const quarter = ['2026-08-18T22:00:00Z', '2026-09-03T10:00:00Z', '2026-09-15T10:00:00Z', '2026-10-02T10:00:00Z', '2026-10-20T10:00:00Z', '2026-11-05T10:00:00Z', '2026-11-18T10:00:00Z']
+
+  it('«3 міс» and «Рік» label month starts with short Ukrainian names', async () => {
+    serveCharts(chartsAt(quarter))
+    const { user } = renderWithProviders(<HomePage />)
+    await screen.findByText('+60', { selector: TOTAL })
+    await user.click(screen.getByRole('radio', { name: h.hero.ranges.months3 }))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['сер', 'вер', 'жов', 'лис']))
+    await user.click(screen.getByRole('radio', { name: h.hero.ranges.year }))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['сер', 'вер', 'жов', 'лис']))
+  })
+
+  it('«Усе» adds the year when the points span years', async () => {
+    serveCharts(chartsAt(['2026-11-30T23:00:00Z', '2026-12-10T10:00:00Z', '2027-01-05T10:00:00Z', '2027-01-20T10:00:00Z']))
+    const { user } = renderWithProviders(<HomePage />)
+    await user.click(await screen.findByRole('radio', { name: h.hero.ranges.all }))
+    await waitFor(() => expect(xLabelTexts()).toEqual(['гру 26', 'січ 27']))
+  })
+
+  it('«Місяць» keeps DD.MM labels', async () => {
+    serveCharts(chartsAt(quarter))
+    renderWithProviders(<HomePage />)
+    await screen.findByText('+60', { selector: TOTAL })
+    expect(xLabelTexts()).toEqual(['19.08', '15.09', '20.10', '18.11'])
+  })
+})
+
+describe('HomePage «До макс. збитку» KPI', () => {
+  const card = async () => screen.findByRole('button', { name: new RegExp(`^${h.kpis.maxLoss}`) })
+
+  it('replaces «Просідання»: room in ink with the account and the limit, MT5 equity has no note', async () => {
+    renderWithProviders(<HomePage />)
+    const kpi = await card()
+    expect(kpi).toHaveTextContent('10.6%')
+    expect(within(kpi).getByText('10.6%')).toHaveClass('text-ink')
+    expect(kpi).toHaveTextContent(h.kpis.maxLossCaption('Funded', `${MINUS}10%`))
+    expect(within(kpi).queryByTestId('kpi-no-floating')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Просідання/ })).not.toBeInTheDocument()
+  })
+
+  it('near the floor the value is in the loss colour; without MT5 equity a muted note says so', async () => {
+    serveHome(homeData({ kpis: { ...homeData().kpis, max_loss: homeMaxLoss({ pct: '1.5000', equity_source: 'balance' }) } }))
+    const { user } = renderWithProviders(<HomePage />)
+    const kpi = await card()
+    expect(within(kpi).getByText('1.5%')).toHaveClass('text-loss')
+    expect(within(kpi).getByTestId('kpi-no-floating')).toHaveTextContent(h.kpis.maxLossNoFloating)
+    expect(within(kpi).getByTestId('kpi-no-floating')).toHaveClass('text-ink-muted')
+    await user.click(kpi)
+    expect(screen.getByTestId('hero-total')).toHaveClass('text-loss')
+    expect(screen.getByText(`${h.kpis.maxLossLimit(`${MINUS}10%`)} · ${h.kpis.maxLossNoFloating}`)).toBeInTheDocument()
+  })
+
+  it('no account limits: «—», the hint, and the hero says the limits are not set', async () => {
+    serveHome(homeData({ kpis: { ...homeData().kpis, max_loss: null } }))
+    const { user } = renderWithProviders(<HomePage />)
+    const kpi = await card()
+    expect(kpi).toHaveTextContent(uk.common.empty)
+    expect(kpi).toHaveTextContent(h.kpis.maxLossNoLimits)
+    await user.click(kpi)
+    expect(screen.getByRole('heading', { level: 2, name: h.hero.maxLossTitle('') })).toBeInTheDocument()
+    expect(screen.getAllByText(h.kpis.maxLossNoLimits)).toHaveLength(2)
+  })
+})
+
+describe('HomePage neutral pills', () => {
+  it('Buy/Sell and the description state are neutral; P&L keeps sign colours', async () => {
+    serveHome(homeData({
+      open_positions: [homePosition(), homePosition({ trade_id: 42, symbol: 'EURUSD', direction: 'sell', pnl: '-28.00', r_now: '-0.3000', described: false })],
+      open_totals: { pnl: '36.20', risk_pct: '1.6560', price_time: '2026-11-19T13:41:30Z' },
+    }))
+    renderWithProviders(<HomePage />)
+    const ger = await screen.findByRole('article', { name: 'GER40' })
+    const eur = screen.getByRole('article', { name: 'EURUSD' })
+    expect(within(ger).getByText(h.positions.sides.buy ?? '')).toHaveAttribute('data-tone', 'neutral')
+    expect(within(eur).getByText(h.positions.sides.sell ?? '')).toHaveAttribute('data-tone', 'neutral')
+    expect(within(ger).getByText(h.positions.described)).toHaveAttribute('data-tone', 'neutral')
+    expect(within(eur).getByText(h.positions.notDescribed)).toHaveAttribute('data-tone', 'neutral')
+    expect(within(eur).getByText(`${MINUS}28`)).toHaveClass('text-loss')
+    expect(screen.getByLabelText(`${h.positions.total}: +36`)).toHaveAttribute('data-tone', 'profit')
+  })
+
+  it('the «Без опису» count pill is neutral', async () => {
+    mockApi(http.get('/api/trades', () => HttpResponse.json({ items: [fixtureTrade({ id: 21 })], total: 3 })))
+    renderWithProviders(<HomePage />)
+    expect(await screen.findByLabelText(h.needs.count(3))).toHaveAttribute('data-tone', 'neutral')
+  })
+})
+
 describe('HomePage pinned backend cases (2026-11-20)', () => {
   it('409 mixed_currency on /api/home asks to pick one account', async () => {
     mockApi(http.get('/api/home', () => HttpResponse.json({ error: { code: 'mixed_currency', message: 'x', details: {} } }, { status: 409 })))
@@ -505,14 +619,16 @@ describe('HomePage pinned backend cases (2026-11-20)', () => {
 
     serveHome(homeData({
       limits: homeLimits({ day: { pct: null, loss_pct: null, profit_pct: '5.0000' }, to_daily_stop_pct: null, max_trades_week: null }),
-      kpis: { ...homeData().kpis, drawdown: { pct: null, limit_pct: null, series: [] } },
+      kpis: { ...homeData().kpis, max_loss: null },
     }))
     renderWithProviders(<HomePage />)
     const day = await screen.findByRole('img', { name: h.limits.barLabel(h.limits.day, uk.common.empty, h.limits.noLimit, '+5%') })
     expect(within(day).getByTestId('limit-fill')).toHaveClass('hidden')
     expect(screen.getByText(h.limits.toStop).nextElementSibling).toHaveTextContent(uk.common.empty)
     expect(screen.getByText(h.limits.trades).nextElementSibling).toHaveTextContent(/^7$/)
-    expect(screen.getByRole('button', { name: new RegExp(`^${h.kpis.drawdown}`) })).toHaveTextContent(uk.common.empty)
+    const maxLoss = screen.getByRole('button', { name: new RegExp(`^${h.kpis.maxLoss}`) })
+    expect(maxLoss).toHaveTextContent(uk.common.empty)
+    expect(maxLoss).toHaveTextContent(h.kpis.maxLossNoLimits)
   })
 
   it('normalises stored and MT5 price precision; null totals hide the pills; no usable SL hides the R scale', async () => {
