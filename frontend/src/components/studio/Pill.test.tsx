@@ -15,6 +15,7 @@ describe('Pill', () => {
     ['loss', ['bg-loss-soft', 'text-loss']],
     ['accent', ['bg-lavender-soft', 'text-lavender']],
     ['peach', ['bg-peach-soft', 'text-ink']],
+    ['warning', ['bg-warning-soft', 'text-warning', 'border-warning-border']],
   ] as const)('%s tone: soft background + own text colour', (tone, classes) => {
     render(<Pill tone={tone}>{COUNT}</Pill>)
     const pill = screen.getByText(COUNT)

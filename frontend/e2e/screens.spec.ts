@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
 /**
- * M8-10a «Студія» foundations: full-page screenshots of every sidebar page at 1440 and 1280 px,
- * saved to docs/reports/M8-10a-screens/<page>-<width>.png for the PM review.
+ * «Студія» screenshots (M8-10a, M8-10b): full-page screenshots of every sidebar page at 1440 and
+ * 1280 px, saved to docs/reports/<SCREENS_DIR>/<page>-<width>.png for the PM review.
  * Run: `npm run e2e:screens` (own config, not part of `npm run e2e`, so normal runs do not rewrite
  * the PNGs). The API is answered here with small fictitious data (no backend, no real account data);
  * endpoints without a fixture fail with 503 and the page shows its error state.
@@ -24,9 +24,91 @@ const WIDTHS = [1440, 1280] as const
 const HEIGHT = 900
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const OUT_DIR = path.resolve(here, '../../docs/reports/M8-10a-screens')
+/** Output folder under docs/reports (default M8-10b-screens) and an optional page filter, e.g.
+ * `SCREENS_DIR=M8-10a-screens` or `SCREENS_PAGES=home` (comma-separated names from PAGES). */
+const OUT_DIR = path.resolve(here, '../../docs/reports', process.env.SCREENS_DIR ?? 'M8-10b-screens')
+const ONLY = process.env.SCREENS_PAGES?.split(',').map((name) => name.trim()).filter(Boolean) ?? []
 
 const NOW = '2026-11-19T13:42:00Z'
+
+/** P&L curve of November like the mockup (cumulative USD per closed trade). */
+const NOV_CURVE = ['0', '-20', '-45', '60', '140', '120', '260', '310', '290', '410', '499', '470', '640', '705', '780', '899', '1010', '1241.20']
+const dayIso = (day: number, hour = 10) => `2026-11-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00Z`
+const ROLLING_WR = ['45', '48', '46', '50', '52', '50', '55', '57']
+const ROLLING_R = ['0.6', '0.7', '0.65', '0.9', '1.0', '0.95', '1.2', '1.3']
+const CHARTS = {
+  from: '2026-11-01', to: '2026-11-19', currency: 'USD', account_size: '30000.00', trades: NOV_CURVE.length - 1,
+  equity: NOV_CURVE.map((v, i) => ({ time: i === 0 ? '2026-10-31T23:00:00Z' : dayIso(1 + i), cum_pnl: v, cum_pct: (Number(v) / 300).toFixed(4) })),
+  daily: [
+    { day: '2026-11-16', net_pnl: '120.00', pct: '0.4000', trades: 1 },
+    { day: '2026-11-17', net_pnl: '-90.00', pct: '-0.3000', trades: 2 },
+    { day: '2026-11-18', net_pnl: '310.00', pct: '1.0300', trades: 1 },
+    { day: '2026-11-19', net_pnl: '401.00', pct: '1.3400', trades: 2 },
+  ],
+  rolling: ROLLING_WR.map((wr, i) => ({ time: dayIso(10 + i), n: 20, win_rate: wr, avg_r: ROLLING_R[i] ?? '0' })),
+  rolling_window: 20,
+}
+const position = (o: Record<string, unknown>) => ({
+  account_id: 1, account_name: 'Demo A', initial_sl: '26430.00000000', tp: '26556.25000000', price_time: '2026-11-19T13:41:00Z',
+  tp_r: '1.5000', risk_pct: '1.0000', described: true, ...o,
+})
+const HOME = {
+  now: NOW, timezone: 'Europe/Brussels',
+  session: { key: 'ny', entries_allowed: true },
+  bias_today: { pre_london: [{ symbol: 'EURUSD', direction: 'bullish' }, { symbol: 'GER40', direction: 'bullish' }], pre_ny_missing: true },
+  limits: {
+    account_id: 1, account_name: 'Demo A', currency: 'USD',
+    day: { pct: '2.1000', loss_pct: '-3.0000', profit_pct: '5.0000' },
+    week: { pct: '2.5000', loss_pct: '-6.0000', profit_pct: '10.0000' },
+    month: { pct: '3.1000', loss_pct: '-10.0000', profit_pct: '10.0000' },
+    trades_week: 7, max_trades_week: 10, to_daily_stop_pct: '5.1000',
+  },
+  kpis: {
+    today: {
+      pnl: '212.40', pct: '2.1240', trades: 3,
+      series: ['0', '45', '30', '110', '96', '160', '212.40'].map((v, i) => ({ time: `2026-11-19T${String(7 + i).padStart(2, '0')}:00:00Z`, cum_pnl: v })),
+    },
+    win_rate: { value: '57.0000', n: 20, window: 20, series: ROLLING_WR.map((v, i) => ({ time: dayIso(10 + i), value: v })) },
+    avg_r: { value: '1.3000', n: 20, window: 20, series: ROLLING_R.map((v, i) => ({ time: dayIso(10 + i), value: v })) },
+    drawdown: {
+      pct: '-0.7000', limit_pct: '-10.0000',
+      series: ['0', '-0.2', '-0.45', '-0.7', '-0.3', '-0.1', '0', '-0.2'].map((v, i) => ({ time: dayIso(1 + 2 * i), pct: v })),
+    },
+  },
+  open_positions: [
+    position({
+      trade_id: 10, symbol: 'GER40', direction: 'buy', volume: '0.13', open_time: '2026-11-19T12:44:00Z', entry_price: '26480.50000000',
+      current_price: '26523.4', pnl: '64.20', r_now: '0.7000', mae_r: '0.2000', mfe_r: '0.8000',
+    }),
+    position({
+      trade_id: 11, symbol: 'EURUSD', direction: 'sell', account_id: 2, account_name: 'Demo B', volume: '0.50', open_time: '2026-11-19T13:05:00Z',
+      entry_price: '1.10950000', initial_sl: '1.11150000', tp: '1.10650000', current_price: '1.10910', pnl: '-28.00', r_now: '-0.3000',
+      mae_r: '0.4000', mfe_r: '0.1000', described: false,
+    }),
+    position({
+      trade_id: 12, symbol: 'XAUUSD', direction: 'buy', volume: '0.20', open_time: '2026-11-19T13:30:00Z', entry_price: '4100.00000000',
+      initial_sl: '4080.00000000', tp: '4130.00000000', current_price: null, pnl: null, r_now: null, price_time: '2026-11-19T13:31:00Z',
+      mae_r: '0.3000', mfe_r: '0.4000',
+    }),
+  ],
+  open_totals: { pnl: null, risk_pct: '3.0000', price_time: '2026-11-19T13:31:00Z' },
+}
+const needTrade = (id: number, symbol: string, day: number, r: string) => ({
+  id, account_id: 1, account_name: 'Demo A', position_id: 900 + id, symbol, direction: 'buy', status: 'needs_description',
+  open_time: dayIso(day, 9), close_time: dayIso(day, 11), duration_seconds: 7200, entry_price: '1.00000000', exit_price: '1.00100000',
+  volume: '0.10', initial_sl: '0.99900000', last_sl: '0.99900000', tp: null, commission: '0.00', swap: '0.00',
+  gross_pnl: r.startsWith('-') ? '-100.00' : '150.00', net_pnl: r.startsWith('-') ? '-100.00' : '150.00', pnl_pct: null, balance_at_open: null,
+  risk_amount: '100.00', risk_pct: '1.0000', r_multiple: r, planned_rr: null, session: 'ny', weekday: 3, hour: 14, is_reentry: false,
+  bias_alignment: null, bias_alignment_weekly: null, bias_alignment_monthly: null, violations: [], excluded_from_stats: false,
+  excluded_reason: null, excluded_at: null,
+})
+const NEEDS = {
+  items: [
+    needTrade(31, 'XAUUSD', 19, '2.1000'), needTrade(32, 'EURUSD', 18, '-1.0000'), needTrade(33, 'GER40', 18, '1.6000'),
+    needTrade(34, 'GBPUSD', 17, '-1.0000'), needTrade(35, 'GER40', 17, '0.4000'),
+  ],
+  total: 12,
+}
 
 const period = (pnl: string, pct: string) => ({ pnl, pct, low_pnl: '-40.00', low_pct: '-0.0400', high_pnl: pnl, high_pct: pct })
 
@@ -73,10 +155,8 @@ const FIXTURES: Record<string, unknown> = {
     inbox: { needs_sl: 1, needs_description: 11, draft: 1 },
   },
   '/api/digests/suggestion': { weekly: null, monthly: null },
-  '/api/dashboard/charts': {
-    from: '2026-11-01', to: '2026-11-19', currency: 'USD', account_size: '10000.00', trades: 0,
-    equity: [], daily: [], rolling: [], rolling_window: 20,
-  },
+  '/api/dashboard/charts': CHARTS,
+  '/api/home': HOME,
   '/api/trades': { items: [], total: 0 },
   '/api/trades/symbols': { items: [] },
   '/api/digests': {
@@ -93,8 +173,11 @@ const FIXTURES: Record<string, unknown> = {
 }
 
 function answer(route: Route) {
-  const { pathname } = new URL(route.request().url())
-  const body = route.request().method() === 'GET' ? FIXTURES[pathname] : undefined
+  const url = new URL(route.request().url())
+  const { pathname } = url
+  // «Головна» asks /api/trades for the trades waiting for a description (M8-15 tiles).
+  const needs = pathname === '/api/trades' && url.searchParams.getAll('status').includes('needs_description')
+  const body = route.request().method() === 'GET' ? (needs ? NEEDS : FIXTURES[pathname]) : undefined
   return body === undefined ? route.fulfill({ status: 503, json: { detail: 'e2e' } }) : route.fulfill({ json: body })
 }
 
@@ -116,7 +199,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 for (const width of WIDTHS) {
-  for (const [name, url] of PAGES) {
+  for (const [name, url] of PAGES.filter(([page]) => ONLY.length === 0 || ONLY.includes(page))) {
     test(`screenshot ${name} @${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: HEIGHT })
       await page.goto(url)

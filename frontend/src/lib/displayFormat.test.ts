@@ -70,10 +70,15 @@ describe('formatPct overview', () => {
     ['2.14', false, '2.1%'],
     ['2.15', false, '2.2%'],
     ['-2.15', false, MINUS + '2.2%'],
-    ['57', false, '57.0%'],
+    ['57', false, '57%'],
+    ['57.04', false, '57%'],
+    ['56.96', false, '57%'],
+    ['2', true, '+2%'],
+    ['2.5', true, '+2.5%'],
+    ['-10.0000', true, MINUS + '10%'],
     ['2.05', true, '+2.1%'],
-    ['-0.04', true, '0.0%'],
-    ['0', true, '0.0%'],
+    ['-0.04', true, '0%'],
+    ['0', true, '0%'],
     ['1234.56', false, '1' + NNBSP + '234.6%'],
   ])('%s (signed %s) -> %s', (input, signed, expected) => {
     expect(formatPct(input, 'overview', { signed })).toBe(expected)
@@ -83,10 +88,13 @@ describe('formatPct overview', () => {
 describe('formatR overview', () => {
   it.each([
     ['1.25', '+1.3R'],
-    ['-1', MINUS + '1.0R'],
+    ['-1', MINUS + '1R'],
+    ['-1.0000', MINUS + '1R'],
+    ['0.7', '+0.7R'],
+    ['1.96', '+2R'],
     ['-0.05', MINUS + '0.1R'],
-    ['-0.04', '0.0R'],
-    ['0', '0.0R'],
+    ['-0.04', '0R'],
+    ['0', '0R'],
     ['0.349', '+0.3R'],
   ])('%s -> %s', (input, expected) => {
     expect(formatR(input, 'overview')).toBe(expected)

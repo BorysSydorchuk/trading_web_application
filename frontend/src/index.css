@@ -56,10 +56,13 @@
 
   --tj-peach-soft: #fcf2ea;
 
-  /* Warnings (sync/backup/AI key chips). Not in the PM palette: amber text readable on light
-     backgrounds (6.3:1 on surface, 5.5:1 on chrome) plus a dot colour. */
+  /* Warning set (PM 2026-11-20, official token): system states only (stale backup, sync delay,
+     stale live prices, missing bias), never P&L or risk. Text >= 5.49:1 on every background
+     incl. its own soft fill; the border is >= 3:1 (non-text) on surface, page, chrome and soft. */
   --tj-warning-text: #8a5300;
-  --tj-warning-strong: #e0a030;
+  --tj-warning-soft: #fcf0da;
+  --tj-warning-border: #b87a10;
+  --tj-warning-strong: #e0a030; /* dots only */
 
   --tj-hero-gradient: linear-gradient(135deg, #eaf6ef 0%, #f3f1fb 55%, #fcf2ea 100%);
   --tj-mark-gradient: linear-gradient(135deg, #cdefd9 0%, #dcd6f7 100%);
@@ -169,6 +172,8 @@
   --color-lavender-button-hover: var(--tj-accent-button-hover);
   --color-peach-soft: var(--tj-peach-soft);
   --color-warning: var(--tj-warning-text);
+  --color-warning-soft: var(--tj-warning-soft);
+  --color-warning-border: var(--tj-warning-border);
   --color-warning-strong: var(--tj-warning-strong);
 
   --shadow-lift: var(--tj-shadow-lift);
