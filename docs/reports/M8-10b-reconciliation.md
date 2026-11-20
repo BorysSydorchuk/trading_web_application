@@ -80,3 +80,14 @@ Fix:
 Known small difference (LOW): MT5 takes the entry commission from the balance at open, so the day % is slightly high until the trade closes (about 0.04 % on a 1-lot forex trade).
 
 **Still to check:** the raw MT5 deal history (`history_deals_get`), for balance operations not in the trades table. «FN Stellar Funded 2»: the stored start balance 9 986.05 is 6.39 below the balance implied by its trades. It runs read-only after 16:00 Brussels, so it can't clash with the worker's MT5 connections in trading hours. The result is added here.
+
+## PM corrections (2026-11-20, tier S, merge `1d15eaf`)
+
+- **Digest layout:** the line «Разом по рахунках (з виключеними)» now sits under the strategy result. The «Виключені угоди» block lists only the excluded trades.
+- **All 5 saved digests recomputed:** backup `backups/pre-migration-recompute-digests-20261120T101536Z.dump`.
+  - Numbers changed in 4 of them.
+  - Week 09–15.11: 3.81 % → 2.54 %. The base is now 30 000, because the excluded XAUUSD trade on 11.11 brings in «FN Stellar Funded 2».
+  - Week 26.10 and October: switched to the new journal taxonomy breakdowns, the breakeven rule, and the excursion / excluded blocks.
+  - Week 16–22.11: gained `account_net_pnl_pct`.
+  - November was already current.
+- **AI summaries:** weeks 09.11 and 16.11 and October now show «Підсумок застарів». Week 16.11 got the mark only because the new % field was added, not because a number changed. Review texts are unchanged.
