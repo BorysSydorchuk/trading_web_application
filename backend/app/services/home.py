@@ -37,7 +37,7 @@ from app.models import Account, BiasNote, Trade
 from app.models.enums import AccountStatus, BiasKind
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
-from app.services.home_max_loss import max_loss
+from app.services.home_max_loss import account_firm_limits, max_loss
 
 OUTSIDE: Final = "outside"
 WEEKDAYS = range(5)  # Monday..Friday, as the bias reminders (app.services.bias_status)
@@ -280,12 +280,8 @@ def _account_limits(
     extra = floating if floating is not None else Decimal(0)
     keyed = [_Keyed(t.id, t.close_time, t.net_pnl) for t in trades if t.account_id == account.id]
     day_key, week_key, month_key = _period_keys(period.tz)
-    month_limits = rules.account_limits
-    month_range = (
-        (month_limits.max_drawdown_pct, month_limits.profit_target_pct)
-        if month_limits is not None
-        else (None, None)
-    )
+    firm = account_firm_limits(account, rules)
+    month_range = (firm.max_loss_pct, firm.profit_target_pct)
     day_range = (_rule(cfg.daily_stop_loss_pct), _rule(cfg.daily_stop_profit_pct))
     week_range = (_rule(cfg.weekly_stop_loss_pct), _rule(cfg.weekly_stop_profit_pct))
     day = _bar(keyed, day_key, period.today, size, day_range, extra, open_booked)

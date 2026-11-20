@@ -92,17 +92,31 @@ def _account_kpi(
     )
 
 
+def account_firm_limits(account: Account, rules: RulesConfig) -> dh.FirmLimits:
+    """Per-account firm rules (Settings) first, rules.yaml `account_limits` as fallback."""
+    cfg = rules.account_limits
+    return dh.firm_limits(
+        account.max_drawdown_pct,
+        account.profit_target_pct,
+        cfg.max_drawdown_pct if cfg is not None else None,
+        cfg.profit_target_pct if cfg is not None else None,
+    )
+
+
 def max_loss(
     db: Session, accounts: Sequence[Account], rules: RulesConfig, now: datetime
 ) -> schemas.MaxLossKpi | None:
     """One account: that account; all accounts: the one closest to its floor (lowest pct,
-    ties -> lowest id). None without account_limits or without an account with a size."""
-    if rules.account_limits is None:
+    ties -> lowest id). Limit per account (Settings firm rules, else rules.yaml account_limits);
+    None when no account has a size and a limit."""
+    usable = [
+        (a, s, limit)
+        for a in accounts
+        if (s := dh.usable_size(a.reference_balance)) is not None
+        and (limit := account_firm_limits(a, rules).max_loss_pct) is not None
+    ]
+    if not usable:
         return None
-    limit = rules.account_limits.max_drawdown_pct
-    sized = [(a, s) for a in accounts if (s := dh.usable_size(a.reference_balance)) is not None]
-    if not sized:
-        return None
-    histories = _histories(db, [a.id for a, _ in sized])
-    items = [_account_kpi(a, s, limit, histories[a.id], now) for a, s in sized]
+    histories = _histories(db, [a.id for a, _, _ in usable])
+    items = [_account_kpi(a, s, limit, histories[a.id], now) for a, s, limit in usable]
     return dh.closest_to_daily_stop(items, lambda item: item.pct)
