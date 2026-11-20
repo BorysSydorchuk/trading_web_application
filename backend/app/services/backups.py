@@ -195,7 +195,7 @@ class PostgresTools:
         """Read TOC and all data blocks without connecting to or restoring any DB."""
         tool = pg_tool("pg_restore")
         if not tool and not docker_allowed:
-            raise BackupFailure("Native PostgreSQL pg_restore not found (DB_MODE native)")
+            raise BackupFailure("pg_restore нативного PostgreSQL 16 не знайдено (DB_MODE native)")
         for operation in ("--list", "--file=-"):
             argv = (
                 [tool, operation, str(path)]

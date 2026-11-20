@@ -524,7 +524,7 @@ def dump_database(url: str, compose_port: int, name: str, label: str) -> Path:
     try:
         BACKUPS.mkdir(parents=True, exist_ok=True)
         tools.dump(url, partial)
-        tools.verify(partial)
+        tools.verify_archive(partial)
         partial.replace(final)
     except (BackupFailure, MigrateError, OSError) as exc:
         partial.unlink(missing_ok=True)

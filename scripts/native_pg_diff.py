@@ -4,7 +4,8 @@
 
 For every table in `public`: rows only in Docker, only in native, and rows with the same primary
 key but different content (by md5 of the row text, UTC / ISO session settings like `copy`).
-Prints table names, primary keys and counts only, never row values. Exit 0 always (diagnostic).
+Prints table names, counts and up to 15 primary keys per table; no other column values.
+Exit 0 always (diagnostic).
 """
 
 # ruff: noqa: RUF001 - Ukrainian console message
@@ -48,7 +49,8 @@ def _snapshot(url: str) -> dict[str, dict[str, str]]:
 
 def main() -> int:
     env: Mapping[str, str] = env_values(read_env_text(npg.ENV_FILE))
-    docker_url = env.get("DOCKER_DATABASE_URL") or env.get("DATABASE_URL", "")
+    # Only the saved Docker address: after a switch DATABASE_URL is the native DB itself.
+    docker_url = env.get("DOCKER_DATABASE_URL", "")
     native_url = env.get("NATIVE_DATABASE_URL", "")
     if not docker_url or not native_url:
         print("[diff] Немає DOCKER_/NATIVE_DATABASE_URL у .env")
