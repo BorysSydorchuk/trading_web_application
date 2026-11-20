@@ -163,3 +163,55 @@ def test_a_range_across_the_dst_change_uses_brussels_midnights(
 
     assert data["trades"] == 1  # 25.10 22:30 UTC = 23:30 Brussels (winter time)
     assert data["equity"][0]["time"] == "2026-10-24T22:00:00Z"  # 00:00 summer time
+
+
+# --- M8-10b fixes: one period P&L / % definition (PM 2026-11-20) -----------------------------
+
+
+def monthly_digest(client: TestClient) -> dict[str, Any]:
+    response = client.post("/api/digests", json={"kind": "monthly", "date": "2026-11-01"})
+    assert response.status_code in (200, 201), response.text
+    metrics: dict[str, Any] = response.json()["metrics"]
+    return metrics
+
+
+def test_home_month_equals_the_digest_month_for_the_same_selection(
+    client: TestClient, session: Session
+) -> None:
+    """November: strategy trades on two accounts, the third has only an excluded trade."""
+    size = {"reference_balance": Decimal("10000.00")}
+    one, two, three = (add_account(session, f"Acc {n}", n, **size) for n in (1, 2, 3))
+    closed(session, one, WED, "1000.00", "2.0")
+    closed(session, two, TODAY, "457.57", "1.0")
+    closed(session, three, TODAY, "-13.95", "-0.2", excluded_from_stats=True,
+           excluded_reason="test", excluded_at=TODAY)  # fmt: skip
+
+    metrics = monthly_digest(client)
+    month = {"from": "2026-11-01", "to": "2026-11-30"}
+    every = charts(client, **month)
+    only_one = charts(client, account_id=one.id, **month)
+
+    combined = metrics["combined"]["metrics"]
+    assert combined["net_pnl"]["value"] == "1457.57"  # strategy money
+    assert combined["net_pnl_pct"]["value"] == "4.8586"  # / 30000 (3 accounts traded)
+    excluded = metrics["excluded"]
+    assert (excluded["account_net_pnl"], excluded["account_net_pnl_pct"]) == (
+        "1443.62",
+        "4.8121",
+    )
+    assert every["account_size"] == "30000.00"
+    last = every["equity"][-1]
+    assert (last["cum_pnl"], last["cum_pct"]) == (
+        excluded["account_net_pnl"],
+        excluded["account_net_pnl_pct"],
+    )
+    [block] = [b for b in metrics["by_account"] if b["account_id"] == one.id]
+    last_one = only_one["equity"][-1]
+    assert (
+        (last_one["cum_pnl"], last_one["cum_pct"])
+        == (
+            block["metrics"]["net_pnl"]["value"],
+            block["metrics"]["net_pnl_pct"]["value"],
+        )
+        == ("1000.00", "10.0000")
+    )

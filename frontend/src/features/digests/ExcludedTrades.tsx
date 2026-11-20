@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { formatPct } from '@/features/dashboard/format'
 import { formatSignedMoney, pnlClass } from '@/features/trades/format'
 import { describePath } from '@/features/trades/links'
 import { uk } from '@/i18n/uk'
@@ -33,6 +34,11 @@ export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; curr
           <span className={cn('num font-medium', pnlClass(block.account_net_pnl))}>
             {money(block.account_net_pnl, currency)}
           </span>
+          {block.account_net_pnl_pct != null && (
+            <span data-testid="excluded-account-pct" className={cn('num ml-1', pnlClass(block.account_net_pnl_pct))}>
+              {x.accountPct(formatPct(block.account_net_pnl_pct))}
+            </span>
+          )}
         </span>
       </p>
       <div className="overflow-x-auto rounded-lg border">

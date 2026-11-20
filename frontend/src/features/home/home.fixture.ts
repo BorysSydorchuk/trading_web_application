@@ -15,6 +15,8 @@ export function homeLimits(overrides: Partial<HomeLimits> = {}): HomeLimits {
     trades_week: 7,
     max_trades_week: 10,
     to_daily_stop_pct: '5.1000',
+    floating_pnl: null,
+    floating_included: false,
     ...overrides,
   }
 }

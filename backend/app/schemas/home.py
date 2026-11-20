@@ -50,6 +50,10 @@ class AccountLimitsOut(BaseModel):
     trades_week: int
     max_trades_week: int | None
     to_daily_stop_pct: Pct | None
+    # M8-10b fixes: equity - balance of a fresh worker sync, added to day/week/month pct;
+    # None (and not included) when the sync is stale/unknown while a position is open.
+    floating_pnl: Money | None
+    floating_included: bool
 
 
 class CumPoint(BaseModel):

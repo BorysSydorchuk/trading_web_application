@@ -15,6 +15,7 @@ from typing import Any
 
 from app.domain import digest_metrics as dm
 from app.domain.digest_breakdowns import JournalSpec, journal_breakdowns
+from app.domain.period_base import period_base
 from app.schemas.dashboard import money_str, pct_str
 
 type Json = dict[str, Any]
@@ -48,11 +49,16 @@ _NO_NORM = dm.NormResult(value=None, norm_mean=None, norm_sd=None, deviation=Non
 
 @dataclass(frozen=True)
 class Scope:
-    """One metric block: the period's trades, the norm window trades and availability."""
+    """One metric block: the period's trades, the norm window trades and availability.
+
+    ``excluded`` / ``window_excluded``: the M8-01 excluded trades of the same accounts in the
+    period / norm window; they only widen the percent base (app.domain.period_base)."""
 
     period: Sequence[dm.DigestTrade]
     window: Sequence[dm.DigestTrade]
     norm_available: bool
+    excluded: Sequence[dm.DigestTrade] = ()
+    window_excluded: Sequence[dm.DigestTrade] = ()
 
 
 @dataclass(frozen=True)
@@ -108,7 +114,7 @@ def _norm_number(name: str, raw: Decimal | None) -> str | None:
 def _norm(name: str, value: Decimal | int | None, scope: Scope, inp: SnapshotInput) -> Json:
     result = _NO_NORM
     if scope.norm_available and name in dm.NORM_METRICS:
-        series = dm.metric_series(scope.window, inp.kind, inp.sizes, name)
+        series = dm.metric_series(scope.window, inp.kind, inp.sizes, name, scope.window_excluded)
         current = None if value is None else Decimal(value)
         result = dm.norm_deviation(name, current, series, inp.sigma)
     return {
@@ -132,7 +138,7 @@ def _trade_ref(trade: dm.DigestTrade | None) -> Json | None:
 
 
 def metric_block(scope: Scope, inp: SnapshotInput) -> Json:
-    metrics = dm.compute_metrics(scope.period, inp.sizes)
+    metrics = dm.compute_metrics(scope.period, inp.sizes, scope.excluded)
     values: Json = {}
     for name in METRIC_ORDER:
         raw: Decimal | int | None = getattr(metrics, name)
@@ -235,13 +241,20 @@ def _charts(trades: Sequence[dm.DigestTrade], start: date) -> Json:
 
 
 def _excluded(inp: SnapshotInput) -> Json:
-    """«Виключені угоди»: strategy net P&L + excluded net P&L = the accounts' real P&L."""
+    """«Виключені угоди»: strategy net P&L + excluded net P&L = the accounts' real P&L; its
+    percent uses the same base as the strategy percent and «Головна» (PM 2026-11-20)."""
     strategy = sum((t.net_pnl for t in inp.combined.period), Decimal(0))
     excluded = sum((e.trade.net_pnl for e in inp.excluded), Decimal(0))
+    traded = {t.account_id for t in inp.combined.period} | {
+        e.trade.account_id for e in inp.excluded
+    }
+    base = period_base(inp.sizes, traded)
+    account_net_pnl = strategy + excluded
     return {
         "trades": len(inp.excluded),
         "net_pnl": _money(excluded),
-        "account_net_pnl": _money(strategy + excluded),
+        "account_net_pnl": _money(account_net_pnl),
+        "account_net_pnl_pct": None if base is None else pct_str(account_net_pnl * HUNDRED / base),
         "items": [
             {
                 "trade_id": e.trade.id,

@@ -335,6 +335,7 @@ def test_digest_without_exclusions_has_an_empty_block(
         "trades": 0,
         "net_pnl": "0.00",
         "account_net_pnl": "50.00",
+        "account_net_pnl_pct": "0.5000",
         "items": [],
     }
 

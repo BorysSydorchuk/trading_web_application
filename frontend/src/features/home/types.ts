@@ -42,6 +42,10 @@ export interface HomeLimits {
   max_trades_week: number | null
   /** day pct − daily_stop_loss_pct; null when the daily stop is off. */
   to_daily_stop_pct: string | null
+  /** Floating P&L of the open positions (money, 2 dp); null without a fresh live snapshot. */
+  floating_pnl: string | null
+  /** True when `floating_pnl` is counted in the day / week / month pct. */
+  floating_included: boolean
 }
 
 export interface HomeKpis {

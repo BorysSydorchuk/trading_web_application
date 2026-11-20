@@ -4,15 +4,13 @@ Closed trades of non-archived accounts (one account or all). The range is Brusse
 ``from``..``to`` inclusive. Equity and daily P&L: every trade of the range (account money,
 excluded trades included). Rolling win rate / average R: computed over all strategy trades,
 so the window reaches back before the range start, then shown for the range only.
-Percent of account size: one account's size, or the sum of the sizes of the accounts with
-a trade in the range (the digest's combined rule).
+Percent of account size: `app.domain.period_base` (one account's size, or the sum of the
+sizes of the accounts with a trade in the range, excluded trades included; the digest's rule).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -20,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_rules
 from app.domain import home_charts as hc
+from app.domain.period_base import period_base
 from app.domain.sessions import DEFAULT_TZ
 from app.errors import ApiError, config_error
 from app.models import Account, Trade
@@ -85,16 +84,6 @@ def _check_range(start: date, end: date) -> None:
         raise _invalid("to", "before from")
 
 
-def percent_base(accounts: Sequence[Account]) -> Decimal | None:
-    """The digest's rule: every counted account needs a finite size > 0, else no percent."""
-    if not accounts:
-        return None
-    sizes = [a.reference_balance for a in accounts]
-    if any(not s.is_finite() or s <= 0 for s in sizes):
-        return None
-    return sum(sizes, Decimal(0))
-
-
 def build(db: Session, start: date, end: date, account_id: int | None) -> schemas.HomeCharts:
     _check_range(start, end)
     try:
@@ -115,7 +104,7 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
             "The range has trades in more than one account currency",
             {"currencies": sorted(currencies)},
         )
-    size = percent_base(counted)
+    size = period_base({a.id: a.reference_balance for a in accounts}, active, account_id=account_id)
     rolling = [p for p in hc.rolling(every, breakeven_r=breakeven_r) if p.time >= lo]
     return schemas.HomeCharts(
         from_=start,
