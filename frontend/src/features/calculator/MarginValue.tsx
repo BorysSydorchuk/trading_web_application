@@ -24,14 +24,14 @@ function liveTime(at: string | null): string {
 /** Cached estimate from the calculate response, or «маржа недоступна». */
 function Estimate({ margin, digitsPrice }: { margin: MarginInfo; digitsPrice: (value: string) => string }) {
   if (margin.source !== 'cached_estimate' || margin.amount === null) {
-    return <span className="text-muted-foreground">{t.marginUnavailable}</span>
+    return <span className="text-ink-muted">{t.marginUnavailable}</span>
   }
   const date = margin.calculated_at === null ? uk.common.empty : formatDateTimeBrussels(margin.calculated_at)
   const price = margin.sample_price === null ? uk.common.empty : digitsPrice(margin.sample_price)
   return (
     <span className="flex flex-col items-end gap-0.5">
       {money(margin.amount, margin.currency)}
-      <span className="text-right text-xs text-muted-foreground">
+      <span className="text-right text-xs text-ink-muted">
         {t.marginEstimate(date, price, formatVolume(margin.sample_volume))}
       </span>
     </span>
@@ -48,8 +48,8 @@ interface MarginValueProps {
 export function MarginValue({ live, cached, digitsPrice }: MarginValueProps) {
   if (live === null || live.state === 'pending') {
     return (
-      <span role="status" className="inline-flex items-center gap-1.5 text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+      <span role="status" className="inline-flex items-center gap-1.5 text-ink-muted">
+        <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
         {t.marginPending}
       </span>
     )
@@ -58,14 +58,14 @@ export function MarginValue({ live, cached, digitsPrice }: MarginValueProps) {
     return (
       <span className="flex flex-col items-end gap-0.5">
         {money(live.amount, live.currency)}
-        <span className="text-xs text-muted-foreground">{liveTime(live.at)}</span>
+        <span className="text-xs text-ink-muted">{liveTime(live.at)}</span>
       </span>
     )
   }
   return (
     <span className="flex flex-col items-end gap-0.5">
       <Estimate margin={cached} digitsPrice={digitsPrice} />
-      <span className="text-right text-xs text-muted-foreground">{marginFailureText(live.reason, live.code)}</span>
+      <span className="text-right text-xs text-ink-muted">{marginFailureText(live.reason, live.code)}</span>
     </span>
   )
 }

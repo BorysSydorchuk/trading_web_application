@@ -1,14 +1,16 @@
 import { Link } from 'react-router'
+import { Card } from '@/components/studio/Card'
 import { formatR, formatSignedMoney, pnlClass } from '@/features/trades/format'
 import { describePath } from '@/features/trades/links'
 import { uk } from '@/i18n/uk'
 import { formatShortDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { deviationClass, formatMetric, formatNorm } from './format'
+import { BLOCK_TITLE } from './tableStyles'
 import { METRIC_NAMES, type MetricBlock, type MetricName, type MetricValue, type TradeRef } from './types'
 
 const b = uk.digests.blocks
-const TD = 'px-3 py-1 whitespace-nowrap'
+const TD = 'px-3 py-1.5 whitespace-nowrap'
 
 interface MetricBlockCardProps {
   title: string
@@ -28,10 +30,10 @@ const MONEY_LABELS: ReadonlySet<MetricName> = new Set(['net_pnl', 'max_drawdown'
 export function MetricBlockCard({ title, block, currency, missingRHref }: MetricBlockCardProps) {
   const trades = block.metrics.trades?.value
   return (
-    <article aria-label={title} className="flex flex-col gap-2 rounded-lg border p-3">
+    <Card as="article" aria-label={title} className="flex flex-col gap-2 px-5 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {!block.norm_available && <span className="text-xs text-muted-foreground">{b.normUnavailable}</span>}
+        <h3 className={cn(BLOCK_TITLE, 'text-base')}>{title}</h3>
+        {!block.norm_available && <span className="text-xs text-ink-muted">{b.normUnavailable}</span>}
       </div>
       <table className="w-full text-sm">
         <thead className="sr-only">
@@ -60,7 +62,7 @@ export function MetricBlockCard({ title, block, currency, missingRHref }: Metric
       </table>
       <TradeLine label={b.bestTrade} trade={block.best_trade} />
       <TradeLine label={b.worstTrade} trade={block.worst_trade} />
-    </article>
+    </Card>
   )
 }
 
@@ -76,8 +78,8 @@ function MetricRow({ name, metric, currency, trades, missingRHref }: MetricRowPr
   const norm = formatNorm(metric)
   const deviationText = metric.deviation === 'worse' ? b.worse : metric.deviation === 'better' ? b.better : null
   return (
-    <tr data-metric={name} data-deviation={metric.deviation ?? undefined} className="border-t first:border-t-0">
-      <th scope="row" className={cn(TD, 'pl-0 text-left font-normal text-muted-foreground')}>
+    <tr data-metric={name} data-deviation={metric.deviation ?? undefined} className="border-t border-divider first:border-t-0">
+      <th scope="row" className={cn(TD, 'pl-0 text-left font-normal text-ink-muted')}>
         {MONEY_LABELS.has(name) ? uk.digests.withCurrency(b.metrics[name], currency) : b.metrics[name]}
         {name === 'total_r' && metric.n !== undefined && trades !== null && (
           <RCoverage n={metric.n} trades={trades} href={missingRHref} />
@@ -87,7 +89,7 @@ function MetricRow({ name, metric, currency, trades, missingRHref }: MetricRowPr
         {formatMetric(name, metric.value)}
         {deviationText && <span className="sr-only"> ({deviationText})</span>}
       </td>
-      <td className={cn(TD, 'num pr-0 text-right text-xs text-muted-foreground')}>{norm}</td>
+      <td className={cn(TD, 'num pr-0 text-right text-xs text-ink-muted')}>{norm}</td>
     </tr>
   )
 }
@@ -99,7 +101,7 @@ function RCoverage({ n, trades, href }: { n: number; trades: number; href?: stri
   return (
     <span className="ml-1 text-xs">
       (
-      <Link to={href} aria-label={b.rMissingLink(trades - n)} className="underline underline-offset-2 hover:text-foreground">
+      <Link to={href} aria-label={b.rMissingLink(trades - n)} className="text-lavender underline underline-offset-2">
         {text}
       </Link>
       )
@@ -110,14 +112,14 @@ function RCoverage({ n, trades, href }: { n: number; trades: number; href?: stri
 function TradeLine({ label, trade }: { label: string; trade: TradeRef | null }) {
   if (!trade) return null
   return (
-    <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
-      <span className="text-muted-foreground">{label}:</span>
-      <Link to={describePath(trade.trade_id)} className="font-medium underline underline-offset-2 hover:text-foreground">
+    <p className="flex flex-wrap items-baseline gap-x-2 border-t border-divider pt-1.5 text-xs">
+      <span className="text-ink-muted">{label}:</span>
+      <Link to={describePath(trade.trade_id)} className="type-symbol text-lavender underline underline-offset-2">
         {trade.symbol}
       </Link>
       <span className={cn('num', pnlClass(trade.net_pnl))}>{formatSignedMoney(trade.net_pnl)}</span>
       <span className="num">{formatR(trade.r_multiple)}</span>
-      <span className="num text-muted-foreground">{formatShortDateTimeBrussels(trade.close_time)}</span>
+      <span className="num text-ink-muted">{formatShortDateTimeBrussels(trade.close_time)}</span>
     </p>
   )
 }

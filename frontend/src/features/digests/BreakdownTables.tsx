@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { formatPct } from '@/features/dashboard/format'
 import { useJournalFields } from '@/features/trades/api'
 import { formatR, formatSignedMoney, pnlClass, sessionLabel, weekdayLabel } from '@/features/trades/format'
@@ -7,12 +8,13 @@ import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { BreakdownMatrix } from './BreakdownMatrix'
 import { optionLabel, type FieldMap } from './breakdownLabels'
+import { BLOCK_TITLE, ROW, THEAD, TITLED_TABLE_CARD } from './tableStyles'
 import type { Breakdown, GroupKey } from './types'
 
 const t = uk.digests.breakdowns
 const EMPTY = uk.common.empty
-const TH = 'px-3 py-1.5 font-medium whitespace-nowrap'
-const TD = 'px-3 py-1 whitespace-nowrap'
+const TH = 'px-4 py-1.5 font-medium whitespace-nowrap'
+const TD = 'px-4 py-1.5 whitespace-nowrap'
 const NUM = `${TD} num text-right`
 /** `poi_types__combo`: one group per distinct selection, values joined « + » (docs/api.md M8-04..08). */
 const COMBO_SUFFIX = '__combo'
@@ -53,9 +55,9 @@ export function BreakdownTables({ breakdowns, currency }: { breakdowns: Record<s
   const fields: FieldMap = useMemo(() => new Map((data?.fields ?? []).map((f) => [f.key, f])), [data])
   const entries = Object.entries(breakdowns)
   return (
-    <section aria-labelledby="digest-breakdowns" className="flex flex-col gap-2">
-      <h2 id="digest-breakdowns" className="text-sm font-semibold">{t.title}</h2>
-      <div className="grid gap-3 lg:grid-cols-2">
+    <section aria-labelledby="digest-breakdowns" className="flex flex-col gap-3">
+      <SectionHeader id="digest-breakdowns" title={t.title} />
+      <div className="grid gap-4 lg:grid-cols-2">
         {entries.map(([name, breakdown]) =>
           breakdown.kind === 'matrix' ? (
             <BreakdownMatrix key={name} name={name} breakdown={breakdown} fields={fields} currency={currency} />
@@ -116,18 +118,18 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
     return Array.isArray(key) ? key.map((part) => part ?? t.notFilled).join(COMBO_JOIN) : view.label(key as ScalarKey)
   }
   return (
-    <article aria-label={view.title} className="flex flex-col gap-1 rounded-lg border">
-      <div className="flex items-baseline justify-between gap-2 px-3 pt-2">
-        <h3 className="text-xs font-semibold">{view.title}</h3>
+    <article aria-label={view.title} className={TITLED_TABLE_CARD}>
+      <div className="flex items-baseline justify-between gap-2 px-4 pt-1">
+        <h3 className={BLOCK_TITLE}>{view.title}</h3>
         {view.showCoverage && (
-          <span className="num text-xs text-muted-foreground">
+          <span className="num text-xs text-ink-muted">
             {t.coverage(breakdown.coverage.filled, breakdown.coverage.total)}
           </span>
         )}
       </div>
-      {view.note && <p className="px-3 text-[11px] text-muted-foreground">{view.note}</p>}
+      {view.note && <p className="px-4 text-[11px] text-ink-muted">{view.note}</p>}
       <table className="w-full text-sm">
-        <thead className="text-xs text-muted-foreground">
+        <thead className={THEAD}>
           <tr>
             <th scope="col" className={`${TH} text-left`}>{t.key}</th>
             <th scope="col" className={`${TH} text-right`}>{t.trades}</th>
@@ -138,8 +140,8 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
         </thead>
         <tbody>
           {breakdown.groups.map((group) => (
-            <tr key={String(group.key)} className="border-t">
-              <td className={cn(TD, group.key === null && 'text-muted-foreground')}>{label(group.key)}</td>
+            <tr key={String(group.key)} className={ROW}>
+              <td className={cn(TD, group.key === null && 'text-ink-muted')}>{label(group.key)}</td>
               <td className={NUM}>{group.trades}</td>
               <td className={cn(NUM, pnlClass(group.net_pnl))}>{formatSignedMoney(group.net_pnl)}</td>
               <td className={NUM}>{formatR(group.total_r)}</td>

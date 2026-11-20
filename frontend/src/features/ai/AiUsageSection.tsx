@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Card } from '@/components/studio/Card'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDecimal, roundDecimal } from '@/lib/decimal'
@@ -19,7 +21,7 @@ export function AiUsageSection() {
   if (isPending) {
     body = (
       <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         {t.loading}
       </div>
     )
@@ -40,8 +42,8 @@ export function AiUsageSection() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t.title}</h2>
-      <div className="rounded-lg border px-4 py-3">{body}</div>
+      <SectionHeader title={t.title} />
+      <Card>{body}</Card>
     </section>
   )
 }

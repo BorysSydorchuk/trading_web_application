@@ -1,4 +1,6 @@
 import { Loader2 } from 'lucide-react'
+import { Card } from '@/components/studio/Card'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { useDesktopState, useSetDesktop, type DesktopChange, type DesktopState } from './api'
@@ -14,7 +16,7 @@ export function DesktopSection() {
   if (state.isPending) {
     body = (
       <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         {t.loading}
       </div>
     )
@@ -32,15 +34,15 @@ export function DesktopSection() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t.title}</h2>
-      <div className="flex flex-col gap-3 rounded-lg border px-4 py-3">
+      <SectionHeader title={t.title} />
+      <Card className="flex flex-col gap-4">
         {body}
         {change.isError && (
           <p role="alert" className="text-xs text-destructive">
             {t.saveError} {errorText(change.error)}
           </p>
         )}
-      </div>
+      </Card>
     </section>
   )
 }
@@ -54,10 +56,10 @@ interface TogglesProps {
 function Toggles({ data, busy, onChange }: TogglesProps) {
   return (
     <>
-      <label className="flex items-start gap-2 text-sm">
+      <label className="flex cursor-pointer items-start gap-2.5 text-sm">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 size-3.5 accent-lavender-mid"
           checked={data.autostart}
           disabled={busy}
           onChange={(e) => onChange({ autostart: e.target.checked })}
@@ -67,10 +69,10 @@ function Toggles({ data, busy, onChange }: TogglesProps) {
           <span className="text-xs text-muted-foreground">{t.autostartHint}</span>
         </span>
       </label>
-      <label className="flex items-start gap-2 text-sm">
+      <label className="flex cursor-pointer items-start gap-2.5 text-sm">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 size-3.5 accent-lavender-mid"
           checked={data.terminals_visible}
           disabled={busy}
           onChange={(e) => onChange({ terminals_visible: e.target.checked })}

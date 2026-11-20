@@ -23,15 +23,15 @@ export function ConversionNote({ conversion, compact }: ConversionNoteProps) {
   const showMt5 = !compact && conversion.source === 'mt5_check' && conversion.mt5_loss_per_tick !== null
   return (
     <div className="flex flex-col gap-1 text-xs">
-      <p className="num text-muted-foreground">{rateLine}</p>
+      <p className="num text-ink-muted">{rateLine}</p>
       {conversion.stale && (
-        <p className="flex items-center gap-1.5 text-warning">
+        <p className="flex w-fit items-center gap-1.5 rounded-full border border-warning-border bg-warning-soft px-2.5 py-0.5 font-semibold text-warning">
           <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
           {t.conversionStale}
         </p>
       )}
       {showMt5 && (
-        <p className="num text-muted-foreground">
+        <p className="num text-ink-muted">
           {t.conversionMt5Check(formatTickValue(conversion.mt5_loss_per_tick), formatTickValue(conversion.rate_loss_per_tick))}
         </p>
       )}

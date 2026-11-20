@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
+import { Pill } from '@/components/studio/Pill'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDateTimeBrussels } from '@/lib/time'
-import { cn } from '@/lib/utils'
 import { AiSummarySection } from './AiSummarySection'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
@@ -27,7 +27,7 @@ export function DigestView({ digest }: { digest: Digest }) {
     <div className="flex flex-col gap-6">
       <DigestHeader digest={digest} />
       <AiSummarySection digest={digest} />
-      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <MetricBlockCard
           title={uk.digests.blocks.combined}
           block={snapshot.combined}
@@ -69,17 +69,16 @@ function DigestHeader({ digest }: { digest: Digest }) {
   const regenerate = useRegenerateDigest()
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <h1 className="text-lg font-semibold tracking-tight">{formatPeriod(digest.kind, digest.period_start)}</h1>
-      <span
-        className={cn(
-          'rounded-full border px-2 py-0.5 text-xs',
-          digest.reviewed ? 'text-muted-foreground' : 'border-lavender-ring bg-lavender-soft font-semibold text-lavender',
-        )}
-      >
-        {reviewedText(digest)}
-      </span>
+      <h1 className="type-page-title m-0 text-ink">{formatPeriod(digest.kind, digest.period_start)}</h1>
+      {digest.reviewed ? (
+        <Pill tone="neutral">{reviewedText(digest)}</Pill>
+      ) : (
+        <Pill tone="accent" className="border border-lavender-ring">
+          {reviewedText(digest)}
+        </Pill>
+      )}
       {digest.generated_at && (
-        <span className="num text-xs text-muted-foreground">{p.generatedAt(formatDateTimeBrussels(digest.generated_at))}</span>
+        <span className="num text-xs text-ink-muted">{p.generatedAt(formatDateTimeBrussels(digest.generated_at))}</span>
       )}
       <Button
         type="button"
@@ -89,7 +88,7 @@ function DigestHeader({ digest }: { digest: Digest }) {
         onClick={() => regenerate.mutate(digest)}
         disabled={regenerate.isPending}
       >
-        {regenerate.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+        {regenerate.isPending ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : <RefreshCw aria-hidden />}
         {regenerate.isPending ? p.regenerating : p.regenerate}
       </Button>
     </div>

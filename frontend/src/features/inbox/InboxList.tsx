@@ -1,9 +1,19 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Link } from 'react-router'
+import { Pill } from '@/components/studio/Pill'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { Button } from '@/components/ui/button'
 import type { ColumnKey } from '@/features/journal/columns'
 import { NUMERIC_COLUMNS } from '@/features/journal/columns'
+import {
+  NOTICE_BOX_CLASS,
+  TABLE_CARD_CLASS,
+  TABLE_HEAD_CLASS,
+  TABLE_ROW_CLASS,
+  TABLE_TD_CLASS,
+  TABLE_TH_CLASS,
+} from '@/features/journal/tableStyles'
 import { useTrades } from '@/features/trades/api'
 import { TradeCell } from '@/features/trades/TradeCell'
 import { TradeDetailDialog } from '@/features/trades/TradeDetailDialog'
@@ -48,7 +58,7 @@ export function InboxList() {
     return (
       <div className="flex flex-col gap-2" role="status" aria-label={p.loading}>
         {[0, 1, 2].map((row) => (
-          <div key={row} className="h-10 animate-pulse rounded-md bg-muted/50" />
+          <div key={row} className="h-10 animate-pulse rounded-tile bg-muted motion-reduce:animate-none" />
         ))}
         <span className="sr-only">{p.loading}</span>
       </div>
@@ -56,7 +66,7 @@ export function InboxList() {
   }
   if (isError) {
     return (
-      <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div role="alert" className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p>{p.loadError}</p>
         <p className="text-xs text-muted-foreground">{errorText(error)}</p>
         <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
@@ -68,7 +78,7 @@ export function InboxList() {
   }
   if (!data.items.some(inInbox)) {
     return (
-      <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
+      <div className={cn(NOTICE_BOX_CLASS, 'flex min-h-32 items-center justify-center')}>
         <p className="text-muted-foreground">{p.empty}</p>
       </div>
     )
@@ -100,41 +110,40 @@ interface InboxGroupProps {
 
 function InboxGroup({ status, trades, onOpen }: InboxGroupProps) {
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-baseline gap-3">
-        <h2 className="text-base font-semibold">{p.groups[status]}</h2>
-        <span className="num text-xs text-muted-foreground">{trades.length}</span>
+    <section className="flex flex-col gap-3">
+      <SectionHeader title={p.groups[status]}>
+        <Pill mono>{trades.length}</Pill>
         <p className="text-xs text-muted-foreground">{p.groupHints[status]}</p>
-      </div>
-      <div className="overflow-x-auto rounded-lg border">
+      </SectionHeader>
+      <div className={TABLE_CARD_CLASS}>
         <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <thead className={TABLE_HEAD_CLASS}>
             <tr>
               {COLUMNS.map((key) => (
                 <th
                   key={key}
                   scope="col"
                   className={cn(
-                    'px-3 py-2 font-medium whitespace-nowrap',
+                    TABLE_TH_CLASS,
                     NUMERIC_COLUMNS.has(key) ? 'text-right' : 'text-left',
                   )}
                 >
                   {uk.trades.columns[key]}
                 </th>
               ))}
-              <th scope="col" className="px-3 py-2">
+              <th scope="col" className="px-3 py-2.5">
                 <span className="sr-only">{uk.accounts.columns.actions}</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {trades.map((trade) => (
-              <tr key={trade.id} className="border-t align-middle hover:bg-muted/20">
+              <tr key={trade.id} className={cn(TABLE_ROW_CLASS, 'align-middle hover:bg-accent/60')}>
                 {COLUMNS.map((key) => (
                   <td
                     key={key}
                     className={cn(
-                      'px-3 py-1.5',
+                      TABLE_TD_CLASS,
                       NUMERIC_COLUMNS.has(key) ? 'text-right whitespace-nowrap' : 'text-left',
                       key !== 'violations' && 'whitespace-nowrap',
                     )}
@@ -142,7 +151,7 @@ function InboxGroup({ status, trades, onOpen }: InboxGroupProps) {
                     <TradeCell trade={trade} column={key} />
                   </td>
                 ))}
-                <td className="px-3 py-1.5">
+                <td className={TABLE_TD_CLASS}>
                   <div className="flex items-center justify-end gap-3">
                     {status === 'needs_sl' ? (
                       <InitialSlForm trade={trade} />

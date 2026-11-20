@@ -1,9 +1,12 @@
 import { Loader2 } from 'lucide-react'
 import { Link } from 'react-router'
+import { Pill } from '@/components/studio/Pill'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { Button } from '@/components/ui/button'
 import { useHome } from '@/features/home/api'
 import type { HomePosition } from '@/features/home/types'
 import { directionLabel } from '@/features/trades/format'
+import { TABLE_CARD_CLASS, TABLE_HEAD_CLASS, TABLE_ROW_CLASS, TABLE_TD_CLASS, TABLE_TH_CLASS } from '@/features/journal/tableStyles'
 import { describePath } from '@/features/trades/links'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
@@ -11,8 +14,8 @@ import { formatShortDateTimeBrussels } from '@/lib/time'
 
 const p = uk.inboxPage
 const cols = uk.trades.columns
-const TH = 'px-3 py-2 text-left font-medium whitespace-nowrap'
-const TD = 'px-3 py-1.5 whitespace-nowrap'
+const TH = `${TABLE_TH_CLASS} text-left`
+const TD = `${TABLE_TD_CLASS} whitespace-nowrap`
 
 /**
  * M8-10b «Відкриті · можна описати зараз»: open positions of every active account without a
@@ -24,8 +27,8 @@ export function OpenUndescribed() {
 
   if (isError && !data) {
     return (
-      <section aria-labelledby="inbox-open" className="flex flex-col gap-2">
-        <h2 id="inbox-open" className="text-base font-semibold">{p.open.title}</h2>
+      <section aria-labelledby="inbox-open" className="flex flex-col gap-3">
+        <SectionHeader id="inbox-open" title={p.open.title} />
         <div role="alert" className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>{p.open.loadError} {errorText(error)}</span>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void refetch()} disabled={isFetching}>
@@ -41,21 +44,20 @@ export function OpenUndescribed() {
   if (positions.length === 0) return null
 
   return (
-    <section aria-labelledby="inbox-open" className="flex flex-col gap-2">
-      <div className="flex items-baseline gap-3">
-        <h2 id="inbox-open" className="text-base font-semibold">{p.open.title}</h2>
-        <span className="num text-xs text-muted-foreground">{positions.length}</span>
+    <section aria-labelledby="inbox-open" className="flex flex-col gap-3">
+      <SectionHeader id="inbox-open" title={p.open.title}>
+        <Pill mono>{positions.length}</Pill>
         <p className="text-xs text-muted-foreground">{p.open.hint}</p>
-      </div>
-      <div className="overflow-x-auto rounded-lg border">
+      </SectionHeader>
+      <div className={TABLE_CARD_CLASS}>
         <table aria-label={p.open.title} className="w-full text-sm">
-          <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <thead className={TABLE_HEAD_CLASS}>
             <tr>
               <th scope="col" className={TH}>{cols.open_time}</th>
               <th scope="col" className={TH}>{cols.account}</th>
               <th scope="col" className={TH}>{cols.symbol}</th>
               <th scope="col" className={TH}>{cols.direction}</th>
-              <th scope="col" className="px-3 py-2">
+              <th scope="col" className="px-3 py-2.5">
                 <span className="sr-only">{uk.accounts.columns.actions}</span>
               </th>
             </tr>
@@ -73,12 +75,12 @@ export function OpenUndescribed() {
 
 function OpenRow({ position }: { position: HomePosition }) {
   return (
-    <tr className="border-t align-middle hover:bg-muted/20">
+    <tr className={`${TABLE_ROW_CLASS} align-middle hover:bg-accent/60`}>
       <td className={`${TD} num`}>{formatShortDateTimeBrussels(position.open_time)}</td>
       <td className={TD}>{position.account_name}</td>
       <td className={`${TD} num`}>{position.symbol}</td>
       <td className={TD}>{directionLabel(position.direction)}</td>
-      <td className="px-3 py-1.5">
+      <td className={TABLE_TD_CLASS}>
         <div className="flex justify-end">
           <Button asChild size="sm" className="h-7 text-xs">
             <Link to={describePath(position.trade_id)}>{p.describe}</Link>

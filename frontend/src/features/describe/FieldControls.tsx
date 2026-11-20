@@ -14,7 +14,7 @@ export function AiBadge() {
   return (
     <span
       title={f.aiFilledHint}
-      className="inline-flex items-center gap-0.5 rounded border border-ai/40 bg-ai/10 px-1 py-px text-[10px] font-medium text-ai"
+      className="inline-flex items-center gap-0.5 rounded-full border border-lavender-ring bg-lavender-soft px-1.5 py-px text-[10px] font-semibold text-ai"
     >
       <Sparkles className="size-2.5" aria-hidden />
       {f.aiBadge}
@@ -27,7 +27,7 @@ export function Mt5Badge({ source }: { source: Mt5FillSource }) {
   return (
     <span
       title={f.mt5FilledHint[source]}
-      className="inline-flex items-center rounded border border-ai/40 bg-ai/10 px-1 py-px text-[10px] font-medium text-ai"
+      className="inline-flex items-center rounded-full border border-lavender-ring bg-lavender-soft px-1.5 py-px text-[10px] font-semibold text-ai"
     >
       {f.mt5Badge}
     </span>
@@ -125,11 +125,11 @@ export function Segmented({ id, options, value, onChange, invalid, mono }: Segme
             aria-pressed={active}
             onClick={() => onChange(active ? null : option.value)}
             className={cn(
-              'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+              'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring motion-reduce:transition-none',
               mono && 'num min-w-8',
               active
                 ? selectedToggleClass
-                : 'border-input bg-transparent text-foreground hover:bg-accent dark:bg-input/30',
+                : 'border-input bg-surface text-foreground hover:bg-accent',
               invalid && !active && 'border-destructive/60',
             )}
           >

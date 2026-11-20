@@ -27,10 +27,10 @@ export function BiasPage() {
 
   const newHref = kinds.length === 1 && isBiasKind(kinds[0]) ? `/bias/new?kind=${kinds[0]}` : '/bias/new'
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">{uk.pages.bias.title}</h1>
-        <span className="text-xs text-muted-foreground">{l.range}</span>
+        <h1 className="type-page-title m-0 text-ink">{uk.pages.bias.title}</h1>
+        <span className="text-[13px] text-ink-muted">{l.range}</span>
         <Button asChild size="sm" className="ml-auto">
           <Link to={newHref}>
             <Plus aria-hidden />
@@ -51,15 +51,15 @@ interface KindFilterProps {
 }
 
 const FILTER_BUTTON =
-  'h-7 rounded-md border px-2.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring'
+  'h-8 rounded-full border px-3.5 text-xs transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring motion-reduce:transition-none'
 
 function filterClass(active: boolean) {
-  return cn(FILTER_BUTTON, active ? selectedToggleClass : 'border-input hover:bg-accent')
+  return cn(FILTER_BUTTON, active ? selectedToggleClass : 'border-input bg-surface text-ink hover:bg-accent')
 }
 
 function KindFilter({ kinds, onToggle, onAll }: KindFilterProps) {
   return (
-    <div role="group" aria-label={l.filterLabel} className="flex flex-wrap gap-1">
+    <div role="group" aria-label={l.filterLabel} className="flex flex-wrap gap-1.5">
       <button type="button" aria-pressed={kinds.length === 0} onClick={onAll} className={filterClass(kinds.length === 0)}>
         {l.allKinds}
       </button>
@@ -81,19 +81,19 @@ function KindFilter({ kinds, onToggle, onAll }: KindFilterProps) {
 function ListBody({ query, filtered }: { query: ReturnType<typeof useBiasNotes>; filtered: boolean }) {
   if (query.isPending) {
     return (
-      <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+      <p role="status" className="flex items-center gap-2 text-xs text-ink-muted">
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         {l.loading}
       </p>
     )
   }
   if (query.data === undefined) {
     return (
-      <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div role="alert" className="flex flex-col items-center gap-3 rounded-card border border-dashed border-input bg-surface px-6 py-8 text-center">
         <p>{l.loadError}</p>
-        <p className="text-xs text-muted-foreground">{errorText(query.error)}</p>
+        <p className="text-xs text-ink-muted">{errorText(query.error)}</p>
         <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
-          {query.isFetching && <Loader2 className="animate-spin" aria-hidden />}
+          {query.isFetching && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
           {uk.common.retry}
         </Button>
       </div>
@@ -101,8 +101,8 @@ function ListBody({ query, filtered }: { query: ReturnType<typeof useBiasNotes>;
   }
   if (query.data.items.length === 0) {
     return (
-      <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
-        <p className="text-muted-foreground">{filtered ? l.emptyFiltered : l.empty}</p>
+      <div className="flex min-h-32 items-center justify-center rounded-card border border-dashed border-input bg-surface px-6 py-8 text-center">
+        <p className="text-ink-muted">{filtered ? l.emptyFiltered : l.empty}</p>
       </div>
     )
   }

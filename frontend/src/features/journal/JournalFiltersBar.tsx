@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { selectedToggleClass } from '@/components/studio/tones'
 import { MultiSelectFilter } from '@/components/MultiSelectFilter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +22,10 @@ import {
 import { JournalFieldFilters } from './JournalFieldFilters'
 
 const j = uk.journal
+
+/** Checkbox filter chip: same height/border as the select filters; selected via `selectedToggleClass`. */
+const CHIP_CLASS =
+  'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input bg-surface px-2.5 text-xs shadow-xs select-none hover:bg-accent focus-within:ring-[3px] focus-within:ring-ring'
 
 interface JournalFiltersBarProps {
   filters: JournalFilters
@@ -129,8 +134,8 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
       <label
         htmlFor={`${id}-missing-new`}
         className={cn(
-          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
-          filters.missingNewFields ? 'border-ring' : 'text-muted-foreground',
+          CHIP_CLASS,
+          filters.missingNewFields ? selectedToggleClass : 'text-muted-foreground',
         )}
       >
         <input
@@ -145,8 +150,8 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
       <label
         htmlFor={`${id}-missing-r`}
         className={cn(
-          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
-          filters.missingR ? 'border-ring' : 'text-muted-foreground',
+          CHIP_CLASS,
+          filters.missingR ? selectedToggleClass : 'text-muted-foreground',
         )}
       >
         <input
@@ -161,8 +166,8 @@ export function JournalFiltersBar({ filters, onChange, journalFields }: JournalF
       <label
         htmlFor={`${id}-show-excluded`}
         className={cn(
-          'flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-2.5 text-xs shadow-xs select-none hover:bg-accent/50 dark:bg-input/30',
-          filters.showExcluded ? 'text-muted-foreground' : 'border-ring',
+          CHIP_CLASS,
+          filters.showExcluded ? 'text-muted-foreground' : selectedToggleClass,
         )}
       >
         <input

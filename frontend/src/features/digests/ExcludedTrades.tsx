@@ -5,11 +5,12 @@ import { describePath } from '@/features/trades/links'
 import { uk } from '@/i18n/uk'
 import { formatShortDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { ROW, TABLE_CARD, THEAD } from './tableStyles'
 import type { ExcludedBlock } from './types'
 
 const x = uk.digests.excluded
-const TH = 'px-3 py-1.5 font-medium whitespace-nowrap'
-const TD = 'px-3 py-1 whitespace-nowrap'
+const TH = 'px-4 py-2 font-medium whitespace-nowrap'
+const TD = 'px-4 py-1.5 whitespace-nowrap'
 
 function money(value: string, currency: string | null): string {
   const text = formatSignedMoney(value)
@@ -24,13 +25,13 @@ export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; curr
   if (block.trades === 0) return null
   return (
     <section aria-labelledby="digest-excluded" className="flex flex-col gap-2">
-      <h2 id="digest-excluded" className="text-sm font-semibold">
+      <h2 id="digest-excluded" className="type-card-title m-0 text-ink">
         {x.summary(block.trades, money(block.net_pnl, currency))}
       </h2>
-      <p className="text-xs text-muted-foreground">{x.hint}</p>
-      <div className="overflow-x-auto rounded-lg border">
+      <p className="text-xs text-ink-muted">{x.hint}</p>
+      <div className={TABLE_CARD}>
         <table aria-label={x.title} className="w-full text-sm">
-          <thead className="bg-muted/40 text-xs text-muted-foreground">
+          <thead className={THEAD}>
             <tr>
               <th scope="col" className={`${TH} text-left`}>{x.date}</th>
               <th scope="col" className={`${TH} text-left`}>{x.account}</th>
@@ -41,16 +42,16 @@ export function ExcludedTrades({ block, currency }: { block: ExcludedBlock; curr
           </thead>
           <tbody>
             {block.items.map((item) => (
-              <tr key={item.trade_id} className="border-t">
+              <tr key={item.trade_id} className={ROW}>
                 <td className={`${TD} num`}>{formatShortDateTimeBrussels(item.close_time)}</td>
                 <td className={TD}>{item.account_name ?? uk.common.empty}</td>
                 <td className={`${TD} num`}>
-                  <Link to={describePath(item.trade_id)} className="underline-offset-2 hover:underline">
+                  <Link to={describePath(item.trade_id)} className="type-symbol text-lavender underline-offset-2 hover:underline">
                     {item.symbol}
                   </Link>
                 </td>
                 <td className={cn(`${TD} num text-right`, pnlClass(item.net_pnl))}>{formatSignedMoney(item.net_pnl)}</td>
-                <td className="px-3 py-1 break-words">{item.reason}</td>
+                <td className="px-4 py-1.5 break-words">{item.reason}</td>
               </tr>
             ))}
           </tbody>

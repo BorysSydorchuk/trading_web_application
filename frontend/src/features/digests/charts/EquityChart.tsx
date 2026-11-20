@@ -33,18 +33,20 @@ export function EquityChart({ title, points, currency }: EquityChartProps) {
   const sign = decimalSign(last)
   const end = currency ? uk.dashboard.money(formatSignedMoney(last), currency) : formatSignedMoney(last)
   return (
-    <figure className="flex flex-col gap-1">
+    <figure className="flex flex-col gap-2 rounded-card border border-line bg-card p-4">
       <figcaption className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="font-medium">{title}</span>
-        <span className="num text-muted-foreground">{c.equityEnd(end)}</span>
+        <span className="font-display text-sm font-extrabold text-ink">{title}</span>
+        <span className="num text-ink-muted">{c.equityEnd(end)}</span>
       </figcaption>
-      <svg role="img" aria-label={c.equitySummary(title, end, points.length - 1)} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-32 w-full rounded-md border bg-muted/10">
-        <line x1={PAD} x2={WIDTH - PAD} y1={y(0)} y2={y(0)} className="stroke-border" strokeDasharray="3 3" />
+      <svg role="img" aria-label={c.equitySummary(title, end, points.length - 1)} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-32 w-full">
+        <line x1={PAD} x2={WIDTH - PAD} y1={y(0)} y2={y(0)} className="stroke-faint" strokeWidth={0.75} strokeDasharray="3 3" />
         <polyline
           data-testid="equity-line"
           points={path}
           fill="none"
-          strokeWidth={1.5}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
           className={cn(sign > 0 ? 'stroke-profit-strong' : sign < 0 ? 'stroke-loss-strong' : 'stroke-faint')}
         />
       </svg>

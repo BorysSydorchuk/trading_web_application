@@ -23,10 +23,10 @@ export function Field({ id, label, required, error, hint, group, aside, classNam
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       <div className="flex min-h-5 items-center justify-between gap-2">
-        <Caption htmlFor={group ? undefined : id} className="text-xs font-medium text-muted-foreground">
+        <Caption htmlFor={group ? undefined : id} className="text-xs font-medium text-ink-muted">
           {label}
           {required && (
-            <span className="text-foreground" aria-hidden>
+            <span className="text-ink" aria-hidden>
               {uk.common.requiredMark}
             </span>
           )}
@@ -34,7 +34,7 @@ export function Field({ id, label, required, error, hint, group, aside, classNam
         {aside}
       </div>
       {children}
-      <p id={`${id}-msg`} className={cn('text-xs', error ? 'text-destructive' : 'text-muted-foreground', !error && !hint && 'sr-only')}>
+      <p id={`${id}-msg`} className={cn('text-xs', error ? 'text-destructive' : 'text-ink-muted', !error && !hint && 'sr-only')}>
         {error ?? hint}
       </p>
     </div>

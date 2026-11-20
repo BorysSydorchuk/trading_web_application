@@ -13,9 +13,9 @@ const t = uk.calculator.result
 
 function Row({ label, children, strong }: { label: string; children: ReactNode; strong?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={cn('num text-right text-sm', strong && 'text-xl font-semibold')}>{children}</dd>
+    <div className="flex items-baseline justify-between gap-3 border-b border-divider py-1.5 last:border-b-0">
+      <dt className="text-[13px] text-ink-muted">{label}</dt>
+      <dd className={cn('num text-right text-ink', strong ? 'type-kpi' : 'text-sm')}>{children}</dd>
     </div>
   )
 }
@@ -47,12 +47,12 @@ export function CalculatorResult({ result, brokerSymbol, digits, margin, compact
   const cur = result.currency
   const currentBalance = compact ? null : currentBalanceNote(result)
   return (
-    <section aria-label={t.title} className="flex flex-col gap-2 rounded-lg border p-3">
+    <section aria-label={t.title} className={cn('flex flex-col gap-3 rounded-card border border-line bg-card', compact ? 'p-4' : 'p-5')}>
       <dl className={cn('grid gap-x-6', compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
         <Row label={t.symbol}>
           {result.symbol}
           {brokerSymbol !== null && brokerSymbol !== result.symbol && (
-            <span className="ml-1 text-xs text-muted-foreground" title={t.brokerSymbolTitle(brokerSymbol)}>
+            <span className="ml-1 text-xs text-ink-muted" title={t.brokerSymbolTitle(brokerSymbol)}>
               {t.brokerSymbol(brokerSymbol)}
             </span>
           )}
@@ -65,9 +65,9 @@ export function CalculatorResult({ result, brokerSymbol, digits, margin, compact
           <span className="flex flex-col items-end">
             <span>
               {formatMoney(result.risk_budget)} {cur}
-              <span className="ml-1 text-xs text-muted-foreground">({budgetNote(result)})</span>
+              <span className="ml-1 text-xs text-ink-muted">({budgetNote(result)})</span>
             </span>
-            <span className="text-xs text-muted-foreground">{t.riskBase(formatMoney(result.balance), cur)}</span>
+            <span className="text-xs text-ink-muted">{t.riskBase(formatMoney(result.balance), cur)}</span>
           </span>
         </Row>
         <Row label={t.sl}>{price(result.sl_price)}</Row>
@@ -79,18 +79,18 @@ export function CalculatorResult({ result, brokerSymbol, digits, margin, compact
         </Row>
         {!compact && <Row label={t.lossPerTick}>{t.lossPerTickValue(formatTickValue(result.loss_per_tick), cur)}</Row>}
       </dl>
-      {currentBalance !== null && <p className="num text-xs text-muted-foreground">{currentBalance}</p>}
+      {currentBalance !== null && <p className="num text-xs text-ink-muted">{currentBalance}</p>}
       {result.conversion !== null && <ConversionNote conversion={result.conversion} compact={compact} />}
-      <div>
-        <h3 className="pt-1 text-xs font-semibold">{t.targets}</h3>
+      <div className="flex flex-col gap-1 rounded-tile bg-track px-4 py-3">
+        <h3 className="m-0 font-display text-sm font-extrabold text-ink">{t.targets}</h3>
         <dl className={cn('grid gap-x-6', compact ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1')}>
           <Row label={t.target('1.5')}>{price(result.tp_1_5)}</Row>
           <Row label={t.target('2')}>{price(result.tp_2)}</Row>
           <Row label={t.target('3')}>{price(result.tp_3)}</Row>
         </dl>
-        <p className="text-xs text-muted-foreground">{t.targetsNote}</p>
+        <p className="text-xs text-ink-muted">{t.targetsNote}</p>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         {t.specsAt(formatDateTimeBrussels(result.specs_at))} · {t.feesNote}
       </p>
     </section>

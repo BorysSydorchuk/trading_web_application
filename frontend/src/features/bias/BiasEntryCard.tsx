@@ -31,9 +31,9 @@ export function BiasEntryCard({ draft, errors, onValue, onLinks, onClear }: Bias
   const { symbol, values, aiFilled } = draft
   const key = (field: BiasAiField | 'chart_links') => biasFieldKey(symbol, field)
   return (
-    <section aria-label={e.cardLabel(symbol)} className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
+    <section aria-label={e.cardLabel(symbol)} className="flex min-w-0 flex-col gap-2 rounded-card border border-line bg-card p-4">
       <div className="flex items-center gap-2">
-        <h3 className="num text-sm font-semibold">{symbol}</h3>
+        <h3 className="type-symbol m-0 text-base text-ink">{symbol}</h3>
         <Button
           type="button"
           variant="ghost"
@@ -48,7 +48,7 @@ export function BiasEntryCard({ draft, errors, onValue, onLinks, onClear }: Bias
         </Button>
       </div>
       {!draft.known && (
-        <p role="note" className="flex gap-1.5 text-xs text-muted-foreground">
+        <p role="note" className="flex gap-1.5 text-xs text-ink-muted">
           <Info className="mt-px size-3.5 shrink-0" aria-hidden />
           {e.unknownSymbol}
         </p>

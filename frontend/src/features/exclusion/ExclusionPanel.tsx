@@ -19,8 +19,8 @@ export function ExclusionPanel({ trade }: { trade: TradeDetail }) {
     <section
       aria-label={excluded ? t.panelExcluded : t.panelCounted}
       className={cn(
-        'flex flex-wrap items-start gap-x-4 gap-y-2 rounded-lg border px-4 py-3 text-sm',
-        excluded && 'border-warning-strong/60',
+        'flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-line px-5 py-3 text-sm',
+        excluded ? 'bg-track' : 'bg-card',
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">

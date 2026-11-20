@@ -47,7 +47,7 @@ export function NextPeriodBias({ digest, reviewDirty }: NextPeriodBiasProps) {
     void refreshDigest()
   }
   const embedded = {
-    title: <h2 className="text-sm font-semibold">{title}</h2>,
+    title: <h2 className="type-card-title m-0 text-ink">{title}</h2>,
     extraDirty: reviewDirty,
     unsavedDescription: uk.digests.unsaved,
     onSaved,
@@ -94,8 +94,8 @@ function ReviewGuard({ dirty }: { dirty: boolean }) {
 
 function Loading({ reviewDirty }: { reviewDirty: boolean }) {
   return (
-    <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" aria-hidden />
+    <div role="status" className="flex items-center gap-2 text-xs text-ink-muted">
+      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
       {n.loading}
       <ReviewGuard dirty={reviewDirty} />
     </div>
@@ -104,9 +104,9 @@ function Loading({ reviewDirty }: { reviewDirty: boolean }) {
 
 function LoadError({ error, onRetry, reviewDirty }: { error: unknown; onRetry: () => void; reviewDirty: boolean }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed px-4 py-3 text-sm">
+    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-card border border-dashed border-input bg-surface px-5 py-4 text-sm">
       <span>{n.loadError}</span>
-      <span className="text-xs text-muted-foreground">{errorText(error)}</span>
+      <span className="text-xs text-ink-muted">{errorText(error)}</span>
       <Button variant="outline" size="sm" onClick={onRetry}>
         {uk.common.retry}
       </Button>

@@ -42,15 +42,15 @@ export function ReviewForm({ digest, onDirtyChange }: ReviewFormProps) {
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3 rounded-lg border p-4">
+    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3 rounded-card border border-line bg-card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id={`${id}-title`} className="text-sm font-semibold">{r.title}</h2>
-        <span className="text-xs text-muted-foreground">{r.hint}</span>
+        <h2 id={`${id}-title`} className="type-card-title m-0 text-ink">{r.title}</h2>
+        <span className="text-xs text-ink-muted">{r.hint}</span>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {REVIEW_FIELDS.map((field) => (
           <div key={field} className="flex flex-col gap-1.5">
-            <label htmlFor={`${id}-${field}`} className="text-xs font-medium text-muted-foreground">
+            <label htmlFor={`${id}-${field}`} className="text-xs font-medium text-ink-muted">
               {r[field]}
             </label>
             <Textarea
@@ -66,7 +66,7 @@ export function ReviewForm({ digest, onDirtyChange }: ReviewFormProps) {
       </div>
       <div className="flex justify-end">
         <Button type="button" size="sm" onClick={submit} disabled={save.isPending || !dirty}>
-          {save.isPending && <Loader2 className="animate-spin" aria-hidden />}
+          {save.isPending && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
           {save.isPending ? r.saving : r.save}
         </Button>
       </div>

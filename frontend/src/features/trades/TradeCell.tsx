@@ -1,4 +1,6 @@
 import type { ColumnKey } from '@/features/journal/columns'
+import { Pill } from '@/components/studio/Pill'
+import type { Tone } from '@/components/studio/tones'
 import { uk } from '@/i18n/uk'
 import { formatShortDateTimeBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -18,13 +20,22 @@ import {
   statusLabel,
   weekdayLabel,
 } from './format'
-import type { ExcursionStatus, TradeRow } from './types'
+import type { ExcursionStatus, TradeRow, TradeStatus } from './types'
 import { useViolationLabel } from './violations'
 
 const EMPTY = uk.common.empty
 
+/** Status pills: neutral/accent only (green/red stay for P&L). Work still to do is accent. */
+const STATUS_TONE: Record<TradeStatus, Tone> & Partial<Record<string, Tone>> = {
+  open: 'accent',
+  needs_sl: 'accent',
+  needs_description: 'accent',
+  draft: 'neutral',
+  complete: 'neutral',
+}
+
 function Muted() {
-  return <span className="text-muted-foreground/60">{EMPTY}</span>
+  return <span className="text-muted-foreground">{EMPTY}</span>
 }
 
 /** One table cell value for a trade column. Numbers use `num` (tabular monospace). */
@@ -104,7 +115,7 @@ export function TradeCell({ trade, column, violationLabel }: {
     case 'position_id':
       return <span className="num">{trade.position_id}</span>
     case 'status':
-      return <span className="whitespace-nowrap">{statusLabel(trade.status)}</span>
+      return <Pill tone={STATUS_TONE[trade.status] ?? 'neutral'} className="px-2">{statusLabel(trade.status)}</Pill>
     case 'violations':
       return violationLabel
         ? <LabeledViolationBadges keys={trade.violations} label={violationLabel} />
@@ -123,15 +134,17 @@ function LabeledViolationBadges({ keys, label }: {
   label: (key: string) => string
 }) {
   if (keys.length === 0) return <Muted />
+  const labels = keys.map(label)
+  // M8-10c: one compact count pill per row so the default columns fit at 1440 px and the row keeps
+  // its height; the rule names show on hover (title), in the trade details and to screen readers.
   return (
-    <span className="flex flex-wrap gap-1">
-      {keys.map((key) => (
-        <span
-          key={key}
-          title={key}
-          className="rounded border border-loss/30 bg-loss/10 px-1.5 py-px text-xs whitespace-nowrap text-loss"
-        >
-          {label(key)}
+    <span className="inline-flex">
+      <Pill tone="loss" mono aria-hidden title={labels.join(', ')}>
+        {keys.length}
+      </Pill>
+      {labels.map((text, index) => (
+        <span key={keys[index]} className="sr-only">
+          {text}
         </span>
       ))}
     </span>

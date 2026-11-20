@@ -26,10 +26,10 @@ const EMPTY = uk.common.empty
 /** Left column: auto data from MT5 (read-only), times in Europe/Brussels. */
 export function TradeSummary({ trade }: { trade: TradeDetail }) {
   return (
-    <aside className="flex flex-col gap-4 rounded-lg border bg-card/40 p-4" aria-label={s.label}>
+    <aside className="flex flex-col gap-4 rounded-card border border-line bg-card p-5" aria-label={s.label}>
       <div className="flex flex-col gap-0.5">
         <p className="flex items-baseline gap-2">
-          <span className="num text-base font-semibold">{trade.symbol}</span>
+          <span className="type-symbol text-lg">{trade.symbol}</span>
           <span className="text-sm">{directionLabel(trade.direction)}</span>
           <span className={cn('num ml-auto text-base font-semibold', pnlClass(trade.net_pnl))}>
             {formatSignedMoney(trade.net_pnl)}

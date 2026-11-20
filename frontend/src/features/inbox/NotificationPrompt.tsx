@@ -29,7 +29,7 @@ export function NotificationPrompt({ variant = 'statusBar' }: { variant?: 'statu
 
   if (variant === 'inline') {
     return (
-      <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+      <div className="flex items-center gap-3 rounded-card border border-line bg-card px-5 py-3 text-xs text-muted-foreground">
         <Bell className="size-4 shrink-0" aria-hidden />
         <p className="flex-1">{n.enableHint}</p>
         <Button size="sm" variant="outline" onClick={() => void enable()} disabled={requesting}>

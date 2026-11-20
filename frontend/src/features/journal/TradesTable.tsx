@@ -8,6 +8,7 @@ import type { SortOrder, TradeRow, TradeSort } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { COLUMN_SORT, NUMERIC_COLUMNS, type ColumnKey } from './columns'
+import { TABLE_CARD_CLASS, TABLE_HEAD_CLASS, TABLE_ROW_CLASS, TABLE_TD_CLASS, TABLE_TH_CLASS } from './tableStyles'
 
 interface TradesTableProps {
   violationLabel: (key: string) => string
@@ -25,9 +26,9 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
   // M8-01: one dialog for the table, opened from a row menu.
   const [exclusion, setExclusion] = useState<ExclusionTarget | null>(null)
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className={cn('w-full text-sm transition-opacity', stale && 'opacity-60')}>
-        <thead className="bg-muted/40 text-xs text-muted-foreground">
+    <div className={TABLE_CARD_CLASS}>
+      <table className={cn('w-full text-[13px] transition-opacity motion-reduce:transition-none', stale && 'opacity-60')}>
+        <thead className={TABLE_HEAD_CLASS}>
           <tr>
             {columns.map((key) => {
               const sortField = COLUMN_SORT[key]
@@ -35,7 +36,7 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
               const label = uk.trades.columns[key]
               if (!sortField) {
                 return (
-                  <th key={key} scope="col" className={cn('px-3 py-2 font-medium whitespace-nowrap', align)}>
+                  <th key={key} scope="col" className={cn(TABLE_TH_CLASS, 'px-[5px]', align)}>
                     {label}
                   </th>
                 )
@@ -47,14 +48,14 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                   key={key}
                   scope="col"
                   aria-sort={active ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  className={cn('px-1 py-1 font-medium whitespace-nowrap', align)}
+                  className={cn('px-0 py-1.5 font-semibold whitespace-nowrap', align)}
                 >
                   <button
                     type="button"
                     onClick={() => onSort(sortField)}
                     title={uk.journal.sortBy(label)}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded px-2 py-1 hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                      'inline-flex items-center gap-0.5 rounded-md px-[5px] py-1 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                       NUMERIC_COLUMNS.has(key) && 'flex-row-reverse',
                       active && 'text-foreground',
                     )}
@@ -65,7 +66,7 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                 </th>
               )
             })}
-            <th scope="col" className="px-2 py-2">
+            <th scope="col" className="sticky right-0 bg-card px-1.5 py-2.5">
               <span className="sr-only">{uk.journal.actionsColumn}</span>
             </th>
           </tr>
@@ -83,23 +84,24 @@ export function TradesTable({ trades, columns, sort, order, onSort, onOpen, stal
                   onOpen(trade)
                 }
               }}
-              className="cursor-pointer border-t hover:bg-muted/30 focus-visible:bg-muted/40 focus-visible:outline-none"
+              className={cn(TABLE_ROW_CLASS, 'group cursor-pointer hover:bg-accent focus-visible:bg-accent focus-visible:outline-none')}
             >
               {columns.map((key) => (
                 <td
                   key={key}
                   className={cn(
-                    'px-3 py-1.5 align-top',
+                    TABLE_TD_CLASS,
+                    'px-[5px] align-middle',
                     NUMERIC_COLUMNS.has(key) ? 'text-right whitespace-nowrap' : 'text-left',
-                    key !== 'violations' && 'whitespace-nowrap',
+                    'whitespace-nowrap',
                   )}
                 >
                   <TradeCell trade={trade} column={key} violationLabel={violationLabel} />
                 </td>
               ))}
-              <td className="px-2 py-1 text-right align-top whitespace-nowrap">
+              <td className="sticky right-0 bg-card px-1.5 py-1 text-right align-middle whitespace-nowrap group-hover:bg-accent group-focus-visible:bg-accent">
                 <div className="flex items-center justify-end gap-1.5">
-                  {trade.excluded_from_stats && <ExcludedBadge reason={trade.excluded_reason} />}
+                  {trade.excluded_from_stats && <ExcludedBadge compact reason={trade.excluded_reason} />}
                   <TradeRowMenu trade={trade} onExclusion={setExclusion} />
                 </div>
               </td>
