@@ -42,7 +42,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck

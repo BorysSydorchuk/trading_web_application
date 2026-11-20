@@ -79,7 +79,6 @@ DB_TCP_TIMEOUT_S = 30.0
 # Native PostgreSQL 16 Windows service (decision 2026-11-20); Docker stays the fallback.
 NATIVE_PG_SERVICE = "postgresql-x64-16"
 NATIVE_PG_DEFAULT_PORT = 5433
-NATIVE_PG_MAJOR = 16
 SC_TIMEOUT_S = 30.0
 SC_SERVICE_MISSING = 1060  # ERROR_SERVICE_DOES_NOT_EXIST
 SERVICE_STATES = {
@@ -965,40 +964,8 @@ def ensure_env_file() -> None:
     say(MSG["env_created"])
 
 
-def native_pg_bin(program_files: str | None = None) -> Path | None:
-    """`%PROGRAMFILES%/PostgreSQL/<major>/bin` of a native install (16 preferred, else the
-    newest), or None. Mirrors backend/app/system/pg_tools.py (this launcher is stdlib only)."""
-    root = program_files if program_files is not None else os.environ.get("PROGRAMFILES")
-    if not root:
-        return None
-    try:
-        children = list((Path(root) / "PostgreSQL").iterdir())
-    except OSError:
-        return None
-    found = [
-        (int(c.name), c / "bin")
-        for c in children
-        if c.name.isdecimal() and (c / "bin" / "pg_dump.exe").is_file()
-    ]
-    if not found:
-        return None
-    found.sort(key=lambda item: (item[0] != NATIVE_PG_MAJOR, -item[0]))
-    return found[0][1]
-
-
-def with_native_bin(env: dict[str, str], bin_dir: Path | None) -> dict[str, str]:
-    """`env` with `bin_dir` first on PATH (once); unchanged when there is no native install."""
-    if bin_dir is None:
-        return env
-    key = next((k for k in env if k.upper() == "PATH"), "PATH")
-    entries = [e for e in env.get(key, "").split(os.pathsep) if e]
-    if any(os.path.normcase(e) == os.path.normcase(str(bin_dir)) for e in entries):
-        return env
-    return {**env, key: os.pathsep.join([str(bin_dir), *entries])}
-
-
 def child_env() -> dict[str, str]:
-    env = with_native_bin(dict(os.environ), native_pg_bin())
+    env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     env["TJ_STARTUP_TOKEN"] = STARTUP_TOKEN

@@ -343,38 +343,6 @@ def test_native_port_from_env() -> None:
     assert dev.native_pg_port({"NATIVE_PG_PORT": "x"}) == 5433
 
 
-def _pg_install(root: Path, version: str) -> Path:
-    bin_dir = root / "PostgreSQL" / version / "bin"
-    bin_dir.mkdir(parents=True)
-    (bin_dir / "pg_dump.exe").write_bytes(b"")
-    return bin_dir
-
-
-def test_native_pg_bin_prefers_16(tmp_path: Path) -> None:
-    _pg_install(tmp_path, "17")
-    bin16 = _pg_install(tmp_path, "16")
-    assert dev.native_pg_bin(str(tmp_path)) == bin16
-    assert dev.native_pg_bin(str(tmp_path / "missing")) is None
-    assert dev.native_pg_bin("") is None
-
-
-def test_with_native_bin_prepends_once(tmp_path: Path) -> None:
-    bin_dir = tmp_path / "bin"
-    env = {"Path": os.pathsep.join(["C:/a", "C:/b"])}
-    first = dev.with_native_bin(env, bin_dir)
-    assert first["Path"].split(os.pathsep) == [str(bin_dir), "C:/a", "C:/b"]
-    assert env["Path"] == os.pathsep.join(["C:/a", "C:/b"])  # input not mutated
-    assert dev.with_native_bin(first, bin_dir) == first
-    assert dev.with_native_bin(env, None) is env
-
-
-def test_child_env_has_native_bin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    bin16 = _pg_install(tmp_path, "16")
-    monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
-    path_key = next(k for k in dev.child_env() if k.upper() == "PATH")
-    assert dev.child_env()[path_key].split(os.pathsep)[0] == str(bin16)
-
-
 # --------------------------------------------------------------------------- children
 
 

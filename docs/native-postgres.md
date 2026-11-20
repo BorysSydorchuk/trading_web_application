@@ -15,15 +15,19 @@
    `Remove-Variable pw`) і дочекайтеся кінця встановлення (кілька хвилин).
 5. **(адмін)** Налаштування: `python -m uv run --project backend python scripts/native_pg.py configure --restart`
    (роль `journal`, бази `trading_journal` і `trading_journal_test` з ICU-локаллю en-US — сортування
-   тексту як у Docker; лише localhost, автозапуск служби, перезапуск служби). Також змінює пароль
-   суперкористувача `postgres` на новий (записує в `.env`): старий міг лишитися в журналі
-   інсталятора в `%TEMP%` і більше не дійсний. `--no-rotate` — не змінювати пароль.
+   тексту як у Docker, з перевіркою кирилиці lower/ILIKE; лише localhost, автозапуск служби,
+   перезапуск служби). Також змінює пароль суперкористувача `postgres` на новий (записує в `.env`):
+   старий міг лишитися в журналі інсталятора в `%TEMP%` і більше не дійсний. `--no-rotate` — не
+   змінювати пароль. Якщо `status` показує `NATIVE_PG_SUPERUSER_PASSWORD_NEW` — просто повторіть
+   `configure`.
 6. Копія даних з Docker і перевірка: `python -m uv run --project backend python scripts/native_pg.py copy`
    — спочатку перевірена резервна копія `backups/pre-native-<UTC>.dump`, потім відновлення і
    таблиця порівняння (кількість рядків кожної таблиці, md5 ключових таблиць, ревізія alembic).
    Будь-яка «РІЗНИЦЯ» → код виходу 1: **не** переходьте до кроку 7, надішліть вивід.
-   Якщо нативна база вже не порожня (повторна копія): додайте `--replace`.
+   Якщо нативна база вже не порожня (повторна копія): додайте `--replace`. Після `switch` команда
+   `copy` відмовляє (затерла б новіші дані в нативній базі).
 7. Перемкнути застосунок: `python -m uv run --project backend python scripts/native_pg.py switch`
+   (лише одразу після успішного `copy`: якщо дані в Docker змінилися, повторіть `copy --replace`).
 8. Запуск: `start.bat`
 9. Перевірка: `python -m uv run --project backend python scripts/native_pg.py status` → «Активна БД
    застосунку: native (порт 5433)»; у браузері «Головна» і «Журнал» показують ваші угоди.
