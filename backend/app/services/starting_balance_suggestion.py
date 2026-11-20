@@ -64,19 +64,24 @@ def _utc_iso(at: datetime) -> str:
     return at.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _net(deal: RawDeal) -> Decimal:
+    return (deal.profit + deal.commission + deal.swap + deal.fee).quantize(
+        CENT, rounding=ROUND_HALF_UP
+    )
+
+
 def first_deposit(deals: Iterable[RawDeal], conversion: Conversion) -> FirstDeposit | None:
-    """The earliest non-trade deal with a positive profit (ties: lowest ticket), or None."""
+    """The earliest non-trade deal whose net amount (profit + costs, 2 dp) is positive
+    (ties: lowest ticket), or None. Net, so a stored amount is always a valid starting balance
+    and the account counts as checked (no full-history re-read every minute)."""
     candidates = [
-        (deal_time_utc(d, conversion), d.ticket, d)
+        (deal_time_utc(d, conversion), d.ticket, net)
         for d in deals
-        if d.type not in TRADE_DEAL_TYPES and d.profit > 0
+        if d.type not in TRADE_DEAL_TYPES and (net := _net(d)) > 0
     ]
     if not candidates:
         return None
-    at, ticket, deal = min(candidates, key=lambda c: (c[0], c[1]))
-    amount = (deal.profit + deal.commission + deal.swap + deal.fee).quantize(
-        CENT, rounding=ROUND_HALF_UP
-    )
+    at, ticket, amount = min(candidates, key=lambda c: (c[0], c[1]))
     return FirstDeposit(amount=amount, time=at, ticket=ticket)
 
 

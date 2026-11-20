@@ -114,6 +114,17 @@ def test_same_time_lowest_ticket_wins_and_none_without_deposits() -> None:
     assert sbs.first_deposit([], UTC2) is None
 
 
+def test_a_deposit_eaten_by_its_costs_is_skipped_so_a_valid_amount_is_always_stored() -> None:
+    at = datetime(2026, 10, 1, 2, 0, tzinfo=UTC)
+    later = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)
+
+    found = sbs.first_deposit([deal(1, 2, "1", at, fee="-1"), deal(2, 2, "10000", later)], UTC2)
+
+    assert found is not None
+    assert (found.ticket, found.amount) == (2, Decimal("10000.00"))
+    assert sbs.first_deposit([deal(1, 2, "0.004", at)], UTC2) is None  # rounds to 0.00
+
+
 # --- file write / read -----------------------------------------------------------------------
 
 
