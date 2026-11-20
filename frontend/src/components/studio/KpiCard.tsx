@@ -13,6 +13,8 @@ export interface KpiCardProps {
   selected?: boolean
   /** Makes the card a toggle button; without it the card is static. */
   onClick?: () => void
+  /** Small muted lines under the value (context, notes). */
+  caption?: ReactNode
   /** Sparkline (decorative SVG, aria-hidden) under the value. */
   sparkline?: ReactNode
   className?: string
@@ -22,7 +24,7 @@ export interface KpiCardProps {
  * KPI card. With `onClick` it is a toggle button (aria-pressed, hover lift) with a tone-coloured ring
  * when selected; without `onClick` it is a static block (no button, no pressed state).
  */
-export function KpiCard({ label, value, hint, tone = 'neutral', selected = false, onClick, sparkline, className }: KpiCardProps) {
+export function KpiCard({ label, value, hint, tone = 'neutral', selected = false, onClick, caption, sparkline, className }: KpiCardProps) {
   const toneClass = kpiToneClass[tone]
   const interactive = onClick !== undefined
   const pressed = interactive && selected
@@ -50,6 +52,7 @@ export function KpiCard({ label, value, hint, tone = 'neutral', selected = false
         )}
       </span>
       <span className={cn('type-kpi', toneClass.value)}>{value}</span>
+      {caption && <span className="flex flex-col text-[11px] text-ink-muted">{caption}</span>}
       {sparkline && <span className="block h-[26px] w-full">{sparkline}</span>}
     </>
   )

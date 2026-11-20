@@ -1,6 +1,6 @@
 /** Test data for `GET /api/home` (docs/api.md "## M8-10b"), values like the PM mockup. */
 import type { HomeCharts } from '@/features/dashboard/homeCharts/api'
-import type { HomeData, HomeLimits, HomePosition } from './types'
+import type { HomeData, HomeLimits, HomeMaxLoss, HomePosition } from './types'
 
 export const HOME_NOW = '2026-11-19T13:42:00Z'
 
@@ -50,6 +50,19 @@ const dayTime = (i: number) => `2026-11-${String(i + 1).padStart(2, '0')}T10:00:
 const valueSeries = (values: readonly string[]) => values.map((value, i) => ({ time: dayTime(i), value }))
 const pctSeries = (values: readonly string[]) => values.map((pct, i) => ({ time: dayTime(i), pct }))
 
+export function homeMaxLoss(overrides: Partial<HomeMaxLoss> = {}): HomeMaxLoss {
+  return {
+    account_id: 1,
+    account_name: 'Funded',
+    pct: '10.5625',
+    limit_pct: '-10.0000',
+    equity: '10056.25',
+    equity_source: 'mt5',
+    series: pctSeries(['10.0000', '10.2000', '9.8000', '10.5625']),
+    ...overrides,
+  }
+}
+
 export function homeData(overrides: Partial<HomeData> = {}): HomeData {
   return {
     now: HOME_NOW,
@@ -71,7 +84,7 @@ export function homeData(overrides: Partial<HomeData> = {}): HomeData {
       },
       win_rate: { value: '57.0000', n: 20, window: 20, series: valueSeries(['45.0000', '48.0000', '46.0000', '50.0000', '57.0000']) },
       avg_r: { value: '1.3000', n: 20, window: 20, series: valueSeries(['0.6000', '0.7000', '0.9000', '1.3000']) },
-      drawdown: { pct: '-0.7000', limit_pct: '-10.0000', series: pctSeries(['0.0000', '-0.2000', '-0.7000', '-0.3000']) },
+      max_loss: homeMaxLoss(),
     },
     open_positions: [],
     open_totals: { pnl: null, risk_pct: null, price_time: null },

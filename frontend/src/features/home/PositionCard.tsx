@@ -111,7 +111,8 @@ export function PositionCard({ position, now }: { position: HomePosition; now: s
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="type-symbol text-[22px]">{position.symbol}</span>
-            <Pill tone={side === 'buy' ? 'profit' : 'loss'} className="text-[11px] tracking-[0.04em] uppercase">
+            {/* Side and description state are not P&L: neutral pills (green/red only for P&L values). */}
+            <Pill tone="neutral" className="text-[11px] tracking-[0.04em] uppercase">
               {t.sides[side] ?? position.direction}
             </Pill>
           </div>
@@ -132,7 +133,7 @@ export function PositionCard({ position, now }: { position: HomePosition; now: s
           {t.mfe(unsignedR(position.mfe_r))}
         </span>
         <span className="flex-1" />
-        <Pill tone={position.described ? 'profit' : 'loss'} className="rounded-[10px] px-2.5 py-1">
+        <Pill tone="neutral" data-testid="position-described" className="rounded-[10px] px-2.5 py-1">
           {position.described ? t.described : t.notDescribed}
         </Pill>
       </div>

@@ -36,6 +36,31 @@ export function evenIndices(length: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => Math.round(i * step))
 }
 
+/** Up to this many month labels under the hero chart («3 міс», «Рік», «Усе»). */
+export const MONTH_LABELS_MAX = 6
+
+/**
+ * Points where a new month starts (`keys`: one month key per point, e.g. "2026-9"). The first point
+ * is labelled too unless the first boundary is closer than the minimum gap; labels closer than the
+ * gap are dropped, and above `max` the rest are thinned evenly.
+ */
+export function monthBoundaryIndices(keys: readonly string[], max: number = MONTH_LABELS_MAX): number[] {
+  if (keys.length === 0) return []
+  const starts = keys.flatMap((key, i) => (i > 0 && key !== keys[i - 1] ? [i] : []))
+  const minGap = Math.max(1, Math.floor((keys.length - 1) / (max * 2)))
+  const first = starts[0]
+  const candidates = first === undefined || first >= minGap ? [0, ...starts] : starts
+  const kept = candidates.reduce<number[]>((acc, index) => {
+    const previous = acc[acc.length - 1]
+    return previous === undefined || index - previous >= minGap ? [...acc, index] : acc
+  }, [])
+  if (kept.length <= max) return kept
+  return evenIndices(kept.length, max).map((i) => kept[i] ?? 0)
+}
+
+/** «До макс. збитку» at or below this many percent of the account size shows in the loss colour. */
+export const MAX_LOSS_WARN_PCT = 2
+
 export interface Grid {
   low: number
   high: number

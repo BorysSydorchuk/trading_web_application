@@ -1,9 +1,9 @@
 import { useId } from 'react'
 import { cn } from '@/lib/utils'
-import { minIndex, niceGrid, scale, valueLabelIndices } from './chartMath'
+import { MAX_LOSS_WARN_PCT, minIndex, niceGrid, scale, valueLabelIndices } from './chartMath'
 
-/** money: P&L curves; rate: win rate; r: average R; drawdown: % from the peak (<= 0, area from the top). */
-export type ChartKind = 'money' | 'rate' | 'r' | 'drawdown'
+/** money: P&L curves; rate: win rate; r: average R; max_loss: room to the max-loss floor (the 0 line). */
+export type ChartKind = 'money' | 'rate' | 'r' | 'max_loss'
 
 export interface ChartPoint {
   /** Exact API decimal (labels are formatted from it). */
@@ -19,6 +19,8 @@ export interface HeroChartProps {
   /** Formats a value label (overview mode). */
   format: (value: string) => string
   ariaLabel: string
+  /** Text of the 0 grid line (max_loss: «ліміт»); the 0 line is always on that chart. */
+  zeroLabel?: string
 }
 
 // Plot box of the mockup (viewBox 700 x 250, stretched to the card width).
@@ -38,21 +40,28 @@ const AREA_COLOR: Record<ChartKind, string> = {
   money: 'var(--tj-profit-mid)',
   rate: 'var(--tj-accent-ring)',
   r: 'var(--tj-accent-ring)',
-  drawdown: 'var(--tj-loss-mid)',
+  max_loss: 'var(--tj-accent-ring)',
 }
 const LINE_END: Record<ChartKind, string> = {
   money: 'var(--tj-profit-strong)',
   rate: 'var(--tj-accent-text)',
   r: 'var(--tj-accent-text)',
-  drawdown: 'var(--tj-loss-strong)',
+  max_loss: 'var(--tj-accent-text)',
 }
 
 /** Colour of a value label: P&L-like values by sign, the win rate in accent (never green/red). */
 function labelTone(kind: ChartKind, value: number): string {
   if (kind === 'rate') return 'text-lavender'
+  if (kind === 'max_loss') return value <= MAX_LOSS_WARN_PCT ? 'text-loss' : 'text-ink'
   if (value < 0) return 'text-loss'
   if (value > 0) return 'text-profit'
   return 'text-ink'
+}
+
+/** The last point's dot: P&L-like values green, max-loss room red near the floor, else accent. */
+function lastDot(kind: ChartKind, value: number): string {
+  if (kind !== 'max_loss') return 'bg-profit-strong'
+  return value <= MAX_LOSS_WARN_PCT ? 'bg-loss-strong' : 'bg-lavender-mid'
 }
 
 /**
@@ -61,23 +70,23 @@ function labelTone(kind: ChartKind, value: number): string {
  * (loss colour when negative), the last value is a pill. Labels are HTML over the stretched SVG so
  * text is not distorted; the SVG carries the accessible summary.
  */
-export function HeroChart({ points, xLabels, kind, format, ariaLabel }: HeroChartProps) {
+export function HeroChart({ points, xLabels, kind, format, ariaLabel, zeroLabel }: HeroChartProps) {
   const id = useId()
   const values = points.map((p) => p.value)
-  const grid = niceGrid(Math.min(...values), Math.max(...values))
+  const withZero = kind === 'max_loss'
+  const grid = niceGrid(Math.min(...values, ...(withZero ? [0] : [])), Math.max(...values, ...(withZero ? [0] : [])))
   const y = scale(grid.low, grid.high, Y_BOTTOM, Y_TOP)
   const x = (i: number) => (points.length === 1 ? (X0 + X1) / 2 : X0 + (i * (X1 - X0)) / (points.length - 1))
   const xy = points.map((p, i) => [x(i), y(p.value)] as const)
   const line = xy.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')
-  const base = kind === 'drawdown' ? Y_TOP : Y_BOTTOM
-  const area = `${x(0).toFixed(1)},${base} ${line} ${x(points.length - 1).toFixed(1)},${base}`
+  const area = `${x(0).toFixed(1)},${Y_BOTTOM} ${line} ${x(points.length - 1).toFixed(1)},${Y_BOTTOM}`
   const last = points.length - 1
   const min = minIndex(values)
   return (
     <div className="relative mt-2.5 h-[290px]">
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="absolute inset-0 size-full">
         <defs>
-          <linearGradient id={`${id}-area`} x1="0" y1={kind === 'drawdown' ? '1' : '0'} x2="0" y2={kind === 'drawdown' ? '0' : '1'}>
+          <linearGradient id={`${id}-area`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" style={{ stopColor: AREA_COLOR[kind], stopOpacity: 0.45 }} />
             <stop offset="1" style={{ stopColor: AREA_COLOR[kind], stopOpacity: 0 }} />
           </linearGradient>
@@ -117,7 +126,7 @@ export function HeroChart({ points, xLabels, kind, format, ariaLabel }: HeroChar
             className="num absolute text-[11px] whitespace-nowrap text-ink-muted"
             style={{ left: left(AXIS_LABEL_X), top: top(y(tick)), transform: 'translate(-100%, -50%)' }}
           >
-            {tick === 0 ? '0' : format(String(tick))}
+            {tick === 0 ? (zeroLabel ?? '0') : format(String(tick))}
           </span>
         ))}
         {xLabels.map((label, i) => (
@@ -146,7 +155,7 @@ export function HeroChart({ points, xLabels, kind, format, ariaLabel }: HeroChar
                 className={cn(
                   'absolute -translate-1/2 rounded-full border-surface',
                   isLast ? 'size-3.5 border-[3px] shadow-[0_0_0_1px_var(--tj-border)]' : 'size-2 border-2',
-                  isLast ? (kind === 'drawdown' ? 'bg-loss-strong' : 'bg-profit-strong') : isMin && point.value < 0 ? 'bg-loss-strong' : 'bg-lavender-mid',
+                  isLast ? lastDot(kind, point.value) : isMin && point.value < 0 ? 'bg-loss-strong' : 'bg-lavender-mid',
                 )}
                 style={position}
               />

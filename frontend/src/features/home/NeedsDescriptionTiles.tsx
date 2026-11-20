@@ -42,7 +42,7 @@ export function NeedsDescriptionTiles() {
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
       <SectionHeader id={`${id}-title`} title={t.title}>
         {total > 0 && (
-          <Pill tone="loss" mono size="md" aria-label={t.count(total)} className="py-0.5">
+          <Pill tone="neutral" mono size="md" aria-label={t.count(total)} className="py-0.5">
             {total}
           </Pill>
         )}

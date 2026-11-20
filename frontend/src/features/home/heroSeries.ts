@@ -1,19 +1,20 @@
 /** What the hero card shows for each metric (P&L curve or one of the KPI cards, M8-10b). */
 import type { HomeCharts } from '@/features/dashboard/homeCharts/api'
-import type { ChartSelection } from '@/features/dashboard/homeCharts/range'
+import type { ChartSelection, RangePreset } from '@/features/dashboard/homeCharts/range'
 import { uk } from '@/i18n/uk'
 import { decimalSign } from '@/lib/decimal'
 import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
-import { evenIndices } from './chartMath'
+import { evenIndices, MAX_LOSS_WARN_PCT, monthBoundaryIndices } from './chartMath'
 import { brusselsDayMonth, brusselsHourMinute, brusselsMonth } from './dates'
 import type { ChartKind, ChartPoint } from './HeroChart'
 import type { HomeData } from './types'
 
-export const HERO_METRICS = ['pnl', 'today', 'win_rate', 'avg_r', 'drawdown'] as const
+export const HERO_METRICS = ['pnl', 'today', 'win_rate', 'avg_r', 'max_loss'] as const
 export type HeroMetric = (typeof HERO_METRICS)[number]
 export type KpiMetric = Exclude<HeroMetric, 'pnl'>
 
 const t = uk.home.hero
+const k = uk.home.kpis
 const X_LABELS = 4
 
 export type ValueTone = 'profit' | 'loss' | 'accent' | 'neutral'
@@ -50,6 +51,30 @@ function xLabels(times: readonly string[], label: (iso: string) => string) {
   return evenIndices(times.length, X_LABELS).map((index) => ({ index, text: label(times[index] ?? '') }))
 }
 
+/** Long ranges label month starts («вер», «жов»; «січ 27» when the points span years). */
+const MONTH_LABEL_PRESETS: ReadonlySet<RangePreset> = new Set(['months3', 'year', 'all'])
+
+function monthLabels(times: readonly string[]) {
+  const months = times.map(brusselsMonth)
+  const withYear = new Set(months.flatMap((m) => (m ? [m.year] : []))).size > 1
+  const keys = months.map((m) => (m ? `${m.year}-${m.month}` : ''))
+  return monthBoundaryIndices(keys).map((index) => {
+    const m = months[index]
+    const name = m ? (t.monthsShort[m.month - 1] ?? '') : ''
+    return { index, text: m && withYear ? t.monthYear(name, String(m.year % 100).padStart(2, '0')) : name }
+  })
+}
+
+/** Room to the max-loss floor: loss colour near the limit (<= 2 %), otherwise ink. */
+export function maxLossTone(pct: string | null): 'loss' | 'neutral' {
+  if (pct === null) return 'neutral'
+  const value = Number(pct)
+  return Number.isFinite(value) && value <= MAX_LOSS_WARN_PCT ? 'loss' : 'neutral'
+}
+
+/** The floor as a negative percent («−10%») whatever sign the API sends. */
+export const maxLossLimit = (limitPct: string) => formatPct(`-${limitPct.replace(/^[+-]/, '')}`, 'overview', { signed: true })
+
 function monthName(iso: string): string {
   const month = brusselsMonth(iso)
   return month ? (uk.dashboard.months[month.month - 1] ?? '') : ''
@@ -64,7 +89,7 @@ export function periodTitle(selection: ChartSelection, range: { from: string; to
   return t.periods[selection.preset]
 }
 
-export function pnlView(charts: HomeCharts | undefined, period: string): HeroView {
+export function pnlView(charts: HomeCharts | undefined, period: string, preset: RangePreset): HeroView {
   const equity = charts?.equity ?? []
   const last = equity[equity.length - 1]
   return {
@@ -74,9 +99,28 @@ export function pnlView(charts: HomeCharts | undefined, period: string): HeroVie
     sub: t.pnlSub(charts?.currency ?? '', last?.cum_pct ? pctSigned(last.cum_pct) : ''),
     kind: 'money',
     points: toPoints(equity.map((p) => p.cum_pnl)),
-    xLabels: xLabels(equity.map((p) => p.time), brusselsDayMonth),
+    xLabels: MONTH_LABEL_PRESETS.has(preset) ? monthLabels(equity.map((p) => p.time)) : xLabels(equity.map((p) => p.time), brusselsDayMonth),
     format: usd,
     empty: uk.dashboard.charts.empty,
+  }
+}
+
+function maxLossView({ kpis }: HomeData): HeroView {
+  const m = kpis.max_loss
+  if (m === null) {
+    return { title: t.maxLossTitle(''), total: uk.common.empty, totalTone: 'neutral', sub: '', kind: 'max_loss', points: [], xLabels: [], format: pct, empty: k.maxLossNoLimits }
+  }
+  const sub = [k.maxLossLimit(maxLossLimit(m.limit_pct)), m.equity_source === 'mt5' ? '' : k.maxLossNoFloating].filter(Boolean).join(' · ')
+  return {
+    title: t.maxLossTitle(m.account_name),
+    total: m.pct === null ? uk.common.empty : pct(m.pct),
+    totalTone: maxLossTone(m.pct),
+    sub,
+    kind: 'max_loss',
+    points: toPoints(m.series.map((p) => p.pct)),
+    xLabels: xLabels(m.series.map((p) => p.time), brusselsDayMonth),
+    format: pct,
+    empty: t.maxLossEmpty,
   }
 }
 
@@ -121,17 +165,7 @@ export function kpiView(metric: KpiMetric, data: HomeData): HeroView {
         format: r,
         empty: t.rollingEmpty,
       }
-    case 'drawdown':
-      return {
-        title: t.drawdownTitle(monthName(data.now)),
-        total: kpis.drawdown.pct === null ? uk.common.empty : pctSigned(kpis.drawdown.pct),
-        totalTone: signTone(kpis.drawdown.pct) === 'loss' ? 'loss' : 'neutral',
-        sub: kpis.drawdown.limit_pct === null ? t.drawdownNoLimit : t.drawdownSub(pctSigned(kpis.drawdown.limit_pct)),
-        kind: 'drawdown',
-        points: toPoints(kpis.drawdown.series.map((p) => p.pct)),
-        xLabels: xLabels(kpis.drawdown.series.map((p) => p.time), brusselsDayMonth),
-        format: pctSigned,
-        empty: t.drawdownEmpty,
-      }
+    case 'max_loss':
+      return maxLossView(data)
   }
 }

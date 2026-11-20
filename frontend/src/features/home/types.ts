@@ -53,8 +53,23 @@ export interface HomeKpis {
   /** No strategy trades: value null, n 0, series []. */
   win_rate: { value: string | null; n: number; window: number; series: { time: string; value: string }[] }
   avg_r: { value: string | null; n: number; window: number; series: { time: string; value: string }[] }
-  /** pct null and series [] when the account size is unknown. */
-  drawdown: { pct: string | null; limit_pct: string | null; series: { time: string; pct: string }[] }
+  /** Room to the FundedNext max-loss floor of one account; null when no account limits are set. */
+  max_loss: HomeMaxLoss | null
+}
+
+/** Where the equity of `max_loss` comes from: a live MT5 snapshot, the balance, or closed trades only. */
+export type EquitySource = 'mt5' | 'balance' | 'trades'
+
+export interface HomeMaxLoss {
+  account_id: number
+  account_name: string
+  /** Distance to the floor in % of the account size: positive = room left, 0 = limit hit. */
+  pct: string | null
+  /** The floor, e.g. "-10.0000". */
+  limit_pct: string
+  equity: string | null
+  equity_source: EquitySource
+  series: { time: string; pct: string }[]
 }
 
 export interface HomePosition {

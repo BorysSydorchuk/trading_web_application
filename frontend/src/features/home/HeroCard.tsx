@@ -74,6 +74,7 @@ function ViewChart({ view }: { view: HeroView }) {
       kind={view.kind}
       format={view.format}
       ariaLabel={t.chartLabel(view.title, view.format(first.raw), view.format(last.raw), view.format(min.raw))}
+      zeroLabel={view.kind === 'max_loss' ? t.maxLossLimitLine : undefined}
     />
   )
 }
@@ -97,7 +98,7 @@ function PnlBody({ charts, view }: { charts: ChartsQuery; view: HeroView }) {
 export function HeroCard({ metric, onBack, selection, onSelection, range, charts, home }: HeroCardProps) {
   const id = useId()
   const isPnl = metric === 'pnl'
-  const view = isPnl || !home ? pnlView(charts.data, periodTitle(selection, range)) : kpiView(metric, home)
+  const view = isPnl || !home ? pnlView(charts.data, periodTitle(selection, range), selection.preset) : kpiView(metric, home)
   return (
     <Card variant="hero" aria-labelledby={`${id}-title`} className="col-span-2 rounded-[22px] px-[26px] pt-6 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-4">

@@ -1,5 +1,7 @@
+import { useId } from 'react'
 import { Link } from 'react-router'
 import { HeaderChip } from '@/components/studio/Pill'
+import { NativeSelect } from '@/components/ui/native-select'
 import { uk } from '@/i18n/uk'
 import { brusselsToday } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -33,15 +35,51 @@ function LondonChip({ bias, newHref }: { bias: HomeBiasToday['pre_london']; newH
   )
 }
 
+export interface HomeAccountOption {
+  id: number
+  name: string
+}
+
+/** Account scope of the whole page, styled as a header chip (shown with more than one account). */
+function AccountChip({ accounts, accountId, onAccount }: { accounts: readonly HomeAccountOption[]; accountId: number | null; onAccount: (id: number | null) => void }) {
+  const id = useId()
+  return (
+    <>
+      <label htmlFor={id} className="sr-only">
+        {h.account}
+      </label>
+      <NativeSelect
+        id={id}
+        wrapperClassName="w-auto"
+        className="h-auto rounded-full border-line bg-surface py-1.5 pr-8 pl-3 text-[13px] font-semibold text-ink shadow-none dark:bg-surface"
+        value={accountId === null ? '' : String(accountId)}
+        onChange={(e) => onAccount(e.target.value === '' ? null : Number(e.target.value))}
+      >
+        <option value="">{h.allAccounts}</option>
+        {accounts.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </NativeSelect>
+    </>
+  )
+}
+
 export interface HomeHeaderProps {
   /** Server time (ISO UTC); the browser clock until the first answer. */
   now: string
   session: HomeSession | null
   bias: HomeBiasToday | null
+  /** Active accounts; the account chip is shown with more than one. */
+  accounts: readonly HomeAccountOption[]
+  /** null = all accounts. Scopes the hero chart, KPIs, limits and bottom charts (not open positions). */
+  accountId: number | null
+  onAccount: (accountId: number | null) => void
 }
 
-/** Date · time (Brussels), session chip, today's London bias, «+ Біас NY», «Калькулятор». */
-export function HomeHeader({ now, session, bias }: HomeHeaderProps) {
+/** Date · time (Brussels), account chip, session chip, today's London bias, «+ Біас NY», «Калькулятор». */
+export function HomeHeader({ now, session, bias, accounts, accountId, onAccount }: HomeHeaderProps) {
   const today = brusselsToday(new Date(now))
   const sessionName = session ? h.sessions[session.key] : null
   return (
@@ -51,6 +89,7 @@ export function HomeHeader({ now, session, bias }: HomeHeaderProps) {
         <h1 className="type-page-title mt-1">{uk.home.title}</h1>
       </div>
       <nav aria-label={h.chips} className="flex flex-wrap items-center gap-2">
+        {accounts.length > 1 && <AccountChip accounts={accounts} accountId={accountId} onAccount={onAccount} />}
         {session && sessionName && (
           <HeaderChip tone={session.entries_allowed ? 'profit' : 'neutral'} dot>
             {h.session(sessionName, session.entries_allowed ? h.entriesAllowed : h.entriesForbidden)}

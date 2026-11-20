@@ -1,7 +1,6 @@
 import { useId } from 'react'
 import { Card } from '@/components/studio/Card'
 import { Tile } from '@/components/studio/Tile'
-import { NativeSelect } from '@/components/ui/native-select'
 import { uk } from '@/i18n/uk'
 import { formatPct } from '@/lib/displayFormat'
 import { cn } from '@/lib/utils'
@@ -64,15 +63,14 @@ export interface LimitsCardProps {
   limits: HomeLimits | null | undefined
   /** First load failed: readable reason shown in the card (e.g. mixed currencies). */
   error?: string | null
-  /** Active accounts (the switch is shown with more than one). */
-  accounts: readonly { id: number; name: string }[]
-  /** null = all accounts: the server picks the one closest to its daily stop. */
+  /** Number of active accounts: with more than one and «Усі рахунки» the card notes why this account. */
+  accountCount: number
+  /** null = all accounts: the server picks the one closest to its daily stop (account chip in the header). */
   accountId: number | null
-  onAccount: (accountId: number | null) => void
 }
 
 /** «Ліміти»: day / week / month bars of one account, trades this week and the room to the daily stop. */
-export function LimitsCard({ limits, error = null, accounts, accountId, onAccount }: LimitsCardProps) {
+export function LimitsCard({ limits, error = null, accountCount, accountId }: LimitsCardProps) {
   const id = useId()
   return (
     <Card lift aria-labelledby={`${id}-title`} className="flex flex-col gap-1 rounded-[22px] px-[22px] pt-[22px] pb-[18px]">
@@ -83,28 +81,8 @@ export function LimitsCard({ limits, error = null, accounts, accountId, onAccoun
         {limits && (
           <p className="text-xs text-ink-muted">
             {limits.account_name}
-            {accountId === null && accounts.length > 1 && ` · ${t.closest}`}
+            {accountId === null && accountCount > 1 && ` · ${t.closest}`}
           </p>
-        )}
-        {accounts.length > 1 && (
-          <>
-            <label htmlFor={`${id}-account`} className="sr-only">
-              {t.account}
-            </label>
-            <NativeSelect
-              id={`${id}-account`}
-              className="h-8 bg-surface text-xs"
-              value={accountId === null ? '' : String(accountId)}
-              onChange={(e) => onAccount(e.target.value === '' ? null : Number(e.target.value))}
-            >
-              <option value="">{t.allAccounts}</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </>
         )}
       </div>
       {limits === undefined && error !== null ? (
