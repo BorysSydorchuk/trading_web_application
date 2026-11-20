@@ -589,9 +589,9 @@ def test_pre_ny_is_missing_only_from_the_premarket_start(
 def test_limits_count_the_entry_commission_an_open_trade_already_took_from_the_balance(
     client: TestClient, session: Session, alpha: Account
 ) -> None:
-    """Real case «FN Stellar Funded 2» 2026-11-20: GBPUSD open with −7.56 entry commission
-    (already in the MT5 balance), XAUUSD closed −96.91, floating +108.00 -> MT5 day result
-    equity − day-start balance = +3.53 (0.0353 %), not 11.09."""
+    """Real case «FN Stellar Funded 2» 2026-11-20: GBPUSD open with -7.56 entry commission
+    (already in the MT5 balance), XAUUSD closed -96.91, floating +108.00 -> MT5 day result
+    equity - day-start balance = +3.53 (0.0353 %), not 11.09."""
     closed(session, alpha, TODAY, "-96.91")
     open_position(session, alpha, net_pnl=D("-7.56"), commission=D("-7.56"))
     open_position(session, alpha, open_time=MON, net_pnl=D("-2.00"), commission=D("-2.00"))
@@ -599,6 +599,6 @@ def test_limits_count_the_entry_commission_an_open_trade_already_took_from_the_b
 
     limits = home(client, account_id=alpha.id)["limits"]
 
-    assert limits["day"]["pct"] == "0.0353"  # (−96.91 + 108.00 − 7.56) / 10000
-    assert limits["week"]["pct"] == "0.0153"  # the Monday trade's −2.00 is this week's cash
+    assert limits["day"]["pct"] == "0.0353"  # (-96.91 + 108.00 - 7.56) / 10000
+    assert limits["week"]["pct"] == "0.0153"  # the Monday trade's -2.00 is this week's cash
     assert limits["to_daily_stop_pct"] == "3.0353"
