@@ -91,3 +91,38 @@ Known small difference (LOW): MT5 takes the entry commission from the balance at
   - Week 16–22.11: gained `account_net_pnl_pct`.
   - November was already current.
 - **AI summaries:** weeks 09.11 and 16.11 and October now show «Підсумок застарів». Week 16.11 got the mark only because the new % field was added, not because a number changed. Review texts are unchanged.
+
+## C. MT5 deal history «FN Stellar Funded 2» (2026-11-20 ~11:45 Brussels, read-only `history_deals_get` + `account_info`)
+
+| Time (UTC) | Deal | Type | Profit | Commission | Running balance |
+|---|---|---|---|---|---|
+| 10.11 12:53 | 194830322 | balance (deposit) | 10 000.00 | 0 | 10 000.00 |
+| 11.11 12:59 | XAUUSD 0.13 in | sell | 0 | −0.95 | 9 999.05 |
+| 11.11 13:00 | XAUUSD out | buy | −13.00 | 0 | 9 986.05 |
+| 20.11 07:33 | GBPUSD 1.08 in (still open) | sell | 0 | −7.56 | 9 978.49 |
+| 20.11 09:05 | XAUUSD 0.07 in | sell | 0 | −0.45 | 9 978.04 |
+| 20.11 10:36 | XAUUSD out | buy | −96.46 | 0 | 9 881.58 |
+
+The deals add up exactly to the MT5 balance 9 881.58, so there is no unknown balance operation and no sync gap.
+
+The 6.39 = 13.95 − 7.56 came from two things:
+- **The stored «starting_balance» 9 986.05 (not our bug):**
+  - It is the balance when the account was added to the journal, after trade 17. So «start + closed trades» counted trade 17 (−13.95) twice.
+  - The real start is the 10 000.00 deposit, which is also the account size (`reference_balance` 10 000). Every % uses the account size, so no % was affected. Correct it in Settings if wanted.
+- **Entry commission of the open GBPUSD trade (−7.56): our bug.**
+  - MT5 takes it from the balance when the trade opens. It is in no closed trade, and equity − balance does not include it.
+  - So «Ліміти» showed the day 7.56 too high: 0.0756 %, over the 0.05 % threshold.
+  - Fix: each bar now also adds the cash an open trade has already booked (its net P&L so far: entry commission, partial exits). This is counted in the period when the trade opened.
+  - Test: the real case.
+
+After the fix («Ліміти» vs MT5, 11:47 Brussels):
+
+| Period | MT5 start balance | Equity | MT5 result | Home | Difference |
+|---|---|---|---|---|---|
+| day | 9 986.05 | 9 988.50 | 0.0245 % | 0.0245 % | 0 |
+| week | 9 986.05 | 9 988.50 | 0.0245 % | 0.0245 % | 0 |
+| month | 10 000.00 (deposit 10.11) | 9 988.50 | −0.1150 % | −0.1150 % | 0 |
+
+«FN Stellar Funded»: unchanged, 0 difference, no open trade.
+
+Known limitation: a partial exit of an open trade that happens in a later period than the trade's open is counted in the open period, not on the day of the partial exit. Rare. Fix later if needed by attributing exit deals by deal time (BACKLOG).

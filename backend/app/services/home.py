@@ -225,10 +225,14 @@ def _bar(
     size: Decimal | None,
     limits: tuple[Decimal | None, Decimal | None],
     floating: Decimal,
+    open_booked: Sequence[tuple[datetime, Decimal]] = (),
 ) -> schemas.LimitBar:
+    """Closed P&L + floating + cash already booked to the balance by still-open trades
+    opened in this period (entry commission, partial exits: the trade's net_pnl so far)."""
     extremes = period_extremes(trades, key_fn, start, size)
     loss, profit = limits
-    pct = dh.with_floating(extremes.pnl, floating, size) if extremes is not None else None
+    booked = sum((cash for opened, cash in open_booked if key_fn(opened) == start), Decimal(0))
+    pct = dh.with_floating(extremes.pnl, floating + booked, size) if extremes is not None else None
     return schemas.LimitBar(pct=pct, loss_pct=loss, profit_pct=profit)
 
 
@@ -264,11 +268,12 @@ def _account_limits(
     account: Account,
     trades: Sequence[hc.ChartTrade],
     trades_week: int,
-    has_open: bool,
+    open_booked: Sequence[tuple[datetime, Decimal]],
     rules: RulesConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut:
     cfg = rules.rules
+    has_open = bool(open_booked)
     size = period_base({account.id: account.reference_balance}, (), account_id=account.id)
     floating, included = _floating(account, has_open, period.now)
     extra = floating if floating is not None else Decimal(0)
@@ -282,15 +287,15 @@ def _account_limits(
     )
     day_range = (_rule(cfg.daily_stop_loss_pct), _rule(cfg.daily_stop_profit_pct))
     week_range = (_rule(cfg.weekly_stop_loss_pct), _rule(cfg.weekly_stop_profit_pct))
-    day = _bar(keyed, day_key, period.today, size, day_range, extra)
+    day = _bar(keyed, day_key, period.today, size, day_range, extra, open_booked)
     max_trades = cfg.max_trades_per_week
     return schemas.AccountLimitsOut(
         account_id=account.id,
         account_name=account.name,
         currency=account.currency,
         day=day,
-        week=_bar(keyed, week_key, period.monday, size, week_range, extra),
-        month=_bar(keyed, month_key, period.month, size, month_range, extra),
+        week=_bar(keyed, week_key, period.monday, size, week_range, extra, open_booked),
+        month=_bar(keyed, month_key, period.month, size, month_range, extra, open_booked),
         floating_pnl=floating,
         floating_included=included,
         trades_week=trades_week,
@@ -303,14 +308,17 @@ def _limits(
     db: Session,
     accounts: Sequence[Account],
     trades: Sequence[hc.ChartTrade],
-    open_ids: set[int],
+    opened: Sequence[tuple[Trade, Account]],
     rules: RulesConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut | None:
     """One account: the selected one, or the one closest to its daily stop."""
     counts = _trades_this_week(db, [a.id for a in accounts], period)
+    booked: dict[int, list[tuple[datetime, Decimal]]] = {}
+    for trade, account in opened:
+        booked.setdefault(account.id, []).append((trade.open_time, trade.net_pnl or Decimal(0)))
     items = [
-        _account_limits(a, trades, counts.get(a.id, 0), a.id in open_ids, rules, period)
+        _account_limits(a, trades, counts.get(a.id, 0), booked.get(a.id, []), rules, period)
         for a in accounts
     ]
     return dh.closest_to_daily_stop(items, lambda item: item.to_daily_stop_pct)
@@ -487,7 +495,7 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
         timezone=rules.timezone,
         session=_session(rules, now),
         bias_today=_bias_today(db, rules, period),
-        limits=_limits(db, accounts, trades, {a.id for _, a in opened}, rules, period),
+        limits=_limits(db, accounts, trades, opened, rules, period),
         kpis=_kpis(db, accounts, trades, rules, period, one),
         open_positions=positions,
         open_totals=_open_totals(positions, {a.currency for _, a in opened}),
