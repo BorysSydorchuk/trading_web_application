@@ -91,6 +91,11 @@ def write_account(
     """Replace ``account_id``'s positions in the snapshot (others kept). Raises OSError."""
     data = _read_raw(path)
     data[str(account_id)] = {str(p.identifier): _position_entry(p, at) for p in positions}
+    write_json_atomic(path, data)
+
+
+def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    """Replace ``path`` with ``data`` as JSON (temp file + ``os.replace``). Raises OSError."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:

@@ -10,13 +10,14 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import mt5_password_for, mt5_password_key
+from app.config import Settings, get_settings, mt5_password_for, mt5_password_key
 from app.config_files.loader import ConfigError
 from app.db import get_db
 from app.errors import ApiError, config_error
 from app.models import Account, Trade
 from app.models.enums import AccountPhase, AccountStatus
 from app.schemas import accounts as schemas
+from app.services import starting_balance_suggestion as suggestion
 from app.services.risk_base import recompute_account
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,23 @@ _CONFLICTS: dict[str, tuple[str, str]] = {
 _SIZE_TOO_SMALL = "Account size is too small: trade percentages would exceed 999999.9999 %"
 
 
-def to_schema(account: Account) -> schemas.Account:
+def _suggestions(settings: Settings) -> dict[int, suggestion.Suggestion]:
+    return suggestion.read_suggestions(suggestion.suggestions_path(settings.data_dir))
+
+
+def _suggestion_schema(
+    account: Account, suggestions: dict[int, suggestion.Suggestion]
+) -> schemas.StartingBalanceSuggestion | None:
+    entry = suggestion.suggestion_for(suggestions, account.id, account.starting_balance)
+    if entry is None or entry.amount is None or entry.time is None:
+        return None
+    return schemas.StartingBalanceSuggestion(amount=entry.amount, time=entry.time)
+
+
+def to_schema(
+    account: Account, suggestions: dict[int, suggestion.Suggestion] | None = None
+) -> schemas.Account:
+    """``suggestions``: the starting balance suggestions file (None = no suggestion)."""
     return schemas.Account(
         id=account.id,
         name=account.name,
@@ -61,6 +78,7 @@ def to_schema(account: Account) -> schemas.Account:
         server_offset_hours=account.server_offset_hours,
         created_at=account.created_at,
         updated_at=account.updated_at,
+        starting_balance_suggestion=_suggestion_schema(account, suggestions or {}),
     )
 
 
@@ -89,15 +107,21 @@ def _commit(db: Session) -> None:
 def list_accounts(
     include_archived: bool = Query(default=False),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> schemas.AccountList:
     query = select(Account).order_by(func.lower(Account.name), Account.id)
     if not include_archived:
         query = query.where(Account.status != AccountStatus.ARCHIVED.value)
-    return schemas.AccountList(items=[to_schema(a) for a in db.scalars(query)])
+    suggestions = _suggestions(settings)
+    return schemas.AccountList(items=[to_schema(a, suggestions) for a in db.scalars(query)])
 
 
 @router.post("", status_code=201, response_model=schemas.Account)
-def create_account(body: schemas.AccountInput, db: Session = Depends(get_db)) -> schemas.Account:
+def create_account(
+    body: schemas.AccountInput,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> schemas.Account:
     data: dict[str, Any] = body.model_dump()
     data["phase"] = body.phase.value
     data["status"] = body.status.value
@@ -110,12 +134,16 @@ def create_account(body: schemas.AccountInput, db: Session = Depends(get_db)) ->
     logger.info(
         "Account %s created (login %s, server %s)", account.id, account.login, account.server
     )
-    return to_schema(account)
+    return to_schema(account, _suggestions(settings))
 
 
 @router.get("/{account_id}", response_model=schemas.Account)
-def get_account(account_id: int, db: Session = Depends(get_db)) -> schemas.Account:
-    return to_schema(_get_or_404(db, account_id))
+def get_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> schemas.Account:
+    return to_schema(_get_or_404(db, account_id), _suggestions(settings))
 
 
 def _recompute_size(db: Session, account_id: int) -> None:
@@ -147,7 +175,10 @@ def _recompute_size(db: Session, account_id: int) -> None:
 
 @router.patch("/{account_id}", response_model=schemas.Account)
 def update_account(
-    account_id: int, body: schemas.AccountPatch, db: Session = Depends(get_db)
+    account_id: int,
+    body: schemas.AccountPatch,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> schemas.Account:
     account = _get_or_404(db, account_id)
     changes = body.changes()
@@ -161,7 +192,7 @@ def update_account(
     _commit(db)
     db.refresh(account)
     logger.info("Account %s updated: %s", account.id, ", ".join(sorted(changes)) or "no fields")
-    return to_schema(account)
+    return to_schema(account, _suggestions(settings))
 
 
 @router.delete("/{account_id}", status_code=204)

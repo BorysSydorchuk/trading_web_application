@@ -32,6 +32,8 @@ export interface Account extends AccountInput {
   equity: string | null
   balance_synced_at: string | null
   server_offset_hours: number | null
+  /** First MT5 deposit when it differs from starting_balance (2026-11-20); confirm = PATCH starting_balance. */
+  starting_balance_suggestion?: { amount: string; time: string } | null
   created_at: string
   updated_at: string
 }

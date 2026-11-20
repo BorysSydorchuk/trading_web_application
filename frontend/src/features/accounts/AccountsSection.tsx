@@ -7,6 +7,7 @@ import { AccountFormDialog } from './AccountFormDialog'
 import { AccountsTable } from './AccountsTable'
 import { useAccounts } from './api'
 import { DeleteAccountDialog } from './DeleteAccountDialog'
+import { StartingBalanceSuggestions } from './StartingBalanceSuggestions'
 import type { Account } from './types'
 
 const t = uk.accounts
@@ -80,7 +81,12 @@ export function AccountsSection() {
       </div>
     )
   } else {
-    body = <AccountsTable accounts={data.items} onEdit={openEdit} onDelete={openDelete} />
+    body = (
+      <>
+        <StartingBalanceSuggestions accounts={data.items} />
+        <AccountsTable accounts={data.items} onEdit={openEdit} onDelete={openDelete} />
+      </>
+    )
   }
 
   return (
