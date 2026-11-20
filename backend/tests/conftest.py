@@ -35,9 +35,9 @@ if not _base_settings.test_database_url:
     pytest.exit("TEST_DATABASE_URL is not set (see .env.example).", returncode=2)
 BASE_TEST_DATABASE_URL: str = _base_settings.test_database_url
 TEST_SUFFIX = "_test"
-_dev_db = make_url(_base_settings.database_url).database
-_test_db = make_url(BASE_TEST_DATABASE_URL).database or ""
-if not _test_db.endswith(TEST_SUFFIX) or _test_db == _dev_db:
+# The dev DB (`trading_journal`) never ends in `_test`. No equality check against
+# DATABASE_URL: xdist workers inherit the controller's override (DATABASE_URL = test URL).
+if not (make_url(BASE_TEST_DATABASE_URL).database or "").endswith(TEST_SUFFIX):
     pytest.exit(
         f"TEST_DATABASE_URL must name a separate *{TEST_SUFFIX} database (never the dev DB).",
         returncode=2,
@@ -249,7 +249,8 @@ def _fresh_journal_requirements(request: pytest.FixtureRequest) -> None:
 def _protected_paths_untouched() -> Iterator[None]:
     """Fail the test if it wrote (or tried to write) a protected repo path, even when the
     code under test swallowed the guard's exception."""
-    GUARD.take()
+    if earlier := GUARD.take():  # from a session/module fixture or a later teardown
+        pytest.fail("A fixture wrote a protected repo path: " + "; ".join(earlier), pytrace=False)
     yield
     if blocked := GUARD.take():
         pytest.fail("Test wrote a protected repo path: " + "; ".join(blocked), pytrace=False)

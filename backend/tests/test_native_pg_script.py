@@ -331,13 +331,24 @@ def test_switch_and_back_back_up_env_and_say_what_changed(
     assert "docker-pw" not in out  # the line never shows a URL or password
 
     native_text = path.read_bytes()
-    backups[0].rename(tmp_path / ".env.bak-20000101T000000Z")  # same-second runs share a name
-    assert npg.main(["switch-back"], env_file=path) == 0
+    assert npg.main(["switch-back"], env_file=path) == 0  # same second: still a new backup
     out = capsys.readouterr().out
     assert "switch-back ЗМІНИВ .env" in out
     assert "docker (порт 5432)" in out
-    newest = sorted(tmp_path.glob(".env.bak-*"))[-1]
-    assert newest.read_bytes() == native_text
+    backups = sorted(tmp_path.glob(".env.bak-*"))
+    assert len(backups) == 2
+    assert backups[0].read_bytes() == docker_text
+    assert backups[-1].read_bytes() == native_text
+
+
+def test_env_backup_never_overwrites(tmp_path: Path) -> None:
+    path = tmp_path / ".env"
+    path.write_bytes(b"A=1\n")
+    first = envm.backup_env_file(path, "20261120T000000000000Z")
+    path.write_bytes(b"A=2\n")
+    with pytest.raises(envm.NativePgError, match="Нічого не змінено"):
+        envm.backup_env_file(path, "20261120T000000000000Z")
+    assert first.read_bytes() == b"A=1\n"
 
 
 def test_env_backups_keep_the_newest(tmp_path: Path) -> None:

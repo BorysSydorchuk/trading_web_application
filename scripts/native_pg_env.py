@@ -160,7 +160,9 @@ def backup_env_file(path: Path, stamp: str) -> Path:
     KEEP_ENV_BACKUPS. Raises NativePgError (nothing changed) if the copy fails."""
     backup = path.with_name(f"{path.name}{BACKUP_INFIX}{stamp}")
     try:
-        backup.write_bytes(path.read_bytes())
+        data = path.read_bytes()
+        with backup.open("xb") as out:  # exclusive: an existing backup is never overwritten
+            out.write(data)
     except OSError as exc:
         raise NativePgError(
             f"Не вдалося зберегти копію {path.name}: {exc.strerror or type(exc).__name__}. "

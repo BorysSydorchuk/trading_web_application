@@ -685,7 +685,8 @@ def write_switched_env(env_file: Path, text: str, updates: Mapping[str, str], co
     """Back up the old .env (`.env.bak-<UTC>`), write the new one, and say plainly what changed:
     a switch is never silent (owner bug 2026-11-20: a recalled `switch-back` went unnoticed)."""
     now = datetime.now(UTC)
-    backup = backup_env_file(env_file, now.strftime("%Y%m%dT%H%M%SZ"))
+    # Microseconds: two switches in one second never overwrite each other's backup.
+    backup = backup_env_file(env_file, now.strftime("%Y%m%dT%H%M%S%fZ"))
     new_text = set_env(text, updates)
     write_env_text(env_file, new_text)
     env = env_values(new_text)

@@ -5,6 +5,9 @@ Installed once per pytest process by conftest via `sys.addaudithook`. A blocked 
 `ProtectedPathWriteError` (the operation is aborted) and is recorded, so an autouse fixture
 fails the test even if the code under test swallows the exception. Paths are compared with
 `os.path.abspath` + `normcase` only (no filesystem calls inside the hook).
+
+Scope: the pytest process only. A child process (`subprocess.run([sys.executable, ...])`) is
+not guarded; no test starts one today, and a new one must get tmp paths explicitly.
 """
 
 from __future__ import annotations
