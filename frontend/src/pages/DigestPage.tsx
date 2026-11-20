@@ -16,8 +16,8 @@ export function DigestPage() {
   const { kind, date } = useParams()
   const valid = isDigestKind(kind) && date !== undefined && isIsoDate(date)
   return (
-    <section className="flex flex-col gap-4">
-      <Button asChild variant="ghost" size="sm" className="h-7 self-start text-xs">
+    <section className="flex flex-col gap-5">
+      <Button asChild variant="ghost" size="sm" className="h-7 self-start text-xs text-ink-muted">
         <Link to={`/digests?kind=${valid ? kind : 'weekly'}`}>
           <ArrowLeft aria-hidden />
           {p.back}
@@ -26,7 +26,7 @@ export function DigestPage() {
       {valid ? (
         <PeriodContent kind={kind} date={date} />
       ) : (
-        <p className="rounded-lg border border-dashed px-6 py-8 text-center text-muted-foreground">{p.invalid}</p>
+        <p className="rounded-card border border-dashed border-input bg-surface px-6 py-8 text-center text-ink-muted">{p.invalid}</p>
       )}
     </section>
   )

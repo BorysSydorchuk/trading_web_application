@@ -33,7 +33,7 @@ export function DeleteBiasDialog({ open, deleting, onOpenChange, onConfirm }: De
             {uk.common.cancel}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={deleting}>
-            {deleting && <Loader2 className="animate-spin" aria-hidden />}
+            {deleting && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
             {deleting ? e.deleting : e.delete}
           </Button>
         </DialogFooter>

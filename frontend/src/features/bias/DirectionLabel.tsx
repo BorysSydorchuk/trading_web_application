@@ -13,8 +13,8 @@ const ICONS = {
 export function DirectionLabel({ direction }: { direction: BiasDirection }) {
   const Icon = ICONS[direction]
   return (
-    <span className="inline-flex items-center gap-1 text-foreground">
-      <Icon className="size-3.5 text-muted-foreground" aria-hidden />
+    <span className="inline-flex items-center gap-1 text-ink">
+      <Icon className="size-3.5 text-ink-muted" aria-hidden />
       {uk.bias.directions[direction]}
     </span>
   )

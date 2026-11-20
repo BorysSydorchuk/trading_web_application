@@ -1,8 +1,11 @@
 import { useId, useState } from 'react'
 import { Info, Loader2, Plus } from 'lucide-react'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
+import { NOTICE_BOX_CLASS } from '@/features/journal/tableStyles'
 import { errorText } from '@/lib/errors'
+import { cn } from '@/lib/utils'
 import { AccountFormDialog } from './AccountFormDialog'
 import { AccountsTable } from './AccountsTable'
 import { useAccounts } from './api'
@@ -52,7 +55,7 @@ export function AccountsSection() {
     body = <LoadingRows />
   } else if (isError) {
     body = (
-      <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div role="alert" className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p>{t.loadError}</p>
         <p className="text-xs text-muted-foreground">{errorText(error)}</p>
         <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
@@ -63,7 +66,7 @@ export function AccountsSection() {
     )
   } else if (allArchived) {
     body = (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p className="text-muted-foreground">{t.allArchived}</p>
         <Button variant="outline" size="sm" onClick={() => setIncludeArchived(true)}>
           {t.showArchived}
@@ -72,7 +75,7 @@ export function AccountsSection() {
     )
   } else if (data.items.length === 0) {
     body = (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p className="text-muted-foreground">{t.empty}</p>
         <Button size="sm" onClick={openCreate}>
           <Plus aria-hidden />
@@ -91,31 +94,17 @@ export function AccountsSection() {
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby={`${archivedToggleId}-title`}>
-      <div className="flex flex-wrap items-center gap-4">
-        <h2 id={`${archivedToggleId}-title`} className="text-base font-semibold">
-          {t.title}
-        </h2>
+      <SectionHeader
+        id={`${archivedToggleId}-title`}
+        title={t.title}
+        actions={
+          <HeaderActions id={archivedToggleId} checked={includeArchived} onToggle={setIncludeArchived} onAdd={openCreate} />
+        }
+      >
         {isFetching && !isPending && (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+          <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
         )}
-        <label
-          htmlFor={archivedToggleId}
-          className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none"
-        >
-          <input
-            id={archivedToggleId}
-            type="checkbox"
-            className="size-3.5 accent-lavender-mid"
-            checked={includeArchived}
-            onChange={(e) => setIncludeArchived(e.target.checked)}
-          />
-          {t.showArchived}
-        </label>
-        <Button size="sm" onClick={openCreate}>
-          <Plus aria-hidden />
-          {t.add}
-        </Button>
-      </div>
+      </SectionHeader>
 
       <PasswordInfo />
 
@@ -127,16 +116,44 @@ export function AccountsSection() {
   )
 }
 
+interface HeaderActionsProps {
+  id: string
+  checked: boolean
+  onToggle: (checked: boolean) => void
+  onAdd: () => void
+}
+
+function HeaderActions({ id, checked, onToggle, onAdd }: HeaderActionsProps) {
+  return (
+    <>
+      <label htmlFor={id} className="mr-2 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none">
+        <input
+          id={id}
+          type="checkbox"
+          className="size-3.5 accent-lavender-mid"
+          checked={checked}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        {t.showArchived}
+      </label>
+      <Button size="sm" onClick={onAdd}>
+        <Plus aria-hidden />
+        {t.add}
+      </Button>
+    </>
+  )
+}
+
 function PasswordInfo() {
   const i = t.info
   return (
-    <aside className="flex gap-3 rounded-lg border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+    <aside className="flex gap-3 rounded-card border border-line bg-card px-5 py-4 text-xs text-muted-foreground">
       <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
       <div className="flex flex-col gap-1">
         <p className="font-medium text-foreground">{i.title}</p>
         <p>{i.neverHere}</p>
         <p>
-          {i.addLine} <code className="num rounded bg-muted px-1 py-0.5 text-foreground">{i.envExample}</code>{' '}
+          {i.addLine} <code className="num rounded-md bg-track px-1.5 py-0.5 text-foreground">{i.envExample}</code>{' '}
           {i.restart}
         </p>
         <p>{i.docs}</p>
@@ -149,7 +166,7 @@ function LoadingRows() {
   return (
     <div className="flex flex-col gap-2" role="status" aria-label={t.loading}>
       {[0, 1, 2].map((row) => (
-        <div key={row} className="h-10 animate-pulse rounded-md bg-muted/50" />
+        <div key={row} className="h-10 animate-pulse rounded-tile bg-muted motion-reduce:animate-none" />
       ))}
       <span className="sr-only">{t.loading}</span>
     </div>

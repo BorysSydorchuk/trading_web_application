@@ -36,15 +36,15 @@ export function BiasNotePage() {
   const isNew = rawId === NEW_ID
   const noteId = isNew ? null : parseNoteId(rawId)
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+        <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-ink-muted">
           <Link to="/bias">
             <ArrowLeft aria-hidden />
             {e.back}
           </Link>
         </Button>
-        <h1 className="text-lg font-semibold tracking-tight">{isNew ? e.newTitle : e.editTitle}</h1>
+        <h1 className="type-page-title m-0 text-ink">{isNew ? e.newTitle : e.editTitle}</h1>
       </div>
       {!isNew && noteId === null ? <Notice text={uk.errors.not_found} /> : <EditorContent noteId={noteId} />}
     </section>
@@ -82,8 +82,8 @@ function EditorContent({ noteId }: { noteId: number | null }) {
 
 function Loading({ text }: { text: string }) {
   return (
-    <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" aria-hidden />
+    <div role="status" className="flex items-center gap-2 text-xs text-ink-muted">
+      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
       {text}
     </div>
   )
@@ -91,19 +91,19 @@ function Loading({ text }: { text: string }) {
 
 function Notice({ text }: { text: ReactNode }) {
   return (
-    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
-      <p className="text-muted-foreground">{text}</p>
+    <div className="flex min-h-32 items-center justify-center rounded-card border border-dashed border-input bg-surface px-6 py-8 text-center">
+      <p className="text-ink-muted">{text}</p>
     </div>
   )
 }
 
 function LoadError({ text, error, onRetry, busy }: { text: string; error: unknown; onRetry: () => void; busy: boolean }) {
   return (
-    <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+    <div role="alert" className="flex flex-col items-center gap-3 rounded-card border border-dashed border-input bg-surface px-6 py-8 text-center">
       <p>{text}</p>
-      <p className="text-xs text-muted-foreground">{errorText(error)}</p>
+      <p className="text-xs text-ink-muted">{errorText(error)}</p>
       <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
-        {busy && <Loader2 className="animate-spin" aria-hidden />}
+        {busy && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
         {uk.common.retry}
       </Button>
     </div>

@@ -58,10 +58,10 @@ export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: B
 
   return (
     <div data-bias-editor className="flex flex-col gap-4">
-      <section aria-label={e.period} className="flex flex-col gap-3 rounded-lg border p-4">
+      <section aria-label={e.period} className="flex flex-col gap-3 rounded-card border border-line bg-card p-5">
         {embedded ? embedded.title : <BiasPeriodFields form={form} noteId={actions.noteId} />}
       </section>
-      <div className="flex flex-col gap-4 rounded-lg border p-4">
+      <div className="flex flex-col gap-4 rounded-card border border-line bg-card p-5">
         <DescriptionInput
           label={e.rawTextLabel}
           placeholder={e.rawTextPlaceholder}
@@ -100,10 +100,10 @@ export function BiasEditor({ symbols, note, kind, date, onCreated, embedded }: B
 function Cards({ form }: { form: BiasForm }) {
   return (
     <section aria-label={e.symbols} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <h2 className="text-sm font-semibold text-foreground">{e.symbols}</h2>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <h2 className="type-card-title m-0 text-ink">{e.symbols}</h2>
         <span>
-          <span className="text-foreground">{uk.common.requiredMark}</span> {e.symbolsHint}
+          <span className="text-ink">{uk.common.requiredMark}</span> {e.symbolsHint}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <AiBadge /> {uk.describe.form.aiLegend}
@@ -130,7 +130,7 @@ function SaveBar({ form, actions }: { form: BiasForm; actions: BiasActions }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const saving = actions.save.isPending
   return (
-    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-background/95 px-4 py-3 backdrop-blur">
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface/95 px-5 py-3 shadow-soft backdrop-blur">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-xs">
         {form.serverErrors.general && (
           <p role="alert" className="text-destructive">
@@ -145,7 +145,7 @@ function SaveBar({ form, actions }: { form: BiasForm; actions: BiasActions }) {
         </Button>
       )}
       <Button type="button" size="sm" onClick={actions.submit} disabled={saving}>
-        {saving && <Loader2 className="animate-spin" aria-hidden />}
+        {saving && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
         {saving ? e.saving : e.save}
       </Button>
       <DeleteBiasDialog

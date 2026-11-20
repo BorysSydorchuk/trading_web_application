@@ -109,7 +109,9 @@ describe('Journal row', () => {
       />,
     )
 
-    expect(screen.getByText(t.badge)).toHaveAttribute('title', t.badgeTitle(REASON))
+    // M8-10c compact badge: icon only; the word and the reason are its screen-reader text and hover title.
+    expect(screen.getByText(t.badgeTitle(REASON))).toHaveClass('sr-only')
+    expect(screen.getByText(t.badgeTitle(REASON)).parentElement).toHaveAttribute('title', t.badgeTitle(REASON))
     await user.click(screen.getByRole('button', { name: t.menu('XAUUSD') }))
     await user.click(await screen.findByRole('button', { name: t.include }))
 

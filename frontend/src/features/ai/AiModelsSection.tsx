@@ -1,5 +1,7 @@
 import { useId } from 'react'
 import { Loader2 } from 'lucide-react'
+import { Card } from '@/components/studio/Card'
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { NativeSelect } from '@/components/ui/native-select'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
@@ -17,7 +19,7 @@ export function AiModelsSection() {
   if (query.isPending) {
     body = (
       <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         {t.loading}
       </div>
     )
@@ -60,8 +62,8 @@ export function AiModelsSection() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t.title}</h2>
-      <div className="flex flex-col gap-2 rounded-lg border px-4 py-3">
+      <SectionHeader title={t.title} />
+      <Card className="flex flex-col gap-3">
         <p className="text-xs text-muted-foreground">{t.hint}</p>
         {body}
         {save.isError && (
@@ -69,7 +71,7 @@ export function AiModelsSection() {
             {t.saveError} {errorText(save.error)}
           </p>
         )}
-      </div>
+      </Card>
     </section>
   )
 }

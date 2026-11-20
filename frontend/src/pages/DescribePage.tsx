@@ -8,7 +8,9 @@ import { TradeSummary } from '@/features/describe/TradeSummary'
 import { useJournalFields, useTrade } from '@/features/trades/api'
 import type { JournalField, TradeDetail } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
+import { NOTICE_BOX_CLASS } from '@/features/journal/tableStyles'
 import { errorText } from '@/lib/errors'
+import { cn } from '@/lib/utils'
 
 const p = uk.describe.page
 
@@ -22,7 +24,7 @@ function parseTradeId(raw: string | undefined): number | null {
 export function DescribePage() {
   const tradeId = parseTradeId(useParams().id)
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
         <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
           <Link to="/inbox">
@@ -30,7 +32,7 @@ export function DescribePage() {
             {p.back}
           </Link>
         </Button>
-        <h1 className="text-lg font-semibold tracking-tight">{p.title}</h1>
+        <h1 className="type-page-title m-0 text-ink">{p.title}</h1>
       </div>
       {tradeId === null ? <Notice text={uk.errors.not_found} /> : <DescribeContent tradeId={tradeId} />}
     </section>
@@ -44,7 +46,7 @@ function DescribeContent({ tradeId }: { tradeId: number }) {
   if (trade.isPending || fields.isPending) {
     return (
       <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         {p.loading}
       </div>
     )
@@ -71,8 +73,8 @@ function DescribeGate({ trade, fields }: { trade: TradeDetail; fields: readonly 
     return (
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
         <TradeSummary trade={trade} />
-        <div className="flex flex-col items-start gap-3 rounded-lg border p-4">
-          <h2 className="text-sm font-semibold">{uk.inboxPage.groups.needs_sl}</h2>
+        <div className="flex flex-col items-start gap-3 rounded-card border border-line bg-card p-5">
+          <h2 className="type-card-title m-0 text-ink">{uk.inboxPage.groups.needs_sl}</h2>
           <p className="text-xs text-muted-foreground">{p.needsSl}</p>
           <InitialSlForm trade={trade} />
         </div>
@@ -85,7 +87,7 @@ function DescribeGate({ trade, fields }: { trade: TradeDetail; fields: readonly 
 
 function Notice({ text }: { text: string }) {
   return (
-    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center">
+    <div className={cn(NOTICE_BOX_CLASS, 'flex min-h-32 items-center justify-center')}>
       <p className="text-muted-foreground">{text}</p>
     </div>
   )
@@ -93,7 +95,7 @@ function Notice({ text }: { text: string }) {
 
 function LoadError({ text, error, onRetry, busy }: { text: string; error: unknown; onRetry: () => void; busy: boolean }) {
   return (
-    <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+    <div role="alert" className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
       <p>{text}</p>
       <p className="text-xs text-muted-foreground">{errorText(error)}</p>
       <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>

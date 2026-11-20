@@ -63,12 +63,12 @@ export function DescribeEditor({ trade, fields: allFields }: DescribeEditorProps
       </div>
       <div className="flex min-w-0 flex-col gap-4">
         {closedSince && (
-          <div role="status" className="flex gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+          <div role="status" className="flex gap-2 rounded-tile bg-track px-3 py-2.5 text-xs">
             <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <p>{t.save.closedSince}</p>
           </div>
         )}
-        <section className="flex flex-col gap-4 rounded-lg border p-4" aria-label={t.input.title}>
+        <section className="flex flex-col gap-4 rounded-card border border-line bg-card p-5" aria-label={t.input.title}>
           <DescriptionInput
             rawText={form.rawText}
             onRawText={form.setRawText}
@@ -126,7 +126,7 @@ function FormSection({ trade, fields, form, newFields }: FormSectionProps) {
     [trade.rule_violations],
   )
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4" aria-label={t.form.title}>
+    <section className="flex flex-col gap-3 rounded-card border border-line bg-card p-5" aria-label={t.form.title}>
       <FormLegend />
       <NewFieldsHint fields={fields} keys={newFields} form={form} />
       <JournalForm
@@ -163,7 +163,7 @@ function NewFieldsHint({ fields, keys, form }: NewFieldsHintProps) {
   )
   if (empty.length === 0) return null
   return (
-    <div role="note" className="flex gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+    <div role="note" className="flex gap-2 rounded-tile bg-track px-3 py-2.5 text-xs text-muted-foreground">
       <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       <div className="flex flex-col gap-0.5">
         <p>
@@ -179,7 +179,7 @@ function NewFieldsHint({ fields, keys, form }: NewFieldsHintProps) {
 function FormLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      <h2 className="text-sm font-semibold text-foreground">{t.form.title}</h2>
+      <h2 className="type-card-title m-0 text-ink">{t.form.title}</h2>
       <span>
         <span className="text-foreground">{uk.common.requiredMark}</span> {uk.common.requiredLegend}
       </span>
@@ -207,7 +207,7 @@ interface SaveBarProps {
 function SaveBar({ fields, missing, general, saving, savingComplete, open, closed, onSave }: SaveBarProps) {
   const labels = useMemo(() => keyLabels(fields), [fields])
   return (
-    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-background/95 px-4 py-3 backdrop-blur">
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-card border border-line bg-card/95 px-5 py-3 shadow-soft backdrop-blur">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-xs">
         {missing.length > 0 && (
           <p className="text-destructive">

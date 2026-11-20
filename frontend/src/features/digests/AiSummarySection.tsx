@@ -44,29 +44,30 @@ export function AiSummarySection({ digest }: { digest: Digest }) {
   }
 
   return (
-    <section aria-labelledby="digest-ai" className="flex flex-col gap-2 rounded-lg border p-4">
+    <section aria-labelledby="digest-ai" className="flex flex-col gap-2 rounded-card border border-line bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id="digest-ai" className="text-sm font-semibold">
+        <h2 id="digest-ai" className="type-card-title m-0 flex items-center gap-1.5 text-ink">
+          <Sparkles className="size-4 text-ai" aria-hidden />
           {uk.digests.page.aiSummary}
         </h2>
         <div className="ml-auto">
           <ModelPicker {...pick} disabled={summary.isPending} />
         </div>
         <Button type="button" variant="outline" size="sm" onClick={run} disabled={summary.isPending}>
-          {summary.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+          {summary.isPending ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : <Sparkles aria-hidden />}
           {summary.isPending ? t.generating : hasSummary ? t.refresh : t.generate}
         </Button>
       </div>
       {hasSummary && digest.ai_summary_stale_at && (
-        <p role="status" className="flex w-fit items-center gap-1.5 rounded-md border border-warning-strong/50 bg-peach-soft px-2 py-0.5 text-xs">
+        <p role="status" className="flex w-fit items-center gap-1.5 rounded-full border border-warning-border bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
           <AlertCircle className="size-3.5 shrink-0" aria-hidden />
           {t.stale(formatShortDateTimeBrussels(digest.ai_summary_stale_at))}
         </p>
       )}
       {hasSummary ? (
-        <p className="text-sm whitespace-pre-line">{digest.ai_summary}</p>
+        <p className="max-w-prose text-sm leading-relaxed whitespace-pre-line text-ink">{digest.ai_summary}</p>
       ) : (
-        <p className="text-sm text-muted-foreground">{t.empty}</p>
+        <p className="text-sm text-ink-muted">{t.empty}</p>
       )}
       {summary.isError && <AiSummaryErrorNote error={summary.error} />}
     </section>
@@ -82,7 +83,7 @@ function AiSummaryErrorNote({ error }: { error: unknown }) {
       role="alert"
       className={cn(
         'flex max-w-prose items-start gap-1.5 text-xs',
-        notConfigured ? 'text-muted-foreground' : 'text-destructive',
+        notConfigured ? 'text-ink-muted' : 'text-destructive',
       )}
     >
       <Icon className="mt-px size-3.5 shrink-0" aria-hidden />

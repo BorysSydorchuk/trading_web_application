@@ -14,6 +14,7 @@ import {
 } from '@/features/journal/filters'
 import { JournalFiltersBar } from '@/features/journal/JournalFiltersBar'
 import { Pagination } from '@/features/journal/Pagination'
+import { NOTICE_BOX_CLASS } from '@/features/journal/tableStyles'
 import { TradesTable } from '@/features/journal/TradesTable'
 import { useJournalFields, useTrades } from '@/features/trades/api'
 import { TradeDetailDialog } from '@/features/trades/TradeDetailDialog'
@@ -22,6 +23,7 @@ import { violationLabeler } from '@/features/trades/violations'
 import { uk } from '@/i18n/uk'
 import { errorText } from '@/lib/errors'
 import { brusselsToday } from '@/lib/time'
+import { cn } from '@/lib/utils'
 
 const j = uk.journal
 
@@ -63,14 +65,14 @@ export function JournalPage() {
     body = (
       <div className="flex flex-col gap-2" role="status" aria-label={j.loading}>
         {[0, 1, 2, 3, 4].map((row) => (
-          <div key={row} className="h-8 animate-pulse rounded-md bg-muted/50" />
+          <div key={row} className="h-9 animate-pulse rounded-tile bg-muted motion-reduce:animate-none" />
         ))}
         <span className="sr-only">{j.loading}</span>
       </div>
     )
   } else if (isError) {
     body = (
-      <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div role="alert" className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p>{j.loadError}</p>
         <p className="text-xs text-muted-foreground">{errorText(error)}</p>
         <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
@@ -82,7 +84,7 @@ export function JournalPage() {
   } else if (data.items.length === 0 && data.total > 0) {
     // Page past the end (e.g. trades were removed since the link was made).
     body = (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p className="text-muted-foreground">{j.empty}</p>
         <Button variant="outline" size="sm" onClick={() => setFilters({ ...filters, page: 1 })}>
           {j.firstPage}
@@ -92,7 +94,7 @@ export function JournalPage() {
   } else if (data.items.length === 0) {
     const filtered = hasActiveFilters(filters)
     body = (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+      <div className={cn(NOTICE_BOX_CLASS, 'flex flex-col items-center gap-3')}>
         <p className="text-muted-foreground">{emptyText(filters)}</p>
         {filtered && (
           <Button variant="outline" size="sm" onClick={() => setFilters(clearedFilters(filters))}>
@@ -126,14 +128,14 @@ export function JournalPage() {
   }
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">{uk.pages.journal.title}</h1>
+        <h1 className="type-page-title m-0 text-ink">{uk.pages.journal.title}</h1>
         {data && (
-          <span className="num text-xs text-muted-foreground">{j.total(data.total)}</span>
+          <span className="num text-[13px] text-muted-foreground">{j.total(data.total)}</span>
         )}
         {isFetching && !isPending && (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+          <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
         )}
         <div className="ml-auto">
           <ColumnChooser visible={columns} onChange={changeColumns} />

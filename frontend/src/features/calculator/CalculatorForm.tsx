@@ -21,9 +21,9 @@ interface CalculatorFormProps {
 
 function Notice({ title, hint, children }: { title: string; hint?: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-2 rounded-lg border p-4">
-      <p className="text-sm">{title}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    <div className="flex flex-col items-start gap-2 rounded-card border border-line bg-card p-5">
+      <p className="text-sm text-ink">{title}</p>
+      {hint && <p className="text-xs text-ink-muted">{hint}</p>}
       {children}
     </div>
   )
@@ -42,7 +42,7 @@ function LoadError({ title, error, onRetry, busy }: { title: string; error: unkn
 /** Position-size calculator (PRD 6.8): only active accounts; symbols from that account's synced specs. */
 export function CalculatorForm({ compact }: CalculatorFormProps) {
   const accounts = useAccounts(false)
-  if (accounts.isPending) return <p role="status" className="text-sm text-muted-foreground">{s.loadingAccounts}</p>
+  if (accounts.isPending) return <p role="status" className="text-sm text-ink-muted">{s.loadingAccounts}</p>
   if (accounts.isError) {
     return <LoadError title={s.accountsError} error={accounts.error} busy={accounts.isFetching} onRetry={() => void accounts.refetch()} />
   }
@@ -67,7 +67,7 @@ function Calculator({ accounts, compact }: { accounts: readonly Account[]; compa
   }
 
   const specsState = (() => {
-    if (specsQuery.isPending) return <p role="status" className="text-xs text-muted-foreground">{s.loadingSpecs}</p>
+    if (specsQuery.isPending) return <p role="status" className="text-xs text-ink-muted">{s.loadingSpecs}</p>
     if (specsQuery.isError) {
       return <LoadError title={s.specsError} error={specsQuery.error} busy={specsQuery.isFetching} onRetry={() => void specsQuery.refetch()} />
     }
@@ -76,8 +76,13 @@ function Calculator({ accounts, compact }: { accounts: readonly Account[]; compa
   })()
 
   return (
-    <div className={cn('grid gap-4', !compact && 'lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]')}>
-      <form aria-label={t.form.label} onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
+    <div className={cn('grid items-start gap-4', !compact && 'lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]')}>
+      <form
+        aria-label={t.form.label}
+        onSubmit={handleSubmit}
+        noValidate
+        className={cn('flex flex-col gap-4', !compact && 'rounded-card border border-line bg-card p-5')}
+      >
         <CalculatorFields
           form={calc.form}
           errors={calc.errors}
@@ -92,23 +97,25 @@ function Calculator({ accounts, compact }: { accounts: readonly Account[]; compa
         {specsState}
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" size="sm" disabled={calc.pending || !specs?.length}>
-            {calc.pending && <Loader2 className="animate-spin" aria-hidden />}
+            {calc.pending && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />}
             {calc.pending ? t.form.calculating : t.form.submit}
           </Button>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-ink-muted">
             {uk.common.requiredMark} {uk.common.requiredLegend}
           </span>
         </div>
       </form>
       <div className="flex flex-col gap-2">
         {calc.generalError && (
-          <p role="alert" className="rounded-lg border border-destructive/50 p-3 text-sm text-destructive">{calc.generalError}</p>
+          <p role="alert" className="rounded-tile border border-destructive/50 bg-loss-wash px-4 py-3 text-sm text-destructive">{calc.generalError}</p>
         )}
         {calc.result ? (
           <CalculatorResult result={calc.result} brokerSymbol={calc.spec?.broker_symbol ?? null} digits={calc.spec?.digits ?? null} margin={calc.margin} compact={compact} />
         ) : (
           !calc.generalError && (
-            <p className="text-xs text-muted-foreground">{calc.changed ? t.form.changed : s.empty}</p>
+            <p className={cn('text-xs text-ink-muted', !compact && 'rounded-card border border-dashed border-input px-5 py-8 text-center')}>
+              {calc.changed ? t.form.changed : s.empty}
+            </p>
           )
         )}
       </div>

@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import { KeyRound, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { Pill } from '@/components/studio/Pill'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDecimal } from '@/lib/decimal'
 import { formatRecentBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { TABLE_CARD_CLASS, TABLE_HEAD_CLASS, TABLE_ROW_CLASS } from '@/features/journal/tableStyles'
 import type { Account } from './types'
 
 const c = uk.accounts.columns
@@ -17,10 +19,10 @@ interface AccountsTableProps {
 
 export function AccountsTable({ accounts, onEdit, onDelete }: AccountsTableProps) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className={TABLE_CARD_CLASS}>
       <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-xs text-muted-foreground">
-          <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium [&>th]:whitespace-nowrap">
+        <thead className={TABLE_HEAD_CLASS}>
+          <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold [&>th]:whitespace-nowrap">
             <th className="text-left">{c.name}</th>
             <th className="text-left">{c.firm}</th>
             <th className="text-left">{c.program}</th>
@@ -63,7 +65,8 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
   return (
     <tr
       className={cn(
-        'border-t align-top hover:bg-muted/30 [&>td]:px-3 [&>td]:py-2',
+        TABLE_ROW_CLASS,
+        'align-top hover:bg-accent/60 [&>td]:px-3 [&>td]:py-2.5',
         archived && 'text-muted-foreground',
       )}
     >
@@ -73,7 +76,9 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       <td className="whitespace-nowrap">{uk.accounts.phase[account.phase]}</td>
       <td className="num text-right">{account.login}</td>
       <td className="whitespace-nowrap">{account.server}</td>
-      <td className="whitespace-nowrap">{uk.accounts.status[account.status]}</td>
+      <td className="whitespace-nowrap">
+        <Pill tone={account.status === 'active' ? 'accent' : 'neutral'}>{uk.accounts.status[account.status]}</Pill>
+      </td>
       <td className="num text-right whitespace-nowrap">{formatDecimal(account.reference_balance)}</td>
       <td className="text-right whitespace-nowrap">
         <BalanceCell account={account} />

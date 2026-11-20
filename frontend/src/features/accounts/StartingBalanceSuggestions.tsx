@@ -31,7 +31,7 @@ function SuggestionRow({ account }: { account: Account }) {
   if (suggestion == null) return null
   const amount = `${formatDecimal(suggestion.amount)} ${account.currency}`
   return (
-    <div data-testid="starting-balance-suggestion" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-warning-border bg-warning-soft px-4 py-3 text-sm">
+    <div data-testid="starting-balance-suggestion" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-lavender-ring bg-lavender-soft px-5 py-3 text-sm">
       <p className="min-w-0 flex-1">
         <span className="font-medium">{account.name}:</span>{' '}
         {t.text(amount, formatShortDateTimeBrussels(suggestion.time), `${formatDecimal(account.starting_balance)} ${account.currency}`)}

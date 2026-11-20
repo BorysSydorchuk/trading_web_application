@@ -11,7 +11,7 @@ import { BIAS_KINDS, isBiasKind, type BiasKind } from './types'
 import type { BiasForm } from './useBiasForm'
 
 const e = uk.bias.editor
-const LABEL = 'text-xs font-medium text-muted-foreground'
+const LABEL = 'text-xs font-medium text-ink-muted'
 
 function periodNote(kind: BiasKind, periodDate: string): string | null {
   if (periodDate === '') return null
@@ -36,7 +36,7 @@ export function BiasPeriodFields({ form, noteId }: { form: BiasForm; noteId: num
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${id}-kind`} className={LABEL}>
             {e.kind}
-            <span className="text-foreground" aria-hidden>
+            <span className="text-ink" aria-hidden>
               {uk.common.requiredMark}
             </span>
           </label>
@@ -63,7 +63,7 @@ export function BiasPeriodFields({ form, noteId }: { form: BiasForm; noteId: num
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${id}-date`} className={cn(LABEL, dateError && 'text-destructive')}>
             {e.date}
-            <span className="text-foreground" aria-hidden>
+            <span className="text-ink" aria-hidden>
               {uk.common.requiredMark}
             </span>
           </label>
@@ -83,7 +83,7 @@ export function BiasPeriodFields({ form, noteId }: { form: BiasForm; noteId: num
           )}
         </div>
       </div>
-      {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      {note && <p className="text-xs text-ink-muted">{note}</p>}
       {existingId !== null && <ExistingNoteNotice id={existingId} kind={form.kind} periodDate={form.periodDate} />}
     </div>
   )
@@ -98,12 +98,12 @@ interface ExistingNoteNoticeProps {
 /** 409 bias_note_exists (or found ahead by by-period): one note per kind + period, link to it. */
 function ExistingNoteNotice({ id, kind, periodDate }: ExistingNoteNoticeProps) {
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-dashed px-3 py-2 text-xs">
+    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-tile border border-dashed border-input bg-surface px-3 py-2 text-xs">
       <span className="flex items-center gap-1.5">
         <AlertCircle className="size-3.5 shrink-0 text-destructive" aria-hidden />
         {e.exists(uk.bias.kinds[kind], formatIsoDate(periodDate))}
       </span>
-      <Link to={`/bias/${id}`} className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-foreground">
+      <Link to={`/bias/${id}`} className="inline-flex items-center gap-1 font-semibold text-lavender underline underline-offset-2">
         <ExternalLink className="size-3" aria-hidden />
         {e.openExisting}
       </Link>

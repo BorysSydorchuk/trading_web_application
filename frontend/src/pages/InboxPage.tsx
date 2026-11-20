@@ -5,8 +5,8 @@ import { uk } from '@/i18n/uk'
 
 export function InboxPage() {
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold tracking-tight">{uk.pages.inbox.title}</h1>
+    <section className="flex flex-col gap-6">
+      <h1 className="type-page-title m-0 text-ink">{uk.pages.inbox.title}</h1>
       <NotificationPrompt variant="inline" />
       <OpenUndescribed />
       <InboxList />

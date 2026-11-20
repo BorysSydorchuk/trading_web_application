@@ -2,21 +2,29 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Page, type Route } from '@playwright/test'
+import {
+  ACCOUNTS, AI_MODELS, BIAS_CONFIG, BIAS_NOTE, BIAS_NOTES, CALC_INPUT, CALC_RESULT, DESCRIBE_TRADE, DIGEST_LIST_MONTHLY, JOURNAL_FIELDS,
+  JOURNAL_TRADES, MARGIN_REQUEST, MONTHLY_BIAS_NOTE, MONTHLY_DIGEST, SYMBOL_SPECS, TRADE_SYMBOLS,
+} from './screens.fixtures'
 
 /**
- * «Студія» screenshots (M8-10a, M8-10b): full-page screenshots of every sidebar page at 1440 and
+ * «Студія» screenshots (M8-10a, M8-10b, M8-10c): full-page screenshots of every sidebar page at 1440 and
  * 1280 px, saved to docs/reports/<SCREENS_DIR>/<page>-<width>.png for the PM review.
  * Run: `npm run e2e:screens` (own config, not part of `npm run e2e`, so normal runs do not rewrite
- * the PNGs). The API is answered here with small fictitious data (no backend, no real account data);
- * endpoints without a fixture fail with 503 and the page shows its error state.
+ * the PNGs). The API is answered here with small fictitious data (no backend, no real account data;
+ * the M8-10c page data is in screens.fixtures.ts); endpoints without a fixture fail with 503 and the
+ * page shows its error state.
  */
 
 const PAGES = [
   ['home', '/'],
   ['inbox', '/inbox'],
   ['journal', '/journal'],
+  ['describe', '/trades/24/describe'],
   ['bias', '/bias'],
+  ['bias-note', '/bias/41'],
   ['digests', '/digests'],
+  ['digest', '/digests/monthly/2026-10-01'],
   ['calculator', '/calculator'],
   ['settings', '/settings'],
 ] as const
@@ -61,7 +69,7 @@ const HOME = {
     day: { pct: '2.1000', loss_pct: '-3.0000', profit_pct: '5.0000' },
     week: { pct: '2.5000', loss_pct: '-6.0000', profit_pct: '10.0000' },
     month: { pct: '3.1000', loss_pct: '-10.0000', profit_pct: '10.0000' },
-    trades_week: 7, max_trades_week: 10, to_daily_stop_pct: '5.1000',
+    trades_week: 7, max_trades_week: 10, to_daily_stop_pct: '5.1000', floating_pnl: '36.20', floating_included: true,
   },
   kpis: {
     today: {
@@ -70,9 +78,9 @@ const HOME = {
     },
     win_rate: { value: '57.0000', n: 20, window: 20, series: ROLLING_WR.map((v, i) => ({ time: dayIso(10 + i), value: v })) },
     avg_r: { value: '1.3000', n: 20, window: 20, series: ROLLING_R.map((v, i) => ({ time: dayIso(10 + i), value: v })) },
-    drawdown: {
-      pct: '-0.7000', limit_pct: '-10.0000',
-      series: ['0', '-0.2', '-0.45', '-0.7', '-0.3', '-0.1', '0', '-0.2'].map((v, i) => ({ time: dayIso(1 + 2 * i), pct: v })),
+    max_loss: {
+      account_id: 1, account_name: 'Demo A', pct: '13.1240', limit_pct: '-10.0000', equity: '31305.40', equity_source: 'mt5',
+      series: ['10', '10.8', '10.2', '11.6', '12.1', '11.7', '12.6', '13.124'].map((v, i) => ({ time: dayIso(1 + 2 * i), pct: v })),
     },
   },
   open_positions: [
@@ -157,28 +165,61 @@ const FIXTURES: Record<string, unknown> = {
   '/api/digests/suggestion': { weekly: null, monthly: null },
   '/api/dashboard/charts': CHARTS,
   '/api/home': HOME,
-  '/api/trades': { items: [], total: 0 },
-  '/api/trades/symbols': { items: [] },
+  '/api/trades': JOURNAL_TRADES,
+  '/api/trades/symbols': TRADE_SYMBOLS,
+  '/api/trades/24': DESCRIBE_TRADE,
+  '/api/journal-fields': JOURNAL_FIELDS,
   '/api/digests': {
     items: [
       { id: 5, kind: 'weekly', period_start: '2026-11-09', period_end: '2026-11-15', generated_at: '2026-11-15T12:00:00Z', trades: 9, net_pnl: '1241.20', net_pnl_pct: '4.1240', total_r: '6.3000', win_rate: '55.5600', reviewed: true, reviewed_at: '2026-11-16T09:00:00Z' },
       { id: 4, kind: 'weekly', period_start: '2026-11-02', period_end: '2026-11-08', generated_at: '2026-11-08T12:00:00Z', trades: 6, net_pnl: '-120.50', net_pnl_pct: '-1.2050', total_r: '-1.5000', win_rate: '33.3300', reviewed: false, reviewed_at: null },
     ],
   },
-  '/api/bias/notes': { items: [] },
-  '/api/accounts': { items: [] },
-  '/api/ai/models': { models: [], defaults: { trade_extraction: 'claude-sonnet-5-5', bias_extraction: 'claude-sonnet-5-5', digest_summary: 'claude-opus-5-5' } },
+  '/api/digests/by-period': MONTHLY_DIGEST,
+  '/api/bias/notes': BIAS_NOTES,
+  '/api/bias/notes/41': BIAS_NOTE,
+  '/api/bias/notes/38': MONTHLY_BIAS_NOTE,
+  // The open note's own period: the editor treats it as itself, not a clash.
+  '/api/bias/notes/by-period': BIAS_NOTE,
+  '/api/bias/config': BIAS_CONFIG,
+  '/api/accounts': ACCOUNTS,
+  '/api/accounts/1/symbol-specs': SYMBOL_SPECS,
+  '/api/accounts/2/symbol-specs': SYMBOL_SPECS,
+  '/api/ai/models': AI_MODELS,
+  '/api/calculator/margin-requests/91': MARGIN_REQUEST,
   '/api/ai/usage': { month: '2026-11', cost_usd: '1.20', calls: 14, failed_calls: 0, unpriced_calls: 0, input_tokens: 42000, output_tokens: 9000, configured: true, extraction_model: 'claude-sonnet-5-5', key_state: 'ok' },
   '/api/system/desktop': { supported: true, autostart: true, terminals_visible: false },
 }
 
+/** POST answers: the calculator result (screenshot of a computed lot) and its live margin request. */
+const POSTS: Record<string, unknown> = {
+  '/api/calculator/calculate': CALC_RESULT,
+  '/api/calculator/margin-requests': MARGIN_REQUEST,
+}
+
+function getBody(url: URL): unknown {
+  const { pathname, searchParams } = url
+  // «Головна» asks /api/trades for the trades waiting for a description (M8-15 tiles).
+  if (pathname === '/api/trades' && searchParams.getAll('status').includes('needs_description')) return NEEDS
+  if (pathname === '/api/digests' && searchParams.get('kind') === 'monthly') return DIGEST_LIST_MONTHLY
+  return FIXTURES[pathname]
+}
+
 function answer(route: Route) {
   const url = new URL(route.request().url())
-  const { pathname } = url
-  // «Головна» asks /api/trades for the trades waiting for a description (M8-15 tiles).
-  const needs = pathname === '/api/trades' && url.searchParams.getAll('status').includes('needs_description')
-  const body = route.request().method() === 'GET' ? (needs ? NEEDS : FIXTURES[pathname]) : undefined
+  const body = route.request().method() === 'GET' ? getBody(url) : POSTS[url.pathname]
   return body === undefined ? route.fulfill({ status: 503, json: { detail: 'e2e' } }) : route.fulfill({ json: body })
+}
+
+/** «Калькулятор»: fill the form and calculate, so the screenshot shows a result. */
+async function calculate(page: Page) {
+  const form = page.getByRole('form', { name: 'Калькулятор розміру позиції' })
+  await form.getByLabel('Символ').selectOption(CALC_INPUT.symbol)
+  await form.getByLabel('Вхід').fill(CALC_INPUT.entry)
+  await form.getByLabel('SL, ціна').fill(CALC_INPUT.sl)
+  await form.getByLabel('Ризик, %').fill(CALC_INPUT.risk)
+  await form.getByRole('button', { name: 'Розрахувати' }).click()
+  await page.waitForLoadState('networkidle')
 }
 
 /** <main> is the only scroll container: grow the viewport until its whole content is visible. */
@@ -205,6 +246,7 @@ for (const width of WIDTHS) {
       await page.goto(url)
       await expect(page.locator('main')).toBeVisible()
       await page.waitForLoadState('networkidle')
+      if (name === 'calculator') await calculate(page)
       await page.evaluate(() => document.fonts.ready)
       await fitContent(page)
       await page.screenshot({ path: path.join(OUT_DIR, `${name}-${width}.png`), fullPage: true, animations: 'disabled' })

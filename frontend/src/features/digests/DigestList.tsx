@@ -7,13 +7,14 @@ import { cn } from '@/lib/utils'
 import { useDigestList } from './api'
 import { digestPagePath, formatDateBrussels, formatPeriod } from './format'
 import { LoadErrorNote, LoadingNote } from './StateViews'
+import { ROW, TABLE_CARD, THEAD } from './tableStyles'
 import type { DigestKind, DigestListItem } from './types'
 
 const l = uk.digests.list
 const col = l.columns
 const EMPTY = uk.common.empty
-const TH = 'px-3 py-2 font-medium whitespace-nowrap'
-const TD = 'px-3 py-1.5 whitespace-nowrap'
+const TH = 'px-4 py-2.5 font-medium whitespace-nowrap'
+const TD = 'px-4 py-2 whitespace-nowrap'
 const NUM = `${TD} num text-right`
 
 /** Digests of one kind, newest first, incl. virtual rows (periods with trades but no digest yet). */
@@ -25,12 +26,12 @@ export function DigestList({ kind }: { kind: DigestKind }) {
   }
   const items = list.data.items
   if (items.length === 0) {
-    return <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{l.empty}</p>
+    return <p className="rounded-card border border-dashed border-input bg-surface px-4 py-8 text-center text-sm text-ink-muted">{l.empty}</p>
   }
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className={TABLE_CARD}>
       <table aria-label={uk.digests.kinds[kind]} className="w-full text-sm">
-        <thead className="bg-muted/40 text-xs text-muted-foreground">
+        <thead className={THEAD}>
           <tr>
             <th scope="col" className={`${TH} text-left`}>{col.period}</th>
             <th scope="col" className={`${TH} text-right`}>{col.trades}</th>
@@ -53,9 +54,9 @@ export function DigestList({ kind }: { kind: DigestKind }) {
 
 function DigestRow({ item }: { item: DigestListItem }) {
   return (
-    <tr data-virtual={item.id === null ? 'true' : undefined} className="border-t hover:bg-muted/30">
+    <tr data-virtual={item.id === null ? 'true' : undefined} className={cn(ROW, 'hover:bg-page')}>
       <td className={TD}>
-        <Link to={digestPagePath(item.kind, item.period_start)} className="font-medium underline-offset-2 hover:underline">
+        <Link to={digestPagePath(item.kind, item.period_start)} className="rounded-sm font-semibold text-ink underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring">
           {formatPeriod(item.kind, item.period_start)}
         </Link>
       </td>
@@ -76,7 +77,11 @@ function DigestRow({ item }: { item: DigestListItem }) {
 function ReviewBadge({ item }: { item: DigestListItem }) {
   if (item.reviewed) {
     const text = item.reviewed_at ? l.reviewed(formatDateBrussels(item.reviewed_at)) : uk.digests.page.reviewed
-    return <span className="text-xs text-muted-foreground">{text}</span>
+    return <Pill tone="neutral">{text}</Pill>
   }
-  return <Pill tone="accent">{l.notReviewed}</Pill>
+  return (
+    <Pill tone="accent" className="border border-lavender-ring">
+      {l.notReviewed}
+    </Pill>
+  )
 }

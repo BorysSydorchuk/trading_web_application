@@ -1,3 +1,4 @@
+import { SectionHeader } from '@/components/studio/SectionHeader'
 import { uk } from '@/i18n/uk'
 import type { DigestSnapshot } from '../types'
 import { EquityChart } from './EquityChart'
@@ -13,8 +14,8 @@ export function DigestCharts({ snapshot }: { snapshot: DigestSnapshot }) {
   const perAccount = charts.equity.by_account
   return (
     <section aria-labelledby="digest-charts" className="flex flex-col gap-3">
-      <h2 id="digest-charts" className="text-sm font-semibold">{c.title}</h2>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <SectionHeader id="digest-charts" title={c.title} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <EquityChart title={c.equityOf(c.equityCombined)} points={charts.equity.combined} currency={snapshot.currency} />
         {perAccount.length > 1 &&
           perAccount.map((curve) => (
@@ -26,7 +27,7 @@ export function DigestCharts({ snapshot }: { snapshot: DigestSnapshot }) {
             />
           ))}
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <RDistributionChart buckets={charts.r_distribution} />
         <HourHeatmap cells={charts.hour_heatmap} />
       </div>

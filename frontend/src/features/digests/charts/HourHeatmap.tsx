@@ -41,19 +41,19 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
   const width = LEFT + hours.length * CELL
   const height = TOP + weekdays.length * CELL
   return (
-    <figure className="flex flex-col gap-1">
+    <figure className="flex flex-col gap-2 rounded-card border border-line bg-card p-4">
       <figcaption className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="font-medium">{c.heatmap}</span>
-        <span className="text-muted-foreground">{c.timeZoneNote}</span>
+        <span className="font-display text-sm font-extrabold text-ink">{c.heatmap}</span>
+        <span className="text-ink-muted">{c.timeZoneNote}</span>
       </figcaption>
-      <svg role="img" aria-label={c.heatmapSummary(cellText(ends.best), cellText(ends.worst))} viewBox={`0 0 ${width} ${height}`} className="w-full max-w-xl rounded-md border bg-muted/10">
+      <svg role="img" aria-label={c.heatmapSummary(cellText(ends.best), cellText(ends.worst))} viewBox={`0 0 ${width} ${height}`} className="w-full max-w-xl">
         {hours.map((hour, i) => (
-          <text key={hour} x={LEFT + i * CELL + CELL / 2} y={TOP - 4} textAnchor="middle" className="num fill-muted-foreground text-[9px]">
+          <text key={hour} x={LEFT + i * CELL + CELL / 2} y={TOP - 4} textAnchor="middle" className="num fill-ink-muted text-[9px] font-medium">
             {String(hour).padStart(2, '0')}
           </text>
         ))}
         {weekdays.map((weekday, row) => (
-          <text key={weekday} x={4} y={TOP + row * CELL + CELL / 2 + 3} className="fill-muted-foreground text-[9px]">
+          <text key={weekday} x={4} y={TOP + row * CELL + CELL / 2 + 3} className="fill-ink-muted text-[9px] font-medium">
             {weekdayLabel(weekday)}
           </text>
         ))}
@@ -70,11 +70,11 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
                 y={TOP + row * CELL + 1}
                 width={CELL - 2}
                 height={CELL - 2}
-                rx={3}
+                rx={5}
                 fillOpacity={opacity}
                 className={sign > 0 ? 'fill-profit-mid' : sign < 0 ? 'fill-loss-mid' : 'fill-faint'}
               />
-              <text x={LEFT + col * CELL + CELL / 2} y={TOP + row * CELL + CELL / 2 + 3} textAnchor="middle" className="num fill-foreground text-[10px]">
+              <text x={LEFT + col * CELL + CELL / 2} y={TOP + row * CELL + CELL / 2 + 3} textAnchor="middle" className="num fill-ink text-[10px] font-semibold">
                 {cell.trades}
               </text>
             </g>
