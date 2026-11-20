@@ -123,10 +123,22 @@ export function TradeCell({ trade, column, violationLabel }: {
   }
 }
 
-/** Rule violations as small badges (red-tinted: a deviation). */
+/**
+ * Rule violations as small named badges (red-tinted: a deviation), e.g. «Потрібен опис». The
+ * Journal passes `violationLabel` and gets the compact count pill instead (M8-10c, PM-approved).
+ */
 export function ViolationBadges({ keys }: { keys: readonly string[] }) {
   const label = useViolationLabel()
-  return <LabeledViolationBadges keys={keys} label={label} />
+  if (keys.length === 0) return <Muted />
+  return (
+    <span className="inline-flex flex-wrap gap-1" data-testid="violation-names">
+      {keys.map((key) => (
+        <Pill key={key} tone="loss" title={key}>
+          {label(key)}
+        </Pill>
+      ))}
+    </span>
+  )
 }
 
 /** Screen readers pause between the rule names (M8-10c count pill). */

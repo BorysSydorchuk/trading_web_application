@@ -7,7 +7,7 @@ const t = uk.exclusion
 
 /**
  * M8-01 «виключено» badge; the reason shows on hover and to screen readers. `compact` (Journal
- * table, M8-10c) shows only an icon; the word stays in the DOM for screen readers.
+ * table, M8-10c) shows only an icon; screen readers and the tooltip get «Не враховується у статистиці: <reason>».
  */
 export function ExcludedBadge({ reason, className, compact = false }: { reason: string | null; className?: string; compact?: boolean }) {
   const title = t.badgeTitle(reason ?? t.noReason)
