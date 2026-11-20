@@ -18,16 +18,16 @@ describe('KpiCard', () => {
     expect(card).toHaveClass('border', 'border-line')
     await user.click(card)
     expect(card).toHaveAttribute('aria-pressed', 'true')
-    expect(card).toHaveClass('border-2', 'border-lavender-ring')
+    expect(card).toHaveClass('border-2', 'border-lavender')
     expect(screen.getByText('на графіку')).toHaveClass('bg-lavender-soft', 'text-lavender')
     await user.click(card)
     expect(card).toHaveAttribute('aria-pressed', 'false')
   })
 
   it.each([
-    ['profit', 'text-profit', 'border-profit-mid', 'from-profit-wash'],
-    ['loss', 'text-loss', 'border-loss-mid', 'from-peach-soft'],
-    ['accent', 'text-lavender', 'border-lavender-ring', 'from-lavender-soft'],
+    ['profit', 'text-profit', 'border-profit', 'from-profit-wash'],
+    ['loss', 'text-loss', 'border-loss', 'from-peach-soft'],
+    ['accent', 'text-lavender', 'border-lavender', 'from-lavender-soft'],
   ] as const)('%s tone colours the value, ring and wash', (tone, valueClass, ringClass, washClass) => {
     render(<KpiCard label="KPI" value="+212" tone={tone} selected onClick={() => undefined} />)
     expect(screen.getByRole('button', { name: /KPI/ })).toHaveClass(ringClass, washClass)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,8 +26,10 @@ from app.models.enums import AccountStatus
 from app.mt5.fixture import FixtureMt5Source
 from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
+from app.mt5.types import RawPosition
+from app.services import open_positions_snapshot
 from app.services.symbol_map import apply_symbol_map
-from app.services.sync import close_orphaned_runs, is_due, sync_account
+from app.services.sync import PositionsSink, close_orphaned_runs, is_due, sync_account
 from app.system.terminals import terminal_windows
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,7 @@ def run_sync_cycle(
     rules_getter: Callable[[], RulesConfig] = get_rules,
     symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config,
     lock: threading.Lock | None = None,
+    snapshot_path: Path | None = None,
 ) -> list[int]:
     """Re-apply the symbol map, then sync every due active account sequentially. Returns
     the ids of synced accounts. A broken rules.yaml or symbols.yaml, or a symbol map that
@@ -100,6 +103,9 @@ def run_sync_cycle(
 
     ``lock`` (shared with the margin job, `app.worker.mt5_shared`) is acquired blocking and
     held for the whole cycle: sync has priority and waits for a running margin lookup.
+
+    ``snapshot_path``: after each successful account sync its open positions are written
+    there (M8-10b `open_positions.json`); None = no snapshot.
     """
     try:
         rules = rules_getter()
@@ -111,7 +117,17 @@ def run_sync_cycle(
         logger.error("MT5 sync skipped: the symbol map could not be applied (see above)")
         return []
     with lock if lock is not None else nullcontext():
-        return _sync_due_accounts(session_factory, source, rules, symbols, now)
+        sink = snapshot_sink(snapshot_path) if snapshot_path is not None else None
+        return _sync_due_accounts(session_factory, source, rules, symbols, now, sink)
+
+
+def snapshot_sink(path: Path) -> PositionsSink:
+    """Write each synced account's open positions into the snapshot file (M8-10b)."""
+
+    def sink(account_id: int, positions: Sequence[RawPosition], at: datetime) -> None:
+        open_positions_snapshot.write_account(path, account_id, positions, at)
+
+    return sink
 
 
 def _sync_due_accounts(
@@ -120,6 +136,7 @@ def _sync_due_accounts(
     rules: RulesConfig,
     symbols: SymbolsConfig,
     now: Callable[[], datetime],
+    sink: PositionsSink | None = None,
 ) -> list[int]:
     with session_factory() as session:
         account_ids = list(
@@ -139,7 +156,15 @@ def _sync_due_accounts(
                 started = now()
                 if not is_due(session, account_id, rules, started):
                     continue
-                sync_account(session, account, source, rules, started, symbols=symbols)
+                sync_account(
+                    session,
+                    account,
+                    source,
+                    rules,
+                    started,
+                    symbols=symbols,
+                    positions_sink=sink,
+                )
                 synced.append(account_id)
         except Exception:
             # sync_account records MT5/data errors itself; this catches e.g. a DB outage.

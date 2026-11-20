@@ -191,6 +191,13 @@ class DigestConfig(_Strict):
     deviation_sigma: Decimal = Field(default=Decimal("1.0"), gt=0)
 
 
+class AccountLimits(_Strict):
+    """Month limits of the prop account (M8-10b «Ліміти» card): display only, no violations."""
+
+    max_drawdown_pct: Decimal = Field(lt=0)
+    profit_target_pct: Decimal = Field(gt=0)
+
+
 class RulesConfig(_Strict):
     timezone: str
     sessions: tuple[SessionWindow, ...]
@@ -200,6 +207,8 @@ class RulesConfig(_Strict):
     digest: DigestConfig = DigestConfig()
     # |R| below this counts as breakeven («в нуль») in digests (Borys/PM 2026-11-14).
     breakeven_r_threshold: Decimal = Field(default=Decimal("0.1"), ge=0)
+    # Optional (M8-10b): None = the month bar has no limits.
+    account_limits: AccountLimits | None = None
 
     @field_validator("timezone")
     @classmethod

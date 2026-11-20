@@ -1,8 +1,9 @@
 /**
  * Display formatter, one module with two modes (DECISIONS 2026-11-20, docs/design/DESIGN_SYSTEM.md).
  *
- * - `overview` (Home, digests, cards, charts, badges): USD whole numbers, % and R one decimal,
- *   prices by magnitude (>= 1000: 0 decimals, >= 10: 2, else 4).
+ * - `overview` (Home, digests, cards, charts, badges): USD whole numbers, % and R one decimal with a
+ *   trailing «.0» dropped (57%, −1R, +2%; +2.5%, +0.7R keep it; PM 2026-11-20), prices by magnitude
+ *   (>= 1000: 0 decimals, >= 10: 2, else 4).
  * - `exact` (calculator, trade details, Describe, Journal table, exports): delegates to today's
  *   formatters in features/trades/format.ts, so exact output does not change.
  *
@@ -61,9 +62,10 @@ function numberToDecimal(value: number): string | null {
 }
 
 /** Rounds, groups thousands, puts U+2212 / "+" from the rounded value (so -0.4 USD shows "0"). */
-function roundedText(decimal: string, places: number, signed: boolean): string {
+function roundedText(decimal: string, places: number, signed: boolean, dropZeroFraction = false): string {
   const rounded = roundDecimal(decimal, places)
-  const text = formatDecimal(rounded)
+  const shown = dropZeroFraction ? rounded.replace(/\.0+$/, '') : rounded
+  const text = formatDecimal(shown)
   return signed && decimalSign(rounded) > 0 ? `+${text}` : text
 }
 
@@ -75,20 +77,20 @@ export function formatUsd(value: DisplayValue, mode: DisplayMode, { signed = fal
   return roundedText(decimal, 0, signed)
 }
 
-/** Percent with the "%" suffix. Overview: one decimal ("+2.1%", "57.0%"). */
+/** Percent with the "%" suffix. Overview: one decimal, whole values without it ("+2.1%", "57%"). */
 export function formatPct(value: DisplayValue, mode: DisplayMode, { signed = false }: SignOptions = {}): string {
   const decimal = toDecimalString(value)
   if (decimal === null) return EMPTY
   if (mode === 'exact') return formatPercent(decimal, signed)
-  return `${roundedText(decimal, 1, signed)}${PERCENT}`
+  return `${roundedText(decimal, 1, signed, true)}${PERCENT}`
 }
 
-/** R multiple, always signed. Overview: one decimal ("+1.3R", "−1.0R"). */
+/** R multiple, always signed. Overview: one decimal, whole values without it ("+1.3R", "−1R"). */
 export function formatR(value: DisplayValue, mode: DisplayMode): string {
   const decimal = toDecimalString(value)
   if (decimal === null) return EMPTY
   if (mode === 'exact') return formatRExact(decimal)
-  return `${roundedText(decimal, 1, true)}${R_SUFFIX}`
+  return `${roundedText(decimal, 1, true, true)}${R_SUFFIX}`
 }
 
 /** Decimal places for an overview price by magnitude of |value| (decided on digits, no float). */

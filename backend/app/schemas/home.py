@@ -1,0 +1,133 @@
+"""`GET /api/home` response (M8-10b; docs/api.md "M8-10b - «Головна» rebuild").
+
+Money 2 dp, percents and R 4 dp (ROUND_HALF_UP at this edge only), prices plain decimals,
+all as strings.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel
+
+from app.schemas.calculator import PlainDecimal
+from app.schemas.common import UtcDatetime
+from app.schemas.dashboard import Money, Pct
+
+R = Pct  # R multiples share the 4 dp string format
+
+SessionKey = Literal["london", "premarket", "ny", "outside"]
+
+
+class SessionNow(BaseModel):
+    key: SessionKey
+    entries_allowed: bool
+
+
+class BiasEntryOut(BaseModel):
+    symbol: str
+    direction: str
+
+
+class BiasToday(BaseModel):
+    pre_london: list[BiasEntryOut] | None  # None = no pre-London note today
+    pre_ny_missing: bool
+
+
+class LimitBar(BaseModel):
+    pct: Pct | None  # None: the account has no usable size
+    loss_pct: Pct | None  # None: rule disabled / no account_limits
+    profit_pct: Pct | None
+
+
+class AccountLimitsOut(BaseModel):
+    account_id: int
+    account_name: str
+    currency: str
+    day: LimitBar
+    week: LimitBar
+    month: LimitBar
+    trades_week: int
+    max_trades_week: int | None
+    to_daily_stop_pct: Pct | None
+
+
+class CumPoint(BaseModel):
+    time: UtcDatetime
+    cum_pnl: Money
+
+
+class ValuePoint(BaseModel):
+    time: UtcDatetime
+    value: Pct
+
+
+class PctPoint(BaseModel):
+    time: UtcDatetime
+    pct: Pct
+
+
+class TodayKpi(BaseModel):
+    pnl: Money
+    pct: Pct | None
+    trades: int
+    series: list[CumPoint]
+
+
+class RollingKpi(BaseModel):
+    value: Pct | None
+    n: int
+    window: int
+    series: list[ValuePoint]
+
+
+class DrawdownKpi(BaseModel):
+    pct: Pct | None
+    limit_pct: Pct | None
+    series: list[PctPoint]
+
+
+class Kpis(BaseModel):
+    today: TodayKpi
+    win_rate: RollingKpi
+    avg_r: RollingKpi
+    drawdown: DrawdownKpi
+
+
+class OpenPositionOut(BaseModel):
+    trade_id: int
+    symbol: str
+    direction: str
+    volume: PlainDecimal
+    account_id: int
+    account_name: str
+    open_time: UtcDatetime
+    entry_price: PlainDecimal
+    initial_sl: PlainDecimal | None
+    tp: PlainDecimal | None
+    current_price: PlainDecimal | None
+    price_time: UtcDatetime | None
+    pnl: Money | None
+    r_now: R | None
+    tp_r: R | None
+    mae_r: R | None
+    mfe_r: R | None
+    risk_pct: Pct | None
+    described: bool
+
+
+class OpenTotalsOut(BaseModel):
+    pnl: Money | None
+    risk_pct: Pct | None
+    price_time: UtcDatetime | None
+
+
+class Home(BaseModel):
+    now: UtcDatetime
+    timezone: str
+    session: SessionNow
+    bias_today: BiasToday
+    limits: AccountLimitsOut | None  # None: no account to show
+    kpis: Kpis
+    open_positions: list[OpenPositionOut]
+    open_totals: OpenTotalsOut

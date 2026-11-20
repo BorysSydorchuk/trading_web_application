@@ -14,7 +14,8 @@ Decisions: `docs/DECISIONS.md` 2026-11-20 (display rounding, contrast rule, font
 | Tone class maps | `frontend/src/components/studio/tones.ts` |
 | Button (shadcn, restyled) | `frontend/src/components/ui/button.tsx` |
 | Display formatter | `frontend/src/lib/displayFormat.ts` |
-| Screenshots of every page (1440 / 1280 px) | `docs/reports/M8-10a-screens/`, refresh with `npm run e2e:screens` in `frontend/` |
+| Screenshots of every page (1440 / 1280 px) | `docs/reports/M8-10a-screens/` (all pages), `docs/reports/M8-10b-screens/` (Home); refresh with `npm run e2e:screens` in `frontend/` (`SCREENS_DIR=<folder>`, `SCREENS_PAGES=home,...`) |
+| «Головна» feature components (M8-10b) | `frontend/src/features/home/*` |
 
 `index.css` has three layers:
 1. **Raw palette** `--tj-*` in `:root` (the only values a theme changes).
@@ -54,12 +55,24 @@ Decisions: `docs/DECISIONS.md` 2026-11-20 (display rounding, contrast rule, font
 | `--tj-accent-button` | `bg-lavender-button`, `bg-primary` | `#E7E3FA` | Primary button, active filter |
 | `--tj-accent-button-hover` | `bg-lavender-button-hover` | `#DCD6F7` | Primary button hover |
 | `--tj-peach-soft` | `bg-peach-soft` | `#FCF2EA` | Peach pills/tiles, drawdown KPI wash |
-| `--tj-warning-text` | `text-warning` | `#8A5300` | Warning text (sync, backup, AI key chips). Added in M8-10a: the old amber-400 was unreadable on light backgrounds |
-| `--tj-warning-strong` | `bg-warning-strong` | `#E0A030` | Warning dots and borders |
+| `--tj-warning-text` | `text-warning` | `#8A5300` | Warning text (official token set, PM 2026-11-20; see «Warning set» below) |
+| `--tj-warning-soft` | `bg-warning-soft` | `#FCF0DA` | Warning chip / tile background |
+| `--tj-warning-border` | `border-warning-border` | `#B87A10` | Warning chip / tile border (>= 3:1 non-text) |
+| `--tj-warning-strong` | `bg-warning-strong` | `#E0A030` | Warning status dots only (decorative, next to text) |
 | `--tj-hero-gradient` | `bg-(image:--tj-hero-gradient)` | `linear-gradient(135deg, #EAF6EF 0%, #F3F1FB 55%, #FCF2EA 100%)` | Home hero card (`<Card variant="hero">`) |
 | `--tj-mark-gradient` | `bg-(image:--tj-mark-gradient)` | `linear-gradient(135deg, #CDEFD9 0%, #DCD6F7 100%)` | TJ mark in the sidebar |
 | `--tj-chart-line-from` / `-to` | — | `#8E86D9` -> `#2EA067` | Main chart line gradient (left to right) |
 | `--tj-chart-area` | — | `#7BCFA2` | Area fill, 45% opacity at the top to 0% at the base |
+
+**Warning set (PM 2026-11-20).** `Pill tone="warning"` / `HeaderChip tone="warning"` = warning-soft fill +
+warning-border + warning text. Only for **system states**: stale backup, sync delay, stale or missing live
+prices («дані застаріли HH:MM», «ціна недоступна»), missing bias («+ Біас NY», «Лондон: біас не записано»,
+the bias reminder tile). Never for P&L, risk or limit results (those stay green/red/neutral).
+
+| Warning colour | surface | page | chrome | warning-soft | accent-soft | track |
+|---|---|---|---|---|---|---|
+| text `#8A5300` | 6.33 | 5.85 | 5.49 | 5.61 | 5.66 | 5.59 |
+| border `#B87A10` (non-text) | 3.60 | 3.33 | 3.13 | 3.19 | — | — |
 
 Rules: no black or dark buttons/badges. Green/red only for P&L, deviations and status. Status pills
 are soft background + their own text colour. Chart marks use the -strong (lines, bars) or -mid
@@ -99,8 +112,11 @@ Rules (DECISIONS 2026-11-20):
   `bg-accent` only, so hover never looks selected. Keep `aria-pressed`.
 - Form control borders use `--tj-input` (1.46:1 on white, visual cue only; the focus ring is the
   accessible state indicator). Checkboxes use lavender-mid (3.20:1 on white, the card surface).
-- Known gap (M8-10b): the selected KPI rings (profit-mid / loss-mid / accent-ring) are below 3:1; the
-  pressed state is also shown by the hint pill text. Revisit when Home is rebuilt.
+- **Selected KPI ring** (M8-10b, closes the M8-10a gap): the 2px ring uses the tone's text shade
+  (`border-profit` `#0E6B43`, `border-loss` `#A3271F`, `border-lavender` `#3B2F86`): >= 5.87:1 on page
+  and on its KPI wash (profit on profit-wash 5.91, loss on peach-soft 6.64, accent on accent-soft 9.70). The mockup's pastel
+  rings (profit-mid, loss-mid, accent-ring) were 1.6-2.3:1. The pressed state is also shown by the
+  «на графіку» pill and `aria-pressed`.
 
 ## 4. Typography
 
@@ -170,8 +186,8 @@ App shell: sidebar 236px (`#EFEFEC`, TJ mark gradient, active item white + soft 
 | Function | Overview | Exact |
 |---|---|---|
 | `formatUsd(value, mode, { signed? })` | whole dollars: `+1 241`, `−90`, `0` | `formatMoney` / `formatSignedMoney` (2 dp) |
-| `formatPct(value, mode, { signed? })` | one decimal: `+2.1%`, `57.0%` | `formatPercent` (2 dp) |
-| `formatR(value, mode)` | one decimal, always signed: `+1.3R`, `−1.0R` | `formatR` (2 dp) |
+| `formatPct(value, mode, { signed? })` | one decimal, a trailing «.0» dropped: `+2.1%`, `57%`, `+2%` | `formatPercent` (2 dp) |
+| `formatR(value, mode)` | one decimal, a trailing «.0» dropped, always signed: `+1.3R`, `+0.7R`, `−1R` | `formatR` (2 dp) |
 | `formatPrice(value, mode)` | by magnitude: >= 1000 -> 0 dp (`26 523`), >= 10 -> 2 dp (`155.23`), else 4 dp (`1.1091`) | `formatPrice` (trailing zeros dropped, >= 2 dp) |
 | `formatLots(value)` | always exact (`formatVolume`) | same |
 
@@ -187,6 +203,8 @@ App shell: sidebar 236px (`#EFEFEC`, TJ mark gradient, active item white + soft 
   `+` only for signed values. Thousands use U+202F narrow no-break space. Prices never get `+`.
 - Price magnitude is decided on the integer digits; when rounding crosses a step (`9.99996` ->
   `10.0000`) the value is re-rounded for the new step (`10.00`).
+- Overview % and R (PM 2026-11-20): rounded to one decimal first, then a zero decimal is dropped, so
+  `56.96` -> `57%`, `-1.0000` -> `−1R`, `-0.04` -> `0%` / `0R`; `2.5` -> `+2.5%` keeps it.
 - Display only: the DB and every calculation keep exact decimals.
 
 ## 8. Adding a dark theme later
@@ -204,3 +222,18 @@ App shell: sidebar 236px (`#EFEFEC`, TJ mark gradient, active item white + soft 
 3. Put `class="dark"` on `<html>` (or toggle it from a setting) and switch `meta color-scheme` and
    the Sonner `theme` prop in `components/ui/sonner.tsx`.
 4. `@custom-variant dark` is kept, so `dark:` utilities still work for one-off overrides.
+
+## 9. «Головна» (M8-10b)
+
+Built from `docs/design/home-mockup.html`, top to bottom; components in `frontend/src/features/home/`:
+
+| Block | Component | Notes |
+|---|---|---|
+| Header | `HomeHeader` | Brussels date · time; chips: session (profit tone when entries are allowed, neutral when not), London bias with arrows (↑ ↓ ↔ ×), «+ Біас NY» (warning), «Калькулятор» (replaces the compact calculator panel) |
+| Hero (span 2) | `HeroCard` + `HeroChart` | Hero gradient, `type-hero` total, `SegmentedControl` range (M8-14 presets and localStorage); value labels: all points <= 8, else every 3rd + min + last (`chartMath.valueLabelIndices`); min below the line (loss colour when negative), last value pill; grid 1/2/2.5/5 steps, <= 4 intervals |
+| Ліміти | `LimitsCard` | Bars: hatched loss zone (loss-wash / loss-light), gradient fill from zero, faint zero tick; missing limit -> symmetric scale and «без ліміту»; one account select scopes the whole page |
+| Відкриті позиції | `OpenPositions`, `PositionCard` | Ladder in R: SL (−1R) left edge, entry 0, TP R right edge; MAE–MFE band in lavender-mid/60; current price dot + tag; no live price -> warning pill |
+| KPI toggles | `KpiRow` | `KpiCard` buttons with sparklines; pressed card drives the hero chart |
+| Потрібен опис | `NeedsDescriptionTiles` | 6-column tiles, 5 trades + dashed «+N у журналі» |
+| P&L по днях / Форма | `BottomCharts` | SVG bars with value labels; rolling win rate (lavender-mid) and avg R (profit-strong, dashed) with end labels |
+| Також на сьогодні | `DigestSuggestionCard`, `BiasStatusCard` | Kept from the old Home, compact |

@@ -23,6 +23,7 @@ import sys
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from types import FrameType
 from zoneinfo import ZoneInfo
 
@@ -51,6 +52,7 @@ from app.services.ai.warmup import (
     WarmupJob,
 )
 from app.services.journal_requirements import sync_requirements
+from app.services.open_positions_snapshot import snapshot_path
 from app.services.risk_base import recompute_all
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.system.terminals import terminal_windows
@@ -147,11 +149,13 @@ def default_mt5(settings: Settings) -> SharedMt5:
     return SharedMt5(factory)
 
 
-def default_sync_job(mt5: SharedMt5) -> Callable[[], None]:
-    """Sync under the shared MT5 lock, DB sessions per account."""
+def default_sync_job(mt5: SharedMt5, data_dir: Path) -> Callable[[], None]:
+    """Sync under the shared MT5 lock, DB sessions per account; each synced account's open
+    positions go to DATA_DIR/open_positions.json (M8-10b)."""
+    snapshot = snapshot_path(data_dir)
 
     def job() -> None:
-        run_sync_cycle(get_session_factory(), mt5.source(), lock=mt5.lock)
+        run_sync_cycle(get_session_factory(), mt5.source(), lock=mt5.lock, snapshot_path=snapshot)
 
     return job
 
@@ -236,7 +240,7 @@ def build_scheduler(
         replace_existing=True,
     )
     scheduler.add_job(
-        _safe(SYNC_JOB_ID, sync_job or default_sync_job(shared)),
+        _safe(SYNC_JOB_ID, sync_job or default_sync_job(shared, settings.data_dir)),
         trigger=IntervalTrigger(seconds=SYNC_JOB_INTERVAL_S, timezone=UTC),
         id=SYNC_JOB_ID,
         name=SYNC_JOB_ID,
