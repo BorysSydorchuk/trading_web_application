@@ -178,6 +178,8 @@ export interface ExcludedBlock {
   trades: number
   net_pnl: string
   account_net_pnl: string
+  /** account_net_pnl as a percent of the account size (4 dp); null without a size; absent in older snapshots. */
+  account_net_pnl_pct?: string | null
   items: ExcludedTradeItem[]
 }
 

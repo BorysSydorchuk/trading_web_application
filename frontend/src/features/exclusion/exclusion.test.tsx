@@ -3,6 +3,7 @@ import { setupUser } from '@/test/user'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { fixtureTrade } from '@/features/describe/trade.fixture'
+import { formatPct } from '@/features/dashboard/format'
 import { ExcludedTrades } from '@/features/digests/ExcludedTrades'
 import { TradesTable } from '@/features/journal/TradesTable'
 import { formatSignedMoney } from '@/features/trades/format'
@@ -144,6 +145,30 @@ describe('Digest excluded block', () => {
     expect(screen.getByRole('heading', { name: uk.digests.excluded.summary(1, `${formatSignedMoney('-50.00')} USD`) })).toBeInTheDocument()
     expect(screen.getByText(REASON)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'XAUUSD' })).toBeInTheDocument()
+  })
+
+  it('shows the account P&L percent next to the account total when the snapshot has it', () => {
+    renderWithProviders(
+      <ExcludedTrades
+        currency="USD"
+        block={{ trades: 1, net_pnl: '-50.00', account_net_pnl: '-50.00', account_net_pnl_pct: '-0.5000', items: [] }}
+      />,
+    )
+    const pct = screen.getByTestId('excluded-account-pct')
+    expect(pct).toHaveTextContent(uk.digests.excluded.accountPct(formatPct('-0.5000')))
+    expect(pct).toHaveClass('text-loss')
+  })
+
+  it('shows no percent for older snapshots without account_net_pnl_pct (or null)', () => {
+    const { unmount } = renderWithProviders(
+      <ExcludedTrades currency="USD" block={{ trades: 1, net_pnl: '-50.00', account_net_pnl: '50.00', items: [] }} />,
+    )
+    expect(screen.queryByTestId('excluded-account-pct')).not.toBeInTheDocument()
+    unmount()
+    renderWithProviders(
+      <ExcludedTrades currency="USD" block={{ trades: 1, net_pnl: '-50.00', account_net_pnl: '50.00', account_net_pnl_pct: null, items: [] }} />,
+    )
+    expect(screen.queryByTestId('excluded-account-pct')).not.toBeInTheDocument()
   })
 
   it('renders nothing without excluded trades', () => {
