@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # URLs contain the DB password: keep them out of repr/str.
     database_url: str = Field(repr=False)
     test_database_url: str | None = Field(default=None, repr=False)
+    # Which server the app runs on (app/system/db_mode.py): `native` never calls Docker.
+    # Unset/empty = derived from DATABASE_URL (port NATIVE_PG_PORT -> native).
+    db_mode: Literal["native", "docker"] | None = None
+    native_pg_port: int = Field(default=5433, ge=1, le=65535)
 
     # App
     app_env: str = "dev"
@@ -110,6 +114,15 @@ class Settings(BaseSettings):
         """DATA_DIR resolved against the repo root (not the CWD) when relative."""
         path = value.expanduser()
         return (path if path.is_absolute() else REPO_ROOT / path).resolve()
+
+    @field_validator("db_mode", mode="before")
+    @classmethod
+    def _db_mode(cls, value: object) -> object:
+        """`Native ` -> `native`; empty -> None (derive from DATABASE_URL)."""
+        if isinstance(value, str):
+            text = value.strip().lower()
+            return text or None
+        return value
 
     @field_validator("whisper_cpu_threads", mode="before")
     @classmethod

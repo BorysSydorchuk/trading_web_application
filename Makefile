@@ -12,8 +12,8 @@ dev:
 stop:
 	python scripts/dev.py --stop
 
-# db-ensure: make sure PostgreSQL is up (native service postgresql-x64-16 on 5433, or the
-# Docker fallback) and apply migrations (pg_dump backup first); no-op when already up.
+# db-ensure: make sure PostgreSQL is up by DB_MODE (native: service postgresql-x64-16 on 5433,
+# never Docker; docker: the compose db) and apply migrations (pg_dump backup first).
 # M8-12: desktop shortcuts «Старт»/«Стоп» + autostart at login (NO_AUTOSTART=1 to turn it off)
 NO_AUTOSTART ?=
 shortcuts:
@@ -22,7 +22,8 @@ shortcuts:
 db-ensure:
 	python scripts/dev.py --ensure-db
 
-# Docker fallback only (docs/native-postgres.md «Як повернутися на Docker»).
+# DB_MODE=docker only (docs/native-postgres.md «Як повернутися на Docker»). Never a prerequisite:
+# in DB_MODE=native no make target calls docker (db-ensure/dev go through scripts/dev.py).
 db-up:
 	docker compose up -d --wait db
 
@@ -44,7 +45,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py ../scripts/native_pg_diff.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck

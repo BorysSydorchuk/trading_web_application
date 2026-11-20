@@ -53,6 +53,7 @@ from native_pg_env import (
     DEFAULT_NATIVE_PORT,
     HOST,
     K_DOCKER_URL,
+    K_MODE,
     K_NATIVE_TEST,
     K_NATIVE_URL,
     K_PORT,
@@ -523,7 +524,7 @@ def dump_database(url: str, compose_port: int, name: str, label: str) -> Path:
     try:
         BACKUPS.mkdir(parents=True, exist_ok=True)
         tools.dump(url, partial)
-        tools.verify(partial)
+        tools.verify_archive(partial)
         partial.replace(final)
     except (BackupFailure, MigrateError, OSError) as exc:
         partial.unlink(missing_ok=True)
@@ -683,13 +684,18 @@ def cmd_switch(env_file: Path, force: bool) -> int:
     ensure_app_stopped(load_dev())
     text = read_env_text(env_file)
     updates = switch_updates(raw_env(text))
+    if set(updates) == {K_MODE}:  # URLs already native: only DB_MODE=native is written
+        write_env_text(env_file, set_env(text, updates))
+        say(f"{K_MODE}=native записано (адреси вже нативні). Запустіть start.bat.")
+        return 0
     if not force:
         _check_copy_current(env_values(text))
     write_env_text(env_file, set_env(text, updates))
     COPY_MARKER.unlink(missing_ok=True)  # one verified copy, one switch
     say(
-        "Перемкнено на нативний PostgreSQL (DATABASE_URL, TEST_DATABASE_URL). Docker-адреси "
-        "збережено як DOCKER_DATABASE_URL / DOCKER_TEST_DATABASE_URL. Запустіть start.bat."
+        "Перемкнено на нативний PostgreSQL (DATABASE_URL, TEST_DATABASE_URL, DB_MODE=native). "
+        "Docker-адреси збережено як DOCKER_DATABASE_URL / DOCKER_TEST_DATABASE_URL. "
+        "Запустіть start.bat."
     )
     return 0
 
@@ -699,8 +705,8 @@ def cmd_switch_back(env_file: Path) -> int:
     text = read_env_text(env_file)
     write_env_text(env_file, set_env(text, switch_back_updates(raw_env(text))))
     say(
-        "Повернено Docker PostgreSQL (DATABASE_URL, TEST_DATABASE_URL). Запустіть Docker "
-        "Desktop, потім start.bat."
+        "Повернено Docker PostgreSQL (DATABASE_URL, TEST_DATABASE_URL, DB_MODE=docker). "
+        "Запустіть Docker Desktop, потім start.bat."
     )
     return 0
 
@@ -719,11 +725,29 @@ def describe_active(url: str, native_port: int, docker_port: int) -> str:
     return f"інший сервер ({conn.host}:{conn.port})"
 
 
+def resolved_mode(dev: Any, env: Mapping[str, str], native_port: int, docker_port: int) -> str:
+    """The launcher's DB mode (dev.resolve_db_mode); host/port only, never the URL."""
+    try:
+        host, port = dev.parse_db_host_port(env.get(K_URL, ""))
+    except ValueError:
+        return "невідомий (DATABASE_URL не задано або некоректний)"
+    try:
+        mode = dev.resolve_db_mode(
+            env.get(K_MODE), host, port, native_port=native_port, docker_port=docker_port
+        )
+    except ValueError:
+        return f"некоректний {K_MODE} (має бути native або docker)"
+    return f"{mode} ({host}:{port})"
+
+
 def cmd_status(env_file: Path) -> int:
     env = env_values(read_env_text(env_file))
     native_port = port_value(env, K_PORT, DEFAULT_NATIVE_PORT)
     docker_port = port_value(env, "POSTGRES_PORT", DOCKER_PORT)
     dev = load_dev()
+    say(f"Режим БД: {resolved_mode(dev, env, native_port, docker_port)}")
+    mode_key = env.get(K_MODE, "").strip()
+    say(f"{K_MODE} у .env: {mode_key or 'не задано (режим визначено з DATABASE_URL)'}")
     say(f"Активна БД застосунку: {describe_active(env.get(K_URL, ''), native_port, docker_port)}")
     say(f"Тестова БД: {describe_active(env.get(K_TEST, ''), native_port, docker_port)}")
     say(f"Служба «{SERVICE}»: {service_state(dev) or 'не знайдена'}")

@@ -122,6 +122,8 @@ class _Settings:
     def __init__(self, url: str) -> None:
         self.database_url = url
         self.postgres_port = 5432
+        self.native_pg_port = 5433
+        self.db_mode = None
 
 
 def test_take_backup_skips_a_test_database_without_confirming(
@@ -139,7 +141,7 @@ def test_take_backup_skips_a_test_database_without_confirming(
 def test_take_backup_confirms_the_target_then_dumps(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def confirm(url: str, port: int) -> None:
+    def confirm(url: str, port: int | None) -> None:
         calls.append("confirm")
 
     def dump(target: migrate.DbTarget, label: str, *_: object, **__: object) -> Path:

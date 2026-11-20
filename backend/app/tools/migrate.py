@@ -11,8 +11,10 @@ backup failure stops here with exit code 1: the upgrade is NOT run.
 
 `pg_dump` on PATH or in a native install (app.system.pg_tools) is preferred (password via
 PGPASSWORD in the child environment only).
-Without it, a local DB is dumped through `docker compose exec -T db pg_dump` (the container
-trusts its local socket). The password and the full URL are never put in argv, output or logs.
+Without it, in DB_MODE docker only (app.system.db_mode), a local DB is dumped through
+`docker compose exec -T db pg_dump` (the container trusts its local socket); in native mode
+a missing pg_dump is an error and Docker is never called. The password and the full URL are
+never put in argv, output or logs.
 A raw `alembic upgrade head` bypasses this backup.
 """
 
@@ -44,6 +46,7 @@ from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.config import REPO_ROOT, Settings, get_settings
 from app.logging_setup import UTCFormatter, setup_logging
+from app.system.db_mode import docker_compose_port
 from app.system.pg_tools import pg_tool
 
 logger = logging.getLogger("app.tools.migrate")
@@ -85,6 +88,11 @@ MSG: dict[str, str] = {
     "no_tool_remote": (
         "не знайдено pg_dump (встановіть клієнт PostgreSQL 16; docker використовується "
         "лише для локальної БД на порту POSTGRES_PORT={compose_port})"
+    ),
+    "no_tool_native": (
+        "не знайдено pg_dump/pg_restore нативного PostgreSQL (режим БД native, Docker не "
+        "використовується). Перевірте встановлення PostgreSQL 16 "
+        "(python scripts/native_pg.py status, docs/native-postgres.md)"
     ),
     "unknown_revision": (
         "БД {db} на ревізії {revs}, якої немає в цьому коді — інша гілка? "
@@ -275,10 +283,11 @@ def dump_plan(
     *,
     which: Callable[[str], str | None],
     compose_dir: Path,
-    compose_port: int,
+    compose_port: int | None,
 ) -> DumpPlan:
     """Host pg_dump if on PATH; else docker compose when the URL points at the compose DB
-    (local host and port == POSTGRES_PORT); else BackupError."""
+    (local host and port == POSTGRES_PORT); else BackupError. `compose_port` None (native
+    mode): never Docker, a missing pg_dump is a BackupError."""
     pg_dump = which("pg_dump")
     if pg_dump:
         argv: tuple[str, ...] = (
@@ -289,6 +298,8 @@ def dump_plan(
         if target.password:
             extra["PGPASSWORD"] = target.password
         return DumpPlan("pg_dump", argv, _child_env(extra), compose_dir, to_stdout=False)
+    if compose_port is None:
+        raise BackupError(MSG["no_tool_native"])
     if not target.is_local or target.port != compose_port:
         raise BackupError(MSG["no_tool_remote"].format(compose_port=compose_port))
     docker = which("docker")
@@ -341,7 +352,7 @@ def run_dump(plan: DumpPlan, partial: Path, runner: Runner) -> None:
 
 
 def make_backup(
-    target: DbTarget, revision: str, deps: Deps, out: TextIO, *, compose_port: int
+    target: DbTarget, revision: str, deps: Deps, out: TextIO, *, compose_port: int | None
 ) -> Path:
     """Dump to `<name>.partial`, rename after success; the partial never survives a failure."""
     try:
@@ -393,16 +404,19 @@ def rotate_backups(
 def verify_backup(path: Path) -> None:
     from app.services.backups import PostgresTools
 
-    PostgresTools.verify(path)
+    PostgresTools.verify(path, docker_allowed=docker_compose_port(get_settings()) is not None)
 
 
-def confirm_backup_target(url: str, port: int) -> None:
+def confirm_backup_target(url: str, port: int | None) -> None:
+    """`port`: POSTGRES_PORT in docker mode, None in native mode (never Docker)."""
     from app.services.backups import PostgresTools, target_key
 
     target_key(url)
     target = parse_target(url)
     PostgresTools._confirm_target(url, target)
     if not pg_tool("pg_dump"):
+        if port is None:
+            raise BackupError(MSG["no_tool_native"])
         if not target.is_local or target.port != port:
             raise BackupError("Docker не відповідає цільовій БД")
         PostgresTools._confirm_compose(url, target)
@@ -418,7 +432,7 @@ class Deps:
     read_revisions: Callable[[Config], Revisions] = read_revisions
     upgrade: Callable[[Config], None] = upgrade_head
     verify_backup: Callable[[Path], None] = verify_backup
-    confirm_target: Callable[[str, int], None] = confirm_backup_target
+    confirm_target: Callable[[str, int | None], None] = confirm_backup_target
 
 
 def _say(out: TextIO, text: str) -> None:
@@ -440,7 +454,11 @@ def _connect_error(target: DbTarget, exc: SQLAlchemyError) -> str:
 
 
 def _backup_step(
-    target: DbTarget, revs: Revisions, deps: Deps, streams: tuple[TextIO, TextIO], port: int
+    target: DbTarget,
+    revs: Revisions,
+    deps: Deps,
+    streams: tuple[TextIO, TextIO],
+    port: int | None,
 ) -> Path:
     out, err = streams
     path = make_backup(target, "+".join(sorted(revs.heads)), deps, out, compose_port=port)
@@ -499,8 +517,9 @@ def migrate(settings: Settings, deps: Deps, out: TextIO, err: TextIO) -> int:
         _say(out, MSG["test_db_skip"].format(db=db))
     else:
         try:
-            deps.confirm_target(settings.database_url, settings.postgres_port)
-            backup = _backup_step(target, revs, deps, (out, err), settings.postgres_port)
+            compose_port = docker_compose_port(settings)
+            deps.confirm_target(settings.database_url, compose_port)
+            backup = _backup_step(target, revs, deps, (out, err), compose_port)
         except BackupError as exc:
             return fail(MSG["backup_failed"].format(db=db, reason=exc, log=log))
         except Exception:

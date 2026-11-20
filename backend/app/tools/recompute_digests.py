@@ -29,6 +29,7 @@ from app.config import Settings, get_settings
 from app.db import get_session_factory
 from app.logging_setup import setup_logging
 from app.services.digests import recompute_all
+from app.system.db_mode import docker_compose_port
 from app.tools import migrate
 
 logger = logging.getLogger(__name__)
@@ -46,8 +47,9 @@ def take_backup(settings: Settings, out: TextIO, deps: migrate.Deps | None = Non
     if target.is_test:
         return None
     deps = deps or migrate.Deps()
-    deps.confirm_target(settings.database_url, settings.postgres_port)
-    return migrate.make_backup(target, BACKUP_LABEL, deps, out, compose_port=settings.postgres_port)
+    compose_port = docker_compose_port(settings)
+    deps.confirm_target(settings.database_url, compose_port)
+    return migrate.make_backup(target, BACKUP_LABEL, deps, out, compose_port=compose_port)
 
 
 def run(

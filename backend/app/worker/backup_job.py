@@ -9,6 +9,7 @@ from http.client import HTTPConnection
 from app.config import Settings
 from app.services.backup_schedule import BackupSchedule
 from app.services.backups import BackupStore, target_key
+from app.system.db_mode import docker_compose_port
 
 BACKUP_JOB_ID = "daily_backup"
 BACKUP_POLL_SECONDS = 15
@@ -47,7 +48,7 @@ def operational(settings: Settings) -> bool:
 
 def make_backup_schedule(settings: Settings) -> BackupSchedule:
     return BackupSchedule(
-        BackupStore(settings.backup_dir, compose_port=settings.postgres_port),
+        BackupStore(settings.backup_dir, compose_port=docker_compose_port(settings)),
         settings.database_url,
         healthy=lambda: operational(settings),
     )

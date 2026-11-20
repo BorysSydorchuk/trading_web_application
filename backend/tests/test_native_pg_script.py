@@ -692,3 +692,58 @@ def test_describe_active(url: str, label: str) -> None:
 def test_native_settings_missing_keys() -> None:
     with pytest.raises(npg.NativePgError, match="secrets"):
         npg.native_settings({})
+
+
+# --------------------------------------------------------------------------- DB_MODE
+
+
+def test_switch_and_back_write_db_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stopped_app: Path
+) -> None:
+    path = _switch_env(tmp_path)
+    assert npg.main(["switch", "--force"], env_file=path) == 0
+    assert envm.env_values(envm.read_env_text(path))["DB_MODE"] == "native"
+    assert npg.main(["switch-back"], env_file=path) == 0
+    text = envm.read_env_text(path)
+    assert envm.env_values(text)["DB_MODE"] == "docker"
+    assert text.count("DB_MODE=") == 1  # replaced in place, not appended twice
+
+
+def test_switch_on_native_urls_without_mode_only_writes_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stopped_app: Path
+) -> None:
+    """Owner switched before DB_MODE existed: `switch` adds DB_MODE=native, no copy needed."""
+    monkeypatch.setattr(npg, "source_fingerprint", lambda _url: pytest.fail("no copy check"))
+    path = _native_active_env(tmp_path)
+    text = envm.read_env_text(path)
+    native_test = envm.env_values(text)["NATIVE_TEST_DATABASE_URL"]
+    text = envm.set_env(
+        text, {"TEST_DATABASE_URL": native_test, "DOCKER_TEST_DATABASE_URL": DOCKER_TEST}
+    )
+    path.write_bytes(text.encode("utf-8"))
+    before = envm.env_values(text)
+    assert npg.main(["switch"], env_file=path) == 0
+    after = envm.env_values(envm.read_env_text(path))
+    assert after["DB_MODE"] == "native"
+    assert {k: v for k, v in after.items() if k != "DB_MODE"} == before
+    assert npg.main(["switch"], env_file=path) == 1  # now really already native
+
+
+def test_status_prints_resolved_mode_and_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dev = npg.load_dev()
+    monkeypatch.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    monkeypatch.setattr(dev, "native_service_state", lambda _s: None)
+    monkeypatch.setattr(npg, "load_dev", lambda: dev)
+    path = _native_active_env(tmp_path)
+    assert npg.main(["status"], env_file=path) == 0
+    out = capsys.readouterr().out
+    assert "Режим БД: native (127.0.0.1:5433)" in out
+    assert "DB_MODE у .env: не задано" in out
+    path.write_bytes(envm.set_env(envm.read_env_text(path), {"DB_MODE": "docker"}).encode())
+    assert npg.main(["status"], env_file=path) == 0
+    out = capsys.readouterr().out
+    assert "Режим БД: docker (127.0.0.1:5433)" in out
+    assert "DB_MODE у .env: docker" in out
+    assert ":app@" not in out  # host/port only, never the URL

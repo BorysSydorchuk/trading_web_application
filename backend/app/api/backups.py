@@ -10,6 +10,7 @@ from app.config import Settings, get_settings
 from app.services.backup_schedule import BackupSchedule, next_due
 from app.services.backup_state import ErrorCode
 from app.services.backups import BackupStore
+from app.system.db_mode import docker_compose_port
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ class BackupStatus(BaseModel):
 def get_backup_schedule(settings: Settings = Depends(get_settings)) -> BackupSchedule | None:
     try:
         return BackupSchedule(
-            BackupStore(settings.backup_dir, compose_port=settings.postgres_port),
+            BackupStore(settings.backup_dir, compose_port=docker_compose_port(settings)),
             settings.database_url,
             healthy=lambda: False,
         )

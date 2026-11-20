@@ -16,6 +16,7 @@ from alembic.runtime.migration import MigrationContext
 from sqlalchemy.exc import OperationalError
 
 from app.config import Settings
+from app.system.db_mode import DbMode
 from app.tools import migrate as mig
 
 PASSWORD = "s3cr3t-DO-NOT-PRINT"  # noqa: S105 - fake test password
@@ -85,9 +86,18 @@ def which_for(*available: str) -> Callable[[str], str | None]:
     return which
 
 
-def make_settings(tmp_path: Path, url: str = DEV_URL, compose_port: int = 5432) -> Settings:
+def make_settings(
+    tmp_path: Path,
+    url: str = DEV_URL,
+    compose_port: int = 5432,
+    db_mode: DbMode | None = None,
+) -> Settings:
     return Settings(
-        _env_file=None, database_url=url, log_dir=tmp_path / "logs", postgres_port=compose_port
+        _env_file=None,
+        database_url=url,
+        log_dir=tmp_path / "logs",
+        postgres_port=compose_port,
+        db_mode=db_mode,
     )
 
 
@@ -121,10 +131,12 @@ class Env:
             confirm_target=lambda url, port: None,
         )
 
-    def run(self, url: str = DEV_URL, compose_port: int = 5432) -> tuple[int, str, str]:
+    def run(
+        self, url: str = DEV_URL, compose_port: int = 5432, db_mode: DbMode | None = None
+    ) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
         code = mig.main(
-            settings=make_settings(self.tmp_path, url, compose_port),
+            settings=make_settings(self.tmp_path, url, compose_port, db_mode),
             deps=self.deps(),
             out=out,
             err=err,
@@ -186,7 +198,7 @@ def test_archive_verification_precedes_publication_and_upgrade(env: Env) -> None
 
 
 def test_wrong_dump_target_never_runs_backup_or_upgrade(env: Env) -> None:
-    def fail(url: str, port: int) -> None:
+    def fail(url: str, port: int | None) -> None:
         raise ValueError("secret-target-error")
 
     out, err = io.StringIO(), io.StringIO()
@@ -478,7 +490,7 @@ def test_read_revisions_flags_unknown_db_revision(monkeypatch: pytest.MonkeyPatc
 def test_docker_fallback_refused_when_port_differs_from_compose(env: Env) -> None:
     env.available = ("docker",)
 
-    code, out, err = env.run(compose_port=5433)
+    code, out, err = env.run(compose_port=5433, db_mode="docker")
 
     assert code == 1
     assert "POSTGRES_PORT=5433" in err
@@ -492,7 +504,7 @@ def test_docker_fallback_uses_custom_compose_port(env: Env) -> None:
     env.available = ("docker",)
     url = DEV_URL.replace(":5432/", ":5433/")
 
-    code, _, err = env.run(url, compose_port=5433)
+    code, _, err = env.run(url, compose_port=5433, db_mode="docker")
 
     assert code == 0, err
     assert len(env.runner.calls) == 1

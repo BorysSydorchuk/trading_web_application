@@ -107,10 +107,17 @@ def retention_union(
 
 
 class PostgresTools:
-    """Host PostgreSQL tools preferred; Docker only for confirmed local compose target."""
+    """Host PostgreSQL tools preferred; Docker only for confirmed local compose target.
 
-    def __init__(self, *, compose_port: int = 5432) -> None:
+    `compose_port` None = native DB mode (app.system.db_mode): Docker is never called and a
+    missing pg_dump/pg_restore is a BackupFailure.
+    """
+
+    def __init__(self, *, compose_port: int | None = 5432) -> None:
         self.compose_port = compose_port
+
+    def verify_archive(self, path: Path) -> None:
+        self.verify(path, docker_allowed=self.compose_port is not None)
 
     def dump(self, url: str, path: Path) -> None:
         target_key(url)
@@ -184,9 +191,11 @@ class PostgresTools:
             engine.dispose()
 
     @staticmethod
-    def verify(path: Path) -> None:
+    def verify(path: Path, *, docker_allowed: bool = True) -> None:
         """Read TOC and all data blocks without connecting to or restoring any DB."""
         tool = pg_tool("pg_restore")
+        if not tool and not docker_allowed:
+            raise BackupFailure("pg_restore нативного PostgreSQL 16 не знайдено (DB_MODE native)")
         for operation in ("--list", "--file=-"):
             argv = (
                 [tool, operation, str(path)]
@@ -216,7 +225,7 @@ class BackupStore:
         *,
         dump: Callable[[str, Path], None] | None = None,
         verify: Callable[[Path], None] | None = None,
-        compose_port: int = 5432,
+        compose_port: int | None = 5432,
     ) -> None:
         self.root = Path(os.path.abspath(root))
         if self.root.is_relative_to(REPO_ROOT) and not self.root.is_relative_to(
@@ -225,7 +234,7 @@ class BackupStore:
             raise BackupFailure("In-repository backup roots must be inside gitignored backups/")
         tools = PostgresTools(compose_port=compose_port)
         self.dump = dump or tools.dump
-        self.verify = verify or tools.verify
+        self.verify = verify or tools.verify_archive
 
     def scope(self, url: str) -> Path:
         return self.root / target_key(url)

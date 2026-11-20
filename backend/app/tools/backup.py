@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.services.backups import BackupStore, Kind
+from app.system.db_mode import docker_compose_port
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,7 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = get_settings()
         kind: Kind = args.kind
-        store = BackupStore(args.root or settings.backup_dir, compose_port=settings.postgres_port)
+        compose_port = docker_compose_port(settings)
+        store = BackupStore(args.root or settings.backup_dir, compose_port=compose_port)
         item = store.create(settings.database_url, kind=kind)
         print("Резервну копію перевірено: " + str(item.archive))
         if kind == "daily":

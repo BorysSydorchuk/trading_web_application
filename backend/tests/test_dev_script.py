@@ -316,17 +316,16 @@ def test_native_running_but_port_closed(db_down: pytest.MonkeyPatch) -> None:
         dev.ensure_db({"DATABASE_URL": NATIVE_URL})
 
 
-def test_no_native_service_uses_docker_path(db_down: pytest.MonkeyPatch) -> None:
+def test_no_native_service_never_uses_docker_path(db_down: pytest.MonkeyPatch) -> None:
+    """Native mode (DB_MODE native 2026-11-20): a missing service is an error, never Docker."""
     db_down.undo()
-    calls: list[list[str]] = []
-    reachable = iter([False, True])
-    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
     db_down.setattr(dev, "run_sc", FakeSc({"query": [(dev.SC_SERVICE_MISSING, "")]}))
-    db_down.setattr(dev.shutil, "which", lambda _n: "docker")
-    db_down.setattr(dev, "docker_daemon_running", lambda _d: True)
-    db_down.setattr(dev, "run_step", lambda cmd, *_a, **_k: calls.append(list(cmd)))
-    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
-    assert calls == [["docker", "compose", "up", "-d", "--wait", "db"]]
+    db_down.setattr(dev.shutil, "which", lambda _n: pytest.fail("docker path not expected"))
+    with pytest.raises(dev.LauncherError) as error:
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert "native_pg.py status" in str(error.value)
+    assert "switch-back" in str(error.value)
 
 
 @pytest.mark.parametrize(
