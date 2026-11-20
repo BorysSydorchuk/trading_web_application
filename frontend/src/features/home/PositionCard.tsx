@@ -137,7 +137,7 @@ export function PositionCard({ position, now }: { position: HomePosition; now: s
           <LiveValues position={position} />
         </div>
       </div>
-      {position.close_unconfirmed === true ? (
+      {position.close_unconfirmed ? (
         // Never a live card for a position MT5 does not report (owner bug 2026-11-20).
         <p data-testid="position-close-unconfirmed" className="mt-3 text-xs text-ink-muted">
           {t.closeUnconfirmedHint}
@@ -148,7 +148,7 @@ export function PositionCard({ position, now }: { position: HomePosition; now: s
         <Ladder position={position} />
       )}
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        {position.close_unconfirmed !== true && <Excursions position={position} />}
+        {!position.close_unconfirmed && <Excursions position={position} />}
         <span className="flex-1" />
         <Pill tone="neutral" data-testid="position-described" className="rounded-[10px] px-2.5 py-1">
           {position.described ? t.described : t.notDescribed}

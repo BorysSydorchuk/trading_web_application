@@ -97,7 +97,7 @@ export interface HomePosition {
   risk_pct: string | null
   described: boolean
   /** MT5 no longer reports the position; its close is not in the history yet (no live values). */
-  close_unconfirmed?: boolean
+  close_unconfirmed: boolean
 }
 
 export interface HomeData {

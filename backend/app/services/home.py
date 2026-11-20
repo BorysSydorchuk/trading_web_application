@@ -33,7 +33,7 @@ from app.domain.period_base import period_base
 from app.domain.period_pnl import local_day, period_extremes, week_start
 from app.domain.sessions import find_window, to_local
 from app.errors import ApiError, config_error
-from app.models import Account, BiasNote, Trade
+from app.models import Account, BiasNote, SyncLog, Trade
 from app.models.enums import AccountStatus, BiasKind
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
@@ -456,6 +456,26 @@ def _position(
     )
 
 
+def _current_snapshot_accounts(db: Session, path: Path, account_ids: set[int]) -> set[int]:
+    """Accounts whose snapshot entry was written by their latest successful sync: only then
+    does a missing position mean "MT5 no longer reports it" (not a failed or pending
+    snapshot write, nor a file shared with another database)."""
+    if not account_ids:
+        return set()
+    written = snapshot.synced_at(path)
+    rows = db.execute(
+        select(SyncLog.account_id, func.max(SyncLog.started_at))
+        .where(SyncLog.account_id.in_(account_ids), SyncLog.ok.is_(True))
+        .group_by(SyncLog.account_id)
+    )
+    last_ok: dict[int, datetime] = {row[0]: row[1] for row in rows}
+    return {
+        account_id
+        for account_id, at in written.items()
+        if account_id in last_ok and at >= last_ok[account_id]
+    }
+
+
 def _open_totals(
     positions: Sequence[schemas.OpenPositionOut], currencies: set[str]
 ) -> schemas.OpenTotalsOut:
@@ -497,14 +517,14 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
     _check_currency(accounts, trades)
     path = snapshot.snapshot_path(data_dir)
     live = snapshot.read_snapshot(path) if opened else {}
-    reported = snapshot.reported_accounts(path) if opened else frozenset()
+    current = _current_snapshot_accounts(db, path, {a.id for _, a in opened})
     positions = [
         _position(
             t,
             a,
             live.get((a.id, t.position_id)),
             now,
-            close_unconfirmed=a.id in reported and (a.id, t.position_id) not in live,
+            close_unconfirmed=a.id in current and (a.id, t.position_id) not in live,
         )
         for t, a in opened
     ]

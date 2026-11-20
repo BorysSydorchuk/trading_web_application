@@ -18,7 +18,7 @@ export function timeInTrade(openTime: string, now: string): string {
  * no snapshot («ціна недоступна») or an old one («дані застаріли HH:MM»).
  */
 export function liveNote(position: Pick<HomePosition, 'current_price' | 'price_time' | 'close_unconfirmed'>): string | null {
-  if (position.close_unconfirmed === true) return t.closeUnconfirmed
+  if (position.close_unconfirmed) return t.closeUnconfirmed
   if (position.current_price !== null) return null
   return position.price_time === null ? t.priceUnavailable : t.stale(brusselsHourMinute(position.price_time))
 }

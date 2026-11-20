@@ -159,20 +159,73 @@ def test_cold_terminal_is_read_again(session: Session, rules: RulesConfig) -> No
     assert trades_by_pid(session, account_id)[T7].close_time is not None
 
 
-def test_history_never_loads_keeps_trade_open_and_unconfirmed(
+def test_warm_terminal_without_the_history_does_not_wait(
     session: Session, rules: RulesConfig, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """History purged / other server: nothing to wait for on every sync; unconfirmed only."""
     rules = no_overlap(rules)
     src = Terminal(never_loads=True)
     account_id = _open_then_close_elsewhere(session, src, rules)
+    # Warm terminal: the window has a deal (a balance credit after the window start).
+    src.extra_deals = [
+        RawDeal(
+            ticket=1999990, order=0, position_id=0, type=2, entry=0, volume=Decimal("0"),
+            time=int(datetime(2026, 10, 23, 16, 40, tzinfo=UTC).timestamp()),  # server wall
+            price=Decimal("0"), profit=Decimal("1"), symbol="",
+        )
+    ]  # fmt: skip
     pauses: list[float] = []
     log = _sync(session, src, rules, pauses)
     assert log.ok is True, log.error_message  # retried next sync, not a failed sync
-    assert len(pauses) == sync_service.HISTORY_READ_ATTEMPTS - 1
+    assert pauses == []
     t7 = trades_by_pid(session, account_id)[T7]
     assert (t7.close_time, t7.status, t7.lesson) == (None, "open", "my note")
     assert "not reported by MT5" in caplog.text
     assert str(T7) in caplog.text
+
+
+def test_terminal_that_stays_cold_is_retried_a_bounded_number_of_times(
+    session: Session, rules: RulesConfig
+) -> None:
+    rules = no_overlap(rules)
+    src = Terminal()
+    account_id = _open_then_close_elsewhere(session, src, rules)
+    src.cold = True  # never warms up
+    pauses: list[float] = []
+    log = _sync(session, src, rules, pauses)
+    assert log.ok is True, log.error_message
+    assert len(pauses) == sync_service.HISTORY_READ_ATTEMPTS - 1
+    assert trades_by_pid(session, account_id)[T7].close_time is None  # retried next sync
+
+
+ENTRY = RawDeal(
+    ticket=1999901, order=2999901, position_id=2999901, time=1_792_000_000, type=0, entry=0,
+    volume=Decimal("0.10"), price=Decimal("1.16000"), profit=Decimal("0"), symbol="EURUSD",
+)  # fmt: skip
+PARTIAL_EXIT = RawDeal(
+    ticket=1999902, order=2999902, position_id=2999901, time=1_792_000_600, type=1, entry=1,
+    volume=Decimal("0.05"), price=Decimal("1.16100"), profit=Decimal("5"), symbol="EURUSD",
+)  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("deals", "expected"),
+    [((ENTRY,), {2999901}), ((ENTRY, PARTIAL_EXIT), {2999901})],
+    ids=["entry-only", "partial-close"],
+)
+def test_partly_or_not_closed_history_is_unconfirmed(
+    deals: tuple[RawDeal, ...], expected: set[int]
+) -> None:
+    src = Wrapped(source("basic_week.json"), deals=list(deals))
+    src.connect("x", WEEK_LOGIN, password(0), "FundedNext-Server")
+    pauses: list[float] = []
+    try:
+        read = sync_service.read_trading(src, 0, 2**31, {2999901}, pause=pauses.append)
+    finally:
+        src.shutdown()
+    assert read.unconfirmed == frozenset(expected)
+    assert 2999901 in read.pids  # built (still open), not dropped
+    assert pauses == []  # warm terminal: no waiting
 
 
 def test_read_trading_reports_unconfirmed_and_keeps_live_positions() -> None:

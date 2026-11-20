@@ -143,8 +143,10 @@ class Fetched:
 
 # A terminal the worker has just started answers history/positions calls with empty lists
 # until it has downloaded them (owner bug 2026-11-20: 0 deals, 0 positions ~10 ms after
-# connect, all there 3 s later). Retry only when a DB-open position's own history is empty:
-# a real position always has its entry deal, so empty means "not loaded yet".
+# connect, all there 3 s later). Retry only while the terminal looks cold (no window deal and
+# no position at all) and a DB-open position's own history is empty: a real position always
+# has its entry deal. A warm terminal without that history (purged, other server) is not
+# waited for on every sync; the trade is only reported as unconfirmed.
 HISTORY_READ_ATTEMPTS = 4
 HISTORY_READ_PAUSE_S = 2.0
 
@@ -155,11 +157,15 @@ class TradingRead:
     positions: list[RawPosition]
     pids: set[int]  # positions to build: window trade deals + open + DB-open missing ones
     own: dict[int, list[RawDeal]]  # every deal of each pid (history_deals_get(position=))
-    unconfirmed: frozenset[int]  # DB-open, not reported by MT5, no closing deal in history
+    unconfirmed: frozenset[int]  # DB-open, not reported by MT5, history not fully closed
 
 
-def _has_exit(deals: Iterable[RawDeal]) -> bool:
-    return any(_is_trade_deal(d) and not _is_entry(d) for d in deals)
+def _fully_closed(deals: Iterable[RawDeal]) -> bool:
+    """Exit volume covers the entry volume (a partial close alone is not a close)."""
+    trade = [d for d in deals if _is_trade_deal(d)]
+    opened = sum((d.volume for d in trade if _is_entry(d)), Decimal(0))
+    closed = sum((d.volume for d in trade if not _is_entry(d)), Decimal(0))
+    return opened > 0 and closed >= opened
 
 
 def read_trading(
@@ -175,7 +181,8 @@ def read_trading(
 
     Reconciliation: a position the DB has open but ``positions_get`` does not report is
     always read by position id, so it is closed from its exit deals however old they are.
-    If its history is still empty (terminal not ready), everything is read again after
+    If its history is still empty and the terminal looks cold (nothing at all in the window
+    and no position: just started), everything is read again after
     ``HISTORY_READ_PAUSE_S``; after ``attempts`` it stays open in the DB and is reported in
     ``unconfirmed`` (retried next sync, never shown as a live position).
     """
@@ -187,7 +194,8 @@ def read_trading(
         pids = {d.position_id for d in by_ticket.values() if _is_trade_deal(d)} | live | missing
         own = {pid: source.deals_for_position(pid) for pid in sorted(pids)}
         not_loaded = {pid for pid in missing if not own[pid]}
-        if not not_loaded or attempt == attempts:
+        cold = not by_ticket and not positions
+        if not (not_loaded and cold) or attempt == attempts:
             break
         logger.info(
             "MT5 history not loaded yet for %s open position(s); reading again (%s/%s)",
@@ -196,7 +204,7 @@ def read_trading(
             attempts - 1,
         )
         pause(HISTORY_READ_PAUSE_S)
-    unconfirmed = frozenset(pid for pid in missing if not _has_exit(own[pid]))
+    unconfirmed = frozenset(pid for pid in missing if not _fully_closed(own[pid]))
     # A position without any deal cannot be built; keep it out of the build set.
     pids -= {pid for pid in missing if not own[pid]}
     return TradingRead(by_ticket, positions, pids, own, unconfirmed)
@@ -760,12 +768,14 @@ def sync_account(
         config = symbols if symbols is not None else get_symbols_config()
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
         targets = excursion_targets(session, account_id, now_utc)
+        open_pids = open_position_ids(session, account_id)
+        session.commit()  # no transaction left idle through the MT5 reads and pauses
         args = (source, account, password, rules, now_utc, window_from, config)
         fetched = fetch(
             *args,
             excursions=targets,
             read_first_deposit=deposit_sink is not None,
-            open_pids=open_position_ids(session, account_id),
+            open_pids=open_pids,
             pause=pause,
         )
         counters = write(session, account, fetched, rules, now_utc, config)
