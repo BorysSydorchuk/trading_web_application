@@ -9,7 +9,8 @@ dumped (custom format) to `<repo>/backups/pre-migration-<head>-<UTC timestamp>.d
 all pre-migration files are kept (PM M7: never auto-prune), then `alembic upgrade head` runs. Any
 backup failure stops here with exit code 1: the upgrade is NOT run.
 
-`pg_dump` on PATH is preferred (password via PGPASSWORD in the child environment only).
+`pg_dump` on PATH or in a native install (app.system.pg_tools) is preferred (password via
+PGPASSWORD in the child environment only).
 Without it, a local DB is dumped through `docker compose exec -T db pg_dump` (the container
 trusts its local socket). The password and the full URL are never put in argv, output or logs.
 A raw `alembic upgrade head` bypasses this backup.
@@ -24,7 +25,6 @@ import io
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -44,6 +44,7 @@ from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.config import REPO_ROOT, Settings, get_settings
 from app.logging_setup import UTCFormatter, setup_logging
+from app.system.pg_tools import pg_tool
 
 logger = logging.getLogger("app.tools.migrate")
 
@@ -401,7 +402,7 @@ def confirm_backup_target(url: str, port: int) -> None:
     target_key(url)
     target = parse_target(url)
     PostgresTools._confirm_target(url, target)
-    if not shutil.which("pg_dump"):
+    if not pg_tool("pg_dump"):
         if not target.is_local or target.port != port:
             raise BackupError("Docker не відповідає цільовій БД")
         PostgresTools._confirm_compose(url, target)
@@ -410,7 +411,7 @@ def confirm_backup_target(url: str, port: int) -> None:
 @dataclass(frozen=True)
 class Deps:
     runner: Runner = subprocess_runner
-    which: Callable[[str], str | None] = shutil.which
+    which: Callable[[str], str | None] = pg_tool
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     backups_dir: Path = BACKUPS_DIR
     compose_dir: Path = REPO_ROOT

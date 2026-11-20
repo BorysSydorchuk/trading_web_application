@@ -167,6 +167,7 @@ def db_down(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     monkeypatch.setattr(dev, "docker_daemon_running", lambda _d: False)
     monkeypatch.setattr(dev, "docker_desktop_exe", lambda: None)
     monkeypatch.setattr(dev.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(dev, "native_service_state", lambda _s: None)
 
     def forbidden(*_a: object, **_k: object) -> bool:
         raise AssertionError("no setup command expected")
@@ -241,6 +242,137 @@ def test_ensure_db_starts_compose_when_daemon_up(db_down: pytest.MonkeyPatch) ->
 def test_ensure_db_empty_url(db_down: pytest.MonkeyPatch) -> None:
     with pytest.raises(dev.LauncherError, match="DATABASE_URL не задано"):
         dev.ensure_db({"DATABASE_URL": ""})
+
+
+# --------------------------------------------------------------------------- native PostgreSQL
+
+NATIVE_URL = "postgresql+psycopg://u:p@127.0.0.1:5433/db"
+SC_RUNNING = """
+SERVICE_NAME: postgresql-x64-16
+        TYPE               : 10  WIN32_OWN_PROCESS
+        STATE              : 4  RUNNING
+                                (STOPPABLE, PAUSABLE, ACCEPTS_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+"""
+SC_STOPPED_LOCALIZED = """
+SERVICE_NAME: postgresql-x64-16
+        ТИП                : 10  WIN32_OWN_PROCESS
+        СОСТОЯНИЕ          : 1  STOPPED
+"""
+
+
+@pytest.mark.parametrize(
+    ("output", "state"),
+    [(SC_RUNNING, "RUNNING"), (SC_STOPPED_LOCALIZED, "STOPPED"), ("", None), ("garbage", None)],
+)
+def test_parse_sc_state(output: str, state: str | None) -> None:
+    assert dev.parse_sc_state(output) == state
+
+
+class FakeSc:
+    """`run_sc` fake: replies per verb, records calls."""
+
+    def __init__(self, replies: dict[str, list[tuple[int, str]]]) -> None:
+        self.replies = replies
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str]) -> tuple[int, str]:
+        self.calls.append(list(args))
+        return self.replies[args[0]].pop(0)
+
+
+def test_native_stopped_service_started(db_down: pytest.MonkeyPatch) -> None:
+    sc = FakeSc({"query": [(0, SC_STOPPED_LOCALIZED)], "start": [(0, "")]})
+    reachable = iter([False, False, True])
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev.time, "sleep", lambda _s: None)
+    db_down.setattr(dev, "run_sc", sc)
+    db_down.setattr(dev.shutil, "which", lambda _n: pytest.fail("docker path not expected"))
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert sc.calls == [["query", "postgresql-x64-16"], ["start", "postgresql-x64-16"]]
+
+
+def test_native_start_fails_with_services_msc_hint(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(
+        dev, "run_sc", FakeSc({"query": [(0, SC_STOPPED_LOCALIZED)], "start": [(5, "")]})
+    )
+    with pytest.raises(dev.LauncherError) as error:
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    text = str(error.value)
+    assert "«postgresql-x64-16»" in text
+    assert "services.msc" in text
+    assert "від імені адміністратора" in text
+
+
+def test_native_running_but_port_closed(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(dev, "DB_TCP_TIMEOUT_S", 0.01)
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(0, SC_RUNNING), (0, SC_RUNNING)]}))
+    with pytest.raises(dev.LauncherError, match=r"у стані RUNNING, але 127.0.0.1:5433"):
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+
+
+def test_no_native_service_uses_docker_path(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    calls: list[list[str]] = []
+    reachable = iter([False, True])
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(dev.SC_SERVICE_MISSING, "")]}))
+    db_down.setattr(dev.shutil, "which", lambda _n: "docker")
+    db_down.setattr(dev, "docker_daemon_running", lambda _d: True)
+    db_down.setattr(dev, "run_step", lambda cmd, *_a, **_k: calls.append(list(cmd)))
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert calls == [["docker", "compose", "up", "-d", "--wait", "db"]]
+
+
+def test_docker_port_never_queries_native_service(db_down: pytest.MonkeyPatch) -> None:
+    """DATABASE_URL on the Docker port (5432): Docker path even if the service exists."""
+    db_down.setattr(dev, "native_service_state", lambda _s: pytest.fail("no sc query expected"))
+    db_down.setattr(dev.shutil, "which", lambda _n: None)
+    with pytest.raises(dev.LauncherError, match="Встановіть Docker Desktop"):
+        dev.ensure_db({"DATABASE_URL": LOCAL_URL})
+
+
+def test_native_port_from_env() -> None:
+    assert dev.native_pg_port({}) == 5433
+    assert dev.native_pg_port({"NATIVE_PG_PORT": "6000"}) == 6000
+    assert dev.native_pg_port({"NATIVE_PG_PORT": "x"}) == 5433
+
+
+def _pg_install(root: Path, version: str) -> Path:
+    bin_dir = root / "PostgreSQL" / version / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "pg_dump.exe").write_bytes(b"")
+    return bin_dir
+
+
+def test_native_pg_bin_prefers_16(tmp_path: Path) -> None:
+    _pg_install(tmp_path, "17")
+    bin16 = _pg_install(tmp_path, "16")
+    assert dev.native_pg_bin(str(tmp_path)) == bin16
+    assert dev.native_pg_bin(str(tmp_path / "missing")) is None
+    assert dev.native_pg_bin("") is None
+
+
+def test_with_native_bin_prepends_once(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    env = {"Path": os.pathsep.join(["C:/a", "C:/b"])}
+    first = dev.with_native_bin(env, bin_dir)
+    assert first["Path"].split(os.pathsep) == [str(bin_dir), "C:/a", "C:/b"]
+    assert env["Path"] == os.pathsep.join(["C:/a", "C:/b"])  # input not mutated
+    assert dev.with_native_bin(first, bin_dir) == first
+    assert dev.with_native_bin(env, None) is env
+
+
+def test_child_env_has_native_bin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bin16 = _pg_install(tmp_path, "16")
+    monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
+    path_key = next(k for k in dev.child_env() if k.upper() == "PATH")
+    assert dev.child_env()[path_key].split(os.pathsep)[0] == str(bin16)
 
 
 # --------------------------------------------------------------------------- children

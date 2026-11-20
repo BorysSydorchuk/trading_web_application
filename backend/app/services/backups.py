@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.engine import make_url
 
 from app.config import REPO_ROOT
+from app.system.pg_tools import pg_tool
 from app.tools.migrate import DbTarget, dump_plan, parse_target, run_dump, subprocess_runner
 
 Kind = Literal["daily", "manual", "pre-migration"]
@@ -117,7 +118,7 @@ class PostgresTools:
         # A real connection confirms identity before invoking any dump subprocess.
         self._confirm_target(url, target)
         plan = dump_plan(
-            target, path, which=shutil.which, compose_dir=REPO_ROOT, compose_port=self.compose_port
+            target, path, which=pg_tool, compose_dir=REPO_ROOT, compose_port=self.compose_port
         )
         if plan.to_stdout:
             self._confirm_compose(url, target)
@@ -185,7 +186,7 @@ class PostgresTools:
     @staticmethod
     def verify(path: Path) -> None:
         """Read TOC and all data blocks without connecting to or restoring any DB."""
-        tool = shutil.which("pg_restore")
+        tool = pg_tool("pg_restore")
         for operation in ("--list", "--file=-"):
             argv = (
                 [tool, operation, str(path)]

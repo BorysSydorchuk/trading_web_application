@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 from app.config import REPO_ROOT, Settings, get_settings
 from app.config_files import check_config_files
 from app.services.backups import BackupStore, PostgresTools, _directory, target_key
+from app.system.pg_tools import pg_tool
 from app.tools.migrate import parse_target
 
 
@@ -68,7 +69,7 @@ def check_database(settings: Settings) -> None:
 def check_backup_tools(settings: Settings) -> None:
     try:
         target = parse_target(settings.database_url)
-        dump, restore = shutil.which("pg_dump"), shutil.which("pg_restore")
+        dump, restore = pg_tool("pg_dump"), pg_tool("pg_restore")
         if dump:
             if not restore:
                 raise ValueError("missing restore")
