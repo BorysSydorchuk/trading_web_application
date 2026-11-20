@@ -21,8 +21,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from tests.fs_guard import GUARD
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+# No test may write the real .env, backups/ or data/ (owner bug 2026-11-20); see fs_guard.py.
+sys.addaudithook(GUARD.hook)
 
 # Point the app at the test DB and throwaway log/data dirs *before* app.main is imported
 # anywhere (it builds the app and configures logging at import time).
@@ -31,6 +35,13 @@ if not _base_settings.test_database_url:
     pytest.exit("TEST_DATABASE_URL is not set (see .env.example).", returncode=2)
 BASE_TEST_DATABASE_URL: str = _base_settings.test_database_url
 TEST_SUFFIX = "_test"
+# The dev DB (`trading_journal`) never ends in `_test`. No equality check against
+# DATABASE_URL: xdist workers inherit the controller's override (DATABASE_URL = test URL).
+if not (make_url(BASE_TEST_DATABASE_URL).database or "").endswith(TEST_SUFFIX):
+    pytest.exit(
+        f"TEST_DATABASE_URL must name a separate *{TEST_SUFFIX} database (never the dev DB).",
+        returncode=2,
+    )
 SAFE_DB_NAME = re.compile(r"[A-Za-z0-9_]+")
 
 
@@ -232,6 +243,17 @@ def _fresh_journal_requirements(request: pytest.FixtureRequest) -> None:
     state, so the result never depends on what an earlier test synced."""
     if "db_engine" in request.fixturenames:
         reset_journal_requirements(request.getfixturevalue("db_engine"))
+
+
+@pytest.fixture(autouse=True)
+def _protected_paths_untouched() -> Iterator[None]:
+    """Fail the test if it wrote (or tried to write) a protected repo path, even when the
+    code under test swallowed the guard's exception."""
+    if earlier := GUARD.take():  # from a session/module fixture or a later teardown
+        pytest.fail("A fixture wrote a protected repo path: " + "; ".join(earlier), pytrace=False)
+    yield
+    if blocked := GUARD.take():
+        pytest.fail("Test wrote a protected repo path: " + "; ".join(blocked), pytrace=False)
 
 
 @pytest.fixture(autouse=True)

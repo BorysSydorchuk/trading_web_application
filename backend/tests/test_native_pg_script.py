@@ -310,6 +310,60 @@ def test_switch_commands_refuse_while_app_runs(
     before = path.read_bytes()
     assert npg.main([command, "--force"] if command == "switch" else [command], env_file=path) == 1
     assert path.read_bytes() == before
+    assert not list(tmp_path.glob(".env.bak-*"))  # refused: no backup, nothing written
+
+
+def test_switch_and_back_back_up_env_and_say_what_changed(
+    tmp_path: Path, stopped_app: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _switch_env(tmp_path)
+    docker_text = path.read_bytes()
+    assert npg.main(["switch", "--force"], env_file=path) == 0
+    out = capsys.readouterr().out
+    backups = sorted(tmp_path.glob(".env.bak-*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == docker_text  # exact old bytes
+    assert "switch ЗМІНИВ .env" in out
+    assert "native (порт 5433)" in out
+    assert "DB_MODE=native" in out
+    assert backups[0].name in out
+    assert "UTC" in out
+    assert "docker-pw" not in out  # the line never shows a URL or password
+
+    native_text = path.read_bytes()
+    assert npg.main(["switch-back"], env_file=path) == 0  # same second: still a new backup
+    out = capsys.readouterr().out
+    assert "switch-back ЗМІНИВ .env" in out
+    assert "docker (порт 5432)" in out
+    backups = sorted(tmp_path.glob(".env.bak-*"))
+    assert len(backups) == 2
+    assert backups[0].read_bytes() == docker_text
+    assert backups[-1].read_bytes() == native_text
+
+
+def test_env_backup_never_overwrites(tmp_path: Path) -> None:
+    path = tmp_path / ".env"
+    path.write_bytes(b"A=1\n")
+    first = envm.backup_env_file(path, "20261120T000000000000Z")
+    path.write_bytes(b"A=2\n")
+    with pytest.raises(envm.NativePgError, match="Нічого не змінено"):
+        envm.backup_env_file(path, "20261120T000000000000Z")
+    assert first.read_bytes() == b"A=1\n"
+
+
+def test_env_backups_keep_the_newest(tmp_path: Path) -> None:
+    path = tmp_path / ".env"
+    path.write_bytes(b"A=1\n")
+    for i in range(envm.KEEP_ENV_BACKUPS + 3):
+        envm.backup_env_file(path, f"2026112{i:02d}T000000Z")
+    kept = sorted(p.name for p in tmp_path.glob(".env.bak-*"))
+    assert len(kept) == envm.KEEP_ENV_BACKUPS
+    assert kept[-1] == f".env.bak-2026112{envm.KEEP_ENV_BACKUPS + 2:02d}T000000Z"
+
+
+def test_env_backup_failure_changes_nothing(tmp_path: Path) -> None:
+    with pytest.raises(envm.NativePgError, match="Нічого не змінено"):
+        envm.backup_env_file(tmp_path / "missing.env", "20261120T000000Z")
 
 
 def test_switch_requires_native_keys() -> None:

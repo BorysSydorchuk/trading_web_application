@@ -65,6 +65,7 @@ from native_pg_env import (
     NATIVE_SERVICE,
     TEST_DB,
     NativePgError,
+    backup_env_file,
     env_values,
     fingerprint,
     install_snippet,
@@ -680,17 +681,37 @@ def _check_copy_current(env: Mapping[str, str]) -> None:
         )
 
 
+def write_switched_env(env_file: Path, text: str, updates: Mapping[str, str], command: str) -> None:
+    """Back up the old .env (`.env.bak-<UTC>`), write the new one, and say plainly what changed:
+    a switch is never silent (owner bug 2026-11-20: a recalled `switch-back` went unnoticed)."""
+    now = datetime.now(UTC)
+    # Microseconds: two switches in one second never overwrite each other's backup.
+    backup = backup_env_file(env_file, now.strftime("%Y%m%dT%H%M%S%fZ"))
+    new_text = set_env(text, updates)
+    write_env_text(env_file, new_text)
+    env = env_values(new_text)
+    target = describe_active(
+        env.get(K_URL, ""),
+        port_value(env, K_PORT, DEFAULT_NATIVE_PORT),
+        port_value(env, "POSTGRES_PORT", DOCKER_PORT),
+    )
+    say(
+        f"{now:%Y-%m-%d %H:%M:%S} UTC: {command} ЗМІНИВ {env_file.name}: база застосунку тепер "
+        f"{target}, {K_MODE}={env.get(K_MODE, '')}. Попередня версія: {backup.name}"
+    )
+
+
 def cmd_switch(env_file: Path, force: bool) -> int:
     ensure_app_stopped(load_dev())
     text = read_env_text(env_file)
     updates = switch_updates(raw_env(text))
     if set(updates) == {K_MODE}:  # URLs already native: only DB_MODE=native is written
-        write_env_text(env_file, set_env(text, updates))
+        write_switched_env(env_file, text, updates, "switch")
         say(f"{K_MODE}=native записано (адреси вже нативні). Запустіть start.bat.")
         return 0
     if not force:
         _check_copy_current(env_values(text))
-    write_env_text(env_file, set_env(text, updates))
+    write_switched_env(env_file, text, updates, "switch")
     COPY_MARKER.unlink(missing_ok=True)  # one verified copy, one switch
     say(
         "Перемкнено на нативний PostgreSQL (DATABASE_URL, TEST_DATABASE_URL, DB_MODE=native). "
@@ -703,7 +724,7 @@ def cmd_switch(env_file: Path, force: bool) -> int:
 def cmd_switch_back(env_file: Path) -> int:
     ensure_app_stopped(load_dev())
     text = read_env_text(env_file)
-    write_env_text(env_file, set_env(text, switch_back_updates(raw_env(text))))
+    write_switched_env(env_file, text, switch_back_updates(raw_env(text)), "switch-back")
     say(
         "Повернено Docker PostgreSQL (DATABASE_URL, TEST_DATABASE_URL, DB_MODE=docker). "
         "Запустіть Docker Desktop, потім start.bat."
