@@ -42,6 +42,7 @@ export function homePosition(overrides: Partial<HomePosition> = {}): HomePositio
     mfe_r: '0.8000',
     risk_pct: '0.6560',
     described: true,
+    close_unconfirmed: false,
     ...overrides,
   }
 }

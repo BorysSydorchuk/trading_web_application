@@ -299,6 +299,23 @@ describe('HomePage «Відкриті позиції»', () => {
     expect(screen.queryByRole('img', { name: h.positions.live })).not.toBeInTheDocument()
   })
 
+  it('a position MT5 no longer reports says «Не вдалося підтвердити закриття», never a live card', async () => {
+    serveHome(homeData({
+      open_positions: [
+        homePosition({ symbol: 'GBPUSD', close_unconfirmed: true, current_price: null, pnl: null, r_now: null, price_time: null }),
+      ],
+      open_totals: { pnl: null, risk_pct: '0.5000', price_time: null },
+    }))
+    renderWithProviders(<HomePage />)
+    const card = await screen.findByRole('article', { name: 'GBPUSD' })
+    expect(within(card).getByTestId('position-live-note')).toHaveTextContent(h.positions.closeUnconfirmed)
+    expect(within(card).getByTestId('position-live-note')).toHaveClass('text-warning')
+    expect(within(card).getByTestId('position-close-unconfirmed')).toHaveTextContent(h.positions.closeUnconfirmedHint)
+    expect(within(card).queryByTestId('position-ladder')).not.toBeInTheDocument()
+    expect(within(card).queryByLabelText(/^MAE /)).not.toBeInTheDocument()
+    expect(within(card).getByRole('link', { name: h.positions.describeLabel('GBPUSD') })).toBeInTheDocument()
+  })
+
   it('shows the empty state without positions', async () => {
     renderWithProviders(<HomePage />)
     expect(await screen.findByText(h.positions.empty)).toBeInTheDocument()

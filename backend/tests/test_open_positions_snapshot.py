@@ -78,7 +78,8 @@ def test_write_stores_price_profit_plus_swap_and_utc_time(tmp_path: Path) -> Non
 
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data == {
-        "3": {"77": {"price_current": "1.1625", "profit": "39.25", "time": "2026-11-20T09:00:00Z"}}
+        "3": {"77": {"price_current": "1.1625", "profit": "39.25", "time": "2026-11-20T09:00:00Z"}},
+        "_synced_at": {"3": "2026-11-20T09:00:00Z"},
     }
     assert [p.name for p in path.parent.iterdir()] == [snap.SNAPSHOT_FILE]  # no temp left
 
@@ -215,7 +216,10 @@ def test_closed_position_leaves_the_snapshot_on_the_next_sync(
     )
 
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data == {str(account.id): {}}
+    assert data == {
+        str(account.id): {},
+        "_synced_at": {str(account.id): "2026-10-23T13:31:00Z"},
+    }
 
 
 @pytest.mark.usefixtures("env_passwords")
@@ -262,3 +266,18 @@ def test_failed_sync_keeps_the_previous_snapshot(
     )
 
     assert sorted(snap.read_snapshot(path)) == [(account.id, 5)]
+
+
+def test_synced_at_per_account_and_positions_readers_skip_it(tmp_path: Path) -> None:
+    path = snap.snapshot_path(tmp_path)
+    assert snap.synced_at(path) == {}  # missing file
+    first = datetime(2026, 11, 20, 21, 15, 3, 123456, tzinfo=UTC)
+    snap.write_account(path, 3, [], first)  # empty entry: MT5 reported no positions
+    snap.write_account(path, 2, [position(9, "1.1", "0", "0")], first + timedelta(seconds=4))
+    assert snap.synced_at(path) == {3: first, 2: first + timedelta(seconds=4)}
+    assert set(snap.read_snapshot(path)) == {(2, 9)}  # "_synced_at" is not a position
+    path.write_text('{"_synced_at": {"x": "2026", "4": "no-date", "5": "2026-11-20T10:00:00"}}',
+                    encoding="utf-8")  # fmt: skip
+    assert snap.synced_at(path) == {}  # junk and naive times are ignored
+    path.write_text("{broken", encoding="utf-8")
+    assert snap.synced_at(path) == {}

@@ -94,6 +94,19 @@ function LiveValues({ position }: { position: HomePosition }) {
   )
 }
 
+function Excursions({ position }: { position: HomePosition }) {
+  return (
+    <>
+      <span aria-label={t.maeLabel(unsignedR(position.mae_r))} className="num rounded-[10px] bg-loss-wash px-2.5 py-1 text-xs font-semibold text-loss">
+        {t.mae(unsignedR(position.mae_r))}
+      </span>
+      <span aria-label={t.mfeLabel(unsignedR(position.mfe_r))} className="num rounded-[10px] bg-profit-wash px-2.5 py-1 text-xs font-semibold text-profit">
+        {t.mfe(unsignedR(position.mfe_r))}
+      </span>
+    </>
+  )
+}
+
 /** One open position (mockup card): P&L and R, SL → entry → TP ladder, MAE / MFE, description state. */
 export function PositionCard({ position, now }: { position: HomePosition; now: string }) {
   const tone = position.current_price === null ? 'neutral' : signTone(position.pnl)
@@ -124,14 +137,18 @@ export function PositionCard({ position, now }: { position: HomePosition; now: s
           <LiveValues position={position} />
         </div>
       </div>
-      {!hasRScale(position) ? <p className="mt-3 text-xs text-ink-muted">{t.noSl}</p> : <Ladder position={position} />}
+      {position.close_unconfirmed ? (
+        // Never a live card for a position MT5 does not report (owner bug 2026-11-20).
+        <p data-testid="position-close-unconfirmed" className="mt-3 text-xs text-ink-muted">
+          {t.closeUnconfirmedHint}
+        </p>
+      ) : !hasRScale(position) ? (
+        <p className="mt-3 text-xs text-ink-muted">{t.noSl}</p>
+      ) : (
+        <Ladder position={position} />
+      )}
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <span aria-label={t.maeLabel(unsignedR(position.mae_r))} className="num rounded-[10px] bg-loss-wash px-2.5 py-1 text-xs font-semibold text-loss">
-          {t.mae(unsignedR(position.mae_r))}
-        </span>
-        <span aria-label={t.mfeLabel(unsignedR(position.mfe_r))} className="num rounded-[10px] bg-profit-wash px-2.5 py-1 text-xs font-semibold text-profit">
-          {t.mfe(unsignedR(position.mfe_r))}
-        </span>
+        {!position.close_unconfirmed && <Excursions position={position} />}
         <span className="flex-1" />
         <Pill tone="neutral" data-testid="position-described" className="rounded-[10px] px-2.5 py-1">
           {position.described ? t.described : t.notDescribed}

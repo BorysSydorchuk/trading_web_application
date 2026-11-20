@@ -1142,6 +1142,8 @@ export const uk = {
       ageHours: (h: number, m: number) => `${h} год ${m} хв`,
       ageDays: (d: number, h: number) => `${d} д ${h} год`,
       priceUnavailable: 'ціна недоступна',
+      closeUnconfirmed: 'Не вдалося підтвердити закриття',
+      closeUnconfirmedHint: 'MT5 більше не показує цю позицію, а закриття ще немає в історії. Перевіримо знову під час наступної синхронізації.',
       stale: (time: string) => `дані застаріли ${time}`,
       sl: '−1R',
       entry: '0',

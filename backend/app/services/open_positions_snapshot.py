@@ -7,6 +7,8 @@ the positions the sync already read (MT5 ``positions_get``, read-only):
                                         "time": "2026-11-20T09:00:00Z"}}}
 
 ``profit`` = MT5 position profit + swap (account currency), ``time`` = the sync time (UTC).
+``"_synced_at": {"<account_id>": "<sync start, UTC>"}`` says which sync wrote each account's
+entry (an empty entry = MT5 reported no positions then); readers of positions skip it.
 The file is replaced atomically (temp file + ``os.replace``). The API reads it; values older
 than ``STALE_AFTER`` are stale (only their time is shown). A missing or broken file never
 fails a reader (logged once per process); a failed write never fails a sync (logged by the
@@ -31,6 +33,7 @@ from app.mt5.types import RawPosition
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_FILE = "open_positions.json"
+SYNCED_KEY = "_synced_at"
 STALE_AFTER = timedelta(minutes=5)
 # Windows: os.replace fails while a reader has the target open; readers are brief.
 _REPLACE_ATTEMPTS = 5
@@ -91,6 +94,11 @@ def write_account(
     """Replace ``account_id``'s positions in the snapshot (others kept). Raises OSError."""
     data = _read_raw(path)
     data[str(account_id)] = {str(p.identifier): _position_entry(p, at) for p in positions}
+    synced = data.get(SYNCED_KEY)
+    data[SYNCED_KEY] = {
+        **(synced if isinstance(synced, dict) else {}),
+        str(account_id): _utc_iso(at),
+    }
     write_json_atomic(path, data)
 
 
@@ -160,3 +168,23 @@ def read_snapshot(path: Path) -> dict[tuple[int, int], LiveValue]:
         _warn_once("broken", "Open positions snapshot %s unreadable: not a mapping", path)
         return {}
     return _parse(data)
+
+
+def synced_at(path: Path) -> dict[int, datetime]:
+    """Per account: start time of the sync that wrote its entry. Never raises (missing or
+    unreadable file, or a file from before this key: no accounts)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}  # read_snapshot already warns about a missing/broken file
+    raw = data.get(SYNCED_KEY) if isinstance(data, dict) else None
+    out: dict[int, datetime] = {}
+    for key, value in (raw if isinstance(raw, dict) else {}).items():
+        try:
+            at = datetime.fromisoformat(str(value))
+            account_id = int(key)
+        except ValueError:
+            continue
+        if at.tzinfo is not None:
+            out[account_id] = at
+    return out
