@@ -66,12 +66,15 @@ AC: digest for a week with real trades matches hand-calculated win rate, total R
 - M7-08 preparation ACCEPTED; the previous M7-08 live-acceptance plan is **SUPERSEDED**. Actual five-day live validation remains **0/5**, has not passed, and is transferred to M8. Technical closure follows the explicit owner/PM decision, not a claim of five successful live days.
 - Preserve `m7/trading-week` at `8b6ade5` and its `docs/reports/M7-08.md` daily checklist. Do not merge or delete that branch/commit. The template is stored on that branch, not in main; view it from repository-root PowerShell with `git show 8b6ade5:docs/reports/M7-08.md`. Its historical closure conditions are superseded by this decision.
 
-## M8. UX & Functional Improvements — awaiting owner feedback and PM scope
+## M8. UX & Functional Improvements — technically complete (2026-11-20), waiting for the PM
 
-- Scope and priorities will be based on actual owner feedback from normal application use. No M8 fixes or implementation are authorized by the M7 closure decision.
-- Five distinct real trading days of owner-driven live validation transfer here, initially **0/5**. Reuse the preserved M7-08 A–F daily template where useful; record actual Brussels dates, account/trade/limit/backup/journal/bias/calculator/digest observations and defects. No weekends, market holidays, simulations, historical backfills or invented results.
-- PM reviews feedback and authorizes bounded tasks with appropriate S/M/L tiers and acceptance criteria before implementation. Preserve real/dev/QA data; MT5 remains strictly read-only, with no agent-initiated real operations or unapproved AI/Whisper calls.
-- The previous M8 placeholder for optional Notion export (PRD 6.11) is superseded by this milestone title. Notion export remains an optional deferred idea without an assigned implementation milestone or authorization.
+- Scope came from owner feedback in normal use: `docs/M8_BACKLOG.md` (M8-01..M8-17 plus the PM's tier S starting-balance suggestion).
+- **Accepted:** M8-11, M8-01, M8-16, M8-04..08, M8-10a, M8-10b, M8-10c and the starting-balance suggestion.
+- **Technically accepted or merged, owner check open:** M8-09, M8-01b, M8-02 + M8-03, M8-15, M8-12, M8-13, M8-14.
+- **Summary:** `docs/reports/M8.md`.
+- **Owner decisions pending:** AI prefill of manual violations (YES / NO); native PostgreSQL instead of Docker (not authorized).
+- **Live validation from M7:** 0/5, not run in M8.
+- The previous M8 placeholder for optional Notion export (PRD 6.11) stays superseded and deferred.
 
 ## Backlog
 New ideas from Borys or agents go to `docs/BACKLOG.md`. PM decides when they enter a milestone.
