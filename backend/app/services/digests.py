@@ -400,19 +400,37 @@ def recompute_for_trade(db: Session, close_time: datetime | None, now: datetime)
     updated: list[int] = []
     kinds: tuple[dm.PeriodKind, ...] = ("weekly", "monthly")
     for kind in kinds:
-        start, end = _period(kind, day)
+        start, _end = _period(kind, day)
         digest = _find(db, kind, start)
         if digest is None:
             continue
-        metrics = _snapshot(db, kind, start, end)
-        if digest.ai_summary and metrics != digest.metrics:
-            digest.ai_summary_stale_at = now
-        digest.metrics = metrics
-        digest.generated_at = now
+        _recompute(db, digest, now)
         updated.append(digest.id)
         logger.info("Digest %s %s recomputed after a statistics exclusion change", kind, start)
     db.flush()
     return updated
+
+
+def _recompute(db: Session, digest: Digest, now: datetime) -> bool:
+    """Numbers only (review texts and summary text kept); True = they changed. A saved AI
+    summary gets the stale mark when the numbers changed."""
+    kind: dm.PeriodKind = "weekly" if digest.kind == "weekly" else "monthly"
+    metrics = _snapshot(db, kind, digest.period_start, digest.period_end)
+    changed = metrics != digest.metrics
+    if digest.ai_summary and changed:
+        digest.ai_summary_stale_at = now
+    digest.metrics = metrics
+    digest.generated_at = now
+    return changed
+
+
+def recompute_all(db: Session, now: datetime) -> list[tuple[int, bool]]:
+    """Recompute every saved digest after a formula change (M8-10b fixes: shared % base).
+    Flushes, never commits. Returns (digest id, numbers changed) in period order."""
+    digests = db.scalars(select(Digest).order_by(Digest.period_start, Digest.id)).all()
+    result = [(digest.id, _recompute(db, digest, now)) for digest in digests]
+    db.flush()
+    return result
 
 
 def get(db: Session, digest_id: int) -> schemas.DigestOut:
