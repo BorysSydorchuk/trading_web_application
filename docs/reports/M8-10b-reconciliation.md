@@ -124,3 +124,5 @@ After the fix («Ліміти» vs MT5, 11:47 Brussels):
 | month | 10 000.00 (deposit 10.11) | 9 988.50 | −0.1150 % | −0.1150 % | 0 |
 
 «FN Stellar Funded»: unchanged, 0 difference, no open trade.
+
+Known limitation: a partial exit of an open trade that happens in a later period than the trade's open is counted in the open period, not on the day of the partial exit. Rare. Fix later if needed by attributing exit deals by deal time (BACKLOG).
