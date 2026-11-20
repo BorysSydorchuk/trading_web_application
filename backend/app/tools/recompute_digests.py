@@ -34,16 +34,18 @@ from app.tools import migrate
 logger = logging.getLogger(__name__)
 LOG_FILE = "maintenance.log"
 BACKUP_LABEL = "recompute-digests"
+LOG_PATH = f"logs/{LOG_FILE}"
+FAILED = "Помилка резервування чи перерахунку дайджестів; нічого не змінено. Деталі:"
 
 Backup = Callable[[Settings, TextIO], Path | None]
 
 
-def take_backup(settings: Settings, out: TextIO) -> Path | None:
+def take_backup(settings: Settings, out: TextIO, deps: migrate.Deps | None = None) -> Path | None:
     """Verified pg_dump of a real database; None for a test database. Raises BackupError."""
     target = migrate.parse_target(settings.database_url)
     if target.is_test:
         return None
-    deps = migrate.Deps()
+    deps = deps or migrate.Deps()
     deps.confirm_target(settings.database_url, settings.postgres_port)
     return migrate.make_backup(target, BACKUP_LABEL, deps, out, compose_port=settings.postgres_port)
 
@@ -92,10 +94,18 @@ def main(argv: Sequence[str] | None = None, *, backup: Backup = take_backup) -> 
                 out=out,
                 backup=lambda: backup(settings, out),
             )
-        except migrate.BackupError as exc:
-            print(f"Резервну копію не створено, нічого не змінено: {exc}", file=sys.stderr)
-            return 1
+        except migrate.MigrateError as exc:  # BackupError included; texts carry no secrets
+            return _fail(f"Резервну копію не створено, нічого не змінено: {exc}")
+        except Exception:
+            logger.exception("recompute_digests failed")
+            return _fail(f"{FAILED} {LOG_PATH}")
     return 0
+
+
+def _fail(text: str) -> int:
+    logger.error("%s", text)
+    print(text, file=sys.stderr, flush=True)
+    return 1
 
 
 if __name__ == "__main__":

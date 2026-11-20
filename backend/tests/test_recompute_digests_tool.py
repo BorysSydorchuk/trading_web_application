@@ -16,8 +16,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.tools import migrate
-from app.tools.recompute_digests import run
+from app.tools import migrate, recompute_digests
+from app.tools.recompute_digests import run, take_backup
 from tests.test_digest_recompute import MONTH, WEEK, create, stored
 from tests.test_trade_exclusion import (  # noqa: F401  (fixtures)
     _clean,
@@ -114,5 +114,62 @@ def test_failed_backup_writes_nothing(
     with pytest.raises(migrate.BackupError):
         run(session, apply=True, now=LATER, out=io.StringIO(), backup=broken)
     session.rollback()
+    digest = stored(session, weekly["id"])
+    assert digest.metrics["combined"]["metrics"]["net_pnl_pct"] == {"value": "7.2879"}
+
+
+class _Settings:
+    def __init__(self, url: str) -> None:
+        self.database_url = url
+        self.postgres_port = 5432
+
+
+def test_take_backup_skips_a_test_database_without_confirming(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def never(*_: object, **__: object) -> None:
+        raise AssertionError("no confirm / dump for a test database")
+
+    monkeypatch.setattr(migrate, "make_backup", never)
+    url = "postgresql+psycopg://u:p@localhost:5432/trading_journal_test"
+    deps = migrate.Deps(confirm_target=never)
+    assert take_backup(_Settings(url), io.StringIO(), deps) is None  # type: ignore[arg-type]
+
+
+def test_take_backup_confirms_the_target_then_dumps(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def confirm(url: str, port: int) -> None:
+        calls.append("confirm")
+
+    def dump(target: migrate.DbTarget, label: str, *_: object, **__: object) -> Path:
+        calls.append(f"dump {target.database} {label}")
+        return Path("b.dump")
+
+    monkeypatch.setattr(migrate, "make_backup", dump)
+    url = "postgresql+psycopg://u:p@localhost:5432/trading_journal"
+    deps = migrate.Deps(confirm_target=confirm)
+    assert take_backup(_Settings(url), io.StringIO(), deps) == Path("b.dump")  # type: ignore[arg-type]
+    assert calls == ["confirm", "dump trading_journal recompute-digests"]
+
+
+@pytest.mark.parametrize("error", [migrate.MigrateError("bad url"), RuntimeError("docker down")])
+def test_main_fails_readably_and_writes_nothing(
+    client: TestClient,
+    session: Session,
+    week: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+) -> None:
+    weekly = create(client, "weekly", WEEK)
+    _make_old(session, weekly["id"], summary=True)
+    monkeypatch.setattr(recompute_digests, "setup_logging", lambda *_: Path("x.log"))
+
+    def broken(*_: object) -> Path:
+        raise error
+
+    assert recompute_digests.main(["--apply"], backup=broken) == 1
+    assert "нічого не змінено" in capsys.readouterr().err
     digest = stored(session, weekly["id"])
     assert digest.metrics["combined"]["metrics"]["net_pnl_pct"] == {"value": "7.2879"}
