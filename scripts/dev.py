@@ -81,6 +81,7 @@ NATIVE_PG_SERVICE = "postgresql-x64-16"
 NATIVE_PG_DEFAULT_PORT = 5433
 SC_TIMEOUT_S = 30.0
 SC_SERVICE_MISSING = 1060  # ERROR_SERVICE_DOES_NOT_EXIST
+SERVICE_UNKNOWN = "UNKNOWN"  # sc failed or printed no recognizable state
 SERVICE_STATES = {
     "1": "STOPPED",
     "2": "START_PENDING",
@@ -153,6 +154,10 @@ MSG: dict[str, str] = {
         "Не вдалося запустити службу PostgreSQL «{service}» (код {code}; можливо, потрібні "
         "права адміністратора). Запустіть її вручну: Win+R → services.msc → «{service}» → "
         "Запустити, або один раз запустіть start.bat від імені адміністратора."
+    ),
+    "native_state_unknown": (
+        "Не вдалося визначити стан служби PostgreSQL «{service}» (sc.exe query). Перевірте її: "
+        "Win+R → services.msc → «{service}» → Запустити; див. docs/native-postgres.md."
     ),
     "native_unreachable": (
         "Служба PostgreSQL «{service}» у стані {state}, але {host}:{port} недоступний. "
@@ -1164,16 +1169,21 @@ def run_sc(args: Sequence[str]) -> tuple[int, str]:
 
 
 def native_service_state(service: str) -> str | None:
-    """State of the native PostgreSQL service, or None when it is not installed."""
+    """State of the native PostgreSQL service; None only when it is not installed (1060) or
+    sc.exe cannot run (not Windows). Any other sc failure or unparsable output: UNKNOWN."""
     code, out = run_sc(["query", service])
     if code == SC_SERVICE_MISSING or code < 0:
         return None
-    return parse_sc_state(out)
+    if code != 0:
+        return SERVICE_UNKNOWN
+    return parse_sc_state(out) or SERVICE_UNKNOWN
 
 
 def ensure_native_service(service: str, state: str, host: str, port: int) -> None:
     """Start the stopped service (may need admin) and wait for TCP; LauncherError if not."""
     seconds = f"{DB_TCP_TIMEOUT_S:.0f}"
+    if state == SERVICE_UNKNOWN:
+        raise LauncherError(MSG["native_state_unknown"].format(service=service))
     if state == "STOPPED":
         say(MSG["native_starting"].format(service=service, seconds=seconds))
         code, _out = run_sc(["start", service])

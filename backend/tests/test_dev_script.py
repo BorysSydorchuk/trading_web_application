@@ -329,6 +329,47 @@ def test_no_native_service_uses_docker_path(db_down: pytest.MonkeyPatch) -> None
     assert calls == [["docker", "compose", "up", "-d", "--wait", "db"]]
 
 
+@pytest.mark.parametrize(
+    ("reply", "state"),
+    [
+        ((dev.SC_SERVICE_MISSING, ""), None),
+        ((-1, ""), None),
+        ((5, ""), "UNKNOWN"),
+        ((1072, "garbage"), "UNKNOWN"),
+        ((0, "no state line here"), "UNKNOWN"),
+        ((0, SC_RUNNING), "RUNNING"),
+    ],
+)
+def test_native_service_state_only_missing_means_none(
+    monkeypatch: pytest.MonkeyPatch, reply: tuple[int, str], state: str | None
+) -> None:
+    monkeypatch.setattr(dev, "run_sc", lambda _args: reply)
+    assert dev.native_service_state("postgresql-x64-16") == state
+
+
+def test_native_sc_failure_never_falls_back_to_docker(db_down: pytest.MonkeyPatch) -> None:
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: False)
+    db_down.setattr(dev, "run_sc", FakeSc({"query": [(5, "")]}))
+    db_down.setattr(dev.shutil, "which", lambda _n: pytest.fail("docker path not expected"))
+    with pytest.raises(dev.LauncherError) as error:
+        dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert "«postgresql-x64-16»" in str(error.value)
+    assert "services.msc" in str(error.value)
+
+
+def test_native_start_pending_waits_without_sc_start(db_down: pytest.MonkeyPatch) -> None:
+    pending = "        STATE              : 2  START_PENDING"
+    sc = FakeSc({"query": [(0, pending)]})
+    reachable = iter([False, False, True])
+    db_down.undo()
+    db_down.setattr(dev, "tcp_reachable", lambda *_a, **_k: next(reachable))
+    db_down.setattr(dev.time, "sleep", lambda _s: None)
+    db_down.setattr(dev, "run_sc", sc)
+    dev.ensure_db({"DATABASE_URL": NATIVE_URL})
+    assert sc.calls == [["query", "postgresql-x64-16"]]
+
+
 def test_docker_port_never_queries_native_service(db_down: pytest.MonkeyPatch) -> None:
     """DATABASE_URL on the Docker port (5432): Docker path even if the service exists."""
     db_down.setattr(dev, "native_service_state", lambda _s: pytest.fail("no sc query expected"))
