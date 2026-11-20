@@ -36,6 +36,7 @@ K_URL = "DATABASE_URL"
 K_TEST = "TEST_DATABASE_URL"
 K_DOCKER_URL = "DOCKER_DATABASE_URL"
 K_DOCKER_TEST = "DOCKER_TEST_DATABASE_URL"
+K_MODE = "DB_MODE"  # native | docker (scripts/dev.py resolve_db_mode); set by switch/switch-back
 NATIVE_KEYS = (K_PORT, K_SUPER, K_NATIVE_URL, K_NATIVE_TEST)
 
 NATIVE_SERVICE = "postgresql-x64-16"
@@ -200,8 +201,10 @@ def switch_updates(raw: Mapping[str, str]) -> dict[str, str]:
         if not raw.get(key):
             raise NativePgError(f"У .env немає {key}; перемикати нічого.")
     if raw[K_URL] == raw[K_NATIVE_URL] and raw[K_TEST] == raw[K_NATIVE_TEST]:
-        raise NativePgError("Застосунок уже працює з нативним PostgreSQL; нічого не змінено.")
-    updates = {K_URL: raw[K_NATIVE_URL], K_TEST: raw[K_NATIVE_TEST]}
+        if _mode(raw) == "native":
+            raise NativePgError("Застосунок уже працює з нативним PostgreSQL; нічого не змінено.")
+        return {K_MODE: "native"}  # URLs already native: only the explicit mode is missing
+    updates = {K_URL: raw[K_NATIVE_URL], K_TEST: raw[K_NATIVE_TEST], K_MODE: "native"}
     if K_DOCKER_URL not in raw:
         updates[K_DOCKER_URL] = raw[K_URL]
     if K_DOCKER_TEST not in raw:
@@ -216,8 +219,14 @@ def switch_back_updates(raw: Mapping[str, str]) -> dict[str, str]:
             "нічого не змінено."
         )
     if raw.get(K_URL) == raw[K_DOCKER_URL] and raw.get(K_TEST) == raw[K_DOCKER_TEST]:
-        raise NativePgError("Застосунок уже працює з Docker PostgreSQL; нічого не змінено.")
-    return {K_URL: raw[K_DOCKER_URL], K_TEST: raw[K_DOCKER_TEST]}
+        if _mode(raw) == "docker":
+            raise NativePgError("Застосунок уже працює з Docker PostgreSQL; нічого не змінено.")
+        return {K_MODE: "docker"}
+    return {K_URL: raw[K_DOCKER_URL], K_TEST: raw[K_DOCKER_TEST], K_MODE: "docker"}
+
+
+def _mode(raw: Mapping[str, str]) -> str:
+    return unquote_value(raw.get(K_MODE, "")).strip().lower()
 
 
 def fingerprint(counts: Mapping[str, int], alembic: tuple[str, ...]) -> str:

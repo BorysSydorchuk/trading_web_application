@@ -28,9 +28,14 @@
    `copy` відмовляє (затерла б новіші дані в нативній базі).
 7. Перемкнути застосунок: `python -m uv run --project backend python scripts/native_pg.py switch`
    (лише одразу після успішного `copy`: якщо дані в Docker змінилися, повторіть `copy --replace`).
-8. Запуск: `start.bat`
-9. Перевірка: `python -m uv run --project backend python scripts/native_pg.py status` → «Активна БД
-   застосунку: native (порт 5433)»; у браузері «Головна» і «Журнал» показують ваші угоди.
+   `switch` також записує в `.env` `DB_MODE=native`. Якщо адреси вже нативні, а `DB_MODE` ще
+   немає (перемикались до 2026-11-20), `switch` лише дописує `DB_MODE=native`.
+8. Запуск: `start.bat`. Перший рядок про БД: «БД: native (127.0.0.1:5433)». У режимі native
+   застосунок (start.bat, трей, автозапуск, резервні копії, міграції) **ніколи** не викликає
+   Docker і не запускає Docker Desktop; якщо служба недоступна — зрозуміла помилка.
+9. Перевірка: `python -m uv run --project backend python scripts/native_pg.py status` → «Режим БД:
+   native (127.0.0.1:5433)», «DB_MODE у .env: native», «Активна БД застосунку: native (порт
+   5433)»; у браузері «Головна» і «Журнал» показують ваші угоди.
 10. Коли все працює: закрийте Docker Desktop (значок у треї → «Quit Docker Desktop») і вимкніть
     його автозапуск: Docker Desktop → Settings → General → зняти «Start Docker Desktop when you
     sign in to your computer» → «Apply & restart» (або Диспетчер завдань → «Автозавантаження» →
@@ -43,9 +48,15 @@
 ## Як повернутися на Docker
 
 1. `stop.bat`
-2. `python -m uv run --project backend python scripts/native_pg.py switch-back`
+2. `python -m uv run --project backend python scripts/native_pg.py switch-back` (записує
+   `DB_MODE=docker`)
 3. Запустіть Docker Desktop, дочекайтеся «Engine running».
-4. `start.bat`
+4. `start.bat` → «БД: Docker (127.0.0.1:5432)». Якщо в `.env` є `NATIVE_DATABASE_URL`, launcher
+   попереджає, що застосунок працює на Docker, хоча нативний сервер налаштовано.
+
+`DB_MODE` (`native` | `docker`) задає режим явно. Без нього: `native`, коли порт `DATABASE_URL`
+дорівнює `NATIVE_PG_PORT` (типово 5433) або БД не локальний Docker-порт `POSTGRES_PORT`;
+`docker` — лише для localhost на `POSTGRES_PORT` (типово 5432).
 
 Дані, записані в нативну базу після кроку 7, у Docker не потрапляють (за потреби — повторний
 перенос у зворотний бік, окреме завдання).

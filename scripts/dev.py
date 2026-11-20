@@ -6,9 +6,9 @@ Stdlib only, Python 3.12.x. Steps:
   2. prerequisite checks (Python, Node/npm, uv),
   3. `.env` from `.env.example` if missing,
   4. `uv sync` / `npm install` when dependencies are missing or stale,
-  5. PostgreSQL reachable (on the native port NATIVE_PG_PORT, default 5433: starts the native
-     Windows service postgresql-x64-16 if installed; otherwise starts Docker Desktop and
-     the `db` service if needed) +
+  5. PostgreSQL reachable, by DB mode (DB_MODE, see resolve_db_mode): `native` starts the
+     Windows service postgresql-x64-16 if needed and NEVER calls Docker; `docker` starts
+     Docker Desktop and the `db` service if needed. One line «БД: <mode> (<host>:<port>)» +
      migrations via `python -m app.tools.migrate` (pg_dump backup to `backups/` first),
   6. starts API, worker and Vite dev server with prefixed output,
   7. waits for http://127.0.0.1:8000/api/health and http://127.0.0.1:5173/, opens the browser.
@@ -79,6 +79,9 @@ DB_TCP_TIMEOUT_S = 30.0
 # Native PostgreSQL 16 Windows service (decision 2026-11-20); Docker stays the fallback.
 NATIVE_PG_SERVICE = "postgresql-x64-16"
 NATIVE_PG_DEFAULT_PORT = 5433
+DOCKER_PG_DEFAULT_PORT = 5432  # POSTGRES_PORT default (docker-compose.yml)
+MODE_NATIVE = "native"
+MODE_DOCKER = "docker"
 SC_TIMEOUT_S = 30.0
 SC_SERVICE_MISSING = 1060  # ERROR_SERVICE_DOES_NOT_EXIST
 SERVICE_UNKNOWN = "UNKNOWN"  # sc failed or printed no recognizable state
@@ -166,6 +169,19 @@ MSG: dict[str, str] = {
     ),
     "step_migrate": "Застосовую міграції БД (з резервною копією в backups/)",
     # database / Docker
+    "db_mode_native": "БД: native ({host}:{port})",
+    "db_mode_docker": "БД: Docker ({host}:{port})",
+    "db_mode_invalid": "DB_MODE у .env має бути native або docker (зараз інше значення).",
+    "docker_but_native_configured": (
+        "УВАГА: застосунок працює на Docker PostgreSQL, хоча в .env налаштовано нативний "
+        "сервер (NATIVE_DATABASE_URL). Щоб перейти на нього: python scripts/native_pg.py switch."
+    ),
+    "native_missing": (
+        "Режим БД native, але {host}:{port} недоступний і службу PostgreSQL «{service}» не "
+        "знайдено. Docker не запускаю. Перевірте: python scripts/native_pg.py status "
+        "(за потреби перевстановіть PostgreSQL 16, docs/native-postgres.md) або поверніться "
+        "на Docker: python scripts/native_pg.py switch-back."
+    ),
     "db_url_missing": "DATABASE_URL не задано в .env (див. .env.example).",
     "db_url_invalid": "Некоректний DATABASE_URL: " + DB_URL_ERROR + ".",
     "db_reachable": "PostgreSQL доступний на {host}:{port}.",
@@ -354,6 +370,33 @@ def native_pg_port(env: Mapping[str, str]) -> int:
         return int(env.get("NATIVE_PG_PORT", "") or NATIVE_PG_DEFAULT_PORT)
     except ValueError:
         return NATIVE_PG_DEFAULT_PORT
+
+
+def docker_pg_port(env: Mapping[str, str]) -> int:
+    try:
+        return int(env.get("POSTGRES_PORT", "") or DOCKER_PG_DEFAULT_PORT)
+    except ValueError:
+        return DOCKER_PG_DEFAULT_PORT
+
+
+def resolve_db_mode(
+    explicit: str | None, host: str, port: int, *, native_port: int, docker_port: int
+) -> str:
+    """`native` | `docker`. Keep identical to backend app/system/db_mode.py (same test table).
+
+    Explicit DB_MODE wins; else native on NATIVE_PG_PORT; docker only for a local host on the
+    Docker POSTGRES_PORT; anything else native (never Docker). ValueError: bad DB_MODE.
+    """
+    if explicit is not None and explicit.strip():
+        mode = explicit.strip().lower()
+        if mode in (MODE_NATIVE, MODE_DOCKER):
+            return mode
+        raise ValueError("DB_MODE must be `native` or `docker`")
+    if port == native_port:
+        return MODE_NATIVE
+    if is_local_host(host) and port == docker_port:
+        return MODE_DOCKER
+    return MODE_NATIVE
 
 
 # --------------------------------------------------------------------------- process queries
@@ -954,7 +997,14 @@ def run_stop() -> int:
 def load_env() -> dict[str, str]:
     """Values from `.env`, overridden by the process environment (same as pydantic-settings)."""
     values = parse_env_file(ENV_FILE.read_text(encoding="utf-8")) if ENV_FILE.exists() else {}
-    for key in {*values, "DATABASE_URL", "TEST_DATABASE_URL"}:
+    overridable = {
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "DB_MODE",
+        "NATIVE_PG_PORT",
+        "POSTGRES_PORT",
+    }
+    for key in {*values, *overridable}:
         if key in os.environ:
             values[key] = os.environ[key]
     return values
@@ -1199,7 +1249,8 @@ def ensure_native_service(service: str, state: str, host: str, port: int) -> Non
     say(MSG["db_reachable"].format(host=host, port=port))
 
 
-def ensure_db(env: Mapping[str, str]) -> None:
+def db_target(env: Mapping[str, str]) -> tuple[str, int, str]:
+    """(host, port, mode) of DATABASE_URL; LauncherError with fixed text (no URL parts)."""
     url = env.get("DATABASE_URL", "")
     if not url:
         raise LauncherError(MSG["db_url_missing"])
@@ -1208,19 +1259,55 @@ def ensure_db(env: Mapping[str, str]) -> None:
     except ValueError:
         # Fixed text only: the URL (and so any exception text) may contain the password.
         raise LauncherError(MSG["db_url_invalid"]) from None
+    try:
+        mode = resolve_db_mode(
+            env.get("DB_MODE"),
+            host,
+            port,
+            native_port=native_pg_port(env),
+            docker_port=docker_pg_port(env),
+        )
+    except ValueError:
+        raise LauncherError(MSG["db_mode_invalid"]) from None
+    return host, port, mode
 
+
+def ensure_db(env: Mapping[str, str]) -> None:
+    host, port, mode = db_target(env)
+    say(
+        MSG["db_mode_native" if mode == MODE_NATIVE else "db_mode_docker"].format(
+            host=host, port=port
+        )
+    )
+    if mode == MODE_NATIVE:
+        ensure_native_db(env, host, port)
+    else:
+        ensure_docker_db(env, host, port)
+
+
+def ensure_native_db(env: Mapping[str, str], host: str, port: int) -> None:
+    """Native mode: reachable, or start the Windows service. Never Docker, on any failure."""
     if tcp_reachable(host, port):
         say(MSG["db_reachable"].format(host=host, port=port))
         return
-
     if not is_local_host(host):
         raise LauncherError(MSG["db_remote"].format(host=host, port=port))
-    if port == native_pg_port(env):
-        service = env.get("NATIVE_PG_SERVICE", "") or NATIVE_PG_SERVICE
-        state = native_service_state(service)
-        if state is not None:
-            ensure_native_service(service, state, host, port)
-            return
+    service = env.get("NATIVE_PG_SERVICE", "") or NATIVE_PG_SERVICE
+    state = native_service_state(service)
+    if state is None:
+        raise LauncherError(MSG["native_missing"].format(host=host, port=port, service=service))
+    ensure_native_service(service, state, host, port)
+
+
+def ensure_docker_db(env: Mapping[str, str], host: str, port: int) -> None:
+    """Docker mode: reachable, or start Docker Desktop and the compose `db` service."""
+    if env.get("NATIVE_DATABASE_URL"):
+        say(MSG["docker_but_native_configured"])
+    if tcp_reachable(host, port):
+        say(MSG["db_reachable"].format(host=host, port=port))
+        return
+    if not is_local_host(host):
+        raise LauncherError(MSG["db_remote"].format(host=host, port=port))
     docker = shutil.which("docker")
     if not docker:
         raise LauncherError(MSG["db_no_docker"].format(host=host, port=port))

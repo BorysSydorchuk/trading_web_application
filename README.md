@@ -129,9 +129,15 @@ Compose використовує `postgres:16`, loopback `127.0.0.1:5432`, по�
 (ніколи не видаляйте його — це копія даних до переносу). На **першій ініціалізації
 порожнього volume** створює БД із `POSTGRES_DB` і окрему `trading_journal_test` через
 `docker/postgres-init/01-test-db.sql`. Схему застосунку створить launcher. Не запускайте
-інший checkout із тією самою БД/Compose-конфігурацією паралельно. Launcher запускає
-Docker лише тоді, коли `DATABASE_URL` вказує не на порт native-сервера (`NATIVE_PG_PORT`,
-типово 5433) або native-служба не встановлена.
+інший checkout із тією самою БД/Compose-конфігурацією паралельно.
+
+Режим БД — ключ `.env` `DB_MODE` (`native` | `docker`; записують `native_pg.py switch` /
+`switch-back`). Без нього режим визначається з `DATABASE_URL`: порт `NATIVE_PG_PORT` (типово
+5433) → native, localhost на `POSTGRES_PORT` (типово 5432) → docker, інше → native. Launcher
+друкує один рядок «БД: native (127.0.0.1:5433)» або «БД: Docker (127.0.0.1:5432)». У режимі
+native ні launcher, ні резервні копії, ні міграції ніколи не викликають `docker` і не запускають
+Docker Desktop (навіть якщо служба не встановлена — тоді помилка з підказкою `native_pg.py
+status` / `switch-back`). `make db-up` — лише для режиму docker.
 
 ## 4. Залежності та перший запуск
 

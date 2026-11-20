@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 from app.config import REPO_ROOT, Settings, get_settings
 from app.config_files import check_config_files
 from app.services.backups import BackupStore, PostgresTools, _directory, target_key
+from app.system.db_mode import docker_compose_port
 from app.system.pg_tools import pg_tool
 from app.tools.migrate import parse_target
 
@@ -26,7 +27,7 @@ class StartupFailure(Exception):  # noqa: N818 - public preflight failure contra
 
 def check_directories(settings: Settings) -> None:
     try:
-        store = BackupStore(settings.backup_dir, compose_port=settings.postgres_port)
+        store = BackupStore(settings.backup_dir, compose_port=docker_compose_port(settings))
         for path in (
             settings.data_dir,
             settings.log_dir_path,
@@ -66,17 +67,27 @@ def check_database(settings: Settings) -> None:
             engine.dispose()
 
 
+NATIVE_TOOLS_MISSING = (
+    "Режим БД native: не знайдено pg_dump/pg_restore нативного PostgreSQL 16 (Docker не "
+    "використовується). Перевірте встановлення: python scripts/native_pg.py status, "
+    "docs/native-postgres.md."
+)
+
+
 def check_backup_tools(settings: Settings) -> None:
+    compose_port = docker_compose_port(settings)
+    dump, restore = pg_tool("pg_dump"), pg_tool("pg_restore")
+    if compose_port is None and not (dump and restore):
+        raise StartupFailure(NATIVE_TOOLS_MISSING)
     try:
         target = parse_target(settings.database_url)
-        dump, restore = pg_tool("pg_dump"), pg_tool("pg_restore")
         if dump:
             if not restore:
                 raise ValueError("missing restore")
             commands = [[dump, "--version"], [restore, "--version"]]
         else:
             docker = shutil.which("docker")
-            if not docker or not target.is_local or target.port != settings.postgres_port:
+            if not docker or not target.is_local or target.port != compose_port:
                 raise ValueError("no compatible tool")
             PostgresTools._confirm_compose(settings.database_url, target)
             commands = [

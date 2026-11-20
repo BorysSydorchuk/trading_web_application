@@ -34,6 +34,7 @@ from sqlalchemy.engine import make_url
 from app.config import REPO_ROOT, Settings, get_settings
 from app.logging_setup import setup_logging
 from app.services.backups import PostgresTools
+from app.system.db_mode import docker_compose_port
 from app.system.pg_tools import pg_tool
 from app.tools.migrate import (
     COMPOSE_DB_SERVICE,
@@ -195,7 +196,10 @@ def drop_scratch(source_url: str, source_db: str, scratch_db: str) -> None:
     _admin(source_url, f'DROP DATABASE IF EXISTS "{scratch_db}" WITH (FORCE)')
 
 
-def _restore_argv(target: DbTarget, scratch_db: str, dump: Path, compose_port: int) -> list[str]:
+def _restore_argv(
+    target: DbTarget, scratch_db: str, dump: Path, compose_port: int | None
+) -> list[str]:
+    """Host/native pg_restore; docker compose only in docker mode (`compose_port` not None)."""
     tool = pg_tool("pg_restore")
     common = ["--no-owner", "--no-privileges", "--exit-on-error"]
     if tool:
@@ -203,6 +207,10 @@ def _restore_argv(target: DbTarget, scratch_db: str, dump: Path, compose_port: i
             tool, *common, "--no-password", "-h", target.host, "-p", str(target.port),
             "-U", target.user, "-d", scratch_db, str(dump),
         ]  # fmt: skip
+    if compose_port is None:
+        raise DryRunError(
+            "Немає pg_restore нативного PostgreSQL (режим БД native, Docker не використовується)"
+        )
     docker = shutil.which("docker")
     if not docker or not target.is_local or target.port != compose_port:
         raise DryRunError("Немає pg_restore, а Docker недоступний для цієї БД")
@@ -212,7 +220,7 @@ def _restore_argv(target: DbTarget, scratch_db: str, dump: Path, compose_port: i
     ]  # fmt: skip
 
 
-def restore(target: DbTarget, scratch_db: str, dump: Path, compose_port: int) -> None:
+def restore(target: DbTarget, scratch_db: str, dump: Path, compose_port: int | None) -> None:
     """pg_restore the dump into the scratch DB (stdin for docker); DryRunError on failure."""
     argv = _restore_argv(target, scratch_db, dump, compose_port)
     env = {k: v for k, v in os.environ.items() if k != "PGPASSWORD"}
@@ -277,9 +285,10 @@ def _run_on_scratch(settings: Settings, target: DbTarget, scratch_db: str, out: 
     with tempfile.TemporaryDirectory(prefix="taxdry-") as tmp:
         dump = Path(tmp) / f"{target.database}.dump"
         _say(out, f"pg_dump БД {target.database} (лише читання)…")
-        PostgresTools(compose_port=settings.postgres_port).dump(settings.database_url, dump)
+        compose_port = docker_compose_port(settings)
+        PostgresTools(compose_port=compose_port).dump(settings.database_url, dump)
         _say(out, f"Відновлюю копію у {scratch_db}…")
-        restore(target, scratch_db, dump, settings.postgres_port)
+        restore(target, scratch_db, dump, compose_port)
     scratch_url = _url_for(settings.database_url, scratch_db)
     before = measure(scratch_url, _BEFORE_SQL)
     _say(out, f"alembic upgrade head на {scratch_db}…")
