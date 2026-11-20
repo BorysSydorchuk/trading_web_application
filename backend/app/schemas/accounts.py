@@ -124,6 +124,13 @@ class AccountPatch(BaseModel):
         }
 
 
+class StartingBalanceSuggestion(BaseModel):
+    """First deposit of the MT5 deal history when it differs from ``starting_balance``."""
+
+    amount: Decimal
+    time: UtcDatetime
+
+
 class Account(BaseModel):
     """Response: AccountInput fields + read-only sync/password info. Never the password."""
 
@@ -150,6 +157,7 @@ class Account(BaseModel):
     server_offset_hours: int | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    starting_balance_suggestion: StartingBalanceSuggestion | None = None
 
 
 class AccountList(BaseModel):

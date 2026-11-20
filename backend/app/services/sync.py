@@ -85,6 +85,7 @@ from app.services.excursions import Fetched as ExcursionFetched
 from app.services.exit_reason import prefill_exit_reason
 from app.services.fx_sync import FxFetched, fetch_fx, write_fx
 from app.services.fx_values import NO_VALUES, tick_values
+from app.services.starting_balance_suggestion import FirstDeposit, read_history_deposit
 from app.services.trade_rules import recompute_rules
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,9 @@ PasswordLookup = Callable[[int], SecretStr | None]
 # M8-10b: receives (account_id, positions read by this sync, sync time UTC) after a
 # successful sync, e.g. to write the open-positions snapshot. Its failure is only logged.
 PositionsSink = Callable[[int, Sequence[RawPosition], datetime], None]
+# Starting balance suggestion: receives (account_id, first deposit or None, sync time UTC)
+# after a successful sync that read the full deal history. Its failure is only logged.
+DepositSink = Callable[[int, FirstDeposit | None, datetime], None]
 
 
 # --- cadence ---------------------------------------------------------------------------
@@ -129,6 +133,10 @@ class Fetched:
     fx: FxFetched | None = None  # None: no FX step (no cross-currency data fetched)
     # M8-16: price series of trades whose MAE/MFE is due (read in the same connection).
     excursions: ExcursionFetched = field(default_factory=lambda: ExcursionFetched([], []))
+    # Starting balance suggestion: True when the full history was read (then
+    # ``first_deposit`` is the answer, None = no deposit in the history).
+    deposit_checked: bool = False
+    first_deposit: FirstDeposit | None = None
 
 
 def _is_trade_deal(raw: RawDeal) -> bool:
@@ -204,10 +212,14 @@ def fetch(
     window_from: datetime,
     symbols: SymbolsConfig,
     excursions: Sequence[ExcursionTarget] = (),
+    *,
+    read_first_deposit: bool = False,
 ) -> Fetched:
     """Everything the write phase needs, read while connected. Raises `Mt5Error`.
 
     ``excursions``: trades whose MAE/MFE price series is read last (never raises, M8-16).
+    ``read_first_deposit``: also read the full deal history for the starting balance
+    suggestion (never raises; a failure leaves ``deposit_checked`` False).
     """
     with connected(
         source, account.terminal_path or "", account.login, password, account.server
@@ -246,6 +258,11 @@ def fetch(
             by_ticket.update((d.ticket, d) for d in source.deals(lo, hi))
         fx = fetch_fx(source, specs.values(), info.currency)
         found = _read_excursions(source, excursions, conversion, specs, now)
+        checked, deposit = (
+            read_history_deposit(source, account.id, hi, conversion)
+            if read_first_deposit
+            else (False, None)
+        )
 
     return Fetched(
         info=info,
@@ -259,6 +276,8 @@ def fetch(
         position_ids=pids,
         fx=fx,
         excursions=found,
+        deposit_checked=checked,
+        first_deposit=deposit,
     )
 
 
@@ -630,11 +649,14 @@ def sync_account(
     password_for: PasswordLookup = mt5_password_for,
     symbols: SymbolsConfig | None = None,
     positions_sink: PositionsSink | None = None,
+    deposit_sink: DepositSink | None = None,
 ) -> SyncLog:
     """One sync cycle for one account; never raises for MT5/data errors (see module doc).
 
     ``symbols`` defaults to config/symbols.yaml (a broken file fails this sync, recorded).
     ``positions_sink`` gets the open positions after a successful sync (M8-10b).
+    ``deposit_sink``: when set, the full deal history is read and its first deposit goes
+    there after a successful sync (starting balance suggestion).
     Commits. Returns the completed sync_log row (``ok`` True or False).
     """
     started = monotonic_time.monotonic()
@@ -657,9 +679,8 @@ def sync_account(
         config = symbols if symbols is not None else get_symbols_config()
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
         targets = excursion_targets(session, account_id, now_utc)
-        fetched = fetch(
-            source, account, password, rules, now_utc, window_from, config, excursions=targets
-        )
+        args = (source, account, password, rules, now_utc, window_from, config)
+        fetched = fetch(*args, excursions=targets, read_first_deposit=deposit_sink is not None)
         counters = write(session, account, fetched, rules, now_utc, config)
         log.ok = True
         log.finished_at = finished()
@@ -686,6 +707,7 @@ def sync_account(
         )
         _store_excursions(session, account_id, fetched, now_utc)
         _sink_positions(positions_sink, account_id, fetched, now_utc)
+        _sink_deposit(deposit_sink, account_id, fetched, now_utc)
         return log
     except Exception as exc:
         session.rollback()
@@ -729,6 +751,18 @@ def _sink_positions(
         sink(account_id, fetched.positions, now)
     except Exception:
         logger.exception("Account %s: open positions snapshot not written", account_id)
+
+
+def _sink_deposit(
+    sink: DepositSink | None, account_id: int, fetched: Fetched, now: datetime
+) -> None:
+    """After the sync committed: a failure here is logged, never fails the sync."""
+    if sink is None or not fetched.deposit_checked:
+        return
+    try:
+        sink(account_id, fetched.first_deposit, now)
+    except Exception:
+        logger.exception("Account %s: starting balance suggestion not written", account_id)
 
 
 # Half the 60 s job interval: an account's start time drifts with the connect time of the

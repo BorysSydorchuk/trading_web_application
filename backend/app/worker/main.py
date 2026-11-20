@@ -54,6 +54,7 @@ from app.services.ai.warmup import (
 from app.services.journal_requirements import sync_requirements
 from app.services.open_positions_snapshot import snapshot_path
 from app.services.risk_base import recompute_all
+from app.services.starting_balance_suggestion import suggestions_path
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.system.terminals import terminal_windows
 from app.worker.backup_job import BACKUP_JOB_ID, BACKUP_POLL_SECONDS, BackupJob
@@ -151,11 +152,19 @@ def default_mt5(settings: Settings) -> SharedMt5:
 
 def default_sync_job(mt5: SharedMt5, data_dir: Path) -> Callable[[], None]:
     """Sync under the shared MT5 lock, DB sessions per account; each synced account's open
-    positions go to DATA_DIR/open_positions.json (M8-10b)."""
+    positions go to DATA_DIR/open_positions.json (M8-10b), first deposits of accounts not yet
+    checked to DATA_DIR/starting_balance_suggestions.json."""
     snapshot = snapshot_path(data_dir)
+    suggestions = suggestions_path(data_dir)
 
     def job() -> None:
-        run_sync_cycle(get_session_factory(), mt5.source(), lock=mt5.lock, snapshot_path=snapshot)
+        run_sync_cycle(
+            get_session_factory(),
+            mt5.source(),
+            lock=mt5.lock,
+            snapshot_path=snapshot,
+            suggestions_path=suggestions,
+        )
 
     return job
 

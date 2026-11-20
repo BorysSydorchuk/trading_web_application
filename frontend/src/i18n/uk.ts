@@ -118,6 +118,13 @@ export const uk = {
   },
   accounts: {
     title: 'Рахунки',
+    startingSuggestion: {
+      title: 'Початковий баланс з історії МТ5',
+      text: (amount: string, when: string, current: string) =>
+        `за історією МТ5 перший депозит ${amount} (${when}), а «Початковий баланс» зараз ${current}. Застосувати депозит?`,
+      apply: 'Застосувати',
+      error: 'Не вдалося зберегти.',
+    },
     add: 'Додати рахунок',
     showArchived: 'Показати архівні',
     loading: 'Завантаження рахунків…',

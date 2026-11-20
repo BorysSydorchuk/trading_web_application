@@ -28,8 +28,15 @@ from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
 from app.mt5.types import RawPosition
 from app.services import open_positions_snapshot
+from app.services import starting_balance_suggestion as suggestion
 from app.services.symbol_map import apply_symbol_map
-from app.services.sync import PositionsSink, close_orphaned_runs, is_due, sync_account
+from app.services.sync import (
+    DepositSink,
+    PositionsSink,
+    close_orphaned_runs,
+    is_due,
+    sync_account,
+)
 from app.system.terminals import terminal_windows
 
 logger = logging.getLogger(__name__)
@@ -95,6 +102,7 @@ def run_sync_cycle(
     symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config,
     lock: threading.Lock | None = None,
     snapshot_path: Path | None = None,
+    suggestions_path: Path | None = None,
 ) -> list[int]:
     """Re-apply the symbol map, then sync every due active account sequentially. Returns
     the ids of synced accounts. A broken rules.yaml or symbols.yaml, or a symbol map that
@@ -106,6 +114,9 @@ def run_sync_cycle(
 
     ``snapshot_path``: after each successful account sync its open positions are written
     there (M8-10b `open_positions.json`); None = no snapshot.
+
+    ``suggestions_path``: accounts without an entry in this file (starting balance
+    suggestion) also read their full deal history once; None = never.
     """
     try:
         rules = rules_getter()
@@ -118,7 +129,8 @@ def run_sync_cycle(
         return []
     with lock if lock is not None else nullcontext():
         sink = snapshot_sink(snapshot_path) if snapshot_path is not None else None
-        return _sync_due_accounts(session_factory, source, rules, symbols, now, sink)
+        deposits = _DepositTarget(suggestions_path) if suggestions_path is not None else None
+        return _sync_due_accounts(session_factory, source, rules, symbols, now, sink, deposits)
 
 
 def snapshot_sink(path: Path) -> PositionsSink:
@@ -130,6 +142,26 @@ def snapshot_sink(path: Path) -> PositionsSink:
     return sink
 
 
+class _DepositTarget:
+    """The suggestions file of this cycle and the accounts already in it."""
+
+    def __init__(self, path: Path) -> None:
+        self.known = set(suggestion.read_suggestions(path))
+        self.sink = deposit_sink(path)
+
+    def sink_for(self, account_id: int) -> DepositSink | None:
+        return None if account_id in self.known else self.sink
+
+
+def deposit_sink(path: Path) -> DepositSink:
+    """Write each checked account's first deposit (or "none") into the suggestions file."""
+
+    def sink(account_id: int, deposit: suggestion.FirstDeposit | None, at: datetime) -> None:
+        suggestion.write_account(path, account_id, deposit, at)
+
+    return sink
+
+
 def _sync_due_accounts(
     session_factory: sessionmaker[Session],
     source: Mt5Source,
@@ -137,6 +169,7 @@ def _sync_due_accounts(
     symbols: SymbolsConfig,
     now: Callable[[], datetime],
     sink: PositionsSink | None = None,
+    deposits: _DepositTarget | None = None,
 ) -> list[int]:
     with session_factory() as session:
         account_ids = list(
@@ -164,6 +197,7 @@ def _sync_due_accounts(
                     started,
                     symbols=symbols,
                     positions_sink=sink,
+                    deposit_sink=deposits.sink_for(account_id) if deposits else None,
                 )
                 synced.append(account_id)
         except Exception:
