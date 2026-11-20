@@ -53,9 +53,11 @@ def test_apply_recomputes_old_numbers_keeps_texts_and_marks_summary_stale(
     calls: list[str] = []
     out = io.StringIO()
 
-    result = run(
-        session, apply=True, now=LATER, out=out, backup=lambda: calls.append("b") or Path("x.dump")
-    )
+    def backup() -> Path:
+        calls.append("b")
+        return Path("x.dump")
+
+    result = run(session, apply=True, now=LATER, out=out, backup=backup)
 
     assert calls == ["b"]
     assert dict(result) == {weekly["id"]: True, monthly["id"]: True}
