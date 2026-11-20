@@ -15,9 +15,7 @@ export function ExcludedBadge({ reason, className, compact = false }: { reason: 
     return (
       <Pill tone="neutral" title={title} className={cn('px-1.5', className)}>
         <EyeOff className="size-3.5" aria-hidden />
-        <span title={title} className="sr-only">
-          {t.badge}
-        </span>
+        <span className="sr-only">{title}</span>
       </Pill>
     )
   }

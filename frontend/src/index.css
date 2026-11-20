@@ -293,3 +293,16 @@
     font-family: var(--font-display);
   }
 }
+
+/* M8-10c: one global reduced-motion rule, so every spinner, pulse and transition stops (WCAG 2.3.3),
+   including ones a component forgets to mark with motion-reduce:*. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

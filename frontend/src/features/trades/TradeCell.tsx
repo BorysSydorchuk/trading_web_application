@@ -129,6 +129,9 @@ export function ViolationBadges({ keys }: { keys: readonly string[] }) {
   return <LabeledViolationBadges keys={keys} label={label} />
 }
 
+/** Screen readers pause between the rule names (M8-10c count pill). */
+const LIST_SEPARATOR = ', '
+
 function LabeledViolationBadges({ keys, label }: {
   keys: readonly string[]
   label: (key: string) => string
@@ -144,7 +147,8 @@ function LabeledViolationBadges({ keys, label }: {
       </Pill>
       {labels.map((text, index) => (
         <span key={keys[index]} className="sr-only">
-          {text}
+          {index > 0 && <span>{LIST_SEPARATOR}</span>}
+          <span>{text}</span>
         </span>
       ))}
     </span>
