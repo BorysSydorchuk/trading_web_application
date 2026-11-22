@@ -42,7 +42,7 @@ Current milestone: **M8 CLOSED 2026-11-20** (all items accepted; summary `docs/r
 - [x] DB_MODE fix (tier M, PM bug 2026-11-20) — branch `infra/native-only-mode`: .env was rewritten to the Docker URLs at 16:19:04 UTC (switch-back or manual edit; no app code writes .env), the app then ran on Docker; only one sync cycle (16:19:49-56 UTC, sync data only) went to Docker. Explicit DB_MODE: native mode never calls Docker (launcher, tray, autostart, backups, tools), test proves it. code-reviewer APPROVE (LOW fixed / BACKLOG).
 - [ ] AI prefill of MANUAL violations (tier S, owner YES 2026-11-20) — after native PostgreSQL.
 - RESUME FROM HERE (2026-11-20): native PostgreSQL merged and running; next: AI prefill of MANUAL violations (tier S, owner YES; fixture tests only, no live AI without permission). Live validation from Monday 2026-11-23 (docs/reports/live-validation.md).
-- [ ] Emotion lists (tier L, migration e7c41b9a2d60) + digest «Розподіл R» and «дні/години» restyle (tier S), owner request 2026-11-22 — branch `feat/emotion-options`, worktree `../WEB_application-emotions`, from main `298c235`. Report `docs/reports/emotions-digest-restyle.md`. Note: `fix/terminal-readiness` (3ad5e35) is unmerged, not in this branch, and the running app uses that checkout.
+- [ ] Emotion lists (tier L, migration e7c41b9a2d60) + digest «Розподіл R» and «дні/години» restyle (tier S), owner request 2026-11-22 — branch `feat/emotion-options`, worktree `../WEB_application-emotions`, from main `298c235`. Report `docs/reports/emotions-digest-restyle.md`. Note: `fix/terminal-readiness` (3ad5e35) is unmerged, not in this branch, and the running app uses that checkout.
 
 ## M7 closure documentation — owner codex, tier S
 
