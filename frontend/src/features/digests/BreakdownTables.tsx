@@ -86,6 +86,8 @@ interface TableView {
   label: (key: ScalarKey) => string
   showCoverage: boolean
   note: string | null
+  /** The journal field whose current option order sorts the rows. */
+  orderField?: JournalField
 }
 
 /** Title, key labels and note of a `field` or `combination` breakdown (no `kind` = field). */
@@ -107,6 +109,7 @@ function tableView(name: string, breakdown: Breakdown, fields: FieldMap): TableV
   const field = fields.get(renamed ? (RENAMED_FIELDS[name] ?? name) : name)
   return {
     title: field?.label ?? name,
+    orderField: field,
     label: (key) => journalKeyLabel(field, key),
     showCoverage: true,
     // A multi field counts a trade once in each of its values, so the rows add up to more trades.
@@ -146,7 +149,7 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
           </tr>
         </thead>
         <tbody>
-          {(breakdown.kind === 'combination' ? breakdown.groups : inOptionOrder(fields.get(name), breakdown.groups)).map((group) => (
+          {inOptionOrder(view.orderField, breakdown.groups).map((group) => (
             <tr key={String(group.key)} className={ROW}>
               <td className={cn(TD, group.key === null && 'text-ink-muted')}>{label(group.key)}</td>
               <td className={NUM}>{group.trades}</td>

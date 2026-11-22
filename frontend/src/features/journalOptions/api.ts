@@ -64,6 +64,8 @@ export function useChangeOptions(field: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (action: OptionAction) => send(field, action),
+    // One list saves one change at a time, in the order the owner made them.
+    scope: { id: `journal-options:${field}` },
     meta: { silentError: true },
     onSettled: () =>
       Promise.all([

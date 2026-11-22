@@ -84,7 +84,9 @@ def _field(field_key: str) -> JournalField:
 
 
 def _seeded_rows(db: Session, field: JournalField) -> list[JournalFieldOption]:
-    """The field's rows; the first edit copies the YAML defaults into the DB."""
+    """The field's rows; the first edit copies the YAML defaults into the DB. Every edit of a
+    list holds its lock until commit/rollback, so concurrent edits cannot seed it twice."""
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"journal_options:{field.key}"))))
     rows = _rows(db, field.key)
     if rows:
         return rows
@@ -172,7 +174,8 @@ def update_option(
     if label is not None:
         _check_label_free(rows, label, own_value=value)
         row.label = label
-    if hidden is True and not any(not r.hidden for r in rows if r.value != value):
+    hides_it = hidden is True and not row.hidden
+    if hides_it and not any(not r.hidden for r in rows if r.value != value):
         db.rollback()
         raise ApiError(409, "last_visible_option", "At least one option must stay visible")
     if hidden is not None:

@@ -92,6 +92,56 @@ describe('Settings «Емоції»', () => {
     await user.click(screen.getByRole('button', { name: t.add }))
     await waitFor(() => expect(sent).toEqual([{ label: 'азарт', synonyms: ['азартно', 'excited'] }]))
     expect(await screen.findByRole('alert')).toHaveTextContent(t.saveError)
+    expect(screen.getByLabelText(t.newLabel)).toHaveValue('азарт') // a refused name is not lost
+  })
+
+  it('saves the edited name and still performs the click that blurred the input', async () => {
+    const sent: unknown[] = []
+    mockApi(
+      http.get(URL, listed),
+      http.patch(`${URL}/calm`, async ({ request }) => {
+        sent.push(await request.json())
+        return HttpResponse.json(OPTIONS[0])
+      }),
+    )
+    const { user } = renderWithProviders(<OptionListEditor field="emotion_before" title="x" />)
+    await user.type(await screen.findByLabelText(t.labelFor('спокій')), '!')
+    await user.click(screen.getByRole('button', { name: t.hide('спокій') }))
+    await waitFor(() => expect(sent).toEqual([{ label: 'спокій!' }, { hidden: true }]))
+  })
+
+  it('a refused rename returns to the saved name and shows the error', async () => {
+    mockApi(
+      http.get(URL, listed),
+      http.patch(`${URL}/calm`, () => HttpResponse.json({ error: { code: 'duplicate_label', message: 'exists' } }, { status: 409 })),
+    )
+    const { user } = renderWithProviders(<OptionListEditor field="emotion_before" title="x" />)
+    const input = await screen.findByLabelText(t.labelFor('спокій'))
+    await user.type(input, '!')
+    await user.tab()
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.saveError)
+    await waitFor(() => expect(input).toHaveValue('спокій'))
+  })
+
+  it('keeps synonyms being typed when a rename of the same row finishes saving', async () => {
+    let renamed = false
+    mockApi(
+      http.get(URL, () =>
+        HttpResponse.json({ field: 'emotion_before', options: renamed ? [{ ...OPTIONS[0], label: 'спокій!' }, OPTIONS[1]] : OPTIONS }),
+      ),
+      http.patch(`${URL}/calm`, () => {
+        renamed = true
+        return HttpResponse.json(OPTIONS[0])
+      }),
+    )
+    const { user } = renderWithProviders(<OptionListEditor field="emotion_before" title="x" />)
+    await user.type(await screen.findByLabelText(t.labelFor('спокій')), '!')
+    const input = screen.getByLabelText(t.synonymsFor('спокій'))
+    await user.type(input, ', новий')
+    // The same input survives the refetch with the new label: no remount, nothing lost.
+    expect(await screen.findByLabelText(t.synonymsFor('спокій!'))).toBe(input)
+    expect(input).toHaveValue('calm, новий')
+    expect(input).toHaveFocus()
   })
 
   it('parses a comma list of synonyms', () => {

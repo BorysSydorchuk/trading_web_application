@@ -10,6 +10,7 @@ import {
   hasActiveFilters,
   parseFilters,
   toTradeQuery,
+  withoutRemovedOptions,
   type JournalFilters,
 } from '@/features/journal/filters'
 import { JournalFiltersBar } from '@/features/journal/JournalFiltersBar'
@@ -38,7 +39,10 @@ export function JournalPage() {
   const journalFields = useJournalFields()
   const violationLabel = useMemo(() => violationLabeler(journalFields.data), [journalFields.data])
   const [searchParams, setSearchParams] = useSearchParams()
-  const filters = useMemo(() => parseFilters(searchParams), [searchParams])
+  const filters = useMemo(() => {
+    const parsed = parseFilters(searchParams)
+    return { ...parsed, journal: withoutRemovedOptions(parsed.journal, journalFields.data?.fields) }
+  }, [searchParams, journalFields.data])
   // Presets (today, this week…) depend on the Brussels date, so a new day gives a new query.
   const today = brusselsToday()
   const query = useMemo(() => toTradeQuery({ ...filters, trade: null }, today), [filters, today])

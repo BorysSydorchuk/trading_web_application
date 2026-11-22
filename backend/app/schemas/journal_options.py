@@ -11,11 +11,12 @@ MAX_SYNONYMS = 30
 
 
 def _clean_text(value: str) -> str:
-    """Labels and synonyms go into the AI prompt: one plain line, no markdown code quotes."""
+    """Labels and synonyms go into the AI prompt: one plain line, no quotes that could end
+    their place in the catalogue line."""
     text = value.strip()
     if not text or len(text) > MAX_TEXT:
         raise ValueError(f"must be 1 to {MAX_TEXT} characters")
-    if "`" in text or any(not ch.isprintable() for ch in text):
+    if "`" in text or '"' in text or any(not ch.isprintable() for ch in text):
         raise ValueError("must be one line without special characters")
     return text
 

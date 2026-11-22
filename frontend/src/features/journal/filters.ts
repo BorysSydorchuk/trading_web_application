@@ -107,6 +107,26 @@ export function withJournalFilter(journal: JournalFieldFilters, key: string, val
   return values.length === 0 ? rest : { ...rest, [key]: [...values] }
 }
 
+/** Fields whose options the owner can delete in Settings (backend `MANAGED_FIELDS`). */
+const EDITABLE_OPTION_KEYS: ReadonlySet<string> = new Set(['emotion_before', 'emotion_after'])
+
+/** A bookmarked value of a since-deleted option is dropped: the API would answer 422 for it. */
+export function withoutRemovedOptions(
+  journal: JournalFieldFilters,
+  fields: readonly { key: string; options?: readonly { value: string }[] | null }[] | undefined,
+): JournalFieldFilters {
+  if (!fields) return journal
+  let result = journal
+  for (const field of fields) {
+    const selected = journal[field.key]
+    if (!selected || !EDITABLE_OPTION_KEYS.has(field.key)) continue
+    const known = new Set([...(field.options ?? []).map((option) => option.value), JOURNAL_NULL_VALUE])
+    const kept = selected.filter((value) => known.has(value))
+    if (kept.length !== selected.length) result = withJournalFilter(result, field.key, kept)
+  }
+  return result
+}
+
 export function parseFilters(params: URLSearchParams): JournalFilters {
   const limit = positiveInt(params.get('limit'))
   return {
