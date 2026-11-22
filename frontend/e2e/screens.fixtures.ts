@@ -233,6 +233,8 @@ export const MONTHLY_DIGEST = {
     breakdowns: {
       symbol: { kind: 'field', groups: [g('GER40', 9, '820.00', '6.4000', '66.6667'), g('EURUSD', 7, '210.20', '2.9000', '42.8571'), g('XAUUSD', 6, '211.00', '2.0000', '50.0000')], coverage: { filled: 22, total: 22 } },
       session: { kind: 'field', groups: [g('london', 15, '1551.20', '12.6000', '60.0000'), g('ny', 7, '-310.00', '-1.3000', '42.8571')], coverage: { filled: 22, total: 22 } },
+      hour: { kind: 'field', groups: [g(8, 2, '240.00', '2.1000', '100.0000'), g(9, 10, '1120.00', '9.4000', '70.0000'), g(10, 4, '191.20', '1.2000', '50.0000'), g(14, 2, '-100.00', '-0.9000', '50.0000'), g(15, 2, '-210.00', '-1.5000', '0.0000'), g(16, 2, '0.00', '0.0000', '50.0000')], coverage: { filled: 22, total: 22 } },
+      weekday: { kind: 'field', groups: [g(0, 4, '210.00', '1.9000', '50.0000'), g(1, 5, '226.20', '2.0000', '60.0000'), g(2, 3, '335.00', '3.0000', '66.6667'), g(3, 6, '320.00', '3.2000', '50.0000'), g(4, 4, '150.00', '1.2000', '50.0000')], coverage: { filled: 22, total: 22 } },
       entry_model: { kind: 'field', groups: [g('ifvg_m5', 14, '1180.00', '9.8000', '64.2857'), g('qm_m5', 6, '91.20', '1.9000', '50.0000'), g(null, 2, '-30.00', '-0.4000', '0.0000')], coverage: { filled: 20, total: 22 } },
       poi_types: { kind: 'field', groups: [g('fvg_h1', 10, '760.00', '6.2000', '60.0000'), g('fvg_h4', 8, '540.00', '4.4000', '62.5000'), g('fractal_h4', 5, '-58.80', '-0.3000', '40.0000')], coverage: { filled: 21, total: 22 } },
       poi_types__combo: { kind: 'combination', groups: [g('fvg_h1', 8, '640.00', '5.1000', '62.5000'), g('fvg_h4 + fractal_h4', 4, '220.00', '1.9000', '50.0000'), g('fvg_h4', 4, '320.00', '2.5000', '75.0000')], coverage: { filled: 21, total: 22 } },
@@ -279,6 +281,16 @@ export const MONTHLY_DIGEST = {
     excursions: { n_winners: 12, n_losers: 9, winners_avg_mfe_r: '2.4100', losers_avg_mfe_r: '0.6200', losers_reached_1r: 3, losers_reached_1r_share: '33.3333' },
   },
 }
+
+/** GET /api/journal-options/{field}: Settings «Емоції». */
+export const EMOTION_OPTIONS = [
+  { value: 'calm', label: 'спокій', hidden: false, synonyms: ['спокійно', 'спокойно', 'calm'], used_count: 9 },
+  { value: 'confidence', label: 'впевненість', hidden: false, synonyms: ['впевнено', 'уверенно', 'confident'], used_count: 6 },
+  { value: 'fomo', label: 'FOMO', hidden: false, synonyms: ['фомо'], used_count: 2 },
+  { value: 'boredom', label: 'нудьга', hidden: true, synonyms: ['нудно', 'скучно', 'bored'], used_count: 1 },
+  { value: 'anxiety', label: 'тривога', hidden: false, synonyms: ['тривожно', 'тревожно', 'anxious'], used_count: 0 },
+  { value: 'uncertainty', label: 'невпевненість', hidden: false, synonyms: ['невпевнено', 'неуверенно', 'unsure'], used_count: 0 },
+]
 
 export const DIGEST_LIST_MONTHLY = {
   items: [

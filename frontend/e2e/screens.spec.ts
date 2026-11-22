@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Page, type Route } from '@playwright/test'
 import {
-  ACCOUNTS, AI_MODELS, BIAS_CONFIG, BIAS_NOTE, BIAS_NOTES, CALC_INPUT, CALC_RESULT, DESCRIBE_TRADE, DIGEST_LIST_MONTHLY, JOURNAL_FIELDS,
+  ACCOUNTS, AI_MODELS, BIAS_CONFIG, BIAS_NOTE, BIAS_NOTES, CALC_INPUT, CALC_RESULT, DESCRIBE_TRADE, DIGEST_LIST_MONTHLY, EMOTION_OPTIONS, JOURNAL_FIELDS,
   JOURNAL_TRADES, MARGIN_REQUEST, MONTHLY_BIAS_NOTE, MONTHLY_DIGEST, SYMBOL_SPECS, TRADE_SYMBOLS,
 } from './screens.fixtures'
 
@@ -169,6 +169,8 @@ const FIXTURES: Record<string, unknown> = {
   '/api/trades/symbols': TRADE_SYMBOLS,
   '/api/trades/24': DESCRIBE_TRADE,
   '/api/journal-fields': JOURNAL_FIELDS,
+  '/api/journal-options/emotion_before': { field: 'emotion_before', options: EMOTION_OPTIONS },
+  '/api/journal-options/emotion_after': { field: 'emotion_after', options: EMOTION_OPTIONS },
   '/api/digests': {
     items: [
       { id: 5, kind: 'weekly', period_start: '2026-11-09', period_end: '2026-11-15', generated_at: '2026-11-15T12:00:00Z', trades: 9, net_pnl: '1241.20', net_pnl_pct: '4.1240', total_r: '6.3000', win_rate: '55.5600', reviewed: true, reviewed_at: '2026-11-16T09:00:00Z' },
