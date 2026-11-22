@@ -25,26 +25,28 @@ export function OptionListEditor({ field, title }: { field: string; title: strin
   const list = useEditableOptions(field)
   const change = useChangeOptions(field)
   const [saveError, setSaveError] = useState<unknown>(null)
-  const [moving, setMoving] = useState(false)
+  // Add, delete and reorder change the set or order the arrows and delete buttons rely on.
+  const [listChanges, setListChanges] = useState(0)
+  const moving = listChanges > 0
   const options = list.data?.options ?? []
   const values = options.map((option) => option.value)
 
   // Changes are queued (mutation scope), so a blur save never swallows the click that caused it.
   const run: RunAction = async (action) => {
+    const changesList = action.kind !== 'update'
     setSaveError(null)
+    if (changesList) setListChanges((n) => n + 1)
     try {
       await change.mutateAsync(action)
       return true
     } catch (error) {
       setSaveError(error)
       return false
+    } finally {
+      if (changesList) setListChanges((n) => n - 1)
     }
   }
-  const move = async (index: number, step: -1 | 1) => {
-    setMoving(true)
-    await run({ kind: 'order', values: moved(values, index, step) })
-    setMoving(false)
-  }
+  const move = (index: number, step: -1 | 1) => run({ kind: 'order', values: moved(values, index, step) })
 
   return (
     <Card className="flex flex-col gap-3">
@@ -148,7 +150,7 @@ function OptionRow({ option, isFirst, isLast, moving, onAction, onMove }: Option
           className={ICON_BUTTON}
           aria-label={t.remove(option.label)}
           title={used ? t.removeBlocked : undefined}
-          disabled={used}
+          disabled={used || moving}
           onClick={() => void onAction({ kind: 'delete', value: option.value })}
         >
           <Trash2 className="size-4" aria-hidden />
