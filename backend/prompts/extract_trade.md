@@ -100,11 +100,8 @@ He trades a liquidity / smart-money style strategy. Terms and the spellings he u
 - **Plan** ("план", "по плану", "все по плану", "відступив від плану", "не по плану",
   "нарушил план"): whether he followed his trading plan. Fill it only when he says so.
 - **Emotions** before the entry and after the trade are separate fields; fill each only for
-  the moment he describes. Typical words: calm "спокій", "спокійно", "спокойно", "calm";
-  confidence "впевнено", "впевненість", "уверенно", "confident"; FOMO "фомо", "FOMO",
-  "боявся пропустити", "боялся упустить"; fear "страх", "страшно", "боявся", "боялся";
-  revenge "реванш", "відігратися", "отыграться", "revenge"; fatigue "втома", "втомився",
-  "устал", "tired"; boredom "нудьга", "нудно", "скучно", "bored".
+  the moment he describes. The words he may use for each option are listed next to it under
+  "Journal fields".
 - **Setup quality rating**: only when he gives an explicit number or grade for the setup
   quality ("якість 4", "сетап на 4 з 5", "оцінка 3", "rating 5"). Never derive it from the
   result or from your own judgement.

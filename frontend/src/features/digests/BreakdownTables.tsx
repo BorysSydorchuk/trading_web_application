@@ -7,7 +7,7 @@ import type { JournalField } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { BreakdownMatrix } from './BreakdownMatrix'
-import { optionLabel, type FieldMap } from './breakdownLabels'
+import { inOptionOrder, optionLabel, type FieldMap } from './breakdownLabels'
 import { BLOCK_TITLE, ROW, THEAD, TITLED_TABLE_CARD } from './tableStyles'
 import type { Breakdown, GroupKey } from './types'
 
@@ -139,7 +139,7 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
           </tr>
         </thead>
         <tbody>
-          {breakdown.groups.map((group) => (
+          {(breakdown.kind === 'combination' ? breakdown.groups : inOptionOrder(fields.get(name), breakdown.groups)).map((group) => (
             <tr key={String(group.key)} className={ROW}>
               <td className={cn(TD, group.key === null && 'text-ink-muted')}>{label(group.key)}</td>
               <td className={NUM}>{group.trades}</td>

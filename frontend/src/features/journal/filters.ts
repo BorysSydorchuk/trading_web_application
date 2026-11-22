@@ -38,7 +38,7 @@ export type DescribedFilter = (typeof DESCRIBED_FILTERS)[number]
 const JOURNAL_PARAM = 'journal'
 export const JOURNAL_NULL_VALUE = 'null'
 /** Journal fields offered as filters (labels and options come from GET /api/journal-fields). */
-export const JOURNAL_FILTER_KEYS = ['poi_types', 'fvg_types_h1', 'fvg_types_h4', 'h1_context', 'h4_context', 'entry_model'] as const
+export const JOURNAL_FILTER_KEYS = ['poi_types', 'fvg_types_h1', 'fvg_types_h4', 'h1_context', 'h4_context', 'entry_model', 'emotion_before', 'emotion_after'] as const
 const FILTER_KEYS: ReadonlySet<string> = new Set(JOURNAL_FILTER_KEYS)
 
 /** Field key → chosen values (any of); keys in first-seen order. */

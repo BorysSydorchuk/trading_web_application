@@ -6,6 +6,7 @@ from app.models.bias import BiasEntry, BiasNote
 from app.models.calculator import CalculatorMarginRequest
 from app.models.digest import Digest
 from app.models.fx_rate import FxRate
+from app.models.journal_option import JournalFieldOption
 from app.models.journal_requirement import JournalFieldRequirement, JournalRequirementsState
 from app.models.media import AudioNote, ChartLink
 from app.models.sync_log import SyncLog
@@ -22,6 +23,7 @@ __all__ = [
     "ChartLink",
     "Digest",
     "FxRate",
+    "JournalFieldOption",
     "JournalFieldRequirement",
     "JournalRequirementsState",
     "RuleViolation",

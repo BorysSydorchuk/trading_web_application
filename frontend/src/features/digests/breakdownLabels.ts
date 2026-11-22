@@ -7,6 +7,13 @@ export function optionLabel(field: JournalField | undefined, value: string): str
   return field?.options?.find((option) => option.value === value)?.label ?? value
 }
 
+/** Groups in the field's current option order; other keys keep their order after them. */
+export function inOptionOrder<G extends { key: unknown }>(field: JournalField | undefined, groups: readonly G[]): readonly G[] {
+  const rank = new Map((field?.options ?? []).map((option, index) => [option.value as unknown, index]))
+  if (rank.size === 0) return groups
+  return [...groups].sort((a, b) => (rank.get(a.key) ?? rank.size) - (rank.get(b.key) ?? rank.size))
+}
+
 /**
  * Distinct values in YAML option order, unknown values after them (first-seen order),
  * `null` (not filled) last.
