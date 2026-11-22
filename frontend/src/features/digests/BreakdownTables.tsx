@@ -7,8 +7,9 @@ import type { JournalField } from '@/features/trades/types'
 import { uk } from '@/i18n/uk'
 import { cn } from '@/lib/utils'
 import { BreakdownMatrix } from './BreakdownMatrix'
-import { optionLabel, type FieldMap } from './breakdownLabels'
+import { inOptionOrder, optionLabel, type FieldMap } from './breakdownLabels'
 import { BLOCK_TITLE, ROW, THEAD, TITLED_TABLE_CARD } from './tableStyles'
+import { TimeBreakdownCard } from './TimeBreakdownCard'
 import type { Breakdown, GroupKey } from './types'
 
 const t = uk.digests.breakdowns
@@ -30,6 +31,9 @@ const TRADE_FIELD_LABELS: Readonly<Record<string, string>> = {
   weekday: uk.trades.columns.weekday,
   bias_alignment: uk.trades.columns.bias_alignment,
 }
+
+/** Shown as pastel cells instead of a table. */
+const TIME_FIELDS: ReadonlySet<string> = new Set(['weekday', 'hour'])
 
 type ScalarKey = Exclude<GroupKey, null | readonly (string | null)[]>
 
@@ -82,6 +86,8 @@ interface TableView {
   label: (key: ScalarKey) => string
   showCoverage: boolean
   note: string | null
+  /** The journal field whose current option order sorts the rows. */
+  orderField?: JournalField
 }
 
 /** Title, key labels and note of a `field` or `combination` breakdown (no `kind` = field). */
@@ -103,6 +109,7 @@ function tableView(name: string, breakdown: Breakdown, fields: FieldMap): TableV
   const field = fields.get(renamed ? (RENAMED_FIELDS[name] ?? name) : name)
   return {
     title: field?.label ?? name,
+    orderField: field,
     label: (key) => journalKeyLabel(field, key),
     showCoverage: true,
     // A multi field counts a trade once in each of its values, so the rows add up to more trades.
@@ -116,6 +123,9 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
   const label = (key: GroupKey) => {
     if (key === null) return t.notFilled
     return Array.isArray(key) ? key.map((part) => part ?? t.notFilled).join(COMBO_JOIN) : view.label(key as ScalarKey)
+  }
+  if (TIME_FIELDS.has(name)) {
+    return <TimeBreakdownCard title={view.title} breakdown={breakdown} label={label} currency={currency} />
   }
   return (
     <article aria-label={view.title} className={TITLED_TABLE_CARD}>
@@ -139,7 +149,7 @@ function BreakdownTable({ name, breakdown, fields, currency }: BreakdownTablePro
           </tr>
         </thead>
         <tbody>
-          {breakdown.groups.map((group) => (
+          {inOptionOrder(view.orderField, breakdown.groups).map((group) => (
             <tr key={String(group.key)} className={ROW}>
               <td className={cn(TD, group.key === null && 'text-ink-muted')}>{label(group.key)}</td>
               <td className={NUM}>{group.trades}</td>

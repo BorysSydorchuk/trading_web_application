@@ -15,7 +15,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.clock import utc_now
-from app.config_files import ConfigError, JournalFieldsConfig, get_journal_fields
+from app.config_files import ConfigError, JournalFieldsConfig
 from app.db import get_db
 from app.domain import metrics
 from app.domain.excursion import r_from_extremes
@@ -31,6 +31,7 @@ from app.services.digests import recompute_for_trade
 from app.services.fx_values import stored_spec_tick_values
 from app.services.inbox import count_inbox
 from app.services.journal_filters import JournalFilterError, journal_conditions
+from app.services.journal_options import effective_journal_fields
 from app.services.journal_requirements import missing_new_fields_condition, sync_requirements
 from app.services.trade_exclusion import exclude_trade, include_trade
 from app.services.trade_journal import journal_view, save_journal
@@ -207,9 +208,9 @@ def to_detail(
     )
 
 
-def journal_config() -> JournalFieldsConfig:
+def journal_config(db: Session) -> JournalFieldsConfig:
     try:
-        return get_journal_fields()
+        return effective_journal_fields(db)
     except ConfigError as exc:
         raise config_error(exc) from None
 
@@ -218,7 +219,7 @@ def journal_context(db: Session) -> tuple[JournalFieldsConfig, dict[str, datetim
     """Journal config plus the synced required-since map (docs/api.md "New required
     fields"). Call first in a request: a sync write commits. Broken YAML → config_error
     before the table is touched."""
-    config = journal_config()
+    config = journal_config(db)
     return config, sync_requirements(db, config)
 
 
@@ -250,9 +251,9 @@ def _load_detail(db: Session, trade_id: int) -> tuple[Trade, str]:
     return row[0], row[1]
 
 
-def _journal_filter(values: Sequence[str]) -> list[ColumnElement[bool]]:
+def _journal_filter(db: Session, values: Sequence[str]) -> list[ColumnElement[bool]]:
     try:
-        return journal_conditions(values, journal_config())
+        return journal_conditions(values, journal_config(db))
     except JournalFilterError as exc:
         raise _validation_error("journal", str(exc)) from None
 
@@ -283,7 +284,7 @@ def list_trades(
 ) -> schemas.TradeList:
     conditions = _filters(account_id, symbol, status, date_from, date_to)
     if journal:
-        conditions.extend(_journal_filter(journal))
+        conditions.extend(_journal_filter(db, journal))
     if excluded is not None:
         conditions.append(Trade.excluded_from_stats.is_(excluded))
     if not archived:

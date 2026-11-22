@@ -5,23 +5,37 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_journal_fields, get_rules, get_violations
-from app.config_files.journal_fields import RULE_VIOLATIONS_FIELD
+from app.config_files.journal_fields import RULE_VIOLATIONS_FIELD, JournalFieldsConfig
+from app.db import get_db
 from app.errors import config_error
+from app.services.journal_options import effective_journal_fields
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/journal-fields")
-def journal_fields() -> dict[str, Any]:
-    """The field definitions; `rule_violations` also carries `violation_types`
-    (key -> auto | manual from violations.yaml, docs/api.md merge B shapes)."""
+def _current_config(db: Session) -> JournalFieldsConfig:
+    """The owner's lists; with the DB down the form still gets the YAML defaults (logged)."""
     try:
-        data = get_journal_fields().to_api()
+        return effective_journal_fields(db)
+    except SQLAlchemyError as exc:
+        logger.error("Journal option lists unavailable, using YAML: %s", type(exc).__name__)
+        db.rollback()
+        return get_journal_fields()
+
+
+@router.get("/journal-fields")
+def journal_fields(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """The field definitions with the owner's current option lists; `rule_violations` also
+    carries `violation_types` (key -> auto | manual from violations.yaml, docs/api.md)."""
+    try:
+        data = _current_config(db).to_api()
         types = {v.key: v.type for v in get_violations().violations}
     except ConfigError as exc:
         raise config_error(exc) from None

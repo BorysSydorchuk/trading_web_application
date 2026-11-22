@@ -1,46 +1,39 @@
 import { uk } from '@/i18n/uk'
-import { decimalSign } from '@/lib/decimal'
-import { rBucketLabel } from '../format'
+import { cn } from '@/lib/utils'
 import type { RBucket } from '../types'
 import { ChartEmpty } from './ChartEmpty'
+import { foldRBuckets } from './rBins'
 
 const c = uk.digests.charts
-const BAR = 44
-const GAP = 6
-const PLOT = 100
-const LABEL = 16
-const TOP = 14
+/** Bars reach this share of the plot, so the count above the tallest bar always fits. */
+const MAX_BAR_PCT = 82
 
-/** Trades per 0.5 R bucket; the edge buckets fold everything beyond ±3 R («≤ −2.5» / «≥ 3»). */
+/** Trades per R bin: compact, centered, one count above each non-empty bar, R ticks below. */
 export function RDistributionChart({ buckets }: { buckets: readonly RBucket[] }) {
   if (buckets.length === 0) return <ChartEmpty title={c.rDistribution} />
-  const max = Math.max(1, ...buckets.map((b) => b.count))
-  const width = buckets.length * (BAR + GAP) + GAP
-  const height = TOP + PLOT + LABEL
-  const summary = c.rSummary(buckets.map((b) => c.bucket(rBucketLabel(b), b.count)).join('; '))
+  const bins = foldRBuckets(buckets)
+  const max = Math.max(1, ...bins.map((bin) => bin.count))
+  const summary = c.rSummary(bins.map((bin) => c.bucket(bin.label, bin.count)).join('; '))
   return (
-    <figure className="flex flex-col gap-2 rounded-card border border-line bg-card p-4">
+    <figure className="m-0 flex flex-col gap-3 rounded-card border border-line bg-card p-4">
       <figcaption className="font-display text-sm font-extrabold text-ink">{c.rDistribution}</figcaption>
-      <svg role="img" aria-label={summary} viewBox={`0 0 ${width} ${height}`} className="h-40 w-full">
-        {buckets.map((bucket, i) => {
-          const label = rBucketLabel(bucket)
-          const h = (bucket.count / max) * PLOT
-          const x = GAP + i * (BAR + GAP)
-          const negative = decimalSign(bucket.lower) < 0
-          return (
-            <g key={bucket.lower} data-bucket={label}>
-              <title>{c.bucket(label, bucket.count)}</title>
-              <rect x={x} y={TOP + PLOT - h} width={BAR} height={h} rx={3} className={negative ? 'fill-loss-strong' : 'fill-profit-strong'} />
-              <text x={x + BAR / 2} y={TOP + PLOT - h - 3} textAnchor="middle" className="num fill-ink text-[10px] font-semibold">
-                {bucket.count}
-              </text>
-              <text x={x + BAR / 2} y={height - 4} textAnchor="middle" className="num fill-ink-muted text-[9px] font-medium">
-                {label}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+      <div role="img" aria-label={summary} className="m-auto grid w-full max-w-md grid-cols-6 gap-2">
+        {bins.map((bin) => (
+          <div key={bin.key} data-bin={bin.key} title={c.bucket(bin.label, bin.count)} className="flex min-w-0 flex-col items-center gap-1">
+            <div className="flex h-40 w-full flex-col items-center justify-end gap-1 border-b border-line">
+              {bin.count > 0 && <span className="num text-xs leading-none font-semibold text-ink">{bin.count}</span>}
+              {bin.count > 0 && (
+                <div
+                  data-bar
+                  style={{ height: `${(bin.count / max) * MAX_BAR_PCT}%` }}
+                  className={cn('w-full max-w-11 rounded-t-md', bin.negative ? 'bg-loss-light' : 'bg-profit-light')}
+                />
+              )}
+            </div>
+            <span className="num text-[11px] font-medium whitespace-nowrap text-ink-muted">{bin.label}</span>
+          </div>
+        ))}
+      </div>
     </figure>
   )
 }

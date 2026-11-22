@@ -388,7 +388,12 @@ def test_get_journal_fields(cfg_dir: Path, api: TestClient) -> None:
     }
     assert first["key"] == "h1_context"
     assert first["phase"] == "before"
-    assert first["options"][0] == {"value": "flow", "label": "Flow", "deprecated": False}
+    assert first["options"][0] == {
+        "value": "flow",
+        "label": "Flow",
+        "deprecated": False,
+        "synonyms": [],
+    }
     assert first["storage"] == "column"
     assert (first["show_if"], first["legacy"]) == (None, False)
     by_key = {f["key"]: f for f in fields}

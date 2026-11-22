@@ -27,21 +27,24 @@ describe('digest SVG charts', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
-  it('labels the R edge buckets «≤ −2.5» and «≥ 3»', () => {
+  it('folds 0.5 R buckets into six bins; exactly −1 R stays in «−1…0»; empty bins have no bar', () => {
     const { container } = render(
       <RDistributionChart
         buckets={[
           { lower: '-3.0000', upper: '-2.5000', count: 1 },
+          { lower: '-1.5000', upper: '-1.0000', count: 2 },
+          { lower: '-1.0000', upper: '-0.5000', count: 5 },
+          { lower: '0.0000', upper: '0.5000', count: 1 },
           { lower: '0.5000', upper: '1.0000', count: 4 },
           { lower: '3.0000', upper: '3.5000', count: 2 },
         ]}
       />,
     )
-    expect(screen.getByText('≤ −2.5')).toBeInTheDocument()
-    expect(screen.getByText('≥ 3')).toBeInTheDocument()
-    expect(screen.getByText('0.50…1.00')).toBeInTheDocument()
-    expect(container.querySelectorAll('rect')).toHaveLength(3)
-    expect(screen.getByRole('img', { name: c.rSummary('≤ −2.5: 1; 0.50…1.00: 4; ≥ 3: 2') })).toBeInTheDocument()
+    const summary = c.rSummary('< −1R: 3; −1…0: 5; 0…1: 5; 1…2: 0; 2…3: 0; ≥ 3R: 2')
+    expect(screen.getByRole('img', { name: summary })).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-bin]')).toHaveLength(6)
+    expect(container.querySelectorAll('[data-bar]')).toHaveLength(4)
+    expect(container.querySelector('[data-bin="1-2"] [data-bar]')).toBeNull()
   })
 
   it('draws heatmap cells with a weekend row only when present', () => {

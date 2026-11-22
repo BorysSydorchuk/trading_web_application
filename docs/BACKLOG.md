@@ -61,3 +61,6 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 - 2026-11-20 (starting-balance suggestion code-review LOW): a history read or file write that keeps failing repeats every sync (cap with a per-process attempted set); sync.py ~800 lines (move the deposit steps out next time); clear the suggestion entry when an account's login/server changes; a failed read/write is only in logs (optional hint, accepted).
 - 2026-11-20 (M8-10c code-review LOW): non-compact ExcludedBadge uses aria-label on a role-less span (use sr-only text); merge features/journal/tableStyles.ts and features/digests/tableStyles.ts into one studio module; TradeCell STATUS_TONE type simpler; sticky save bars bg-card/95 vs bg-surface/95.
 - 2026-11-20 (DB_MODE code-review LOW): app/tools/migrate.py verify_backup re-reads get_settings() instead of the settings passed to migrate() (pass docker_allowed via Deps); scripts/native_pg_diff.py (diagnostic) has no tests.
+
+- Same option editor for other choice fields (entry model, POI, exit reason): add the key to `MANAGED_FIELDS`, handle `other`/`show_if`/`rules.yaml` references (owner 2026-11-22, not built).
+- Digest R chart: exactly −1 R in the `≤ −1R` bin needs raw R values in the snapshot and a digest recompute (owner decides, 2026-11-22).

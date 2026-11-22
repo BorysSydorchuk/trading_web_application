@@ -183,13 +183,16 @@ fields:
     label: "Емоція до входу"
     type: enum
     options: &emotions
-      - { value: calm, label: "спокій" }
-      - { value: confidence, label: "впевненість" }
-      - { value: fomo, label: "FOMO" }
-      - { value: fear, label: "страх" }
-      - { value: revenge, label: "реванш" }
-      - { value: fatigue, label: "втома" }
-      - { value: boredom, label: "нудьга" }
+      # Defaults only: after the first edit in Settings «Емоції» the list lives in the DB.
+      - { value: calm, label: "спокій", synonyms: ["спокійно", "спокойно", "calm"] }
+      - { value: confidence, label: "впевненість", synonyms: ["впевнено", "уверенно", "уверенность", "confident"] }
+      - { value: fomo, label: "FOMO", synonyms: ["фомо", "боявся пропустити", "боялся упустить"] }
+      - { value: fear, label: "страх", synonyms: ["страшно", "боявся", "боялся", "fear"] }
+      - { value: revenge, label: "реванш", synonyms: ["відігратися", "отыграться", "revenge"] }
+      - { value: fatigue, label: "втома", synonyms: ["втомився", "устал", "усталость", "tired"] }
+      - { value: boredom, label: "нудьга", synonyms: ["нудно", "скучно", "скука", "bored"] }
+      - { value: anxiety, label: "тривога", synonyms: ["тривожно", "хвилювався", "тревога", "тревожно", "волновался", "anxious", "anxiety"] }
+      - { value: uncertainty, label: "невпевненість", synonyms: ["невпевнено", "сумнівався", "неуверенность", "неуверенно", "сомневался", "unsure", "uncertain"] }
     required: true
     analytics: true
     storage: column

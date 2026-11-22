@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import ColumnElement, Date, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config_files import ConfigError, get_journal_fields, get_rules
+from app.config_files import ConfigError, get_rules
 from app.config_files.journal_fields import RELATION_FIELDS, JournalField
 from app.domain import digest_metrics as dm
 from app.domain.digest_breakdowns import JournalSpec, ShowIfSpec
@@ -38,6 +38,7 @@ from app.services.digest_snapshot import (
     SnapshotInput,
     build_snapshot,
 )
+from app.services.journal_options import effective_journal_fields
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,11 @@ def _closed() -> ColumnElement[bool]:
     return and_(Trade.close_time.is_not(None), Trade.net_pnl.is_not(None))
 
 
-def _journal_specs() -> tuple[JournalField, ...]:
+def _journal_specs(db: Session) -> tuple[JournalField, ...]:
     """Fields the digest reads, in file order: the analytics fields with a breakdown
-    (relation fields have their own sections) plus the show_if parents they need."""
-    fields = get_journal_fields().fields
+    (relation fields have their own sections) plus the show_if parents they need. Hidden
+    options stay in the lists, so history statistics keep them."""
+    fields = effective_journal_fields(db).fields
     analysed = [
         f
         for f in fields
@@ -275,7 +277,7 @@ def _snapshot(db: Session, kind: dm.PeriodKind, start: date, end: date) -> Json:
         rules = get_rules()
         sigma = rules.digest.deviation_sigma
         breakeven_r = rules.breakeven_r_threshold
-        specs = _journal_specs()
+        specs = _journal_specs(db)
     except ConfigError as exc:
         raise config_error(exc) from exc
     accounts = {a.id: a for a in db.scalars(select(Account).where(_not_archived()))}

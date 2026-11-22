@@ -75,6 +75,8 @@ class JournalOption(_Strict):
     value: str = Field(pattern=_KEY_PATTERN, max_length=50)
     label: str = Field(min_length=1)
     deprecated: bool = False
+    # Words (UA/RU/EN) the AI extraction maps to this option.
+    synonyms: tuple[str, ...] = ()
 
 
 class ShowIf(_Strict):

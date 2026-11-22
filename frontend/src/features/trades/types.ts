@@ -183,6 +183,7 @@ export interface JournalFieldOption {
   value: string
   label: string
   deprecated: boolean
+  synonyms?: readonly string[]
 }
 
 /** `enum | multi_enum | bool | int | text | links | auto`; kept as string so a new type never crashes the UI. */

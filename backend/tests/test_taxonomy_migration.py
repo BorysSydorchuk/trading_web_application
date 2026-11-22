@@ -119,13 +119,9 @@ def _columns(db_engine: Engine) -> dict[str, str]:
         return dict(rows.all())
 
 
-def test_the_new_revision_follows_the_previous_head() -> None:
+def test_the_taxonomy_revision_follows_its_previous_head() -> None:
     script = ScriptDirectory.from_config(alembic_config())
-    head = script.get_current_head()
-    assert head is not None
-
-    assert head != BEFORE
-    revision = script.get_revision(head)
+    revision = script.get_revision("d3b9f1a7c2e4")
     assert revision is not None
     assert revision.down_revision == BEFORE
 

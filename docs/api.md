@@ -840,3 +840,13 @@ Branch `m8/home-redesign`, tier M, no migration. Layout and behaviour: docs/desi
 - **Field**: every account response (`GET /api/accounts` items, `GET` / `POST` / `PATCH /api/accounts/{id}`) gains `starting_balance_suggestion: {amount: "10000.00", time: "2026-11-10T12:53:00Z"} | null` (money 2 dp string, UTC). Non-null only when the suggestions file has an amount for the account and it differs from the stored `starting_balance`.
 - **Confirm**: the existing `PATCH /api/accounts/{id}` with `{"starting_balance": "<amount>"}` (same validation as create: positive, max 2 decimals, decimal string). Afterwards the amounts are equal, so the field is null. `reference_balance` is not changed.
 - **Source**: `DATA_DIR/starting_balance_suggestions.json`, written by the worker (atomic replace): `{"<account_id>": {"amount": "10000.00", "time": "...Z", "ticket": 194830322, "checked_at": "...Z"}}`, or `{"amount": null, "checked_at": "...Z"}` when the history has no deposit. An account without an entry (new account, first sync) reads its full MT5 deal history once (read-only `history_deals_get`, inside the normal sync connection); the first deposit = the earliest non-trade deal (MT5 type not 0 buy / 1 sell, e.g. 2 balance or 4) with profit > 0, amount = profit + commission + swap + fee. A failed history read or file write never fails the sync (warning / error in the log; a failed read is retried on the next sync). A missing or broken file means no suggestion (logged once).
+
+## Editable journal option lists (owner request 2026-11-22)
+
+- Managed fields: `emotion_before`, `emotion_after` (`MANAGED_FIELDS` in `app/services/journal_options.py`); any other field -> 404.
+- `GET /api/journal-options/{field}` -> `{field, options: [{value, label, hidden, synonyms, used_count}]}`.
+- `POST /api/journal-options/{field}` `{label, synonyms?}` -> 201 option (`value` = generated stable `opt_<hex>`); same label -> 409 `duplicate_label`.
+- `PATCH /api/journal-options/{field}/{value}` `{label?, hidden?, synonyms?}`; `value` never changes; hiding the last visible option -> 409 `last_visible_option`.
+- `PUT /api/journal-options/{field}/order` `{values}`: every current value exactly once, else 422.
+- `DELETE /api/journal-options/{field}/{value}` -> 204; used by a trade -> 409 `option_in_use`.
+- `GET /api/journal-fields` returns the current lists; `hidden` is `deprecated`; every option carries `synonyms`. With the DB down it returns the YAML defaults (logged).

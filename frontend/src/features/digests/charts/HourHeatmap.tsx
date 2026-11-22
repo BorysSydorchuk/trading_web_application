@@ -11,6 +11,8 @@ const TOP = 16
 /** Mon–Fri always; Sat/Sun rows only when they have trades (docs/api.md "Charts data"). */
 const WORKDAYS = [0, 1, 2, 3, 4]
 const MIN_OPACITY = 0.15
+/** Few hours must not blow the cells up and leave the neighbouring R chart card half empty. */
+const MAX_SCALE = 1.6
 
 function cellText(cell: HeatCell): string {
   return c.cell(weekdayLabel(cell.weekday), String(cell.hour).padStart(2, '0'), cell.trades, formatSignedMoney(cell.net_pnl))
@@ -46,7 +48,7 @@ export function HourHeatmap({ cells }: { cells: readonly HeatCell[] }) {
         <span className="font-display text-sm font-extrabold text-ink">{c.heatmap}</span>
         <span className="text-ink-muted">{c.timeZoneNote}</span>
       </figcaption>
-      <svg role="img" aria-label={c.heatmapSummary(cellText(ends.best), cellText(ends.worst))} viewBox={`0 0 ${width} ${height}`} className="w-full max-w-xl">
+      <svg role="img" aria-label={c.heatmapSummary(cellText(ends.best), cellText(ends.worst))} viewBox={`0 0 ${width} ${height}`} style={{ maxWidth: width * MAX_SCALE }} className="m-auto w-full">
         {hours.map((hour, i) => (
           <text key={hour} x={LEFT + i * CELL + CELL / 2} y={TOP - 4} textAnchor="middle" className="num fill-ink-muted text-[9px] font-medium">
             {String(hour).padStart(2, '0')}

@@ -38,7 +38,7 @@ export type DescribedFilter = (typeof DESCRIBED_FILTERS)[number]
 const JOURNAL_PARAM = 'journal'
 export const JOURNAL_NULL_VALUE = 'null'
 /** Journal fields offered as filters (labels and options come from GET /api/journal-fields). */
-export const JOURNAL_FILTER_KEYS = ['poi_types', 'fvg_types_h1', 'fvg_types_h4', 'h1_context', 'h4_context', 'entry_model'] as const
+export const JOURNAL_FILTER_KEYS = ['poi_types', 'fvg_types_h1', 'fvg_types_h4', 'h1_context', 'h4_context', 'entry_model', 'emotion_before', 'emotion_after'] as const
 const FILTER_KEYS: ReadonlySet<string> = new Set(JOURNAL_FILTER_KEYS)
 
 /** Field key → chosen values (any of); keys in first-seen order. */
@@ -105,6 +105,26 @@ export function journalPairs(journal: JournalFieldFilters): string[] {
 export function withJournalFilter(journal: JournalFieldFilters, key: string, values: readonly string[]): JournalFieldFilters {
   const rest = Object.fromEntries(Object.entries(journal).filter(([k]) => k !== key))
   return values.length === 0 ? rest : { ...rest, [key]: [...values] }
+}
+
+/** Fields whose options the owner can delete in Settings (backend `MANAGED_FIELDS`). */
+const EDITABLE_OPTION_KEYS: ReadonlySet<string> = new Set(['emotion_before', 'emotion_after'])
+
+/** A bookmarked value of a since-deleted option is dropped: the API would answer 422 for it. */
+export function withoutRemovedOptions(
+  journal: JournalFieldFilters,
+  fields: readonly { key: string; options?: readonly { value: string }[] | null }[] | undefined,
+): JournalFieldFilters {
+  if (!fields) return journal
+  let result = journal
+  for (const field of fields) {
+    const selected = journal[field.key]
+    if (!selected || !EDITABLE_OPTION_KEYS.has(field.key)) continue
+    const known = new Set([...(field.options ?? []).map((option) => option.value), JOURNAL_NULL_VALUE])
+    const kept = selected.filter((value) => known.has(value))
+    if (kept.length !== selected.length) result = withJournalFilter(result, field.key, kept)
+  }
+  return result
 }
 
 export function parseFilters(params: URLSearchParams): JournalFilters {

@@ -21,6 +21,20 @@ function render(breakdowns: Record<string, Breakdown>) {
 }
 
 describe('BreakdownTables (M8-04..08)', () => {
+  it('shows weekday and hour as pastel cells, not tables, scaled by P&L', async () => {
+    render({
+      weekday: { kind: 'field', groups: [group(0, 2, '300.00', '3.0000', '100.0000'), group(1, 1, '-30.00', '-0.3000', '0.0000')], coverage: { filled: 3, total: 3 } },
+      hour: { kind: 'field', groups: [group(9, 3, '0.00', '0.0000', null)], coverage: { filled: 3, total: 3 } },
+    })
+    const days = await screen.findByRole('article', { name: uk.trades.columns.weekday })
+    expect(within(days).queryByRole('table')).not.toBeInTheDocument()
+    expect(within(days).getByText(uk.trades.weekdays[0] ?? '').closest('li')).toHaveClass('bg-profit-light')
+    expect(within(days).getByText(uk.trades.weekdays[1] ?? '').closest('li')).toHaveClass('bg-loss-wash')
+    const hours = screen.getByRole('article', { name: uk.trades.columns.hour })
+    expect(within(hours).getByText(t.hour('09')).closest('li')).toHaveClass('bg-track')
+    expect(within(hours).getByText(t.cellTrades(3))).toBeInTheDocument()
+  })
+
   it('renders a multi field with the «each value» note and coverage', async () => {
     render({
       poi_types: {

@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from app.config_files.journal_fields import JournalFieldsConfig
+from app.config_files.journal_fields import JournalFieldsConfig, JournalOption
 from app.domain.journal import (
     OTHER_OPTION,
     InvalidJournalValue,
@@ -203,6 +203,14 @@ def _show_if_note(spec: JournalKey, config: JournalFieldsConfig) -> str:
     return f", only when `{cond.field}` {verb} `{cond.includes}`"
 
 
+def _option_line(option: JournalOption) -> str:
+    line = f"  - `{option.value}`: {option.label}"
+    if not option.synonyms:
+        return line
+    words = ", ".join(f'"{word}"' for word in option.synonyms)
+    return f"{line} (he may say: {words})"
+
+
 def _catalogue_lines(spec: JournalKey, config: JournalFieldsConfig) -> list[str]:
     head = f"- `{spec.key}` ({spec.field.label}){_show_if_note(spec, config)}"
     if spec.other_only:
@@ -213,9 +221,7 @@ def _catalogue_lines(spec: JournalKey, config: JournalFieldsConfig) -> list[str]
     match spec.type:
         case "enum" | "multi_enum":
             many = "one or more option values" if spec.type == "multi_enum" else "one option value"
-            options = [
-                f"  - `{o.value}`: {o.label}" for o in spec.field.options if not o.deprecated
-            ]
+            options = [_option_line(o) for o in spec.field.options if not o.deprecated]
             return [f"{head}: {many}:", *options]
         case "bool":
             return [f"{head}: true or false."]
