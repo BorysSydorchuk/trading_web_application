@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "digests",
     "rule_violations",
     "sync_log",
+    "journal_field_options",
     "journal_field_requirements",
     "journal_requirements_state",
 }
