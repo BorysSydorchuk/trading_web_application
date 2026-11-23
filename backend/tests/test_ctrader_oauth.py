@@ -319,12 +319,16 @@ def test_new_pair_is_on_disk_before_it_is_returned(
 ) -> None:
     store.write(_pair(days=1))
 
-    def fail(_pair: TokenPair) -> None:
-        raise CtraderError(CtraderErrorCode.BAD_RESPONSE, "disk full")
+    written: list[str] = []
+    real_write = store.write
 
-    monkeypatch.setattr(store, "write", fail)
-    with pytest.raises(CtraderError):
-        _manager(store, FakeHttp(_token_body())).fresh_access_token()
+    def spy(pair: TokenPair) -> None:
+        written.append(pair.access_token.get_secret_value())
+        real_write(pair)
+
+    monkeypatch.setattr(store, "write", spy)
+    token = _manager(store, FakeHttp(_token_body())).fresh_access_token()
+    assert written == [token.get_secret_value()]
 
 
 def test_network_failure_with_a_valid_token_keeps_working(store: TokenStore) -> None:

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from decimal import ROUND_HALF_UP, Context, Decimal, localcontext
+from decimal import ROUND_HALF_UP, Context, Decimal, InvalidOperation, localcontext
 from typing import Final
 
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 
 MAX_MONEY_DIGITS: Final = 18
+# The protocol's widest integer is uint64 (20 digits).
+_MAX_INT_DIGITS: Final = 20
+_INT_LIMIT: Final = 2**64
 _CENTS: Final = Decimal("0.01")
 # accounts.balance / equity are NUMERIC(18, 2).
 _STORED_LIMIT: Final = Decimal(10) ** 16
@@ -21,13 +24,14 @@ def _bad(message: str) -> CtraderError:
 
 def parse_int(value: object, field: str) -> int:
     """An exact integer from JSON (a number, or digits: int64 may arrive as a string)."""
-    if type(value) is int:
-        return value
+    parsed: int | None = value if type(value) is int else None
     if isinstance(value, str):
         digits = value[1:] if value.startswith("-") else value
-        if digits.isascii() and digits.isdigit():
-            return int(value)
-    raise _bad(f"{field} is not an integer")
+        if len(digits) <= _MAX_INT_DIGITS and digits.isascii() and digits.isdigit():
+            parsed = int(value)
+    if parsed is None or abs(parsed) >= _INT_LIMIT:
+        raise _bad(f"{field} is not an integer in range")
+    return parsed
 
 
 def scale_money(raw: int, digits: int) -> Decimal:
@@ -51,8 +55,13 @@ def equity_from(balance: Decimal, net_pnl: Iterable[Decimal]) -> Decimal:
 
 def to_stored(value: Decimal) -> Decimal:
     """Rounded half up to the cents of NUMERIC(18, 2); a value it cannot hold is refused."""
-    with localcontext(_WIDE):
-        stored = value.quantize(_CENTS, rounding=ROUND_HALF_UP)
+    if not value.is_finite():
+        raise _bad("money value is not a finite number")
+    try:
+        with localcontext(_WIDE):
+            stored = value.quantize(_CENTS, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise _bad("money value too large to store") from None
     if abs(stored) >= _STORED_LIMIT:
         raise _bad("money value too large to store")
     return stored

@@ -10,10 +10,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +27,15 @@ class Account(TimestampMixin, Base):
     __tablename__ = "accounts"
     __table_args__ = (
         UniqueConstraint("name"),
-        UniqueConstraint("login", "server"),
+        # MT5 only: one terminal login per server. A cTrader account is identified by
+        # ctid_trader_account_id; its login can repeat under one broker title.
+        Index(
+            "uq_accounts_mt5_login_server",
+            "login",
+            "server",
+            unique=True,
+            postgresql_where=text("platform = 'mt5'"),
+        ),
         UniqueConstraint("ctid_trader_account_id"),
         enum_check("phase", AccountPhase, "phase_valid"),
         enum_check("status", AccountStatus, "status_valid"),

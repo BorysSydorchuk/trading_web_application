@@ -396,8 +396,8 @@ def test_read_balances_uses_one_connection_per_environment() -> None:
         read = results[ctid]
         assert not isinstance(read, CtraderError)
         assert read.balance == Decimal("1000.50")
-    assert demo.types_sent().count(p.TRADER_REQ) == 1
-    assert live.types_sent().count(p.TRADER_REQ) == 1
+    assert demo.types_sent().count(p.TRADER_REQ) == 2  # before and after the P&L
+    assert live.types_sent().count(p.TRADER_REQ) == 2
     assert demo.closed
     assert live.closed
 

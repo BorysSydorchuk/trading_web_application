@@ -278,9 +278,12 @@ class CtraderConnection:
             secrets=self._secrets,
         )
         logger.warning("cTrader error: %s", error.message)
-        future = self._pending.get(frame.client_msg_id) if frame.client_msg_id else None
-        if future is None:
+        if frame.client_msg_id is None:  # about the session: every request is affected
             self._fail_pending(error)
+            return
+        future = self._pending.get(frame.client_msg_id)
+        if future is None:
+            logger.warning("cTrader error for an unknown request dropped")
         elif not future.done():
             future.set_exception(error)
 

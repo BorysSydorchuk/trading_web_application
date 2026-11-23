@@ -18,7 +18,6 @@ ALLOWED_OUTGOING: Final = frozenset(
         2121,  # TraderReq
         2124,  # ReconcileReq
         2149,  # GetAccountListByAccessTokenReq
-        2173,  # RefreshTokenReq
         2187,  # GetPositionUnrealizedPnLReq
     }
 )

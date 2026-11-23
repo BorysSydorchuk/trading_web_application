@@ -30,7 +30,7 @@ _NON_PROPAGATING_LOGGERS = ("uvicorn", "uvicorn.access")
 
 # HTTP/SDK loggers log request bodies (the prompt and the trade description) at DEBUG:
 # never below INFO, whatever LOG_LEVEL is.
-_QUIET_LOGGERS = ("anthropic", "httpx", "httpx2", "httpcore", "httpcore2")
+_QUIET_LOGGERS = ("anthropic", "httpx", "httpx2", "httpcore", "httpcore2", "websockets")
 
 _HANDLER_MARK = "_trading_journal_handler"
 

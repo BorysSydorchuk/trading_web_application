@@ -27,7 +27,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 # Unique constraint name (models/base.py naming convention) -> (field, message).
 _CONFLICTS: dict[str, tuple[str, str]] = {
     "uq_accounts_name": ("name", "An account with this name already exists"),
-    "uq_accounts_login_server": (
+    "uq_accounts_mt5_login_server": (
         "login",
         "An account with this login and server already exists",
     ),
@@ -185,6 +185,11 @@ def _recompute_size(db: Session, account_id: int) -> None:
     logger.info("Account %s: size changed, %s trades recomputed", account_id, count)
 
 
+def _same_value(key: str, new: Any, current: Any) -> bool:
+    """A blank terminal path and NULL both mean "not set"."""
+    return (new or None) == (current or None) if key == "terminal_path" else new == current
+
+
 def _refuse_ctrader_identity_change(account: Account, changes: dict[str, Any]) -> None:
     """The edit form may resend these unchanged; an actual change is a 422."""
     if account.platform == AccountPlatform.MT5.value:
@@ -192,7 +197,7 @@ def _refuse_ctrader_identity_change(account: Account, changes: dict[str, Any]) -
     fields = {
         key: "cannot be changed for a cTrader account"
         for key in _CTRADER_FIXED_FIELDS
-        if key in changes and changes[key] != getattr(account, key)
+        if key in changes and not _same_value(key, changes[key], getattr(account, key))
     }
     if fields:
         raise ApiError(422, "validation_error", "Request validation failed", {"fields": fields})

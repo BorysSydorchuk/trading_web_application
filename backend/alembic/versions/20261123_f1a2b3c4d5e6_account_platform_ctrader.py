@@ -2,6 +2,8 @@
 
 Additive: existing rows become ``mt5`` through the server default and keep every value. A
 cTrader account stores its ctidTraderAccountId and live/demo flag; an MT5 account has neither.
+UNIQUE(login, server) becomes a partial unique index for MT5 only: a cTrader account is
+identified by its ctid, and its login can repeat under one broker title.
 Downgrade refuses while cTrader accounts exist: without these columns they would look like MT5
 accounts with no terminal.
 
@@ -41,14 +43,26 @@ def upgrade() -> None:
     op.create_unique_constraint(
         op.f("uq_accounts_ctid_trader_account_id"), "accounts", ["ctid_trader_account_id"]
     )
+    op.drop_constraint(op.f("uq_accounts_login_server"), "accounts", type_="unique")
+    op.create_index(
+        "uq_accounts_mt5_login_server",
+        "accounts",
+        ["login", "server"],
+        unique=True,
+        postgresql_where=sa.text("platform = 'mt5'"),
+    )
 
 
 def downgrade() -> None:
     count = op.get_bind().scalar(sa.text("SELECT count(*) FROM accounts WHERE platform <> 'mt5'"))
     if count:
         raise RuntimeError(
-            f"Downgrade refused: {count} cTrader account(s) exist. Delete them first."
+            f"Downgrade refused: {count} cTrader account(s) exist. Removing them means "
+            "deleting their trades first (the database refuses to delete an account that "
+            "has trades), and that data is lost."
         )
+    op.drop_index("uq_accounts_mt5_login_server", table_name="accounts")
+    op.create_unique_constraint(op.f("uq_accounts_login_server"), "accounts", ["login", "server"])
     op.drop_constraint(op.f("uq_accounts_ctid_trader_account_id"), "accounts", type_="unique")
     op.drop_constraint(op.f("ck_accounts_platform_fields"), "accounts", type_="check")
     op.drop_constraint(op.f("ck_accounts_platform_valid"), "accounts", type_="check")

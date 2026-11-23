@@ -17,7 +17,6 @@ ACCOUNT_AUTH_REQ: Final = 2102
 TRADER_REQ: Final = 2121
 RECONCILE_REQ: Final = 2124
 ACCOUNT_LIST_REQ: Final = 2149
-REFRESH_TOKEN_REQ: Final = 2173
 POSITION_PNL_REQ: Final = 2187
 
 # Incoming responses.
@@ -43,9 +42,6 @@ HEARTBEAT_PAYLOAD: Final[dict[str, Any]] = {}
 
 MAX_REQUESTS_PER_S: Final = 50
 MAX_HISTORICAL_REQUESTS_PER_S: Final = 5
-
-# How often the worker reads balances; sync status derives "stale" from it.
-BALANCE_INTERVAL_S: Final = 60
 
 
 @dataclass(frozen=True)

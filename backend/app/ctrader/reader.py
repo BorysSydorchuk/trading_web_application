@@ -23,6 +23,10 @@ _SCOPE_VIEW_VALUE: Final = 0
 _DEFAULT_BROKER: Final = "cTrader"
 _MAX_BROKER: Final = 100  # accounts.server is String(100)
 _RETRY_READ: Final = (CtraderErrorCode.ACCOUNT_DISCONNECTED, CtraderErrorCode.CONNECTION_FAILED)
+_BALANCE_CHANGED: Final = "balance_changed"
+_CONSISTENCY_ATTEMPTS: Final = 2
+# Below the worker's 60 s schedule; closing the connections adds a few seconds at most.
+READ_BUDGET_S: Final = 45.0
 
 
 @dataclass(frozen=True)
@@ -159,8 +163,31 @@ async def _read_trader_balance(connection: CtraderConnection, ctid: int) -> Deci
     return scale_money(parse_int(trader.get("balance"), "balance"), digits)
 
 
+async def _read_consistent(connection: CtraderConnection, ctid: int) -> BalanceRead:
+    """2121, 2187, 2121: the P&L counts only if the balance did not move around it.
+
+    A deal closing mid-read would otherwise add its profit twice (in the balance and in the
+    P&L) or not at all. One retry, then equity is reported as unavailable.
+    """
+    balance = Decimal(0)
+    for _attempt in range(_CONSISTENCY_ATTEMPTS):
+        before = await _read_trader_balance(connection, ctid)
+        try:
+            net = await _read_net_pnl(connection, ctid)
+        except CtraderError as exc:
+            if exc.code in _RETRY_READ:
+                raise
+            logger.warning("cTrader account %s: equity not read: %s", ctid, exc.code.value)
+            return BalanceRead(before, None, exc.code.value)
+        balance = await _read_trader_balance(connection, ctid)
+        if balance == before:
+            return BalanceRead(balance, equity_from(balance, net))
+    logger.warning("cTrader account %s: balance kept changing during the read", ctid)
+    return BalanceRead(balance, None, _BALANCE_CHANGED)
+
+
 async def read_balance(connection: CtraderConnection, creds: Credentials, ctid: int) -> BalanceRead:
-    """Account auth, 2121 for the balance, 2187 for equity (see `money.equity_from`).
+    """Account auth, then a consistent balance and equity (see `money.equity_from`).
 
     A failed P&L read gives ``equity=None``: an equity is never invented. A dropped session
     is raised so the caller can authorize again.
@@ -171,15 +198,23 @@ async def read_balance(connection: CtraderConnection, creds: Credentials, ctid: 
         p.ACCOUNT_AUTH_RES,
     )
     _check_account(auth, ctid)
-    balance = await _read_trader_balance(connection, ctid)
+    return await _read_consistent(connection, ctid)
+
+
+class _EnvironmentDownError(Exception):
+    """A reconnect failed: the other accounts of this environment would only wait for it."""
+
+    def __init__(self, error: CtraderError) -> None:
+        super().__init__(error.code.value)
+        self.error = error
+
+
+async def _restore_session(connection: CtraderConnection, creds: Credentials) -> None:
     try:
-        net = await _read_net_pnl(connection, ctid)
+        await connection.reconnect()
+        await authorize_app(connection, creds)
     except CtraderError as exc:
-        if exc.code in _RETRY_READ:
-            raise
-        logger.warning("cTrader account %s: equity not read: %s", ctid, exc.code.value)
-        return BalanceRead(balance, None, exc.code.value)
-    return BalanceRead(balance, equity_from(balance, net))
+        raise _EnvironmentDownError(exc) from None
 
 
 async def _read_one(
@@ -194,29 +229,41 @@ async def _read_one(
                 if attempt == 1 or exc.code not in _RETRY_READ:
                     raise
                 if exc.code is CtraderErrorCode.CONNECTION_FAILED:
-                    await connection.reconnect()
-                    await authorize_app(connection, creds)
+                    await _restore_session(connection, creds)
     except CtraderError as exc:
         return exc
     return CtraderError(CtraderErrorCode.BAD_RESPONSE, "no read")  # pragma: no cover
 
 
 async def _read_environment(
-    creds: Credentials, is_live: bool, ctids: Sequence[int], connector: Connector, sleep: Sleep
+    creds: Credentials,
+    is_live: bool,
+    ctids: Sequence[int],
+    connector: Connector,
+    sleep: Sleep,
+    budget_s: float,
 ) -> dict[int, BalanceRead | CtraderError]:
+    """Accounts read before a failure or the time limit keep their results."""
     connection = CtraderConnection(
         endpoint_for(is_live), connector, sleep=sleep, secrets=creds.secrets()
     )
+    results: dict[int, BalanceRead | CtraderError] = {}
     try:
-        await connection.start()
-        await authorize_app(connection, creds)
+        async with asyncio.timeout(budget_s):
+            await connection.start()
+            await authorize_app(connection, creds)
+            for ctid in ctids:
+                results[ctid] = await _read_one(connection, creds, ctid)
+        return results
+    except _EnvironmentDownError as exc:
+        error = exc.error
+    except TimeoutError:
+        error = CtraderError(CtraderErrorCode.TIMEOUT, "cTrader read exceeded the time limit")
     except CtraderError as exc:
-        await connection.close()
-        return dict.fromkeys(ctids, exc)
-    try:
-        return {ctid: await _read_one(connection, creds, ctid) for ctid in ctids}
+        error = exc
     finally:
         await connection.close()
+    return {ctid: results.get(ctid, error) for ctid in ctids}
 
 
 async def read_balances(
@@ -225,15 +272,28 @@ async def read_balances(
     connector: Connector = open_websocket,
     *,
     sleep: Sleep = asyncio.sleep,
+    budget_s: float = READ_BUDGET_S,
 ) -> dict[int, BalanceRead | CtraderError]:
-    """``(ctid, is_live)`` -> result. Live and demo run on their own connection."""
+    """``(ctid, is_live)`` -> result. Live and demo run on their own connection, and an
+    unexpected failure of one never loses the results of the other."""
     groups: dict[bool, list[int]] = {}
     for ctid, is_live in targets:
         groups.setdefault(is_live, []).append(ctid)
     parts = await asyncio.gather(
         *(
-            _read_environment(creds, is_live, ctids, connector, sleep)
+            _read_environment(creds, is_live, ctids, connector, sleep, budget_s)
             for is_live, ctids in groups.items()
-        )
+        ),
+        return_exceptions=True,
     )
-    return {ctid: result for part in parts for ctid, result in part.items()}
+    merged: dict[int, BalanceRead | CtraderError] = {}
+    for ctids, part in zip(groups.values(), parts, strict=True):
+        if isinstance(part, BaseException):
+            if not isinstance(part, Exception):
+                raise part  # cancellation
+            logger.error("cTrader environment read failed: %s", type(part).__name__)
+            error = CtraderError(CtraderErrorCode.INTERNAL_ERROR, "unexpected error, see log")
+            merged.update(dict.fromkeys(ctids, error))
+        else:
+            merged.update(part)
+    return merged

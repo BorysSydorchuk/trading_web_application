@@ -12,7 +12,7 @@ import os
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,6 +46,18 @@ class TokenPair:
 
 def tokens_path(data_dir: Path) -> Path:
     return data_dir / TOKENS_FILE
+
+
+def _retry_locked(action: Callable[[], object]) -> None:
+    """Windows: replacing or deleting fails while a reader has the file open."""
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            action()
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_PAUSE_S)
 
 
 def _try_lock(stream: IO[bytes]) -> bool:
@@ -157,7 +169,7 @@ class TokenStore:
                 stream.write(body)
                 stream.flush()
                 os.fsync(stream.fileno())
-            self._replace(temp)
+            _retry_locked(lambda: os.replace(temp, self.path))
             temp = None
         except OSError as exc:
             logger.error("cTrader token file not written: %s", type(exc).__name__)
@@ -168,15 +180,11 @@ class TokenStore:
             if temp is not None:
                 Path(temp).unlink(missing_ok=True)
 
-    def _replace(self, temp: str) -> None:
-        for attempt in range(_REPLACE_ATTEMPTS):
-            try:
-                os.replace(temp, self.path)
-                return
-            except PermissionError:
-                if attempt == _REPLACE_ATTEMPTS - 1:
-                    raise
-                time.sleep(_REPLACE_PAUSE_S)
-
     def delete(self) -> None:
-        self.path.unlink(missing_ok=True)
+        try:
+            _retry_locked(lambda: self.path.unlink(missing_ok=True))
+        except OSError as exc:
+            logger.error("cTrader token file not deleted: %s", type(exc).__name__)
+            raise CtraderError(
+                CtraderErrorCode.TOKEN_STORE_FAILED, "could not delete the token file"
+            ) from None

@@ -1,7 +1,8 @@
 """The `ctrader_balance` worker job: balance and equity of active cTrader accounts.
 
-Separate from the MT5 job and its lock. Every run records one `sync_log` row per account, so
-the status bar works as for MT5. A failed read never overwrites a good value.
+Separate from the MT5 job and its lock, on the same cadence rule (`is_due`: 60 s in trading
+hours, the idle interval otherwise). Every attempt records one `sync_log` row, so the status
+bar works as for MT5. A failed read never overwrites a good value.
 
 Equity = balance + the positions' net unrealized P&L (`app.ctrader.money.equity_from`). When
 the balance was read but the equity was not, the stored balance/equity pair stays as it is:
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -24,21 +26,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
+from app.config_files import ConfigError, get_rules
+from app.config_files.rules import RulesConfig
 from app.ctrader.connection import Connector, Sleep, open_websocket
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.money import to_stored
-from app.ctrader.protocol import BALANCE_INTERVAL_S
-from app.ctrader.reader import BalanceRead, Credentials, read_balances
+from app.ctrader.reader import READ_BUDGET_S, BalanceRead, Credentials, read_balances
 from app.ctrader.token_manager import TokenManager
 from app.ctrader.tokens import TokenStore, tokens_path
 from app.models import Account, SyncLog
 from app.models.enums import AccountPlatform, AccountStatus
-from app.services.sync import MAX_ERROR_MESSAGE
+from app.services.sync import MAX_ERROR_MESSAGE, is_due
 
 logger = logging.getLogger(__name__)
 
 CTRADER_JOB_ID: Final = "ctrader_balance"
-CTRADER_JOB_INTERVAL_S: Final = BALANCE_INTERVAL_S
+CTRADER_JOB_INTERVAL_S: Final = 60
 
 ReadResults = dict[int, BalanceRead | CtraderError]
 BalanceReader = Callable[..., Coroutine[Any, Any, ReadResults]]
@@ -57,6 +60,8 @@ class CtraderJobConfig:
     sleep: Sleep = asyncio.sleep
     now: Callable[[], datetime] = _utc_now
     read: BalanceReader = read_balances
+    rules_getter: Callable[[], RulesConfig] = get_rules
+    budget_s: float = READ_BUDGET_S  # token step + reads, below the job interval
 
     @classmethod
     def from_settings(cls, settings: Settings) -> CtraderJobConfig:
@@ -85,7 +90,9 @@ class _Outcome:
     message: str | None = None
 
 
-def _targets(session_factory: sessionmaker[Session]) -> list[_Target]:
+def _due_targets(
+    session_factory: sessionmaker[Session], rules: RulesConfig, now: datetime
+) -> list[_Target]:
     with session_factory() as session:
         rows = session.execute(
             select(Account.id, Account.ctid_trader_account_id, Account.ctrader_is_live)
@@ -95,11 +102,11 @@ def _targets(session_factory: sessionmaker[Session]) -> list[_Target]:
             )
             .order_by(Account.id)
         ).all()
-    return [
-        _Target(account_id, ctid, bool(is_live))
-        for account_id, ctid, is_live in rows
-        if ctid is not None
-    ]
+        return [
+            _Target(account_id, ctid, bool(is_live))
+            for account_id, ctid, is_live in rows
+            if ctid is not None and is_due(session, account_id, rules, now)
+        ]
 
 
 def _store_read(account: Account, read: BalanceRead, at: datetime) -> _Outcome:
@@ -165,17 +172,22 @@ def _record(
 
 def _read_all(config: CtraderJobConfig, targets: Sequence[_Target]) -> ReadResults:
     """Every target gets a result; nothing here raises for a cTrader or token problem."""
+    began = time.monotonic()
     try:
         if not config.configured:
             raise CtraderError(CtraderErrorCode.NOT_CONFIGURED, "cTrader app is not configured")
         manager = TokenManager(config.store, config.client_id, config.client_secret, now=config.now)
         creds = Credentials(config.client_id, config.client_secret, manager.fresh_access_token())
+        budget = config.budget_s - (time.monotonic() - began)  # the token step counts
+        if budget <= 0:
+            raise CtraderError(CtraderErrorCode.TIMEOUT, "no time left to read cTrader")
         return asyncio.run(
             config.read(
                 creds,
                 [(t.ctid, t.is_live) for t in targets],
                 config.connector,
                 sleep=config.sleep,
+                budget_s=budget,
             )
         )
     except CtraderError as exc:
@@ -185,11 +197,19 @@ def _read_all(config: CtraderJobConfig, targets: Sequence[_Target]) -> ReadResul
 def run_ctrader_balance_cycle(
     session_factory: sessionmaker[Session], config: CtraderJobConfig
 ) -> list[int]:
-    """Read and store every active cTrader account. Returns the fully updated account ids."""
-    targets = _targets(session_factory)
+    """Read and store every due cTrader account. Returns the fully updated account ids.
+
+    A broken rules.yaml skips the cycle, as for MT5.
+    """
+    started = config.now()
+    try:
+        rules = config.rules_getter()
+    except ConfigError as exc:
+        logger.error("cTrader balance sync skipped: %s", exc)
+        return []
+    targets = _due_targets(session_factory, rules, started)
     if not targets:
         return []
-    started = config.now()
     try:
         results = _read_all(config, targets)
     except Exception as exc:  # a bug must still be visible in the status bar

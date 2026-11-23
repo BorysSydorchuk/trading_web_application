@@ -6,6 +6,7 @@ Redirects are refused, because these URLs carry the client secret in the query s
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import urllib.error
@@ -68,9 +69,12 @@ def _json_body(raw: bytes) -> dict[str, Any]:
 
 def _from_http_error(exc: urllib.error.HTTPError) -> dict[str, Any]:
     """A JSON error body goes to the normal parsing; otherwise a code from the status."""
-    with exc:
-        raw = exc.read(_MAX_BODY)
-        status = exc.code
+    status = exc.code
+    try:
+        with exc:
+            raw = exc.read(_MAX_BODY)
+    except (OSError, http.client.HTTPException):
+        raw = b""
     try:
         return _json_body(raw)
     except CtraderError:
@@ -100,6 +104,11 @@ def call_token_endpoint(method: str, url: str, params: dict[str, str]) -> dict[s
         raise CtraderError(
             CtraderErrorCode.CONNECTION_FAILED,
             f"token endpoint unreachable: {type(exc).__name__}",
+        ) from None
+    except http.client.HTTPException as exc:  # e.g. a truncated answer
+        raise CtraderError(
+            CtraderErrorCode.CONNECTION_FAILED,
+            f"token endpoint broke the answer: {type(exc).__name__}",
         ) from None
 
 
