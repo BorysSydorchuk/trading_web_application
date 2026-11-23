@@ -299,6 +299,7 @@ export const uk = {
       login_failed: 'не вдалося увійти в MT5',
       timeout: 'MT5 не відповідає',
       mt5_error: 'помилка MT5',
+      terminal_loading: 'термінал ще завантажується',
       internal_error: 'внутрішня помилка синхронізації',
       unknown: 'помилка синхронізації',
     },

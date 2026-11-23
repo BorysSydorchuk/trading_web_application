@@ -71,6 +71,7 @@ ALLOWED_FUNCTIONS = frozenset(
         "shutdown",
         "last_error",
         "account_info",
+        "terminal_info",  # readiness: connected to the trade server (read-only)
         "symbol_info",
         "symbol_info_tick",
         "symbol_select",  # adds a symbol to Market Watch so it gets ticks; not trading
@@ -100,6 +101,7 @@ class Mt5Module(Protocol):
     def shutdown(self) -> Any: ...
     def last_error(self) -> Any: ...
     def account_info(self) -> Any: ...
+    def terminal_info(self) -> Any: ...
     def symbol_info(self, symbol: str) -> Any: ...
     def symbol_info_tick(self, symbol: str) -> Any: ...
     def symbol_select(self, symbol: str, enable: bool) -> Any: ...
@@ -442,6 +444,10 @@ class RealMt5Source:
     def account_info(self) -> RawAccountInfo:
         obj = self._read("account_info", self._mt5().account_info, empty_ok=False)
         return account_from_mt5(obj)
+
+    def terminal_connected(self) -> bool:
+        obj = self._read("terminal_info", self._mt5().terminal_info, empty_ok=True)
+        return bool(getattr(obj, "connected", False)) if obj is not None else False
 
     def _tick(self, symbol: str) -> Any:
         """``symbol_info_tick``; on an empty read select the symbol once and ask again."""

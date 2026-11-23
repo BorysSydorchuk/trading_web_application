@@ -78,6 +78,7 @@ METHODS = frozenset(
     {
         "connect",
         "account_info",
+        "terminal_connected",
         "server_tick_epoch",
         "symbol_spec",
         "symbols_matching",
@@ -305,6 +306,10 @@ class FixtureMt5Source:
         if self._snap.account is None:
             raise Mt5Error(Mt5ErrorCode.MT5_ERROR, "account_info failed: no account (fixture)")
         return self._snap.account
+
+    def terminal_connected(self) -> bool:
+        self._enter("terminal_connected")
+        return True
 
     def server_tick_epoch(self, symbol: str) -> int | None:
         self._enter("server_tick_epoch")

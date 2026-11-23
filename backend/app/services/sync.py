@@ -151,6 +151,47 @@ HISTORY_READ_ATTEMPTS = 4
 HISTORY_READ_PAUSE_S = 2.0
 
 
+READY_PAUSE_S = 2.0
+
+
+def _tickets(deals: Iterable[RawDeal]) -> frozenset[int]:
+    return frozenset(d.ticket for d in deals)
+
+
+def ensure_terminal_ready(
+    source: Mt5Source,
+    lo: int,
+    hi: int,
+    *,
+    expect_history: bool,
+    pause: Callable[[float], None] = monotonic_time.sleep,
+) -> None:
+    """Readiness gate before anything is read for the write phase (owner bug 2026-11-20).
+
+    ``account_info`` was already verified by `connected`. Here: ``terminal_info().connected``,
+    then two ``history_deals_get`` reads of the window must agree (after READY_PAUSE_S when the
+    first is empty), and an empty window while the journal has trades in it, with no open
+    position either, is a terminal still loading. Raises ``Mt5Error(TERMINAL_LOADING)``: the
+    sync fails for this cycle, so no cursor moves and no snapshot is written.
+    """
+    if not source.terminal_connected():
+        raise Mt5Error(Mt5ErrorCode.TERMINAL_LOADING, "terminal not connected to the trade server")
+    first = _tickets(source.deals(lo, hi))
+    if not first:
+        pause(READY_PAUSE_S)
+    second = _tickets(source.deals(lo, hi))
+    if first != second:
+        raise Mt5Error(
+            Mt5ErrorCode.TERMINAL_LOADING,
+            f"deal history still loading ({len(first)} then {len(second)} deals)",
+        )
+    if not second and expect_history and not source.open_positions():
+        raise Mt5Error(
+            Mt5ErrorCode.TERMINAL_LOADING,
+            "deal history empty although the journal has trades in this window",
+        )
+
+
 @dataclass(frozen=True)
 class TradingRead:
     by_ticket: dict[int, RawDeal]  # window deals by ticket
@@ -286,13 +327,15 @@ def fetch(
     *,
     read_first_deposit: bool = False,
     open_pids: Collection[int] = (),
+    expect_history: bool = False,
     pause: Callable[[float], None] = monotonic_time.sleep,
 ) -> Fetched:
     """Everything the write phase needs, read while connected. Raises `Mt5Error`.
 
     ``open_pids``: positions the DB still has open; each one MT5 no longer reports is read
     from its own deal history (no time window) so its close is never missed (see
-    `read_trading`).
+    `read_trading`). ``expect_history``: the journal has trades in the window, so an empty
+    deal history means the terminal is not ready (`ensure_terminal_ready`).
 
     ``excursions``: trades whose MAE/MFE price series is read last (never raises, M8-16).
     ``read_first_deposit``: also read the full deal history for the starting balance
@@ -306,6 +349,7 @@ def fetch(
         conversion, detected = _detect(source, watch, rules, now)
 
         lo, hi = server_epoch_range(window_from, now, conversion)
+        ensure_terminal_ready(source, lo, hi, expect_history=expect_history, pause=pause)
         read = read_trading(source, lo, hi, open_pids, pause=pause)
         by_ticket, positions, pids = read.by_ticket, read.positions, read.pids
 
@@ -703,6 +747,19 @@ def open_position_ids(session: Session, account_id: int) -> set[int]:
     )
 
 
+def has_trades_since(session: Session, account_id: int, since: datetime) -> bool:
+    """A trade opened or closed in the window: its deals must be in the MT5 history."""
+    found = session.scalar(
+        select(Trade.id)
+        .where(
+            Trade.account_id == account_id,
+            (Trade.open_time >= since) | (Trade.close_time >= since),
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
 def history_window_start(
     session: Session, account_id: int, sync: SyncConfig, now: datetime
 ) -> datetime:
@@ -769,6 +826,7 @@ def sync_account(
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
         targets = excursion_targets(session, account_id, now_utc)
         open_pids = open_position_ids(session, account_id)
+        expect_history = has_trades_since(session, account_id, window_from)
         session.commit()  # no transaction left idle through the MT5 reads and pauses
         args = (source, account, password, rules, now_utc, window_from, config)
         fetched = fetch(
@@ -776,6 +834,7 @@ def sync_account(
             excursions=targets,
             read_first_deposit=deposit_sink is not None,
             open_pids=open_pids,
+            expect_history=expect_history,
             pause=pause,
         )
         counters = write(session, account, fetched, rules, now_utc, config)
@@ -875,18 +934,29 @@ def _sink_deposit(
 DUE_SLACK = timedelta(seconds=30)
 
 
+LOADING_RETRY = timedelta(seconds=60)  # one worker cycle (sync_job.SYNC_JOB_INTERVAL_S)
+
+
 def is_due(session: Session, account_id: int, rules: RulesConfig, now: datetime) -> bool:
     """True when the cadence interval passed since the account's last attempt.
 
-    `DUE_SLACK` absorbs start-time drift between cycles (see above).
+    `DUE_SLACK` absorbs start-time drift between cycles (see above). An attempt that found
+    the terminal still loading is retried on the next worker cycle (LOADING_RETRY), not only
+    after the idle interval.
     """
-    last = session.scalar(
-        select(func.max(SyncLog.started_at)).where(SyncLog.account_id == account_id)
-    )
+    last = session.execute(
+        select(SyncLog.started_at, SyncLog.error_code)
+        .where(SyncLog.account_id == account_id)
+        .order_by(SyncLog.started_at.desc())
+        .limit(1)
+    ).first()
     if last is None:
         return True
+    started, code = last
     interval = sync_interval(rules.sync, rules.timezone, now)
-    return now - last >= interval - DUE_SLACK
+    if code == Mt5ErrorCode.TERMINAL_LOADING.value:
+        interval = min(interval, LOADING_RETRY)
+    return now - started >= interval - DUE_SLACK
 
 
 def close_orphaned_runs(session: Session, now: datetime) -> int:

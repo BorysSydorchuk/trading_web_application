@@ -21,6 +21,9 @@ class Mt5ErrorCode(enum.StrEnum):
     LOGIN_FAILED = "login_failed"
     TIMEOUT = "timeout"
     MT5_ERROR = "mt5_error"
+    # Connected, but the terminal has not loaded the trade server data yet (just started):
+    # the sync skips the account this cycle and moves no cursor.
+    TERMINAL_LOADING = "terminal_loading"
 
 
 # MetaTrader5 package result codes (MetaTrader5/__init__.py, RES_*).
