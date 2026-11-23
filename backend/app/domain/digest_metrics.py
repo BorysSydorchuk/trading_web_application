@@ -658,7 +658,7 @@ def r_distribution(trades: Iterable[DigestTrade]) -> tuple[RBucket, ...]:
 
 
 def r_exactly_minus_one(trades: Iterable[DigestTrade]) -> int:
-    """Trades at exactly -1 R: the chart counts them in «≤ −1R», inside a 0.5 R bucket they
+    """Trades at exactly -1 R: the chart counts them in «≤ -1R», inside a 0.5 R bucket they
     share [-1, -0.5) with smaller losses."""
     return sum(1 for t in trades if t.r_multiple == MINUS_ONE_R)
 
