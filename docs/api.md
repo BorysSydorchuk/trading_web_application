@@ -850,3 +850,22 @@ Branch `m8/home-redesign`, tier M, no migration. Layout and behaviour: docs/desi
 - `PUT /api/journal-options/{field}/order` `{values}`: every current value exactly once, else 422.
 - `DELETE /api/journal-options/{field}/{value}` -> 204; used by a trade -> 409 `option_in_use`.
 - `GET /api/journal-fields` returns the current lists; `hidden` is `deprecated`; every option carries `synonyms`. With the DB down it returns the YAML defaults (logged).
+
+## cTrader integration, phase a (owner 2026-11-23)
+
+Read-only: OAuth, account list, saved accounts, balance and equity on Home. No deals, trades, positions in the journal, symbol specs or MAE/MFE yet. Every outgoing message passes the allowlist in `app/ctrader/guard.py`.
+
+`Account` gains `platform`: `mt5 | ctrader` (read-only: POST and PATCH of `/api/accounts` refuse it). For a cTrader account `login` = traderLogin, `server` = broker title (or `cTrader`), `terminal_path` = null, `password_env_key` = `""`, `password_configured` = `true` (no password exists, nothing is missing). PATCH refuses a changed `login`, `server` or `terminal_path` with `422 validation_error` (`details.fields`); the same values may be resent.
+
+- `GET /api/ctrader/status` -> `{ "configured": true, "connected": true, "error_code": null }`. No network call. `error_code`: `not_configured`, `token_expired`, `token_invalid`, `token_store_failed`, or null.
+- `POST /api/ctrader/connect` -> `{ "authorize_url": "https://id.ctrader.com/..." }`. Scope is always `accounts`; the `state` is single use and lives 10 minutes.
+- `GET /api/ctrader/callback?code&state` (or `error`) -> `302` to `http://127.0.0.1:5173/settings?ctrader=connected` or `?ctrader_error=<code>`, with `Cache-Control: no-store`. Codes: `not_configured`, `state_invalid`, `access_denied`, `bad_response`, `token_invalid`, `token_store_failed`, `timeout`, `connection_failed`, `client_auth_failed`, `not_authorized`, `rate_limited`, `trade_scope_refused`, `internal_error`. The redirect never holds a token or the code. It is the only endpoint open to a cross-site browser request, and only as a top-level GET navigation (`app/local_boundary.py`); the state check protects it.
+- `GET /api/ctrader/accounts` -> `{ "items": [ { "ctid_trader_account_id": 7001, "is_live": false, "trader_login": 5100200, "broker": "Broker", "already_added": false } ] }`. `trader_login` may be null (optional in cTrader's model); such an account cannot be added.
+- `POST /api/ctrader/accounts` body: `ctid_trader_account_id` + `name`, `firm`, `program`, `phase`, `starting_balance`, `currency`; optional `status`, `reference_balance`, `daily_loss_pct`, `max_drawdown_pct`, `profit_target_pct` -> `201 Account`. Same validation as `AccountInput`; unknown keys (`login`, `server`, `platform`, `terminal_path`) are 422. `422 ctrader_account_not_granted` (id not in the token's list), `422 ctrader_account_incomplete` (no login), `409 conflict` (`details.field`).
+- `DELETE /api/ctrader/connection` -> `204`, idempotent. Forgets the tokens; accounts stay and then show `token_invalid`.
+
+Errors use the standard envelope with code `ctrader_<code>`: `503 ctrader_not_configured`, `409 ctrader_token_invalid` / `ctrader_token_expired`, `403 ctrader_not_authorized` / `ctrader_trade_scope_refused`, `429 ctrader_rate_limited`, `504 ctrader_timeout`, `502` for the others.
+
+Worker job `ctrader_balance` (every 60 s, independent of the MT5 job and lock): balance from 2121, equity = balance + the sum of `netUnrealizedPnL` from 2187, each scaled by its own `moneyDigits` (Decimal). The docs do not state this formula, and net P&L excludes the potential closing commission. One `sync_log` row per account and attempt. `GET /api/sync/status` treats a cTrader account as stale after 3 x 60 s, whatever the trading hours. New `error_code` values: `not_configured`, `token_expired`, `token_invalid`, `token_store_failed`, `not_authorized`, `client_auth_failed`, `connection_failed`, `rate_limited` (state `warning`), `bad_response`, `account_disconnected`, `equity_unavailable`, `internal_error`; `timeout` is shared with MT5. On `equity_unavailable` the stored balance, equity and `balance_synced_at` stay unchanged, because Home derives the floating P&L from their difference; an account with no stored equity gets the balance alone.
+
+`POST /api/calculator/margin-requests` answers `409 margin_unsupported_platform` for a cTrader account (live margin is MT5 only).
