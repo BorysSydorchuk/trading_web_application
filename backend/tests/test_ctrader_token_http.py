@@ -72,11 +72,12 @@ def test_failures_are_typed_and_hold_no_secret(
     assert caught.value.code is expected
     assert CLIENT_SECRET not in str(caught.value)
     assert caught.value.__cause__ is None
-    assert caught.value.__suppress_context__ is True
+    # Nothing chained may carry the URL, which holds the client secret.
+    assert caught.value.__context__ is None or caught.value.__suppress_context__
 
 
 def test_redirects_are_refused() -> None:
     """A redirect would resend the client secret in the query to another host."""
-    handler = oauth._NoRedirect()
+    handler: Any = oauth._NoRedirect()
     request = urllib.request.Request(oauth.TOKEN_URL)  # noqa: S310 - never opened
     assert handler.redirect_request(request, None, 302, "Found", {}, "https://x") is None
