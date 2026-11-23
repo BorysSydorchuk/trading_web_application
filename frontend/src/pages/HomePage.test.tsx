@@ -611,6 +611,30 @@ describe('HomePage «До макс. збитку» KPI', () => {
     expect(screen.getByText(`${h.kpis.maxLossLimit(`${MINUS}10%`)} · ${h.kpis.maxLossNoFloating}`)).toBeInTheDocument()
   })
 
+  it('a cTrader account: fresh equity counts as live and no MT5 position data is needed', async () => {
+    // The API labels any fresh synced equity `mt5`, cTrader included (backend home_max_loss.py).
+    serveHome(homeData({
+      limits: homeLimits({ account_name: 'CT Demo', floating_pnl: '56.25', floating_included: true }),
+      kpis: { ...homeData().kpis, max_loss: homeMaxLoss({ account_name: 'CT Demo', equity: '10056.25', equity_source: 'mt5' }) },
+      open_positions: [],
+    }))
+    renderWithProviders(<HomePage />)
+    const kpi = await card()
+    expect(kpi).toHaveTextContent('10.6%')
+    expect(kpi).toHaveTextContent(h.kpis.maxLossCaption('CT Demo', `${MINUS}10%`))
+    expect(within(kpi).queryByTestId('kpi-no-floating')).not.toBeInTheDocument()
+  })
+
+  it('a cTrader account with only a balance: the room shows with the no-floating note', async () => {
+    serveHome(homeData({
+      kpis: { ...homeData().kpis, max_loss: homeMaxLoss({ account_name: 'CT Demo', equity: '10000.00', equity_source: 'balance', pct: '10.0000' }) },
+    }))
+    renderWithProviders(<HomePage />)
+    const kpi = await card()
+    expect(kpi).toHaveTextContent('10%')
+    expect(within(kpi).getByTestId('kpi-no-floating')).toHaveTextContent(h.kpis.maxLossNoFloating)
+  })
+
   it('no account limits: «—», the hint, and the hero says the limits are not set', async () => {
     serveHome(homeData({ kpis: { ...homeData().kpis, max_loss: null } }))
     const { user } = renderWithProviders(<HomePage />)
