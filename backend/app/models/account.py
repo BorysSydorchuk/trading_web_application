@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Integer,
@@ -17,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import MONEY, PRICE, RATIO, Base, TimestampMixin, copy_of, enum_check
-from app.models.enums import AccountPhase, AccountStatus
+from app.models.enums import AccountPhase, AccountPlatform, AccountStatus
 
 
 class Account(TimestampMixin, Base):
@@ -25,8 +26,17 @@ class Account(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("name"),
         UniqueConstraint("login", "server"),
+        UniqueConstraint("ctid_trader_account_id"),
         enum_check("phase", AccountPhase, "phase_valid"),
         enum_check("status", AccountStatus, "status_valid"),
+        enum_check("platform", AccountPlatform, "platform_valid"),
+        CheckConstraint(
+            "(platform = 'ctrader' AND ctid_trader_account_id IS NOT NULL "
+            "AND ctrader_is_live IS NOT NULL) OR "
+            "(platform = 'mt5' AND ctid_trader_account_id IS NULL "
+            "AND ctrader_is_live IS NULL)",
+            name="platform_fields",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -55,6 +65,13 @@ class Account(TimestampMixin, Base):
     balance: Mapped[Decimal | None] = mapped_column(MONEY)
     equity: Mapped[Decimal | None] = mapped_column(MONEY)
     balance_synced_at: Mapped[datetime | None]
+    # mt5 (terminal + investor password) or ctrader (Open API, read-only). For cTrader:
+    # login = traderLogin, server = broker title, terminal_path = NULL.
+    platform: Mapped[str] = mapped_column(
+        String(10), server_default=AccountPlatform.MT5.value, default=AccountPlatform.MT5.value
+    )
+    ctid_trader_account_id: Mapped[int | None] = mapped_column(BigInteger)
+    ctrader_is_live: Mapped[bool | None] = mapped_column(Boolean)
 
     symbol_specs: Mapped[list[SymbolSpec]] = relationship(
         back_populates="account", cascade="all, delete-orphan", passive_deletes=True
