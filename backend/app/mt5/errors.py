@@ -24,6 +24,8 @@ class Mt5ErrorCode(enum.StrEnum):
     # Connected, but the terminal has not loaded the trade server data yet (just started):
     # the sync skips the account this cycle and moves no cursor.
     TERMINAL_LOADING = "terminal_loading"
+    # Still not ready after many attempts in a row: a visible error, retried at normal cadence.
+    TERMINAL_NOT_READY = "terminal_not_ready"
 
 
 # MetaTrader5 package result codes (MetaTrader5/__init__.py, RES_*).

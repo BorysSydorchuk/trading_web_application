@@ -29,6 +29,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
+from itertools import takewhile
 from typing import Any
 
 from pydantic import SecretStr
@@ -152,6 +153,12 @@ HISTORY_READ_PAUSE_S = 2.0
 
 
 READY_PAUSE_S = 2.0
+# After this many not-ready attempts in a row the account shows a red error and returns to its
+# normal cadence (still retried), so a terminal that never loads cannot stay amber forever.
+NOT_READY_MAX_ATTEMPTS = 10
+_NOT_READY_CODES = frozenset(
+    {Mt5ErrorCode.TERMINAL_LOADING.value, Mt5ErrorCode.TERMINAL_NOT_READY.value}
+)
 
 
 def _tickets(deals: Iterable[RawDeal]) -> frozenset[int]:
@@ -163,33 +170,37 @@ def ensure_terminal_ready(
     lo: int,
     hi: int,
     *,
-    expect_history: bool,
+    balance: Decimal,
     pause: Callable[[float], None] = monotonic_time.sleep,
 ) -> None:
     """Readiness gate before anything is read for the write phase (owner bug 2026-11-20).
 
-    ``account_info`` was already verified by `connected`. Here: ``terminal_info().connected``,
-    then two ``history_deals_get`` reads of the window must agree (after READY_PAUSE_S when the
-    first is empty), and an empty window while the journal has trades in it, with no open
-    position either, is a terminal still loading. Raises ``Mt5Error(TERMINAL_LOADING)``: the
-    sync fails for this cycle, so no cursor moves and no snapshot is written.
+    ``account_info`` was already verified by `connected`. Here: ``terminal_info().connected``;
+    a non-empty window must read the same twice. An empty window is checked against the full
+    history: a funded account always has a balance deal, so no deal at all with a non-zero
+    balance is a terminal still loading (one more look after READY_PAUSE_S). A quiet window
+    with older history, or a new account with zero balance, is ready and waits for nothing.
+    Raises ``Mt5Error(TERMINAL_LOADING)``: no cursor moves and no snapshot is written.
     """
     if not source.terminal_connected():
         raise Mt5Error(Mt5ErrorCode.TERMINAL_LOADING, "terminal not connected to the trade server")
     first = _tickets(source.deals(lo, hi))
-    if not first:
-        pause(READY_PAUSE_S)
-    second = _tickets(source.deals(lo, hi))
-    if first != second:
-        raise Mt5Error(
-            Mt5ErrorCode.TERMINAL_LOADING,
-            f"deal history still loading ({len(first)} then {len(second)} deals)",
-        )
-    if not second and expect_history and not source.open_positions():
-        raise Mt5Error(
-            Mt5ErrorCode.TERMINAL_LOADING,
-            "deal history empty although the journal has trades in this window",
-        )
+    if first:
+        second = _tickets(source.deals(lo, hi))
+        if first != second:
+            raise Mt5Error(
+                Mt5ErrorCode.TERMINAL_LOADING,
+                f"deal history still loading ({len(first)} then {len(second)} deals)",
+            )
+        return
+    if balance == 0 or source.deals(0, hi):
+        return
+    pause(READY_PAUSE_S)
+    detail = "still loading" if source.deals(0, hi) else "empty"
+    raise Mt5Error(
+        Mt5ErrorCode.TERMINAL_LOADING,
+        f"no deal history yet although the account has a balance (history {detail})",
+    )
 
 
 @dataclass(frozen=True)
@@ -327,15 +338,13 @@ def fetch(
     *,
     read_first_deposit: bool = False,
     open_pids: Collection[int] = (),
-    expect_history: bool = False,
     pause: Callable[[float], None] = monotonic_time.sleep,
 ) -> Fetched:
     """Everything the write phase needs, read while connected. Raises `Mt5Error`.
 
     ``open_pids``: positions the DB still has open; each one MT5 no longer reports is read
     from its own deal history (no time window) so its close is never missed (see
-    `read_trading`). ``expect_history``: the journal has trades in the window, so an empty
-    deal history means the terminal is not ready (`ensure_terminal_ready`).
+    `read_trading`). A terminal that is not ready raises first (`ensure_terminal_ready`).
 
     ``excursions``: trades whose MAE/MFE price series is read last (never raises, M8-16).
     ``read_first_deposit``: also read the full deal history for the starting balance
@@ -349,7 +358,7 @@ def fetch(
         conversion, detected = _detect(source, watch, rules, now)
 
         lo, hi = server_epoch_range(window_from, now, conversion)
-        ensure_terminal_ready(source, lo, hi, expect_history=expect_history, pause=pause)
+        ensure_terminal_ready(source, lo, hi, balance=info.balance, pause=pause)
         read = read_trading(source, lo, hi, open_pids, pause=pause)
         by_ticket, positions, pids = read.by_ticket, read.positions, read.pids
 
@@ -747,19 +756,6 @@ def open_position_ids(session: Session, account_id: int) -> set[int]:
     )
 
 
-def has_trades_since(session: Session, account_id: int, since: datetime) -> bool:
-    """A trade opened or closed in the window: its deals must be in the MT5 history."""
-    found = session.scalar(
-        select(Trade.id)
-        .where(
-            Trade.account_id == account_id,
-            (Trade.open_time >= since) | (Trade.close_time >= since),
-        )
-        .limit(1)
-    )
-    return found is not None
-
-
 def history_window_start(
     session: Session, account_id: int, sync: SyncConfig, now: datetime
 ) -> datetime:
@@ -826,7 +822,6 @@ def sync_account(
         window_from = history_window_start(session, account_id, rules.sync, now_utc)
         targets = excursion_targets(session, account_id, now_utc)
         open_pids = open_position_ids(session, account_id)
-        expect_history = has_trades_since(session, account_id, window_from)
         session.commit()  # no transaction left idle through the MT5 reads and pauses
         args = (source, account, password, rules, now_utc, window_from, config)
         fetched = fetch(
@@ -834,7 +829,6 @@ def sync_account(
             excursions=targets,
             read_first_deposit=deposit_sink is not None,
             open_pids=open_pids,
-            expect_history=expect_history,
             pause=pause,
         )
         counters = write(session, account, fetched, rules, now_utc, config)
@@ -877,7 +871,12 @@ def sync_account(
         session.rollback()
         if isinstance(exc, Mt5Error):
             code, message = exc.code.value, exc.message
-            logger.error("Account %s sync failed: %s: %s", account_id, code, message)
+            if exc.code is Mt5ErrorCode.TERMINAL_LOADING:
+                if _not_ready_streak(session, account_id, log_id) >= NOT_READY_MAX_ATTEMPTS:
+                    code = Mt5ErrorCode.TERMINAL_NOT_READY.value
+                logger.warning("Account %s not synced: %s: %s", account_id, code, message)
+            else:
+                logger.error("Account %s sync failed: %s: %s", account_id, code, message)
         else:
             code, message = INTERNAL_ERROR, f"{type(exc).__name__}: {exc}"
             logger.exception("Account %s sync failed with an unexpected error", account_id)
@@ -890,6 +889,17 @@ def sync_account(
         failed.error_message = _short(message)
         session.commit()
         return failed
+
+
+def _not_ready_streak(session: Session, account_id: int, current_log_id: int) -> int:
+    """Attempts right before this one that ended with the terminal not ready."""
+    codes = session.scalars(
+        select(SyncLog.error_code)
+        .where(SyncLog.account_id == account_id, SyncLog.id != current_log_id)
+        .order_by(SyncLog.started_at.desc(), SyncLog.id.desc())
+        .limit(NOT_READY_MAX_ATTEMPTS)
+    ).all()
+    return sum(1 for _ in takewhile(lambda code: code in _NOT_READY_CODES, codes))
 
 
 def _store_excursions(session: Session, account_id: int, fetched: Fetched, now: datetime) -> None:

@@ -48,6 +48,12 @@ describe('digest SVG charts', () => {
     expect(container.querySelector('[data-bin="1-2"] [data-bar]')).toBeNull()
   })
 
+  it('keeps «< −1R» for a digest saved before the exact −1 R count existed', () => {
+    render(<RDistributionChart buckets={[{ lower: '-1.0000', upper: '-0.5000', count: 2 }]} />)
+    const summary = c.rSummary('< −1R: 0; −1…0: 2; 0…1: 0; 1…2: 0; 2…3: 0; ≥ 3R: 0')
+    expect(screen.getByRole('img', { name: summary })).toBeInTheDocument()
+  })
+
   it('draws heatmap cells with a weekend row only when present', () => {
     const { container } = render(
       <HourHeatmap cells={[{ weekday: 0, hour: 9, trades: 2, net_pnl: '100.00' }, { weekday: 5, hour: 11, trades: 1, net_pnl: '-20.00' }]} />,

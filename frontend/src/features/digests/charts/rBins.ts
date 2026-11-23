@@ -23,15 +23,17 @@ const BINS: readonly { key: string; below: number; label: string; negative: bool
   { key: '3-up', below: Number.POSITIVE_INFINITY, label: c.rBinThree, negative: false },
 ]
 
-export function foldRBuckets(buckets: readonly RBucket[], exactlyMinusOne = 0): RBin[] {
+/** ``exactlyMinusOne`` is undefined for a digest saved before the field existed: its first bin keeps «< −1R». */
+export function foldRBuckets(buckets: readonly RBucket[], exactlyMinusOne?: number): RBin[] {
   const counts = BINS.map(() => 0)
   for (const bucket of buckets) {
     const lower = Number(bucket.lower)
     const index = BINS.findIndex((bin) => lower < bin.below)
     counts[index] = (counts[index] ?? 0) + bucket.count
   }
-  const moved = Math.min(exactlyMinusOne, counts[1] ?? 0)
+  const moved = Math.min(exactlyMinusOne ?? 0, counts[1] ?? 0)
   counts[0] = (counts[0] ?? 0) + moved
   counts[1] = (counts[1] ?? 0) - moved
-  return BINS.map((bin, i) => ({ key: bin.key, label: bin.label, negative: bin.negative, count: counts[i] ?? 0 }))
+  const firstLabel = exactlyMinusOne === undefined ? c.rBinBelowLegacy : c.rBinBelow
+  return BINS.map((bin, i) => ({ key: bin.key, label: i === 0 ? firstLabel : bin.label, negative: bin.negative, count: counts[i] ?? 0 }))
 }

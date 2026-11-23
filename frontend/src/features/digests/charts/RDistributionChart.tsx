@@ -9,7 +9,7 @@ const c = uk.digests.charts
 const MAX_BAR_PCT = 82
 
 /** Trades per R bin: compact, centered, one count above each non-empty bar, R ticks below. */
-export function RDistributionChart({ buckets, exactlyMinusOne = 0 }: { buckets: readonly RBucket[]; exactlyMinusOne?: number }) {
+export function RDistributionChart({ buckets, exactlyMinusOne }: { buckets: readonly RBucket[]; exactlyMinusOne?: number }) {
   if (buckets.length === 0) return <ChartEmpty title={c.rDistribution} />
   const bins = foldRBuckets(buckets, exactlyMinusOne)
   const max = Math.max(1, ...bins.map((bin) => bin.count))
