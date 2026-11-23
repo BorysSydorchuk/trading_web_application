@@ -27,7 +27,7 @@ describe('digest SVG charts', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
-  it('folds 0.5 R buckets into six bins; exactly −1 R stays in «−1…0»; empty bins have no bar', () => {
+  it('folds 0.5 R buckets into six bins; exactly −1 R moves to «≤ −1R»; empty bins have no bar', () => {
     const { container } = render(
       <RDistributionChart
         buckets={[
@@ -38,13 +38,20 @@ describe('digest SVG charts', () => {
           { lower: '0.5000', upper: '1.0000', count: 4 },
           { lower: '3.0000', upper: '3.5000', count: 2 },
         ]}
+        exactlyMinusOne={2}
       />,
     )
-    const summary = c.rSummary('< −1R: 3; −1…0: 5; 0…1: 5; 1…2: 0; 2…3: 0; ≥ 3R: 2')
+    const summary = c.rSummary('≤ −1R: 5; −1…0: 3; 0…1: 5; 1…2: 0; 2…3: 0; ≥ 3R: 2')
     expect(screen.getByRole('img', { name: summary })).toBeInTheDocument()
     expect(container.querySelectorAll('[data-bin]')).toHaveLength(6)
     expect(container.querySelectorAll('[data-bar]')).toHaveLength(4)
     expect(container.querySelector('[data-bin="1-2"] [data-bar]')).toBeNull()
+  })
+
+  it('keeps «< −1R» for a digest saved before the exact −1 R count existed', () => {
+    render(<RDistributionChart buckets={[{ lower: '-1.0000', upper: '-0.5000', count: 2 }]} />)
+    const summary = c.rSummary('< −1R: 0; −1…0: 2; 0…1: 0; 1…2: 0; 2…3: 0; ≥ 3R: 0')
+    expect(screen.getByRole('img', { name: summary })).toBeInTheDocument()
   })
 
   it('draws heatmap cells with a weekend row only when present', () => {

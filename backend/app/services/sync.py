@@ -29,6 +29,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
+from itertools import takewhile
 from typing import Any
 
 from pydantic import SecretStr
@@ -149,6 +150,57 @@ class Fetched:
 # waited for on every sync; the trade is only reported as unconfirmed.
 HISTORY_READ_ATTEMPTS = 4
 HISTORY_READ_PAUSE_S = 2.0
+
+
+READY_PAUSE_S = 2.0
+# After this many not-ready attempts in a row the account shows a red error and returns to its
+# normal cadence (still retried), so a terminal that never loads cannot stay amber forever.
+NOT_READY_MAX_ATTEMPTS = 10
+_NOT_READY_CODES = frozenset(
+    {Mt5ErrorCode.TERMINAL_LOADING.value, Mt5ErrorCode.TERMINAL_NOT_READY.value}
+)
+
+
+def _tickets(deals: Iterable[RawDeal]) -> frozenset[int]:
+    return frozenset(d.ticket for d in deals)
+
+
+def ensure_terminal_ready(
+    source: Mt5Source,
+    lo: int,
+    hi: int,
+    *,
+    balance: Decimal,
+    pause: Callable[[float], None] = monotonic_time.sleep,
+) -> None:
+    """Readiness gate before anything is read for the write phase (owner bug 2026-11-20).
+
+    ``account_info`` was already verified by `connected`. Here: ``terminal_info().connected``;
+    a non-empty window must read the same twice. An empty window is checked against the full
+    history: a funded account always has a balance deal, so no deal at all with a non-zero
+    balance is a terminal still loading (one more look after READY_PAUSE_S). A quiet window
+    with older history, or a new account with zero balance, is ready and waits for nothing.
+    Raises ``Mt5Error(TERMINAL_LOADING)``: no cursor moves and no snapshot is written.
+    """
+    if not source.terminal_connected():
+        raise Mt5Error(Mt5ErrorCode.TERMINAL_LOADING, "terminal not connected to the trade server")
+    first = _tickets(source.deals(lo, hi))
+    if first:
+        second = _tickets(source.deals(lo, hi))
+        if first != second:
+            raise Mt5Error(
+                Mt5ErrorCode.TERMINAL_LOADING,
+                f"deal history still loading ({len(first)} then {len(second)} deals)",
+            )
+        return
+    if balance == 0 or source.deals(0, hi):
+        return
+    pause(READY_PAUSE_S)
+    detail = "still loading" if source.deals(0, hi) else "empty"
+    raise Mt5Error(
+        Mt5ErrorCode.TERMINAL_LOADING,
+        f"no deal history yet although the account has a balance (history {detail})",
+    )
 
 
 @dataclass(frozen=True)
@@ -292,7 +344,7 @@ def fetch(
 
     ``open_pids``: positions the DB still has open; each one MT5 no longer reports is read
     from its own deal history (no time window) so its close is never missed (see
-    `read_trading`).
+    `read_trading`). A terminal that is not ready raises first (`ensure_terminal_ready`).
 
     ``excursions``: trades whose MAE/MFE price series is read last (never raises, M8-16).
     ``read_first_deposit``: also read the full deal history for the starting balance
@@ -306,6 +358,7 @@ def fetch(
         conversion, detected = _detect(source, watch, rules, now)
 
         lo, hi = server_epoch_range(window_from, now, conversion)
+        ensure_terminal_ready(source, lo, hi, balance=info.balance, pause=pause)
         read = read_trading(source, lo, hi, open_pids, pause=pause)
         by_ticket, positions, pids = read.by_ticket, read.positions, read.pids
 
@@ -818,7 +871,12 @@ def sync_account(
         session.rollback()
         if isinstance(exc, Mt5Error):
             code, message = exc.code.value, exc.message
-            logger.error("Account %s sync failed: %s: %s", account_id, code, message)
+            if exc.code is Mt5ErrorCode.TERMINAL_LOADING:
+                if _not_ready_streak(session, account_id, log_id) >= NOT_READY_MAX_ATTEMPTS:
+                    code = Mt5ErrorCode.TERMINAL_NOT_READY.value
+                logger.warning("Account %s not synced: %s: %s", account_id, code, message)
+            else:
+                logger.error("Account %s sync failed: %s: %s", account_id, code, message)
         else:
             code, message = INTERNAL_ERROR, f"{type(exc).__name__}: {exc}"
             logger.exception("Account %s sync failed with an unexpected error", account_id)
@@ -831,6 +889,17 @@ def sync_account(
         failed.error_message = _short(message)
         session.commit()
         return failed
+
+
+def _not_ready_streak(session: Session, account_id: int, current_log_id: int) -> int:
+    """Attempts right before this one that ended with the terminal not ready."""
+    codes = session.scalars(
+        select(SyncLog.error_code)
+        .where(SyncLog.account_id == account_id, SyncLog.id != current_log_id)
+        .order_by(SyncLog.started_at.desc(), SyncLog.id.desc())
+        .limit(NOT_READY_MAX_ATTEMPTS)
+    ).all()
+    return sum(1 for _ in takewhile(lambda code: code in _NOT_READY_CODES, codes))
 
 
 def _store_excursions(session: Session, account_id: int, fetched: Fetched, now: datetime) -> None:
@@ -875,18 +944,29 @@ def _sink_deposit(
 DUE_SLACK = timedelta(seconds=30)
 
 
+LOADING_RETRY = timedelta(seconds=60)  # one worker cycle (sync_job.SYNC_JOB_INTERVAL_S)
+
+
 def is_due(session: Session, account_id: int, rules: RulesConfig, now: datetime) -> bool:
     """True when the cadence interval passed since the account's last attempt.
 
-    `DUE_SLACK` absorbs start-time drift between cycles (see above).
+    `DUE_SLACK` absorbs start-time drift between cycles (see above). An attempt that found
+    the terminal still loading is retried on the next worker cycle (LOADING_RETRY), not only
+    after the idle interval.
     """
-    last = session.scalar(
-        select(func.max(SyncLog.started_at)).where(SyncLog.account_id == account_id)
-    )
+    last = session.execute(
+        select(SyncLog.started_at, SyncLog.error_code)
+        .where(SyncLog.account_id == account_id)
+        .order_by(SyncLog.started_at.desc())
+        .limit(1)
+    ).first()
     if last is None:
         return True
+    started, code = last
     interval = sync_interval(rules.sync, rules.timezone, now)
-    return now - last >= interval - DUE_SLACK
+    if code == Mt5ErrorCode.TERMINAL_LOADING.value:
+        interval = min(interval, LOADING_RETRY)
+    return now - started >= interval - DUE_SLACK
 
 
 def close_orphaned_runs(session: Session, now: datetime) -> int:

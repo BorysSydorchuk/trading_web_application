@@ -16,6 +16,7 @@ from app.db import get_db
 from app.domain.sessions import is_trading_time
 from app.models import Account, SyncLog
 from app.models.enums import AccountStatus
+from app.mt5.errors import Mt5ErrorCode
 from app.schemas.sync_status import AccountSyncStatus, SyncState, SyncStatusList
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,8 @@ def stale_after(now: datetime, last_attempt: datetime) -> timedelta:
 def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
     """never | running | error | warning | ok while the worker is active; stale once
     nothing (not even a failed or running attempt) happened for 3x the expected interval.
-    `warning` = the sync succeeded but recorded a problem (e.g. positions_skipped)."""
+    `warning` = the sync succeeded but recorded a problem (e.g. positions_skipped), or the
+    terminal was still loading (skipped this cycle, retried on the next one)."""
     if latest is None:
         return "never"
     last_attempt = latest.finished_at or latest.started_at
@@ -67,7 +69,7 @@ def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
     if latest.ok is None:
         return "running"
     if not latest.ok:
-        return "error"
+        return "warning" if latest.error_code == Mt5ErrorCode.TERMINAL_LOADING.value else "error"
     return "warning" if latest.error_code else "ok"
 
 

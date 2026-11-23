@@ -211,11 +211,13 @@ def test_inverse_pair_stores_one_over_bid(session: Session, rules: RulesConfig) 
         symbols=[swi, usdchf],
         quotes={"USDCHF": quote("0.8", "0.8002"), "SWI20": quote("11000", "11001")},
         profit_per_tick={"SWI20": "1.25"},
-        deals=[],
+        # A funded account always has its balance deal (readiness gate).
+        deals=[d for d in fx_data()["deals"] if d["type"] == 2],
         orders=[],
         positions=[],
         ticks={},
     )
+    assert data["deals"]
     symbols = SymbolsConfig.model_validate({"symbols": [{"name": "SWI20"}, {"name": "USDCHF"}]})
     account = add_account(session, GER30_LOGIN)
 

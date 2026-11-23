@@ -133,7 +133,7 @@ function SyncDetails({ row }: { row: SyncStatusRow }) {
   const d = s.details
   const state = knownSyncState(row.state)
   // Warning (sync worked, something needs attention) is amber; any error kept on the row is red.
-  const isWarning = state === 'warning' || row.error_code === 'positions_skipped'
+  const isWarning = state === 'warning' || row.error_code === 'positions_skipped' || row.error_code === 'terminal_loading'
   const hasProblem = row.error_code !== null || row.error_message !== null
   const problemText =
     row.error_code === null && isWarning ? s.states.warning : syncErrorText(row.error_code)

@@ -8,6 +8,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from sqlalchemy import Engine, text
@@ -17,6 +19,7 @@ from app.config_files import get_rules
 from app.config_files.rules import RulesConfig
 from app.db import make_session_factory
 from app.models import Account, SyncLog
+from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.types import RawDeal, RawPosition
 from app.services import sync as sync_service
 from app.services.sync import sync_account
@@ -137,10 +140,17 @@ def test_closed_while_away_is_closed_from_position_history(
     assert t7.lesson == "my note"  # the journal survives the close
 
 
-def test_cold_terminal_is_read_again(session: Session, rules: RulesConfig) -> None:
+def test_cold_terminal_skips_the_cycle_then_the_next_sync_closes_the_trade(
+    session: Session, rules: RulesConfig
+) -> None:
+    """Readiness gate: empty first read, real deals on the second -> «термінал ще
+    завантажується» for this cycle (no cursor moves); the next sync loses nothing."""
     rules = no_overlap(rules)
     src = Terminal()
     account_id = _open_then_close_elsewhere(session, src, rules)
+    window_before = sync_service.history_window_start(
+        session, account_id, rules.sync, WEEK_STEP1_NOW + timedelta(minutes=15)
+    )
     src.cold = True
     pauses: list[float] = []
 
@@ -150,13 +160,59 @@ def test_cold_terminal_is_read_again(session: Session, rules: RulesConfig) -> No
 
     account = session.get(Account, account_id)
     assert account is not None
+    at = WEEK_STEP1_NOW + timedelta(minutes=15)
     log = sync_account(
-        session, account, src, rules, WEEK_STEP1_NOW + timedelta(minutes=15),
-        password_for=password, symbols=SYMBOLS, pause=warm_up,
+        session, account, src, rules, at, password_for=password, symbols=SYMBOLS, pause=warm_up
+    )
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert pauses == [sync_service.READY_PAUSE_S]
+    assert trades_by_pid(session, account_id)[T7].close_time is None  # nothing written
+    later = at + timedelta(minutes=1)
+    assert sync_service.history_window_start(session, account_id, rules.sync, later) == (
+        window_before
+    )  # the failed attempt did not move the cursor
+    assert sync_service.is_due(session, account_id, rules, later)  # retried next cycle
+
+    log = sync_account(
+        session, account, src, rules, later, password_for=password, symbols=SYMBOLS,
+        pause=pauses.append,
     )  # fmt: skip
     assert log.ok is True, log.error_message
-    assert pauses == [sync_service.HISTORY_READ_PAUSE_S]
     assert trades_by_pid(session, account_id)[T7].close_time is not None
+
+
+def test_empty_history_while_the_journal_has_trades_in_the_window_is_loading(
+    session: Session, rules: RulesConfig
+) -> None:
+    """Both reads empty and consistent, but trades of this window are in the journal."""
+    src = Terminal()
+    account = add_account(session, WEEK_LOGIN)
+    first = sync_account(
+        session, account, src, rules, WEEK_NOW, password_for=password, symbols=SYMBOLS
+    )
+    assert first.ok is True, first.error_message
+    before = len(trades_by_pid(session, account.id))
+    src.cold = True  # never warms up
+    pauses: list[float] = []
+    log = sync_account(
+        session, account, src, rules, WEEK_NOW + timedelta(minutes=1), password_for=password,
+        symbols=SYMBOLS, pause=pauses.append,
+    )  # fmt: skip
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert log.error_message is not None
+    assert "no deal history" in log.error_message
+    assert len(trades_by_pid(session, account.id)) == before
+
+
+def test_terminal_not_connected_is_loading(session: Session, rules: RulesConfig) -> None:
+    src = Terminal()
+    account = add_account(session, WEEK_LOGIN)
+    src.terminal_connected = lambda: False  # type: ignore[method-assign]
+    log = sync_account(
+        session, account, src, rules, WEEK_NOW, password_for=password, symbols=SYMBOLS
+    )
+    assert (log.ok, log.error_code) == (False, "terminal_loading")
+    assert trades_by_pid(session, account.id) == {}
 
 
 def test_warm_terminal_without_the_history_does_not_wait(
@@ -193,9 +249,68 @@ def test_terminal_that_stays_cold_is_retried_a_bounded_number_of_times(
     src.cold = True  # never warms up
     pauses: list[float] = []
     log = _sync(session, src, rules, pauses)
-    assert log.ok is True, log.error_message
-    assert len(pauses) == sync_service.HISTORY_READ_ATTEMPTS - 1
+    assert (log.ok, log.error_code) == (False, "terminal_loading")  # funded, no deal at all
+    assert pauses == [sync_service.READY_PAUSE_S]
     assert trades_by_pid(session, account_id)[T7].close_time is None  # retried next sync
+
+
+class Gate:
+    """Minimal source for the readiness gate: ``window`` and ``full`` deal tickets."""
+
+    def __init__(self, window: list[int], full: list[int]) -> None:
+        self.window, self.full = window, full
+
+    def terminal_connected(self) -> bool:
+        return True
+
+    def deals(self, lo: int, _hi: int) -> list[SimpleNamespace]:
+        return [SimpleNamespace(ticket=t) for t in (self.full if lo == 0 else self.window)]
+
+
+def _gate(src: Gate, balance: str, pauses: list[float]) -> None:
+    sync_service.ensure_terminal_ready(
+        cast(Any, src), 100, 200, balance=Decimal(balance), pause=pauses.append
+    )
+
+
+def test_quiet_window_with_older_history_is_ready_without_waiting() -> None:
+    pauses: list[float] = []
+    _gate(Gate([], [1, 2]), "10000", pauses)
+    assert pauses == []
+
+
+def test_new_account_with_zero_balance_is_ready() -> None:
+    pauses: list[float] = []
+    _gate(Gate([], []), "0", pauses)
+    assert pauses == []
+
+
+def test_funded_account_without_any_deal_is_loading() -> None:
+    pauses: list[float] = []
+    with pytest.raises(Mt5Error) as caught:
+        _gate(Gate([], []), "10000", pauses)
+    assert caught.value.code is Mt5ErrorCode.TERMINAL_LOADING
+    assert pauses == [sync_service.READY_PAUSE_S]
+
+
+def test_terminal_that_never_loads_escalates_to_a_red_error_and_recovers(
+    session: Session, rules: RulesConfig
+) -> None:
+    src = Terminal(cold=True)
+    account = add_account(session, WEEK_LOGIN)
+    at = WEEK_NOW
+    for _ in range(sync_service.NOT_READY_MAX_ATTEMPTS):
+        log = sync_account(session, account, src, rules, at, password_for=password,
+                           symbols=SYMBOLS, pause=lambda _s: None)  # fmt: skip
+        assert log.error_code == "terminal_loading"
+        at += timedelta(minutes=1)
+    log = sync_account(session, account, src, rules, at, password_for=password,
+                       symbols=SYMBOLS, pause=lambda _s: None)  # fmt: skip
+    assert (log.ok, log.error_code) == (False, "terminal_not_ready")
+    src.cold = False
+    log = sync_account(session, account, src, rules, at + timedelta(minutes=1),
+                       password_for=password, symbols=SYMBOLS)  # fmt: skip
+    assert log.ok is True, log.error_message
 
 
 ENTRY = RawDeal(

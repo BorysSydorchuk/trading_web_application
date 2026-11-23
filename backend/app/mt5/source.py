@@ -59,6 +59,10 @@ class Mt5Source(Protocol):
         """``symbol_info_tick(symbol).time`` (server wall epoch) or None if no tick."""
         ...
 
+    def terminal_connected(self) -> bool:
+        """``terminal_info().connected``: the terminal is connected to the trade server."""
+        ...
+
     def quote(self, symbol: str) -> RawQuote | None:
         """Latest ``symbol_info_tick`` bid/ask/time (server wall epoch) or None if no tick."""
         ...
