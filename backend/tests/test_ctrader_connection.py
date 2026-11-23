@@ -45,7 +45,7 @@ def _with_connection[T](
         connection = CtraderConnection(
             "wss://fake", FakeConnector(transport), sleep=no_sleep, **kwargs
         )
-        await connection.open()
+        await connection.start()
         try:
             return await body(connection)
         finally:
@@ -108,7 +108,7 @@ def test_open_retries_with_backoff_then_succeeds() -> None:
 
     async def scenario() -> None:
         connection = CtraderConnection("wss://fake", connector, sleep=sleep)
-        await connection.open()
+        await connection.start()
         await connection.close()
 
     asyncio.run(scenario())
@@ -120,7 +120,7 @@ def test_open_gives_up_with_connection_failed() -> None:
     connector = FakeConnector(OSError("secret-free failure"))
 
     async def scenario() -> None:
-        await CtraderConnection("wss://fake", connector, sleep=no_sleep).open()
+        await CtraderConnection("wss://fake", connector, sleep=no_sleep).start()
 
     with pytest.raises(CtraderError) as caught:
         asyncio.run(scenario())
@@ -187,7 +187,7 @@ def test_error_res_honours_retry_after_then_succeeds() -> None:
 
     async def scenario() -> dict[str, Any]:
         connection = CtraderConnection("wss://fake", FakeConnector(transport), sleep=sleep)
-        await connection.open()
+        await connection.start()
         try:
             return await connection.request(p.TRADER_REQ, {}, p.TRADER_RES)
         finally:

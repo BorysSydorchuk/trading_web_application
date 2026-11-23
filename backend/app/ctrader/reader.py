@@ -110,7 +110,7 @@ async def fetch_account_list(
     connection = CtraderConnection(
         endpoint_for(live), connector, sleep=sleep, secrets=creds.secrets()
     )
-    await connection.open()
+    await connection.start()
     try:
         await authorize_app(connection, creds)
         payload = await connection.request(
@@ -194,7 +194,7 @@ async def _read_one(
                 if attempt == 1 or exc.code not in _RETRY_READ:
                     raise
                 if exc.code is CtraderErrorCode.CONNECTION_FAILED:
-                    await connection.reopen()
+                    await connection.reconnect()
                     await authorize_app(connection, creds)
     except CtraderError as exc:
         return exc
@@ -208,7 +208,7 @@ async def _read_environment(
         endpoint_for(is_live), connector, sleep=sleep, secrets=creds.secrets()
     )
     try:
-        await connection.open()
+        await connection.start()
         await authorize_app(connection, creds)
     except CtraderError as exc:
         await connection.close()

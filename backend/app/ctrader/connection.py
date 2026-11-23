@@ -107,7 +107,7 @@ class CtraderConnection:
         self._pending: dict[str, asyncio.Future[p.Frame]] = {}
         self._broken = False
 
-    async def open(self) -> None:
+    async def start(self) -> None:
         """Connect with exponential backoff; raises ``connection_failed`` when out of tries."""
         delays = backoff_delays(CONNECT_ATTEMPTS)
         for attempt in range(CONNECT_ATTEMPTS):
@@ -149,9 +149,9 @@ class CtraderConnection:
         except Exception as exc:
             logger.debug("cTrader close failed: %s", type(exc).__name__)
 
-    async def reopen(self) -> None:
+    async def reconnect(self) -> None:
         await self.close()
-        await self.open()
+        await self.start()
 
     async def request(
         self,

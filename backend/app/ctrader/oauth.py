@@ -40,7 +40,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_OPENER: Final = urllib.request.build_opener(_NoRedirect)
+_open_url: Final = urllib.request.build_opener(_NoRedirect).open
 
 
 def build_authorize_url(client_id: str, state: str) -> str:
@@ -88,7 +88,7 @@ def call_token_endpoint(method: str, url: str, params: dict[str, str]) -> dict[s
         headers={"Accept": "application/json", "Content-Type": "application/json"},
     )
     try:
-        with _OPENER.open(request, timeout=HTTP_TIMEOUT_S) as response:
+        with _open_url(request, timeout=HTTP_TIMEOUT_S) as response:
             return _json_body(response.read(_MAX_BODY))
     except urllib.error.HTTPError as exc:
         return _from_http_error(exc)

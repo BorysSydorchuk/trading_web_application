@@ -31,6 +31,7 @@ class CtraderErrorCode(enum.StrEnum):
     EQUITY_UNAVAILABLE = "equity_unavailable"
     STATE_INVALID = "state_invalid"
     ACCESS_DENIED = "access_denied"
+    INTERNAL_ERROR = "internal_error"
 
 
 _SERVER_CODES: Final[dict[str, CtraderErrorCode]] = {

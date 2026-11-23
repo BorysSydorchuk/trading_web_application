@@ -55,7 +55,7 @@ def test_send_raises_before_anything_is_written(payload_type: int) -> None:
     async def scenario() -> FakeTransport:
         transport = FakeTransport({})
         connection = CtraderConnection("wss://fake", FakeConnector(transport))
-        await connection.open()
+        await connection.start()
         try:
             with pytest.raises(guard.ForbiddenMessageError):
                 await connection.request(payload_type, {}, 0)
