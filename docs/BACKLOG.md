@@ -63,4 +63,4 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 - 2026-11-20 (DB_MODE code-review LOW): app/tools/migrate.py verify_backup re-reads get_settings() instead of the settings passed to migrate() (pass docker_allowed via Deps); scripts/native_pg_diff.py (diagnostic) has no tests.
 
 - Same option editor for other choice fields (entry model, POI, exit reason): add the key to `MANAGED_FIELDS`, handle `other`/`show_if`/`rules.yaml` references (owner 2026-11-22, not built).
-- Digest R chart: exactly −1 R in the `≤ −1R` bin needs raw R values in the snapshot and a digest recompute (owner decides, 2026-11-22).
+- 2026-11-23 (startup guard review, MEDIUM/LOW): show Cyrillic paths in the warning (`core.quotePath=false`, split on newline only); test that the tray child gets `TJ_ACCEPT_CHECKOUT`; «git switch main» hint only when off main; say «змін» instead of «файлів»; `uv sync --locked` / `npm ci` in the launcher.
