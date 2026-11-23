@@ -4,7 +4,7 @@ import type { CalculateResult, ConversionInfo, MarginRequest, SymbolSpec } from 
 
 export function account(overrides: Partial<Account> = {}): Account {
   return {
-    id: 1, name: 'FN Phase 1', firm: 'FundedNext', program: 'Stellar', phase: 'phase_1', login: 1234567,
+    id: 1, platform: 'mt5', name: 'FN Phase 1', firm: 'FundedNext', program: 'Stellar', phase: 'phase_1', login: 1234567,
     server: 'FundedNext-Server', terminal_path: null, starting_balance: '100000.00', currency: 'USD', status: 'active',
     reference_balance: '100000.00', daily_loss_pct: null, max_drawdown_pct: null, profit_target_pct: null,
     password_env_key: 'MT5_PASSWORD_1234567', password_configured: true, balance: '101250.40', equity: '101250.40',

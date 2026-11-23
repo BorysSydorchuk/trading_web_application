@@ -33,9 +33,18 @@ function configErrorText(error: ApiError): string {
   return uk.errors.config_error
 }
 
+/** cTrader code without the `ctrader_` prefix → Ukrainian text; an unknown code never shows raw. */
+export function ctraderErrorText(code: string | null): string {
+  const texts: Readonly<Record<string, string>> = uk.ctrader.errors
+  return code !== null && Object.hasOwn(texts, code) ? (texts[code] ?? uk.ctrader.errors.unknown) : uk.ctrader.errors.unknown
+}
+
+const CTRADER_PREFIX = 'ctrader_'
+
 /** Maps any thrown value to readable Ukrainian text. */
 export function errorText(error: unknown): string {
   if (!isApiError(error)) return uk.errors.unknown
+  if (error.code.startsWith(CTRADER_PREFIX)) return ctraderErrorText(error.code.slice(CTRADER_PREFIX.length))
   if (error.code === 'ai_error') return aiErrorText(error)
   if (error.code === 'config_error') return configErrorText(error)
   if (isKnownCode(error.code)) return uk.errors[error.code]
