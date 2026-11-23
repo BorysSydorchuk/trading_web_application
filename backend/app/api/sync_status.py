@@ -12,10 +12,12 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_rules
+from app.ctrader.errors import CtraderErrorCode
+from app.ctrader.protocol import BALANCE_INTERVAL_S
 from app.db import get_db
 from app.domain.sessions import is_trading_time
 from app.models import Account, SyncLog
-from app.models.enums import AccountStatus
+from app.models.enums import AccountPlatform, AccountStatus
 from app.mt5.errors import Mt5ErrorCode
 from app.schemas.sync_status import AccountSyncStatus, SyncState, SyncStatusList
 
@@ -26,6 +28,12 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 STALE_FACTOR = 3
 # Used only when config/rules.yaml is broken: the idle interval avoids false "stale".
 FALLBACK_INTERVAL_S = 900
+# The cTrader balance job runs on a fixed cadence, whatever the trading hours.
+CTRADER_INTERVAL = timedelta(seconds=BALANCE_INTERVAL_S)
+# Failed attempts that retry by themselves: shown as a warning, not as an error.
+_RETRYING_CODES = frozenset(
+    {Mt5ErrorCode.TERMINAL_LOADING.value, CtraderErrorCode.RATE_LIMITED.value}
+)
 
 
 def utc_now() -> datetime:
@@ -56,20 +64,28 @@ def stale_after(now: datetime, last_attempt: datetime) -> timedelta:
     return STALE_FACTOR * max(expected_interval(now), expected_interval(last_attempt))
 
 
-def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
+def sync_state(
+    latest: SyncLog | None, now: datetime, *, fixed_interval: timedelta | None = None
+) -> SyncState:
     """never | running | error | warning | ok while the worker is active; stale once
     nothing (not even a failed or running attempt) happened for 3x the expected interval.
     `warning` = the sync succeeded but recorded a problem (e.g. positions_skipped), or the
-    terminal was still loading (skipped this cycle, retried on the next one)."""
+    terminal was still loading / cTrader rate limited (retried on the next cycle).
+    ``fixed_interval``: the cadence of a job independent of the trading hours (cTrader)."""
     if latest is None:
         return "never"
     last_attempt = latest.finished_at or latest.started_at
-    if now - last_attempt > stale_after(now, last_attempt):
+    limit = (
+        STALE_FACTOR * fixed_interval
+        if fixed_interval is not None
+        else stale_after(now, last_attempt)
+    )
+    if now - last_attempt > limit:
         return "stale"
     if latest.ok is None:
         return "running"
     if not latest.ok:
-        return "warning" if latest.error_code == Mt5ErrorCode.TERMINAL_LOADING.value else "error"
+        return "warning" if latest.error_code in _RETRYING_CODES else "error"
     return "warning" if latest.error_code else "ok"
 
 
@@ -111,7 +127,15 @@ def sync_status(db: Session = Depends(get_db), now: datetime = Depends(utc_now))
             AccountSyncStatus(
                 account_id=account.id,
                 account_name=account.name,
-                state=sync_state(row, now),
+                state=sync_state(
+                    row,
+                    now,
+                    fixed_interval=(
+                        CTRADER_INTERVAL
+                        if account.platform == AccountPlatform.CTRADER.value
+                        else None
+                    ),
+                ),
                 last_attempt_utc=row.started_at if row is not None else None,
                 last_success_utc=(success.finished_at or success.started_at) if success else None,
                 error_code=row.error_code if failed and row is not None else None,
