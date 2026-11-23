@@ -46,6 +46,11 @@ export interface HomeLimits {
   floating_pnl: string | null
   /** True when `floating_pnl` is counted in the day / week / month pct. */
   floating_included: boolean
+  /** Last synced balance and equity (MT5 or cTrader); null before the first sync. */
+  balance: string | null
+  equity: string | null
+  /** False when that sync is older than the staleness limit. */
+  balance_fresh: boolean
 }
 
 export interface HomeKpis {

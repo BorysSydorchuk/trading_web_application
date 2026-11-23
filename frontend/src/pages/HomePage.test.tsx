@@ -635,6 +635,31 @@ describe('HomePage «До макс. збитку» KPI', () => {
     expect(within(kpi).getByTestId('kpi-no-floating')).toHaveTextContent(h.kpis.maxLossNoFloating)
   })
 
+  it('the limits card shows the exact balance and equity of the account', async () => {
+    serveHome(homeData({ limits: homeLimits({ balance: '10000.00', equity: '10056.25', balance_fresh: true }) }))
+    renderWithProviders(<HomePage />)
+    const figures = await screen.findByTestId('limits-balance')
+    expect(figures).toHaveTextContent(uk.home.limits.balance)
+    expect(figures).toHaveTextContent(/10.000\.00/)
+    expect(figures).toHaveTextContent(uk.home.limits.equity)
+    expect(figures).toHaveTextContent(/10.056\.25/)
+    expect(within(figures).queryByTestId('limits-balance-stale')).not.toBeInTheDocument()
+  })
+
+  it('a stale sync keeps the last figures and says they are old', async () => {
+    serveHome(homeData({ limits: homeLimits({ balance: '10000.00', equity: '10056.25', balance_fresh: false }) }))
+    renderWithProviders(<HomePage />)
+    const figures = await screen.findByTestId('limits-balance')
+    expect(within(figures).getByTestId('limits-balance-stale')).toHaveTextContent(uk.home.limits.balanceStale)
+  })
+
+  it('an account that never synced shows no balance block', async () => {
+    serveHome(homeData())
+    renderWithProviders(<HomePage />)
+    await card()
+    expect(screen.queryByTestId('limits-balance')).not.toBeInTheDocument()
+  })
+
   it('no account limits: «—», the hint, and the hero says the limits are not set', async () => {
     serveHome(homeData({ kpis: { ...homeData().kpis, max_loss: null } }))
     const { user } = renderWithProviders(<HomePage />)

@@ -799,7 +799,8 @@ Branch `m8/home-redesign`, tier M, no migration. Layout and behaviour: docs/desi
   bias_today: {pre_london: [{symbol, direction}] | null, pre_ny_missing: bool},          # today's notes; null = no pre-London note
   limits: {account_id, account_name, currency,
            day: {pct, loss_pct, profit_pct}, week: {...}, month: {pct, loss_pct, profit_pct},
-           trades_week, max_trades_week, to_daily_stop_pct},                            # one account (see below)
+           trades_week, max_trades_week, to_daily_stop_pct,
+           balance, equity, balance_fresh},                                             # one account (see below); last synced figures, MT5 or cTrader
   kpis: {
     today:    {pnl, pct, trades, series: [{time, cum_pnl}]},                            # closed trades today, from 0 at Brussels midnight
     win_rate: {value, n, window: 20, series: [{time, value}]},                         # strategy trades (M8-01 exclusions out)

@@ -54,6 +54,11 @@ class AccountLimitsOut(BaseModel):
     # None (and not included) when the sync is stale/unknown while a position is open.
     floating_pnl: Money | None
     floating_included: bool
+    # Last synced figures of the account (MT5 or cTrader); balance_fresh is False when that
+    # sync is older than the snapshot staleness limit or never happened.
+    balance: Money | None
+    equity: Money | None
+    balance_fresh: bool
 
 
 class CumPoint(BaseModel):
