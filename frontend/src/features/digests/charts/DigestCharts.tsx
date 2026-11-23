@@ -28,7 +28,7 @@ export function DigestCharts({ snapshot }: { snapshot: DigestSnapshot }) {
           ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <RDistributionChart buckets={charts.r_distribution} />
+        <RDistributionChart buckets={charts.r_distribution} exactlyMinusOne={charts.r_exactly_minus_one} />
         <HourHeatmap cells={charts.hour_heatmap} />
       </div>
     </section>

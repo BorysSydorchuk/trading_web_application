@@ -193,6 +193,8 @@ fields:
       - { value: boredom, label: "нудьга", synonyms: ["нудно", "скучно", "скука", "bored"] }
       - { value: anxiety, label: "тривога", synonyms: ["тривожно", "хвилювався", "тревога", "тревожно", "волновался", "anxious", "anxiety"] }
       - { value: uncertainty, label: "невпевненість", synonyms: ["невпевнено", "сумнівався", "неуверенность", "неуверенно", "сомневался", "unsure", "uncertain"] }
+      - { value: joy, label: "радість", synonyms: ["задоволення", "радий", "радісно", "радость", "доволен", "happy", "joy"] }
+      - { value: courage, label: "сміливість", synonyms: ["сміливо", "рішучість", "смело", "смелость", "решительность", "courage", "bold"] }
     required: true
     analytics: true
     storage: column

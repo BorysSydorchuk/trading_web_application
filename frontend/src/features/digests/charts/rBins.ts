@@ -11,8 +11,8 @@ export interface RBin {
 }
 
 /**
- * The snapshot's 0.5 R buckets folded into six clear bins by each bucket's lower edge. A bucket
- * [−1, −0.5) holds exactly −1 R, so that value belongs to «−1…0»; saved digests need no recompute.
+ * The snapshot's 0.5 R buckets folded into six clear bins by each bucket's lower edge. The bucket
+ * [−1, −0.5) also holds exactly −1 R; the snapshot counts those trades so they move to «≤ −1R».
  */
 const BINS: readonly { key: string; below: number; label: string; negative: boolean }[] = [
   { key: 'below-1', below: -1, label: c.rBinBelow, negative: true },
@@ -23,12 +23,15 @@ const BINS: readonly { key: string; below: number; label: string; negative: bool
   { key: '3-up', below: Number.POSITIVE_INFINITY, label: c.rBinThree, negative: false },
 ]
 
-export function foldRBuckets(buckets: readonly RBucket[]): RBin[] {
+export function foldRBuckets(buckets: readonly RBucket[], exactlyMinusOne = 0): RBin[] {
   const counts = BINS.map(() => 0)
   for (const bucket of buckets) {
     const lower = Number(bucket.lower)
     const index = BINS.findIndex((bin) => lower < bin.below)
     counts[index] = (counts[index] ?? 0) + bucket.count
   }
+  const moved = Math.min(exactlyMinusOne, counts[1] ?? 0)
+  counts[0] = (counts[0] ?? 0) + moved
+  counts[1] = (counts[1] ?? 0) - moved
   return BINS.map((bin, i) => ({ key: bin.key, label: bin.label, negative: bin.negative, count: counts[i] ?? 0 }))
 }

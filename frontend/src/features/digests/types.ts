@@ -144,6 +144,8 @@ export interface HeatCell {
 export interface DigestCharts {
   equity: { combined: EquityPoint[]; by_account: { account_id: number; points: EquityPoint[] }[] }
   r_distribution: RBucket[]
+  /** Absent in digests saved before 2026-11-23 until they are recomputed. */
+  r_exactly_minus_one?: number
   hour_heatmap: HeatCell[]
 }
 

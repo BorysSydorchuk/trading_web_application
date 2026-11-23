@@ -233,6 +233,7 @@ def _charts(trades: Sequence[dm.DigestTrade], start: date) -> Json:
             {"lower": pct_str(b.lower), "upper": pct_str(b.upper), "count": b.count}
             for b in dm.r_distribution(trades)
         ],
+        "r_exactly_minus_one": dm.r_exactly_minus_one(trades),
         "hour_heatmap": [
             {"weekday": c.weekday, "hour": c.hour, "trades": c.trades, "net_pnl": _money(c.net_pnl)}
             for c in dm.hour_heatmap(trades)

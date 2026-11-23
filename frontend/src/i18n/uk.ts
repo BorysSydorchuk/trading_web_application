@@ -1405,7 +1405,7 @@ export const uk = {
       rLow: (value: string) => `≤ ${value}`,
       rHigh: (value: string) => `≥ ${value}`,
       rRange: (lower: string, upper: string) => `${lower}…${upper}`,
-      rBinBelow: '< −1R',
+      rBinBelow: '≤ −1R',
       rBinMinusOne: '−1…0',
       rBinZero: '0…1',
       rBinOne: '1…2',

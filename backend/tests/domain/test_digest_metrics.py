@@ -97,6 +97,7 @@ from app.domain.digest_metrics import (
     period_end,
     period_start,
     r_distribution,
+    r_exactly_minus_one,
     rule_section,
     trades_in_period,
 )
@@ -753,6 +754,13 @@ def test_r_distribution_of_the_fixture_week() -> None:
         D(x) for x in ["-2", "-1.5", "-1", "-0.5", "0", "0.5", "1", "1.5", "2", "2.5", "3"]
     ]
     assert [b.count for b in buckets] == [1, 0, 2, 0, 1, 0, 1, 0, 1, 0, 1]
+
+
+def test_r_exactly_minus_one_counts_only_full_stops() -> None:
+    rs = ["-1", "-1.0000", "-1.0001", "-0.9999", "1", None]
+    trades = [trade(i, "1", r) for i, r in enumerate(rs, start=1)]
+    assert r_exactly_minus_one(trades) == 2
+    assert r_exactly_minus_one([]) == 0
 
 
 def test_r_distribution_without_r_is_empty() -> None:

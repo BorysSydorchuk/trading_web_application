@@ -34,6 +34,8 @@ DEFAULT_VALUES = [
     "boredom",
     "anxiety",
     "uncertainty",
+    "joy",
+    "courage",
 ]
 
 
@@ -80,6 +82,11 @@ def test_defaults_have_the_new_emotions_and_both_lists_start_identical(
     labels = {o["value"]: o["label"] for o in before}
     assert labels["anxiety"] == "тривога"
     assert labels["uncertainty"] == "невпевненість"
+    assert labels["joy"] == "радість"
+    assert labels["courage"] == "сміливість"
+    synonyms = {o["value"]: o["synonyms"] for o in after}
+    assert {"задоволення", "радий", "happy"} <= set(synonyms["joy"])
+    assert {"сміливо", "рішучість", "courage"} <= set(synonyms["courage"])
 
 
 def test_add_appears_in_this_list_only(client: TestClient) -> None:

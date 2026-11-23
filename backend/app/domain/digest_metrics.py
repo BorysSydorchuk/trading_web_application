@@ -639,6 +639,9 @@ def equity_curves(trades: Iterable[DigestTrade], start: date) -> EquityCurves:
     return EquityCurves(combined=_curve(origin, ordered), by_account=MappingProxyType(by_account))
 
 
+MINUS_ONE_R = Decimal("-1")
+
+
 def _bucket_index(r: Decimal) -> int:
     clamped = min(max(r, -R_CLAMP), R_CLAMP)
     return int((clamped / R_BUCKET).to_integral_value(rounding=ROUND_FLOOR))
@@ -652,6 +655,12 @@ def r_distribution(trades: Iterable[DigestTrade]) -> tuple[RBucket, ...]:
         RBucket(lower=i * R_BUCKET, upper=(i + 1) * R_BUCKET, count=indices[i])
         for i in range(min(indices), max(indices) + 1)
     )
+
+
+def r_exactly_minus_one(trades: Iterable[DigestTrade]) -> int:
+    """Trades at exactly -1 R: the chart counts them in «≤ −1R», inside a 0.5 R bucket they
+    share [-1, -0.5) with smaller losses."""
+    return sum(1 for t in trades if t.r_multiple == MINUS_ONE_R)
 
 
 def hour_heatmap(trades: Iterable[DigestTrade]) -> tuple[HeatCell, ...]:
