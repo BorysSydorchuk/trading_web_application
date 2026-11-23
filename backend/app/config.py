@@ -90,10 +90,21 @@ class Settings(BaseSettings):
     # Temperature fallback, comma-separated, ascending, each 0..1; `0` = no fallback.
     whisper_temperatures: Annotated[tuple[float, ...], NoDecode] = (0.0, 0.4)
 
+    # cTrader Open API app (read-only). Empty = not configured: the app still starts and
+    # the cTrader endpoints answer `ctrader_not_configured`.
+    ctrader_client_id: str = ""
+    ctrader_client_secret: SecretStr = SecretStr("")
+
     @property
     def ai_configured(self) -> bool:
         """True when ANTHROPIC_API_KEY is set (non-blank)."""
         return self.anthropic_api_key.get_secret_value().strip() != ""
+
+    @property
+    def ctrader_configured(self) -> bool:
+        """True when both the cTrader client id and secret are set (non-blank)."""
+        secret = self.ctrader_client_secret.get_secret_value()
+        return self.ctrader_client_id.strip() != "" and secret.strip() != ""
 
     @property
     def log_dir_path(self) -> Path:

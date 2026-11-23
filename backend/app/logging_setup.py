@@ -52,6 +52,8 @@ class UTCFormatter(logging.Formatter):
         for secret in self.secrets:
             rendered = rendered.replace(secret, "[REDACTED]")
         rendered = re.sub(r"(?i)([a-z][a-z0-9+.-]*://)[^\s/@]+@", r"\1[REDACTED]@", rendered)
+        # The access log line of the OAuth return holds the one-time code and state.
+        rendered = re.sub(r"(/api/ctrader/callback)\?\S*", r"\1?[REDACTED]", rendered)
         rendered = re.sub(r"(?i)(bearer\s+)[^\s,'\"}]+", r"\1[REDACTED]", rendered)
         rendered = re.sub(
             r"(?is)((?:password|passwd|pwd|api[_-]?key|token|secret)\s*['\"]?\s*[:=]\s*)(['\"])(.*?)\2",
@@ -98,6 +100,7 @@ def setup_logging(log_file_name: str = "api.log", settings: Settings | None = No
     values = [
         settings.anthropic_api_key.get_secret_value(),
         settings.postgres_password.get_secret_value(),
+        settings.ctrader_client_secret.get_secret_value(),
     ]
     for url in (settings.database_url, settings.test_database_url):
         if url:
