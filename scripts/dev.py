@@ -58,7 +58,7 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from checkout_guard import confirm_console  # noqa: E402
+from checkout_guard import CANCELLED_EXIT, confirm_console  # noqa: E402
 
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
@@ -1647,7 +1647,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.ensure_db:
             return run_ensure_db()
         if not confirm_console(ROOT, os.environ, say=say):
-            return 1
+            return CANCELLED_EXIT
         return run_dev(open_browser=not args.no_browser, started=started)
     except LauncherError as exc:
         say(MSG["error"].format(error=exc))

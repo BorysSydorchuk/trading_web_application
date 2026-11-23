@@ -16,6 +16,10 @@ if errorlevel 1 (
 python scripts\dev.py %*
 set "EXITCODE=%ERRORLEVEL%"
 if "%EXITCODE%"=="0" goto :done
+if "%EXITCODE%"=="3" (
+    pause
+    goto :done
+)
 
 echo.
 echo [start] Зупинено з помилкою ^(код виходу %EXITCODE%^). Див. повідомлення вище та logs\.

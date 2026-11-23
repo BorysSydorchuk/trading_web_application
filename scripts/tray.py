@@ -251,6 +251,7 @@ class TrayApp:
         self._timeout_reported = False
         self._stop_thread: threading.Thread | None = None
         self._stop_code: int | None = None
+        self._asking = False  # the checkout question is open
         self.icon = pystray.Icon(
             "trading_journal", draw_icon(64), MSG["title_starting"], self._menu()
         )
@@ -300,8 +301,17 @@ class TrayApp:
             self._notify(MSG["autostart_failed"].format(error=exc))
 
     def _restart(self) -> None:
-        if not self._running():
-            self._start_launcher()
+        """The checkout may have changed since the last start: ask again."""
+        if self._asking or self._running():
+            return
+        self._asking = True
+        try:
+            if checkout_accepted():
+                self._start_launcher()
+            else:
+                logger.warning("Restart cancelled: the checkout is not a clean main")
+        finally:
+            self._asking = False
 
     def _stop_async(self) -> None:
         self._stop_thread = threading.Thread(target=self._stop, name="tray-stop", daemon=True)
@@ -437,10 +447,11 @@ def show_fatal(error: object) -> None:
 
 
 def checkout_accepted() -> bool:
-    """Clean main (or git unavailable) starts; otherwise a Yes/No box whose default is No."""
+    """Clean main starts; anything else, git unavailable too, is a Yes/No box, default No."""
     state = read_checkout(ROOT)
-    if state is None or state.is_clean_main:
+    if state is not None and state.is_clean_main:
         return True
+    logger.warning("Checkout needs confirmation: %s", warning_text(state))
     if sys.platform != "win32":
         return False
     text = f"{warning_text(state)}\n\n{MSG['checkout_question']}"

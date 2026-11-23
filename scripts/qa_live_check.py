@@ -35,6 +35,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from checkout_guard import ACCEPT_ENV  # noqa: E402
+
 BACKEND = ROOT / "backend"
 CONFIG_SRC = ROOT / "config"
 DEV_SCRIPT = ROOT / "scripts" / "dev.py"
@@ -251,7 +254,7 @@ def validate_config(env: Mapping[str, str]) -> None:
 
 def run_dev(env: Mapping[str, str], dev_args: Sequence[str]) -> int:
     try:
-        qa_env = {**env, "TJ_ACCEPT_CHECKOUT": "1"}  # QA runs on topic branches by design
+        qa_env = {**env, ACCEPT_ENV: "1"}  # QA runs on topic branches by design
         proc = subprocess.Popen([sys.executable, str(DEV_SCRIPT), *dev_args], cwd=ROOT, env=qa_env)
     except OSError as exc:
         raise QaError(MSG["dev_cannot_start"].format(error=exc)) from exc

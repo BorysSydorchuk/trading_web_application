@@ -57,7 +57,30 @@ def test_tray_on_clean_main_asks_nothing(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def tray_state(branch: str) -> object:
-    return sys.modules["checkout_guard"].Checkout(branch, 0)
+    return sys.modules["checkout_guard"].Checkout(branch)
+
+
+@pytest.mark.parametrize(("accepted", "starts"), [(True, 1), (False, 0)])
+def test_restart_asks_again_before_starting(
+    monkeypatch: pytest.MonkeyPatch, accepted: bool, starts: int
+) -> None:
+    app = tray.TrayApp.__new__(tray.TrayApp)
+    app._asking, app._proc = False, None
+    started: list[bool] = []
+    monkeypatch.setattr(app, "_start_launcher", lambda: started.append(True))
+    monkeypatch.setattr(tray, "checkout_accepted", lambda: accepted)
+    app._restart()
+    assert len(started) == starts
+    assert app._asking is False
+
+
+def test_restart_is_ignored_while_the_question_is_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = tray.TrayApp.__new__(tray.TrayApp)
+    app._asking, app._proc = True, None
+    monkeypatch.setattr(tray, "checkout_accepted", lambda: pytest.fail("asked twice"))
+    app._restart()
 
 
 def test_rotate_log_keeps_one_previous_copy(tmp_path: Path) -> None:
