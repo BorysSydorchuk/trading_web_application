@@ -346,6 +346,7 @@ export const uk = {
       live: 'Live',
       demo: 'Demo',
       alreadyAdded: 'вже додано',
+      alreadyAddedError: 'Цей рахунок cTrader уже додано. Поверніться до списку й оберіть інший.',
       noLogin: 'cTrader не повідомив логін, додати не можна',
       loginLabel: 'Логін',
       brokerLabel: 'Брокер',

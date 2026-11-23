@@ -60,6 +60,7 @@ export function AccountForm({ account, ctraderAccount = null, onBack, onDone }: 
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<FieldErrors>({})
   const [generalError, setGeneralError] = useState(false)
+  const [generalText, setGeneralText] = useState<string | null>(null)
 
   const createMutation = useCreateAccount()
   const updateMutation = useUpdateAccount()
@@ -91,6 +92,7 @@ export function AccountForm({ account, ctraderAccount = null, onBack, onDone }: 
     const mapped = serverFormErrors(error, platform)
     setServerErrors(mapped.fields)
     setGeneralError(mapped.general)
+    setGeneralText(mapped.generalText ?? null)
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -191,7 +193,7 @@ export function AccountForm({ account, ctraderAccount = null, onBack, onDone }: 
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       {generalError && (
         <p role="alert" className="rounded-md border border-destructive/50 px-3 py-2 text-xs text-destructive">
-          {t.formError}
+          {generalText ?? t.formError}
         </p>
       )}
 

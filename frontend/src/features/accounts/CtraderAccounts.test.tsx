@@ -161,6 +161,29 @@ describe('Add account: cTrader states', () => {
   })
 })
 
+describe('Add account: cTrader duplicate', () => {
+  it('409 on the cTrader id says the account is already added', async () => {
+    serve(CONNECTED)
+    mockApi(
+      http.post('/api/ctrader/accounts', () =>
+        HttpResponse.json(
+          { error: { code: 'conflict', message: 'exists', details: { field: 'ctid_trader_account_id' } } },
+          { status: 409 },
+        ),
+      ),
+    )
+    const { user } = renderWithProviders(<AccountsSection />, { path: '/settings' })
+    await openCtrader(user)
+    const radios = await screen.findAllByRole('radio')
+    await user.click(radios[0] as HTMLElement)
+    await user.click(screen.getByRole('button', { name: c.flow.next }))
+    await screen.findByLabelText(new RegExp(`^${f.fields.name}`))
+    await fillJournalFields(user)
+    await user.click(screen.getByRole('button', { name: f.submitCreate }))
+    expect(await screen.findByText(c.flow.alreadyAddedError)).toBeInTheDocument()
+  })
+})
+
 describe('OAuth return', () => {
   it('success: message, the cTrader step reopens, the query string is cleaned', async () => {
     serve(CONNECTED)

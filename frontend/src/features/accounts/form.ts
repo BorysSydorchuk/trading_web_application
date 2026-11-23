@@ -280,6 +280,8 @@ export interface ServerFormErrors {
   fields: FieldErrors
   /** The server rejected something that is not a form field (shown above the form). */
   general: boolean
+  /** Specific text for the general error; the form's default text otherwise. */
+  generalText?: string
 }
 
 /** Stable 422 `details.field_codes` values (docs/api.md, Accounts) → Ukrainian text. */
@@ -305,7 +307,13 @@ export function serverFormErrors(error: unknown, platform: AccountPlatform = 'mt
   // A cTrader form has no login/server/path inputs: such an error goes above the form.
   const entries = Object.entries(mapped.fields)
   const visible = entries.filter(([field]) => !MT5_ONLY_FIELDS.has(field as FormField))
-  return { fields: Object.fromEntries(visible), general: mapped.general || visible.length < entries.length }
+  const general = mapped.general || visible.length < entries.length
+  const isDuplicate = isApiError(error) && error.code === 'conflict' && error.details?.field === 'ctid_trader_account_id'
+  return {
+    fields: Object.fromEntries(visible),
+    general,
+    ...(isDuplicate ? { generalText: uk.ctrader.flow.alreadyAddedError } : {}),
+  }
 }
 
 function mapServerErrors(error: unknown): ServerFormErrors {
