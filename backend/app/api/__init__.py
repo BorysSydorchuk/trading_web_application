@@ -10,6 +10,7 @@ from app.api import (
     bias,
     calculator,
     config_files,
+    ctrader,
     dashboard,
     digests,
     health,
@@ -23,6 +24,7 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
 api_router.include_router(backups.router)
 api_router.include_router(accounts.router)
+api_router.include_router(ctrader.router)
 api_router.include_router(config_files.router)
 api_router.include_router(journal_options.router)
 api_router.include_router(sync_status.router)

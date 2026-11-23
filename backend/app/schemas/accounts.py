@@ -14,7 +14,7 @@ from app.domain.terminal_path import (
     TERMINAL_EXE,
     is_in_program_files,
 )
-from app.models.enums import AccountPhase, AccountStatus
+from app.models.enums import AccountPhase, AccountPlatform, AccountStatus
 from app.schemas.common import DecimalIn, UtcDatetime
 
 MAX_LOGIN = 2**63 - 1  # accounts.login is BIGINT
@@ -135,6 +135,7 @@ class Account(BaseModel):
     """Response: AccountInput fields + read-only sync/password info. Never the password."""
 
     id: int
+    platform: AccountPlatform
     name: str
     firm: str
     program: str
