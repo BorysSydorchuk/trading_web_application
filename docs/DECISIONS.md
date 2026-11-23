@@ -387,3 +387,6 @@ One line per decision: date, decision, reason. Product decisions live in PRD.md.
 - 2026-11-23: the cTrader worker opens one short connection per environment and cycle instead of a permanent one: simpler, and a dropped session cannot go unnoticed. To revisit if cTrader limits connection frequency.
 - 2026-11-23: asset message 2112 is not on the cTrader allowlist: phase a takes the currency from the owner's form, so depositAssetId is not resolved.
 - 2026-11-23: OAuth `state` values live in the API process memory (single API process); a restart during consent only means connecting again.
+- 2026-11-23 (cTrader review): `UNIQUE(login, server)` becomes a partial unique index for MT5 only; a cTrader account is identified by its ctid and may share a login and broker title. Migration `f1a2b3c4d5e6` was edited in place because it was not applied to the dev DB.
+- 2026-11-23 (cTrader review, supersedes the 60 s line of the job): the balance job uses the MT5 cadence (`is_due`) and a 45 s work budget; equity counts only when the balance is equal before and after the P&L read.
+- 2026-11-23 (cTrader review): a refreshed token pair that cannot be written stays in process memory and is saved on the next use; a refused refresh waits 1 hour unless the owner reconnects. A process restart in that window loses the unsaved pair, and the owner must reconnect.

@@ -64,3 +64,6 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 
 - Same option editor for other choice fields (entry model, POI, exit reason): add the key to `MANAGED_FIELDS`, handle `other`/`show_if`/`rules.yaml` references (owner 2026-11-22, not built).
 - 2026-11-23 (startup guard review, MEDIUM/LOW): show Cyrillic paths in the warning (`core.quotePath=false`, split on newline only); test that the tray child gets `TJ_ACCEPT_CHECKOUT`; «git switch main» hint only when off main; say «змін» instead of «файлів»; `uv sync --locked` / `npm ci` in the launcher.
+- 2026-11-23 (cTrader review, not now): restrict the Windows ACL of `data/ctrader_tokens.json` to the owner.
+- 2026-11-23 (cTrader review, not now): `GET /api/ctrader/accounts` has side effects (token refresh, deleting a trade-scoped token) reachable from same-site localhost pages.
+- 2026-11-23 (cTrader review, not now): check the entered currency against the broker's deposit asset via 2112/2113.
