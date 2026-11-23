@@ -302,7 +302,7 @@ export const DIGEST_LIST_MONTHLY = {
 
 const account = (o: Record<string, unknown>) => ({
   firm: 'Demo Prop', program: 'Two-Step', phase: 'phase_1', server: 'DemoBroker-Server', terminal_path: 'C:\\MT5\\demo-a\\terminal64.exe',
-  currency: 'USD', status: 'active', daily_loss_pct: '5.00', max_drawdown_pct: '10.00', profit_target_pct: '8.00', password_configured: true,
+  platform: 'mt5', currency: 'USD', status: 'active', daily_loss_pct: '5.00', max_drawdown_pct: '10.00', profit_target_pct: '8.00', password_configured: true,
   server_offset_hours: 2, starting_balance_suggestion: null, created_at: '2026-10-01T08:00:00Z', updated_at: '2026-11-19T07:00:00Z', ...o,
 })
 

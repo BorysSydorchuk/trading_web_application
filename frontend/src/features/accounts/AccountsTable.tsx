@@ -24,6 +24,7 @@ export function AccountsTable({ accounts, onEdit, onDelete }: AccountsTableProps
         <thead className={TABLE_HEAD_CLASS}>
           <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold [&>th]:whitespace-nowrap">
             <th className="text-left">{c.name}</th>
+            <th className="text-left">{c.platform}</th>
             <th className="text-left">{c.firm}</th>
             <th className="text-left">{c.program}</th>
             <th className="text-left">{c.phase}</th>
@@ -71,6 +72,9 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       )}
     >
       <td className="font-medium whitespace-nowrap">{account.name}</td>
+      <td className="whitespace-nowrap">
+        <Pill tone="neutral">{uk.accounts.platform[account.platform]}</Pill>
+      </td>
       <td className="whitespace-nowrap">{account.firm}</td>
       <td className="whitespace-nowrap">{account.program}</td>
       <td className="whitespace-nowrap">{uk.accounts.phase[account.phase]}</td>
@@ -85,7 +89,11 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       </td>
       <td className="num">{account.currency}</td>
       <td className="whitespace-nowrap">
-        <PasswordCell account={account} />
+        {account.platform === 'ctrader' ? (
+          <span className="text-muted-foreground">{uk.common.empty}</span>
+        ) : (
+          <PasswordCell account={account} />
+        )}
       </td>
       <td className="text-right whitespace-nowrap">
         <div className="flex justify-end gap-1">
