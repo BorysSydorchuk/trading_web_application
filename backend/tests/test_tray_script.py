@@ -33,6 +33,56 @@ def test_launcher_runs_dev_py_without_its_browser() -> None:
     assert cmd == ["python.exe", str(ROOT / "scripts" / "dev.py"), "--no-browser"]
 
 
+@pytest.mark.parametrize(("answer", "expected"), [(tray.IDYES, True), (7, False)])
+def test_tray_starts_off_main_only_on_yes(
+    monkeypatch: pytest.MonkeyPatch, answer: int, expected: bool
+) -> None:
+    if sys.platform != "win32":
+        pytest.skip("Windows message box")
+    seen: list[int] = []
+
+    def box(_owner: object, _text: str, _title: str, flags: int) -> int:
+        seen.append(flags)
+        return answer
+
+    monkeypatch.setattr(tray, "read_checkout", lambda _root: tray_state("fix/x"))
+    monkeypatch.setattr(tray.ctypes.windll.user32, "MessageBoxW", box)
+    assert tray.checkout_accepted() is expected
+    assert seen[0] & 0x100  # the second button (No) is the default
+
+
+def test_tray_on_clean_main_asks_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tray, "read_checkout", lambda _root: tray_state("main"))
+    assert tray.checkout_accepted() is True
+
+
+def tray_state(branch: str) -> object:
+    return sys.modules["checkout_guard"].Checkout(branch)
+
+
+@pytest.mark.parametrize(("accepted", "starts"), [(True, 1), (False, 0)])
+def test_restart_asks_again_before_starting(
+    monkeypatch: pytest.MonkeyPatch, accepted: bool, starts: int
+) -> None:
+    app = tray.TrayApp.__new__(tray.TrayApp)
+    app._asking, app._proc = False, None
+    started: list[bool] = []
+    monkeypatch.setattr(app, "_start_launcher", lambda: started.append(True))
+    monkeypatch.setattr(tray, "checkout_accepted", lambda: accepted)
+    app._restart()
+    assert len(started) == starts
+    assert app._asking is False
+
+
+def test_restart_is_ignored_while_the_question_is_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = tray.TrayApp.__new__(tray.TrayApp)
+    app._asking, app._proc = True, None
+    monkeypatch.setattr(tray, "checkout_accepted", lambda: pytest.fail("asked twice"))
+    app._restart()
+
+
 def test_rotate_log_keeps_one_previous_copy(tmp_path: Path) -> None:
     log = tmp_path / "launcher.log"
     log.write_bytes(b"x" * 20)

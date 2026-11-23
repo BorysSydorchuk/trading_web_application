@@ -33,6 +33,18 @@ def _load() -> ModuleType:
 dev = _load()
 
 
+def test_refused_checkout_never_starts_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dev, "confirm_console", lambda *_a, **_k: False)
+    monkeypatch.setattr(dev, "run_dev", lambda **_k: pytest.fail("started"))
+    assert dev.main([]) == dev.CANCELLED_EXIT
+
+
+def test_ensure_db_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dev, "confirm_console", lambda *_a, **_k: pytest.fail("asked"))
+    monkeypatch.setattr(dev, "run_ensure_db", lambda: 0)
+    assert dev.main(["--ensure-db"]) == 0
+
+
 @pytest.mark.parametrize(
     ("url", "expected"),
     [

@@ -36,6 +36,8 @@ from typing import IO, Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "scripts"))
+from checkout_guard import ACCEPT_ENV, read_checkout, warning_text  # noqa: E402
 
 LOG_DIR = ROOT / "logs"
 LAUNCHER_LOG = LOG_DIR / "launcher.log"
@@ -52,9 +54,12 @@ STOP_TIMEOUT_S = 120
 QUIT_WAIT_S = 30
 ERROR_ALREADY_EXISTS = 183
 CREATE_NO_WINDOW = 0x08000000
+MB_YESNO_WARNING_DEFAULT_NO = 0x4 | 0x30 | 0x100 | 0x10000  # Yes/No, warning, No, foreground
+IDYES = 6
 
 MSG = {
     "title": "Торговий журнал",
+    "checkout_question": "Запустити все одно?",
     "title_running": "Торговий журнал — працює",
     "title_starting": "Торговий журнал — запуск…",
     "title_failed": "Торговий журнал — помилка, див. «Логи»",
@@ -246,6 +251,7 @@ class TrayApp:
         self._timeout_reported = False
         self._stop_thread: threading.Thread | None = None
         self._stop_code: int | None = None
+        self._asking = False  # the checkout question is open
         self.icon = pystray.Icon(
             "trading_journal", draw_icon(64), MSG["title_starting"], self._menu()
         )
@@ -295,8 +301,17 @@ class TrayApp:
             self._notify(MSG["autostart_failed"].format(error=exc))
 
     def _restart(self) -> None:
-        if not self._running():
-            self._start_launcher()
+        """The checkout may have changed since the last start: ask again."""
+        if self._asking or self._running():
+            return
+        self._asking = True
+        try:
+            if checkout_accepted():
+                self._start_launcher()
+            else:
+                logger.warning("Restart cancelled: the checkout is not a clean main")
+        finally:
+            self._asking = False
 
     def _stop_async(self) -> None:
         self._stop_thread = threading.Thread(target=self._stop, name="tray-stop", daemon=True)
@@ -330,6 +345,7 @@ class TrayApp:
                     stdin=subprocess.DEVNULL,
                     stdout=self._log,
                     stderr=subprocess.STDOUT,
+                    env={**os.environ, ACCEPT_ENV: "1"},  # confirmed in `checkout_accepted`
                     **hidden_console(),
                 )
             except OSError as exc:
@@ -430,6 +446,19 @@ def show_fatal(error: object) -> None:
         print(text, file=sys.stderr)
 
 
+def checkout_accepted() -> bool:
+    """Clean main starts; anything else, git unavailable too, is a Yes/No box, default No."""
+    state = read_checkout(ROOT)
+    if state is not None and state.is_clean_main:
+        return True
+    logger.warning("Checkout needs confirmation: %s", warning_text(state))
+    if sys.platform != "win32":
+        return False
+    text = f"{warning_text(state)}\n\n{MSG['checkout_question']}"
+    answer = ctypes.windll.user32.MessageBoxW(None, text, MSG["title"], MB_YESNO_WARNING_DEFAULT_NO)
+    return bool(answer == IDYES)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Trading Journal tray")
     mode = parser.add_mutually_exclusive_group()
@@ -466,6 +495,9 @@ def _run(stop: bool, autostart: bool) -> int:
         logger.info("Tray already running: opening the journal only")
         if not autostart:
             webbrowser.open(WEB_URL)
+        return 0
+    if not checkout_accepted():
+        logger.warning("Start cancelled: the checkout is not a clean main")
         return 0
     TrayApp(open_browser=not autostart).run()
     return 0
