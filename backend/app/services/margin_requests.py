@@ -22,7 +22,9 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
+from app.models import Account
 from app.models.calculator import CalculatorMarginRequest
+from app.models.enums import AccountPlatform
 from app.mt5.real import (
     CONNECT_GRACE_S,
     DEFAULT_CALL_TIMEOUT_S,
@@ -119,6 +121,9 @@ def to_item(row: CalculatorMarginRequest) -> schemas.MarginRequestItem:
 
 def create(db: Session, body: schemas.CalculateInput) -> schemas.MarginRequestItem:
     """Size like calculate (its errors unchanged, no row), then queue or reuse a request."""
+    account = db.get(Account, body.account_id)
+    if account is not None and account.platform != AccountPlatform.MT5.value:
+        raise ApiError(409, "margin_unsupported_platform", "Live margin is available for MT5 only")
     sized = size(db, body)
     context, volume, entry = sized.context, sized.result.volume, sized.request.entry
     direction = sized.request.direction

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import mt5_password_for
 from app.models import Account
 from app.models.calculator import CalculatorMarginRequest
+from app.models.enums import AccountPlatform
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.source import Mt5Source, connected
 from app.mt5.types import Direction
@@ -43,6 +44,7 @@ MARGIN_JOB_ID = "calculator_margin"
 MARGIN_JOB_INTERVAL_S = 2
 REQUEST_EXPIRED = "request_expired"
 INTERRUPTED = "interrupted"
+UNSUPPORTED_PLATFORM = "unsupported_platform"
 # calculator_margin_requests.margin is NUMERIC(28, 8).
 _MARGIN_INTEGER_DIGITS = 20
 
@@ -62,6 +64,7 @@ class ClaimedRequest:
     login: int
     server: str
     terminal_path: str
+    platform: str = AccountPlatform.MT5.value
 
 
 def _rowcount(result: object) -> int:
@@ -134,6 +137,7 @@ def claim_next(session: Session) -> ClaimedRequest | None:
         login=account.login,
         server=account.server,
         terminal_path=account.terminal_path or "",
+        platform=account.platform,
     )
     row.status = "processing"
     row.started_at = func.now()  # SQL expression: the DB clock
@@ -153,6 +157,9 @@ def lookup_margin(
     source: Mt5Source, claimed: ClaimedRequest, password_for: PasswordLookup
 ) -> tuple[Decimal | None, str | None]:
     """``(margin, None)`` or ``(None, error_code)``; never raises."""
+    if claimed.platform != AccountPlatform.MT5.value:  # no terminal to open
+        logger.error("Margin request %s: not an MT5 account", claimed.id)
+        return None, UNSUPPORTED_PLATFORM
     try:
         if not claimed.terminal_path.strip():  # as sync/resolve_terminal, before connecting
             raise Mt5Error(

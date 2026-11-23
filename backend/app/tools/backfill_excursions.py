@@ -34,7 +34,7 @@ from app.config import mt5_password_for
 from app.config_files import get_rules
 from app.domain.broker_time import BrokerTimeRule, Conversion, choose_conversion, detect_offset
 from app.models import Account, SyncLog, Trade
-from app.models.enums import AccountStatus, ExcursionStatus
+from app.models.enums import AccountPlatform, AccountStatus, ExcursionStatus
 from app.mt5.errors import Mt5Error
 from app.mt5.source import Mt5Source, PriceHistory
 from app.services.excursions import (
@@ -143,6 +143,7 @@ def same_broker_terminals(session: Session, account: Account) -> list[Terminal]:
         .where(
             Account.id != account.id,
             Account.status != AccountStatus.ARCHIVED.value,
+            Account.platform == AccountPlatform.MT5.value,
             Account.terminal_path.is_not(None),
             Account.terminal_path != "",
         )
@@ -303,7 +304,10 @@ def run(
             "зупиніть його "
             "(«Торговий журнал — Стоп» або stop.bat) і запустіть знову"
         )
-    query = select(Account).where(Account.status != AccountStatus.ARCHIVED.value)
+    query = select(Account).where(
+        Account.status != AccountStatus.ARCHIVED.value,
+        Account.platform == AccountPlatform.MT5.value,
+    )
     if account_id is not None:
         query = query.where(Account.id == account_id)
     totals = Totals()
