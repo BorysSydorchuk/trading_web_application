@@ -81,7 +81,7 @@ def test_paging_is_bounded_and_warns_when_the_latest_tick_stays_unknown(
     assert "latest tick not found" in caplog.text
 
 
-PAIR = ConversionPair("EURUSD", False, ("EURUSD",))
+PAIR = ConversionPair("EURUSD", False, "ask")
 
 
 def quote(points: dict[int, list[tuple[int, Decimal]]]) -> Any:
