@@ -278,6 +278,17 @@ def _symbol_names(payload: Mapping[str, Any]) -> dict[int, str]:
     return names
 
 
+async def symbol_ids_by_name(connection: CtraderConnection, ctid: int) -> dict[str, int]:
+    """Broker name -> symbol id of every symbol (2114, archived included)."""
+    listing = await connection.request(
+        p.SYMBOLS_LIST_REQ,
+        {"ctidTraderAccountId": ctid, "includeArchivedSymbols": True},
+        p.SYMBOLS_LIST_RES,
+    )
+    check_account(listing, ctid)
+    return {name: symbol_id for symbol_id, name in sorted(_symbol_names(listing).items())}
+
+
 def _optional_int(raw: Mapping[str, Any], key: str) -> int | None:
     value = raw.get(key)
     return parse_int(value, key) if value is not None else None

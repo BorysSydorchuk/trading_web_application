@@ -55,10 +55,11 @@ def decode_ticks(entries: Sequence[object]) -> tuple[CtTick, ...]:
     return tuple(out)
 
 
-async def last_tick(
+async def tick_page(
     connection: CtraderConnection, ctid: int, symbol_id: int, kind: int, from_ms: int, to_ms: int
-) -> CtTick | None:
-    """The latest BID or ASK tick in ``from_ms..to_ms`` (a historical request), or None."""
+) -> tuple[tuple[CtTick, ...], bool]:
+    """One 2145 answer (a historical request): the BID or ASK ticks in ``from_ms..to_ms``
+    and its ``hasMore`` (True: the answer holds only part of the range)."""
     payload = await connection.request(
         p.TICK_DATA_REQ,
         {
@@ -75,8 +76,15 @@ async def last_tick(
     entries = payload.get("tickData", [])
     if not isinstance(entries, list):
         raise _bad("tickData is not a list")
-    if payload.get("hasMore") is True:
+    return decode_ticks(entries), payload.get("hasMore") is True
+
+
+async def last_tick(
+    connection: CtraderConnection, ctid: int, symbol_id: int, kind: int, from_ms: int, to_ms: int
+) -> CtTick | None:
+    """The latest BID or ASK tick in ``from_ms..to_ms`` (a historical request), or None."""
+    ticks, has_more = await tick_page(connection, ctid, symbol_id, kind, from_ms, to_ms)
+    if has_more:
         # ASSUMPTION: the answer then holds part of the range; its latest tick is used.
         logger.debug("cTrader ticks of symbol %s: more than one answer holds", symbol_id)
-    ticks = decode_ticks(entries)
     return max(ticks, key=lambda tick: tick.time) if ticks else None

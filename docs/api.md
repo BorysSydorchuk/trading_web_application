@@ -928,6 +928,10 @@ All field names below are assumptions from the Open API docs, to confirm on the 
   entry and exit tick samples (`bar(..., spread_price)`); no tick samples -> the middle stays bid with spread 0
   and the series is incomplete (retry, then unavailable as for MT5).
 - Inside the 45 s cycle budget, at most `BUDGET_S` for MAE/MFE per account; a rate-limit wait ends the step.
+- Built (c5): `app.ctrader.excursions` (`BUDGET_S` = 8 s, read at call time); the reader step runs after the market step and
+  returns `BalanceRead.excursions` (`Fetched`); the job picks targets with `excursion_targets` before the read and stores
+  them after the trades with `store_excursions` in a savepoint. `hasMore` (2145/2137) halves the range, max 16 requests
+  per window, else the series is incomplete. A cut-off, timeout, dropped connection or rate-limit error ends the step.
 
 ### c6. Limits
 - Home «Ліміти», daily/weekly stops and rules use the cTrader trades and account size exactly like MT5
