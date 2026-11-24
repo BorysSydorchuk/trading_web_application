@@ -57,7 +57,7 @@ from app.services.journal_requirements import sync_requirements
 from app.services.open_positions_snapshot import snapshot_path
 from app.services.risk_base import recompute_all
 from app.services.starting_balance_suggestion import suggestions_path
-from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
+from app.services.transcriber import WhisperOptions, WhisperTranscriber
 from app.system.terminals import terminal_windows
 from app.worker.backup_job import BACKUP_JOB_ID, BACKUP_POLL_SECONDS, BackupJob
 from app.worker.ctrader_job import (
@@ -187,13 +187,17 @@ def default_margin_job(mt5: SharedMt5) -> Callable[[], None]:
 
 
 def default_transcription_job(settings: Settings) -> Callable[[], None]:
-    """One Whisper transcriber per process; the model loads on the first note."""
-    transcriber: list[Transcriber] = []
+    """One Whisper transcriber per process; the model loads on the first note and is
+    unloaded after 15 idle minutes (checked after every cycle, even a failed one)."""
+    transcriber: list[WhisperTranscriber] = []
 
     def job() -> None:
         if not transcriber:
             transcriber.append(WhisperTranscriber(WhisperOptions.from_settings(settings)))
-        run_transcription_cycle(get_session_factory(), transcriber[0], settings.data_dir)
+        try:
+            run_transcription_cycle(get_session_factory(), transcriber[0], settings.data_dir)
+        finally:
+            transcriber[0].unload_if_idle()
 
     return job
 

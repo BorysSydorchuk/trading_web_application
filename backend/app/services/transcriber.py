@@ -1,15 +1,18 @@
 """Speech-to-text behind a small Protocol; the real one is local faster-whisper (worker only).
 
 `faster_whisper` (and PyAV) are imported lazily inside `WhisperTranscriber`, so the API
-process and the tests never load them. The model is loaded once per process and cached by
-(model, compute type, CPU threads).
+process and the tests never load them. The model is loaded on the first note, cached by
+(model, compute type, CPU threads), and dropped again after `WHISPER_IDLE_UNLOAD_S` without
+notes (PM 2026-11-24), so an idle worker does not hold it in RAM.
 """
 
 from __future__ import annotations
 
+import gc
 import logging
 import threading
-from collections.abc import Iterable, Iterator
+import time
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -21,6 +24,7 @@ from app.services.cpu_cores import physical_cores
 logger = logging.getLogger(__name__)
 
 WHISPER_DEVICE = "cpu"  # no CUDA on Borys's laptop; "auto" may pick a broken GPU setup
+WHISPER_IDLE_UNLOAD_S = 15 * 60  # unload the model after 15 min without notes (PM 2026-11-24)
 
 
 class TranscriptionError(Exception):
@@ -138,6 +142,18 @@ def _load_model(options: WhisperOptions) -> Any:
         return model
 
 
+def _unload_model(options: WhisperOptions) -> bool:
+    """Drop the cached model for these options; True when one was loaded."""
+    key = (options.model, options.compute_type, options.cpu_threads)
+    with _models_lock:
+        model = _models.pop(key, None)
+    if model is None:
+        return False
+    del model
+    gc.collect()  # CTranslate2 frees its buffers when the last reference goes
+    return True
+
+
 def classify_error(exc: Exception) -> TranscriptionError:
     """Map a decode/transcribe exception to an error code (PyAV errors = unreadable audio)."""
     if isinstance(exc, TranscriptionError):
@@ -167,14 +183,38 @@ def _segments(raw: Iterable[Any]) -> Iterator[TranscribedSegment]:
 class WhisperTranscriber:
     """faster-whisper on the CPU with the configured decoding options and glossary prompt."""
 
-    def __init__(self, options: WhisperOptions) -> None:
+    def __init__(
+        self, options: WhisperOptions, clock: Callable[[], float] = time.monotonic
+    ) -> None:
         self.options = options
+        self._clock = clock
+        self._last_used: float | None = None  # None: not loaded by this transcriber
 
     def load(self) -> None:
         _load_model(self.options)
+        self._last_used = self._clock()
+
+    def unload_if_idle(self) -> bool:
+        """Unload the model after `WHISPER_IDLE_UNLOAD_S` without a note; True when unloaded.
+
+        Call it from the transcription job between cycles (the job never runs twice at once),
+        so a note in progress is never cut off; the next note loads the model again.
+        """
+        if self._last_used is None or self._clock() - self._last_used < WHISPER_IDLE_UNLOAD_S:
+            return False
+        self._last_used = None
+        if not _unload_model(self.options):
+            return False
+        logger.info(
+            "Whisper model unloaded after %d idle minutes: %s",
+            WHISPER_IDLE_UNLOAD_S // 60,
+            self.options.describe(),
+        )
+        return True
 
     def transcribe(self, path: Path, initial_prompt: str | None) -> TranscriptionRun:
         model = _load_model(self.options)
+        self._last_used = self._clock()
         try:
             raw, info = model.transcribe(
                 str(path), **self.options.transcribe_kwargs(initial_prompt)

@@ -489,3 +489,42 @@ def test_worker_starts_even_when_the_symbol_map_fails(
         r.levelno == logging.ERROR and "symbol map" in r.getMessage().lower()
         for r in caplog.records
     )
+
+
+class _FakeTranscriber:
+    def __init__(self, options: Any) -> None:
+        self.unload_checks = 0
+
+    def unload_if_idle(self) -> bool:
+        self.unload_checks += 1
+        return False
+
+
+def test_transcription_job_checks_idle_unload_after_every_cycle(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.worker.main as worker_main
+
+    made: list[_FakeTranscriber] = []
+
+    def make(options: Any) -> _FakeTranscriber:
+        made.append(_FakeTranscriber(options))
+        return made[-1]
+
+    calls: list[object] = []
+
+    def cycle(_factory: object, transcriber: object, _data_dir: object) -> None:
+        calls.append(transcriber)
+        if len(calls) == 2:
+            raise RuntimeError("database down")
+
+    monkeypatch.setattr(worker_main, "WhisperTranscriber", make)
+    monkeypatch.setattr(worker_main, "run_transcription_cycle", cycle)
+    monkeypatch.setattr(worker_main, "get_session_factory", lambda: None)
+    job = worker_main.default_transcription_job(settings)
+    job()
+    with pytest.raises(RuntimeError):
+        job()  # a failed cycle still checks the idle unload
+    assert len(made) == 1
+    assert calls == [made[0], made[0]]
+    assert made[0].unload_checks == 2
