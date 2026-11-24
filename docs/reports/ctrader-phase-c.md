@@ -52,7 +52,9 @@ Contract: `docs/api.md`, section "cTrader integration, phase c" (c1–c6).
 - After the fixes, 933 cTrader, calculator, excursion and fx backend tests ran: 932 passed. The one failure was a
   flaky test in `test_ctrader_calculator.py`: its two accounts got rates from different `now()` calls. It now uses
   one fixed rate time, and the file then passed 6 runs out of 6.
-- Full gate: see the end of this report.
+- Full gate (`make check`, 2+2 workers) on e7b7ecc: free RAM 3.5 GB, 4704 backend passed / 1 skipped, 797 frontend,
+  lint/typecheck PASS (`logs/gate-phase-c-20261124-2.log`). The first run on 1c3005e stopped at mypy on a test file
+  (fixed in e7b7ecc). Merge `2e02294`; its tree equals the gated tree.
 
 ## Reviews
 
@@ -78,4 +80,4 @@ Contract: `docs/api.md`, section "cTrader integration, phase c" (c1–c6).
 
 ## Commit range
 
-6f79e64..(merge commit), branch `ctrader/phase-c`.
+6f79e64..2e02294 (merge), branch `ctrader/phase-c`.
