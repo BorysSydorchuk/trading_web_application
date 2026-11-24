@@ -38,7 +38,7 @@ FIRM = {"firm": "FundedNext", "program": "Stellar 2-Step", "reference_balance": 
 def make(session: Session, platform: str, name: str = "Alpha") -> Account:
     if platform == "ctrader":
         return make_ctrader_account(session, name=name, **FIRM)
-    return add_account(session, name, 1, **FIRM)
+    return add_account(session, name, 1, reference_balance=FIRM["reference_balance"])
 
 
 @pytest.fixture(params=["mt5", "ctrader"])
@@ -93,7 +93,7 @@ def test_daily_stop_state_is_reached_by_a_ctrader_account_like_by_mt5(
 def test_all_accounts_pick_the_closest_to_the_stop_across_platforms(
     client: TestClient, session: Session
 ) -> None:
-    mt5 = add_account(session, "Mt5 account", 1, **FIRM)
+    mt5 = add_account(session, "Mt5 account", 1, reference_balance=FIRM["reference_balance"])
     ct = make_ctrader_account(session, name="cTrader account", **FIRM)
     closed(session, mt5, TODAY, "210.00")  # +2.1 % -> 5.1 to the stop
     closed(session, ct, TODAY, "-250.00")  # -2.5 % -> 0.5 to the stop

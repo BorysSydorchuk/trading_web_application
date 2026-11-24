@@ -268,7 +268,7 @@ def _store_one(trade: Trade, series: Series, now: datetime) -> None:
     trade.excursion_at = now  # the attempt, also when nothing is stored
     if outcome == "unavailable":
         trade.excursion_status = ExcursionStatus.UNAVAILABLE.value
-        logger.warning("MAE/MFE of trade %s: MT5 has no (complete) history", trade.id)
+        logger.warning("MAE/MFE of trade %s: no (complete) price history", trade.id)
     if result is None:
         return  # retry later, or unavailable
     trade.excursion_source = series.source.value
