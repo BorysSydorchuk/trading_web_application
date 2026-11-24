@@ -1,4 +1,5 @@
-"""Phase c additions to the fake cTrader history server: assets (2112) and tick data (2145).
+"""Phase c additions to the fake cTrader history server: assets (2112), tick data (2145) and
+M1 trendbars (2137, c5).
 
 Message numbers are literals on purpose: the protocol constants are part of the phase c
 implementation (tests/test_ctrader_phase_c_specs.py pins their names), so this helper keeps
@@ -16,11 +17,16 @@ from tests.ctrader_history_fakes import HistoryServer, load
 
 ASSET_LIST_REQ, ASSET_LIST_RES = 2112, 2113
 TICK_DATA_REQ, TICK_DATA_RES = 2145, 2146
+TRENDBARS_REQ, TRENDBARS_RES = 2137, 2138
+M1 = 1  # ProtoOATrendbarPeriod M1
+MINUTE_MS = 60_000
 BID, ASK = 1, 2  # ProtoOAQuoteType
 PRICE_SCALE = 100_000  # ticks are integers in 1/100000
 
 # (epoch ms UTC, price)
 Point = tuple[int, Decimal]
+# One M1 trendbar (BID prices): (start of the minute in epoch ms UTC, open, high, low, close)
+Bar = tuple[int, Decimal, Decimal, Decimal, Decimal]
 
 
 def encode_ticks(points: Iterable[Point]) -> list[dict[str, int]]:
@@ -36,6 +42,23 @@ def encode_ticks(points: Iterable[Point]) -> list[dict[str, int]]:
     return out
 
 
+def encode_trendbar(bar: Bar) -> dict[str, int]:
+    """ProtoOATrendbar as the server sends it. ASSUMPTION (Open API docs, to confirm on the
+    first live run): ``low`` is absolute, ``deltaOpen``, ``deltaClose`` and ``deltaHigh`` are
+    unsigned distances above ``low``; all prices are integers in 1/100000;
+    ``utcTimestampInMinutes`` is the start of the bar in epoch minutes."""
+    start_ms, open_, high, low, close = bar
+    scaled = {name: int(value * PRICE_SCALE) for name, value in
+              (("open", open_), ("high", high), ("low", low), ("close", close))}  # fmt: skip
+    return {
+        "low": scaled["low"],
+        "deltaOpen": scaled["open"] - scaled["low"],
+        "deltaClose": scaled["close"] - scaled["low"],
+        "deltaHigh": scaled["high"] - scaled["low"],
+        "utcTimestampInMinutes": start_ms // MINUTE_MS,
+    }
+
+
 def tick_points(name: str = "EURUSD") -> dict[int, list[Point]]:
     """The fixture ticks of one symbol: {BID: [...], ASK: [...]}."""
     raw = load("ticks_eurusd.json")[name]
@@ -46,20 +69,31 @@ def tick_points(name: str = "EURUSD") -> dict[int, list[Point]]:
 
 
 class PhaseCServer(HistoryServer):
-    """HistoryServer + assets + ticks. ``ticks``: {broker symbol name: {BID|ASK: points}}.
+    """HistoryServer + assets + ticks + M1 trendbars.
+
+    ``ticks``: {broker symbol name: {BID|ASK: points}}. ``bars``: {broker symbol name: [Bar]}
+    (BID only, as the real 2137 answer). A bar is returned when its start lies in
+    ``fromTimestamp..toTimestamp`` (ms); with ``bars_ignore_range`` every bar is returned (a
+    real server may also send the bar that overlaps ``fromTimestamp``).
 
     ``requests`` lists every request type received (all connections), ``tick_requests`` the
-    (symbolId, type, from_ms, to_ms) of every 2145.
+    (symbolId, type, from_ms, to_ms) of every 2145, ``trendbar_requests`` the
+    (symbolId, period, from_ms, to_ms) of every 2137.
     """
 
     def __init__(
         self,
         *args: Any,
         ticks: Mapping[str, Mapping[int, list[Point]]] | None = None,
+        bars: Mapping[str, list[Bar]] | None = None,
+        bars_ignore_range: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.ticks = dict(ticks or {})
+        self.bars = dict(bars or {})
+        self.bars_ignore_range = bars_ignore_range
+        self.trendbar_requests: list[tuple[int, int, int, int]] = []
         self.assets = load("assets.json")
         self.requests: list[int] = []
         self.tick_requests: list[tuple[int, int, int, int]] = []
@@ -81,6 +115,21 @@ class PhaseCServer(HistoryServer):
             "hasMore": False,
         }
 
+    def _trendbars(self, frame: dict[str, Any]) -> Reply:
+        payload = frame["payload"]
+        symbol_id, period = int(payload["symbolId"]), int(payload["period"])
+        lo, hi = int(payload["fromTimestamp"]), int(payload["toTimestamp"])
+        self.trendbar_requests.append((symbol_id, period, lo, hi))
+        found = self.bars.get(self._names.get(symbol_id, ""), []) if period == M1 else []
+        inside = [b for b in sorted(found) if self.bars_ignore_range or lo <= b[0] <= hi]
+        return TRENDBARS_RES, {
+            "ctidTraderAccountId": CTID,
+            "period": period,
+            "timestamp": hi,
+            "trendbar": [encode_trendbar(b) for b in inside],
+            "symbolId": symbol_id,
+        }
+
     def _logged(self, payload_type: int, handler: Handler) -> Handler:
         def run(frame: dict[str, Any]) -> Reply:
             self.requests.append(payload_type)
@@ -92,4 +141,5 @@ class PhaseCServer(HistoryServer):
         base = super().handlers()
         base[ASSET_LIST_REQ] = (ASSET_LIST_RES, self.assets)
         base[TICK_DATA_REQ] = self._tick_data
+        base[TRENDBARS_REQ] = self._trendbars
         return {kind: self._logged(kind, handler) for kind, handler in base.items()}
