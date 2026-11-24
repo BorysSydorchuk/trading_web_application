@@ -30,7 +30,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from itertools import takewhile
-from typing import Any
 
 from pydantic import SecretStr
 from sqlalchemy import func, select
@@ -39,7 +38,6 @@ from sqlalchemy.orm import Session
 from app.config import mt5_password_for, mt5_password_key
 from app.config_files.rules import RulesConfig, SyncConfig
 from app.config_files.symbols import SymbolsConfig, get_symbols_config
-from app.domain import metrics
 from app.domain.broker_time import (
     BrokerTimeRule,
     Conversion,
@@ -47,23 +45,16 @@ from app.domain.broker_time import (
     detect_offset,
     offset_hours,
 )
-from app.domain.sessions import brussels_weekday_hour, classify, is_trading_time
+from app.domain.sessions import is_trading_time
 from app.domain.symbols import broker_candidates, canonical_symbol, resolve_broker_symbol
 from app.domain.trade_builder import (
-    BuiltTrade,
-    Deal,
     DealEntry,
     DealType,
-    OrderStops,
-    PositionSnapshot,
     SkippedPosition,
-    build_trades,
     deal_entry_from_mt5,
     deal_type_from_mt5,
-    next_status,
 )
-from app.models import Account, SymbolSpec, SyncLog, Trade, TradeExitDeal
-from app.models.enums import InitialSlSource
+from app.models import Account, SymbolSpec, SyncLog, Trade
 from app.mt5.convert import (
     deal_time_utc,
     digits_by_symbol,
@@ -75,7 +66,6 @@ from app.mt5.convert import (
 from app.mt5.errors import Mt5Error, Mt5ErrorCode
 from app.mt5.source import Mt5Source, connected
 from app.mt5.types import RawAccountInfo, RawDeal, RawOrder, RawPosition, RawSymbolSpec
-from app.services.bias_alignment import recompute_after_sync
 from app.services.excursions import (
     ExcursionTarget,
     excursion_targets,
@@ -83,13 +73,18 @@ from app.services.excursions import (
     store_excursions,
 )
 from app.services.excursions import Fetched as ExcursionFetched
-from app.services.exit_reason import prefill_exit_reason
 from app.services.fx_sync import FxFetched, fetch_fx, write_fx
-from app.services.fx_values import NO_VALUES, tick_values
 from app.services.starting_balance_suggestion import FirstDeposit, read_history_deposit
-from app.services.trade_rules import recompute_rules
+from app.services.trade_writer import (
+    TradeBatch,
+    assign_changed,
+    trade_values,
+    write_trades,
+)
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["trade_values"]  # moved to app.services.trade_writer; kept importable here
 
 INTERNAL_ERROR = "internal_error"
 POSITIONS_SKIPPED = "positions_skipped"
@@ -438,16 +433,6 @@ class Counters:
     skipped: list[SkippedPosition] = field(default_factory=list)
 
 
-def _assign(obj: Any, values: dict[str, Any]) -> bool:
-    """Set attributes that differ; True if anything changed."""
-    changed = False
-    for key, value in values.items():
-        if getattr(obj, key) != value:
-            setattr(obj, key, value)
-            changed = True
-    return changed
-
-
 def _upsert_specs(
     session: Session,
     account_id: int,
@@ -483,167 +468,9 @@ def _upsert_specs(
         if row is None:
             session.add(SymbolSpec(account_id=account_id, symbol=raw.name, **values))
         else:
-            _assign(row, values)
+            assign_changed(row, values)
         count += 1
     return count
-
-
-def _first_seen_sl(
-    existing: dict[int, Trade], snapshots: dict[int, PositionSnapshot]
-) -> dict[int, Decimal]:
-    """SL first seen on the open position: persisted ones win over the current snapshot."""
-    seen: dict[int, Decimal] = {
-        pid: t.initial_sl
-        for pid, t in existing.items()
-        if t.initial_sl is not None and t.initial_sl_source == InitialSlSource.POSITION.value
-    }
-    for pid, snap in snapshots.items():
-        if snap.sl is not None and snap.sl != 0:
-            seen.setdefault(pid, snap.sl)
-    return seen
-
-
-def _initial_sl(built: BuiltTrade, current: Trade | None) -> tuple[Decimal | None, str | None]:
-    """User-entered SL is never overwritten; a known SL is never cleared."""
-    if current is not None and current.initial_sl_source == InitialSlSource.USER.value:
-        return current.initial_sl, current.initial_sl_source
-    if built.initial_sl is not None and built.initial_sl_source is not None:
-        return built.initial_sl, built.initial_sl_source.value
-    if current is not None:
-        return current.initial_sl, current.initial_sl_source
-    return None, None
-
-
-def trade_values(
-    built: BuiltTrade,
-    current: Trade | None,
-    *,
-    deals: list[Deal],
-    balance: Decimal,
-    spec: RawSymbolSpec | None,
-    rules: RulesConfig,
-    account_size: Decimal | None,
-    symbol: str | None = None,
-    account_currency: str | None = None,
-    fx_loss_per_tick: Decimal | None = None,
-) -> dict[str, Any]:
-    """Auto (MT5-derived and computed) columns of a trade. Journal fields are not included.
-
-    ``symbol`` is the canonical name (default: the broker name); ``spec`` belongs to the
-    broker symbol ``built.symbol``. A spec whose profit currency differs from
-    ``account_currency`` (M5-09) uses only ``fx_loss_per_tick`` in the risk fallback, never
-    its tick_value (None -> no fallback risk). Risk % and P&L % divide by
-    ``account_size`` (accounts.reference_balance, M5-10; None -> both None);
-    ``balance`` only feeds ``balance_at_open`` (information).
-    """
-    initial_sl, sl_source = _initial_sl(built, current)
-    balance_open = metrics.balance_at_open(balance, built.open_time, deals)
-    # Same rule as a user-entered SL (app.services.fx_values, M5-09).
-    per_tick = (
-        tick_values(spec.currency_profit, spec.tick_value, account_currency, fx_loss_per_tick)
-        if spec is not None
-        else NO_VALUES
-    )
-    risk = metrics.risk_amount(
-        entry_price=built.entry_price,
-        initial_sl=initial_sl,
-        volume=built.volume,
-        exit_price=built.exit_price,
-        exit_volume=built.exit_volume,
-        gross_pnl=built.gross_pnl,
-        tick_size=spec.tick_size if spec is not None else None,
-        tick_value=per_tick.tick_value,
-        loss_per_tick=per_tick.loss_per_tick,
-    )
-    closed = built.is_closed
-    weekday, hour = brussels_weekday_hour(built.open_time, rules.timezone)
-    status = next_status(
-        current.status if current is not None else None,
-        is_closed=closed,
-        has_initial_sl=initial_sl is not None,
-        described=current is not None and current.described_at is not None,
-    )
-    return {
-        "symbol": symbol if symbol is not None else built.symbol,
-        "broker_symbol": built.symbol,
-        "direction": built.direction.value,
-        "open_time": built.open_time,
-        "close_time": built.close_time,
-        "duration_seconds": built.duration_seconds,
-        "entry_price": built.entry_price,
-        "exit_price": built.exit_price,
-        "volume": built.volume,
-        "initial_sl": initial_sl,
-        "initial_sl_source": sl_source,
-        "last_sl": built.last_sl,
-        "tp": built.tp,
-        "commission": built.commission,
-        "swap": built.swap,
-        "gross_pnl": built.gross_pnl,
-        "net_pnl": built.net_pnl,
-        # P&L % and R describe the final result: only for closed trades.
-        "pnl_pct": metrics.pnl_pct(built.net_pnl, account_size) if closed else None,
-        "balance_at_open": balance_open,
-        "risk_amount": risk,
-        "risk_pct": metrics.risk_pct(risk, account_size),
-        "r_multiple": metrics.r_multiple(built.net_pnl, risk) if closed else None,
-        "planned_rr": metrics.planned_rr(built.entry_price, initial_sl, built.tp),
-        "session": classify(built.open_time, rules.sessions, rules.timezone),
-        "weekday": weekday,
-        "hour": hour,
-        "status": status.value,
-    }
-
-
-def _upsert_exit_deals(
-    session: Session, account_id: int, trades: dict[int, tuple[Trade, BuiltTrade]]
-) -> set[int]:
-    """Upsert exit deals by (account, ticket); returns position ids whose deals changed."""
-    tickets = [e.ticket for _, built in trades.values() for e in built.exit_deals]
-    existing = {
-        d.ticket: d
-        for d in session.scalars(
-            select(TradeExitDeal).where(
-                TradeExitDeal.account_id == account_id, TradeExitDeal.ticket.in_(tickets)
-            )
-        )
-    }
-    changed: set[int] = set()
-    for pid, (trade, built) in trades.items():
-        for e in built.exit_deals:
-            values = {
-                "trade_id": trade.id,
-                "time": e.time,
-                "price": e.price,
-                "volume": e.volume,
-                "profit": e.profit,
-                "commission": e.commission,
-                "swap": e.swap,
-                "reason": e.reason,
-                "reason_code": e.reason_code,
-            }
-            row = existing.get(e.ticket)
-            if row is None:
-                session.add(TradeExitDeal(account_id=account_id, ticket=e.ticket, **values))
-                changed.add(pid)
-            elif _assign(row, values):
-                changed.add(pid)
-    return changed
-
-
-def _prefill_exit_reasons(
-    session: Session,
-    trades: dict[int, tuple[Trade, BuiltTrade]],
-    specs: Mapping[str, RawSymbolSpec],
-) -> set[int]:
-    """M8-09: exit_reason from the final closing deal; returns position ids changed."""
-    changed: set[int] = set()
-    for pid, (trade, built) in trades.items():
-        spec = specs.get(built.symbol)
-        tick = spec.tick_size if spec is not None else None
-        if prefill_exit_reason(session, trade, built.exit_deals, tick) is not None:
-            changed.add(pid)
-    return changed
 
 
 def write(
@@ -656,7 +483,9 @@ def write(
 ) -> Counters:
     """Persist one fetched snapshot (no commit). Raises on unexpected data.
 
-    Trades and specs get their canonical name from ``symbols``.
+    MT5 account values, symbol specs and FX here; the trades go through the
+    platform-neutral `app.services.trade_writer.write_trades` (canonical names from
+    ``symbols``).
     """
     counters = Counters(
         deals_fetched=len(fetched.deals),
@@ -664,32 +493,6 @@ def write(
     )
     digits = digits_by_symbol(fetched.specs.values())
     deals = to_deals(fetched.deals, fetched.conversion, digits)
-    snapshots = position_snapshots(fetched.positions, digits)
-    orders: dict[int, OrderStops] = {
-        ticket: order_stops(order, digits) for ticket, order in fetched.orders.items()
-    }
-
-    existing = {
-        t.position_id: t
-        for t in session.scalars(
-            select(Trade).where(
-                Trade.account_id == account.id, Trade.position_id.in_(fetched.position_ids)
-            )
-        )
-    }
-    # The deals list may hold other positions' deals (balance window); build only the
-    # touched ones, whose complete history was fetched and whose rows are in `existing`.
-    own = [d for d in deals if d.position_id in fetched.position_ids]
-    result = build_trades(own, orders, snapshots, _first_seen_sl(existing, snapshots))
-    if result.skipped:
-        counters.skipped = list(result.skipped)
-        for skipped in result.skipped:
-            logger.warning(
-                "Account %s: position %s skipped: %s",
-                account.id,
-                skipped.position_id,
-                skipped.reason,
-            )
 
     account.balance = fetched.info.balance
     account.equity = fetched.info.equity
@@ -705,40 +508,20 @@ def write(
     if fetched.fx is not None:
         fx_loss = write_fx(session, account.id, fetched.fx, fetched.specs, fetched.conversion, now)
 
-    touched: dict[int, tuple[Trade, BuiltTrade]] = {}
-    updated: set[int] = set()
-    for built in result.trades:
-        current = existing.get(built.position_id)
-        values = trade_values(
-            built,
-            current,
-            deals=deals,
-            balance=fetched.info.balance,
-            spec=fetched.specs.get(built.symbol),
-            rules=rules,
-            symbol=canonical_symbol(symbols, built.symbol),
-            account_currency=fetched.info.currency,
-            fx_loss_per_tick=fx_loss.get(built.symbol),
-            account_size=account.reference_balance,
-        )
-        if current is None:
-            current = Trade(account_id=account.id, position_id=built.position_id, **values)
-            session.add(current)
-            counters.trades_created += 1
-        elif _assign(current, values):
-            updated.add(built.position_id)
-        touched[built.position_id] = (current, built)
-    session.flush()  # ids for new trades
-
-    created = {pid for pid in touched if pid not in existing}
-    updated |= _upsert_exit_deals(session, account.id, touched) - created
-    updated |= _prefill_exit_reasons(session, touched, fetched.specs) - created
-    counters.trades_updated = len(updated)
-
-    if result.trades:
-        earliest = min(b.open_time for b in result.trades)
-        recompute_rules(session, account.id, earliest, rules)
-    recompute_after_sync(session, account.id, [trade for trade, _ in touched.values()])
+    batch = TradeBatch(
+        deals=deals,
+        position_ids=fetched.position_ids,
+        snapshots=position_snapshots(fetched.positions, digits),
+        orders={ticket: order_stops(o, digits) for ticket, o in fetched.orders.items()},
+        balance=fetched.info.balance,
+        currency=fetched.info.currency,
+        specs=fetched.specs,
+        fx_loss=fx_loss,
+    )
+    counts = write_trades(session, account, batch, rules, symbols)
+    counters.trades_created = counts.created
+    counters.trades_updated = counts.updated
+    counters.skipped = list(counts.skipped)
     return counters
 
 
