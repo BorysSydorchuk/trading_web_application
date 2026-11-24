@@ -68,3 +68,26 @@ Tier L, no migration. Owner request 2026-11-23 (STEP 2). Branch `ctrader/phase-b
 - A trade opened and closed between two syncs gets `needs_sl`, because the order history is not read.
 - Each cycle re-reads history from the oldest DB-open trade. That is up to about 53 requests, about 11 s per account, inside the 45 s budget.
 - Netting-account reversals are not verified.
+
+## Memory diagnosis before the gate (2026-11-24)
+
+The first gate attempt never started: free RAM stayed about 2.3 GB, below the 3 GB rule.
+
+Snapshot 14:17 Brussels, app running (before stop.bat): free RAM 3.43 GB of 15.68 GB.
+Top processes by working set (all instances summed):
+
+| Process | Count | MB |
+|---|---|---|
+| chrome | 19 | 2395 |
+| msedgewebview2 | 25 | 2300 |
+| claude | 10 | 1916 |
+| svchost | 82 | 1504 |
+| explorer | 1 | 491 |
+| NVIDIA Overlay | 5 | 415 |
+| python (API + worker + tray) | 6 | 336 |
+| rsAppUI | 4 | 333 |
+| rsEngineSvc | 1 | 293 |
+| terminal64 (MT5) | 2 | 266 |
+
+The worker was 147 MB: the Whisper model was not loaded (no voice note since the start).
+The app itself is not the memory problem; browsers/webviews and Claude take about 6.6 GB.
