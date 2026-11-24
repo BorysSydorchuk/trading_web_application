@@ -17,7 +17,7 @@
     "symbolName": "DE40",
     "enabled": true,
     "baseAssetId": 30,
-    "quoteAssetId": 3,
+    "quoteAssetId": 1,
     "symbolCategoryId": 5,
     "description": "Germany 40"
    },
@@ -29,6 +29,15 @@
     "quoteAssetId": 2,
     "symbolCategoryId": 3,
     "description": "Gold vs US Dollar"
+   },
+   {
+    "symbolId": 77,
+    "symbolName": "US100",
+    "enabled": true,
+    "baseAssetId": 77,
+    "quoteAssetId": 2,
+    "symbolCategoryId": 5,
+    "description": "US Tech 100"
    }
   ],
   "archivedSymbol": [
@@ -68,6 +77,15 @@
     "minVolume": 100,
     "maxVolume": 1000000,
     "stepVolume": 100
+   },
+   {
+    "symbolId": 77,
+    "digits": 2,
+    "pipPosition": 1,
+    "lotSize": 100,
+    "minVolume": 10,
+    "maxVolume": 100000,
+    "stepVolume": 10
    }
   ]
  }

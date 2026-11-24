@@ -6,7 +6,7 @@ import { formatDateTimeBrussels, formatTimeBrussels } from '@/lib/time'
 import { CalculatorPage } from '@/pages/CalculatorPage'
 import { renderWithProviders } from '@/test/render'
 import { mockApi } from '@/test/server'
-import { marginRequest, NO_MARGIN, result } from './calculator.fixture'
+import { account, marginRequest, NO_MARGIN, result } from './calculator.fixture'
 import type { CalculateResult, MarginRequest } from './types'
 import { MARGIN_MAX_POLLS, MARGIN_POLL_MS } from './useLiveMargin'
 import { fillForm, input, f, r, findRowText, rowValue, serveSetup, submit } from './testUtils'
@@ -189,5 +189,23 @@ describe('CalculatorForm live margin', () => {
     await nextPoll()
     await nextPoll()
     expect(served.gets).toBe(1)
+  })
+})
+
+describe('CalculatorForm margin for a cTrader account', () => {
+  it('sends no live margin request and shows the cTrader line instead of an MT5 error', async () => {
+    const served = serveMargin([DONE], result({ margin: NO_MARGIN }))
+    serveSetup({ accounts: [account({ platform: 'ctrader' })] })
+    const view = renderWithProviders(<CalculatorPage />, { path: '/calculator' })
+    await fillForm(view.user)
+    await submit(view.user)
+    await screen.findByRole('region', { name: r.title })
+    await nextPoll()
+    expect(served).toEqual({ posts: 0, gets: 0 })
+    const cell = rowValue(r.margin)
+    expect(within(cell).getByText(r.marginUnavailable)).toBeInTheDocument()
+    expect(within(cell).getByText(r.marginCtrader)).toBeInTheDocument()
+    expect(within(cell).queryByText(r.marginPending)).not.toBeInTheDocument()
+    expect(within(cell).queryByText(r.marginLiveFailed.error)).not.toBeInTheDocument()
   })
 })

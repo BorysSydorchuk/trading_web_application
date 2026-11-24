@@ -44,8 +44,16 @@ interface MarginValueProps {
   digitsPrice: (value: string) => string
 }
 
-/** Live MT5 margin while/after polling; on failure the labelled cached estimate. */
+/** Live MT5 margin while/after polling; on failure (or for cTrader) the labelled cached estimate. */
 export function MarginValue({ live, cached, digitsPrice }: MarginValueProps) {
+  if (live?.state === 'unsupported') {
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        <Estimate margin={cached} digitsPrice={digitsPrice} />
+        <span className="text-right text-xs text-ink-muted">{t.marginCtrader}</span>
+      </span>
+    )
+  }
   if (live === null || live.state === 'pending') {
     return (
       <span role="status" className="inline-flex items-center gap-1.5 text-ink-muted">

@@ -15,11 +15,14 @@ ALLOWED_OUTGOING: Final = frozenset(
         51,  # heartbeat
         2100,  # ApplicationAuthReq
         2102,  # AccountAuthReq
+        2112,  # AssetListReq (asset names: profit/margin currencies)
         2114,  # SymbolsListReq (symbol names)
         2116,  # SymbolByIdReq (digits, lot size)
         2121,  # TraderReq
         2124,  # ReconcileReq (open positions)
         2133,  # DealListReq (deal history)
+        2137,  # GetTrendbarsReq (M1 bars for MAE/MFE)
+        2145,  # GetTickDataReq (BID/ASK ticks: conversion rates, MAE/MFE)
         2149,  # GetAccountListByAccessTokenReq
         2187,  # GetPositionUnrealizedPnLReq
     }

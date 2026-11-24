@@ -883,3 +883,56 @@ No endpoint changes. The `ctrader_balance` job now also reads, in the same conne
 - Reconcile: a new position with an entry deal that cTrader does not report open and the deals do not close is not written; the row is `ok` with `positions_skipped` and the position in `error_message` ("not reported open by cTrader and not closed in the history"), retried next cycle. Closed = closed volume >= entered volume; a shortfall keeps the trade open (`close_unconfirmed`), an excess is skipped. A DB-open trade's stored `last_sl` / `tp` survive its close. `swap` / `commission` missing from `closePositionDetail` count as 0; `grossProfit` is required.
 - When equity is not read and positions were skipped, the row shows `equity_unavailable` (ok false) with both messages joined by `; `.
 - `balance_at_open` ignores cTrader cash flow (deposits / withdrawals are not read), so after a deposit or withdrawal it is off by that amount (information only).
+
+## cTrader integration, phase c (owner 2026-11-24): specs, calculator, MAE/MFE, limits
+
+Read-only as before. The allowlist grows only by **2112** (asset list), **2137** (trendbars) and
+**2145** (tick data); the guard test pins it. Recorded/sanitized fixtures only, no live calls in tests.
+All field names below are assumptions from the Open API docs, to confirm on the first live run.
+
+### c1. Symbol specs -> `symbol_specs` (same table and columns as MT5)
+- Symbols: the broker names of `config/symbols.yaml` (same resolution as MT5, incl. aliases/firms)
+  plus every symbol of a DB-open or recent trade, plus the conversion pairs of c2.
+- From 2114 light symbol (`symbolId`, `symbolName`, `baseAssetId`, `quoteAssetId`), 2116 full symbol
+  (`digits`, `pipPosition`, `lotSize`, `minVolume`, `stepVolume`, `maxVolume`; volumes and lotSize are
+  in cents of a unit) and 2112 assets (`assetId`, `name`).
+- Mapping: `contract_size = lotSize / 100`; `tick_size = point = 10^-digits`;
+  `volume_min/step/max = minVolume/stepVolume/maxVolume / lotSize` (lots, exact Decimal);
+  `currency_profit` = quote asset name; `currency_margin` = base asset name;
+  `tick_value = tick_value_loss = contract_size * tick_size` (in the profit currency; used as is only
+  when profit currency == account currency); `mt5_loss_per_tick` = NULL (no order_calc_profit on cTrader);
+  `synced_at` = read time. A symbol with a missing/non-positive field is skipped with a WARNING, never written half.
+- Refresh: on the first cycle and then at most once per hour per account (specs rarely change).
+
+### c2. Conversion rate -> `fx_rates` (same rule as MT5, M5-09)
+- Cross-currency spec (profit != account currency): `pick_conversion_pair` among the cTrader symbol names
+  (direct `<P><A>` -> ask, inverse `<A><P>` -> 1 / bid). Quote = the last BID and the last ASK tick (2145,
+  `type` 1 = BID, 2 = ASK) in the last 60 min; none (weekend) -> the last 3 days; none -> WARNING, the old row stays.
+- Loss per tick per lot = `tick_size * contract_size * rate` (`loss_per_tick_from_rate`), the MT5 rule.
+- The same value feeds the trade risk of c3 and the calculator (`calculator_fx.conversion_for`, source
+  `rate` because `mt5_loss_per_tick` is NULL).
+
+### c3. Trades
+- `write_ctrader_trades` passes the cTrader specs and FX loss per tick to `TradeBatch`, so open and breakeven
+  trades get their risk from the initial SL like MT5 trades.
+
+### c4. Calculator
+- Works unchanged from `symbol_specs`/`fx_rates`. Live margin stays 409 `margin_unsupported_platform` for cTrader;
+  the UI shows a cTrader-specific Ukrainian line instead of the MT5 margin text.
+
+### c5. MAE / MFE (same definitions as M8-16)
+- Same targets, retry and final/running/unavailable rules (`excursion_targets`, `evaluate`, `store_excursions`).
+- Ticks (2145, BID and ASK, merged by timestamp) for trades < 2 h and for the entry and exit minutes;
+  M1 trendbars (2137, `period` 1, `low` + `deltaHigh`, prices in 1/100000, `utcTimestampInMinutes`) in between.
+- Trendbars are BID only: a long uses them as is; a short adds a spread equal to the median ASK-BID of the
+  entry and exit tick samples (`bar(..., spread_price)`); no tick samples -> the middle stays bid with spread 0
+  and the series is incomplete (retry, then unavailable as for MT5).
+- Inside the 45 s cycle budget, at most `BUDGET_S` for MAE/MFE per account; a rate-limit wait ends the step.
+- Built (c5): `app.ctrader.excursions` (`BUDGET_S` = 8 s, read at call time); the reader step runs after the market step and
+  returns `BalanceRead.excursions` (`Fetched`); the job picks targets with `excursion_targets` before the read and stores
+  them after the trades with `store_excursions` in a savepoint. `hasMore` (2145/2137) halves the range, max 16 requests
+  per window, else the series is incomplete. A cut-off, timeout, dropped connection or rate-limit error ends the step.
+
+### c6. Limits
+- Home «Ліміти», daily/weekly stops and rules use the cTrader trades and account size exactly like MT5
+  (no platform branch); tests prove it for a cTrader account.

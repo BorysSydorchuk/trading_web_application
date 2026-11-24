@@ -21,7 +21,7 @@ qualifying candidates at WARNING (the first sorted is used).
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.domain.broker_time import Conversion, server_to_utc
 from app.domain.fx import (
     ConversionPair,
+    RateQuote,
     check_loss_per_tick,
     check_tick_count,
     conversion_rate,
@@ -198,22 +199,24 @@ def fetch_fx(source: Mt5Source, specs: Iterable[RawSymbolSpec], account_currency
     return FxFetched(account_currency=target, rates=rates, checks=checks)
 
 
-def _upsert_rates(
-    session: Session, account_id: int, fetched: FxFetched, conversion: Conversion, now: datetime
-) -> dict[str, FxRate]:
-    """Upsert the fetched rates; returns every rate row of the account by from_currency."""
+def upsert_rates(
+    session: Session, account_id: int, quotes: Iterable[RateQuote], now: datetime
+) -> dict[tuple[str, str], FxRate]:
+    """Upsert one row per (account, from, to) (no commit); the rate is the stored (8 dp,
+    half-up) `conversion_rate`. Returns every rate row of the account by (from, to). Shared
+    by the MT5 and the cTrader sync."""
     rows = {
         (r.from_currency, r.to_currency): r
         for r in session.scalars(select(FxRate).where(FxRate.account_id == account_id))
     }
-    for item in fetched.rates.values():
+    for item in quotes:
         values = {
             "pair": item.pair.pair,
             "inverted": item.pair.inverted,
-            "bid": item.quote.bid,
-            "ask": item.quote.ask,
-            "rate": stored(conversion_rate(item.pair, bid=item.quote.bid, ask=item.quote.ask)),
-            "rate_at": server_to_utc(item.quote.time, conversion),
+            "bid": item.bid,
+            "ask": item.ask,
+            "rate": stored(conversion_rate(item.pair, bid=item.bid, ask=item.ask)),
+            "rate_at": item.at,
             "synced_at": now,
         }
         key = (item.from_currency, item.to_currency)
@@ -224,6 +227,27 @@ def _upsert_rates(
             rows[key] = row
         for name, value in values.items():
             setattr(row, name, value)
+    return rows
+
+
+def _mt5_quotes(fetched: FxFetched, conversion: Conversion) -> Iterator[RateQuote]:
+    """Lazily, so a bad quote raises at the same point of the upsert as before."""
+    for item in fetched.rates.values():
+        yield RateQuote(
+            from_currency=item.from_currency,
+            to_currency=item.to_currency,
+            pair=item.pair,
+            bid=item.quote.bid,
+            ask=item.quote.ask,
+            at=server_to_utc(item.quote.time, conversion),
+        )
+
+
+def _upsert_rates(
+    session: Session, account_id: int, fetched: FxFetched, conversion: Conversion, now: datetime
+) -> dict[str, FxRate]:
+    """Upsert the fetched rates; returns every rate row of the account by from_currency."""
+    rows = upsert_rates(session, account_id, _mt5_quotes(fetched, conversion), now)
     target = fetched.account_currency
     return {f: row for (f, t), row in rows.items() if t == target}
 

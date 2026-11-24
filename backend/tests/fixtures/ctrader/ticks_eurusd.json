@@ -1,0 +1,43 @@
+{
+ "_comment": "Synthetic ticks for the conversion pair EURUSD (absolute time in ms UTC, price as a decimal string). The fake server delta-encodes them like ProtoOAGetTickDataRes (first entry absolute, later ones deltas, prices in 1/100000). Last BID 1.08034, last ASK 1.08044, both within 60 min of Mon 2026-11-23 12:00 UTC.",
+ "EURUSD": {
+  "bid": [
+   [
+    1795434000000,
+    "1.08010"
+   ],
+   [
+    1795434300000,
+    "1.08020"
+   ],
+   [
+    1795434600000,
+    "1.08034"
+   ]
+  ],
+  "ask": [
+   [
+    1795434300000,
+    "1.08030"
+   ],
+   [
+    1795434900000,
+    "1.08044"
+   ]
+  ]
+ },
+ "EURUSD_weekend": {
+  "bid": [
+   [
+    1795208400000,
+    "1.07990"
+   ]
+  ],
+  "ask": [
+   [
+    1795208401000,
+    "1.08000"
+   ]
+  ]
+ }
+}

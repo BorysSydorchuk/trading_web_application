@@ -33,7 +33,7 @@ TRADING_NAMES = (
 
 def test_allowlist_is_exactly_the_read_only_set() -> None:
     assert (
-        frozenset({51, 2100, 2102, 2114, 2116, 2121, 2124, 2133, 2149, 2187})
+        frozenset({51, 2100, 2102, 2112, 2114, 2116, 2121, 2124, 2133, 2137, 2145, 2149, 2187})
         == guard.ALLOWED_OUTGOING
     )
 
@@ -52,7 +52,7 @@ def test_allowlist_contains_no_trading_message() -> None:
     assert set(TRADING_TYPES) <= guard.BLOCKED_OUTGOING
 
 
-@pytest.mark.parametrize("payload_type", [*TRADING_TYPES, 2112, 0, -1, 999999])
+@pytest.mark.parametrize("payload_type", [*TRADING_TYPES, 2113, 2138, 2146, 0, -1, 999999])
 def test_guard_refuses_everything_else(payload_type: int) -> None:
     with pytest.raises(guard.ForbiddenMessageError):
         guard.assert_allowed(payload_type)

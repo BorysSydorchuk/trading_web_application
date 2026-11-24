@@ -69,3 +69,4 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 - 2026-11-23 (cTrader review, not now): check the entered currency against the broker's deposit asset via 2112/2113.
 - 2026-11-24 (gate rule review, LOW): `.env` backup counter sorts by name, so `-10` sorts before `-2`; pad it (`-01`) or cap at 10; add a pruning test with a suffixed copy.
 - 2026-11-24 (gate rule review, LOW): add `gate-ram` to `.PHONY`; `TJ_GATE_WAIT_S=nan/inf` should fall back to the default (`math.isfinite`).
+- cTrader (phase c review, LOW/MEDIUM, 2026-11-24): a traded symbol whose spec is always skipped re-triggers the spec refresh (2112/2116 + warnings) every cycle; refresh it at most hourly. After the first live run: replace MAE/MFE hasMore halving with cursor paging once the tick order is confirmed; align docs/api.md c1 wording ("this read's history symbols").

@@ -2,9 +2,13 @@
 
 `app.ctrader.convert` turns the read into domain deals and position snapshots; from there
 `app.services.trade_writer.write_trades` does exactly what it does for MT5 (build, upsert by
-account + position_id, metrics, exit deals, exit reason, rules, bias alignment). No symbol
-specs are written for cTrader (phase c): the risk of a trade comes from its realized P&L,
-open or breakeven trades have no fallback risk yet.
+account + position_id, metrics, exit deals, exit reason, rules, bias alignment).
+
+Risk (phase c): the batch carries the account's stored cTrader specs by broker name and the
+FX loss per tick per lot of the cross-currency ones (`app.services.ctrader_specs.risk_inputs`,
+written earlier in the same cycle), exactly as the MT5 sync passes them. So a closed trade
+gets its risk from the realized P&L, and an open or breakeven trade from its initial SL and
+the spec, like an MT5 trade; a cross-currency spec without a rate row gives no fallback risk.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import TradingRead
 from app.domain.trade_builder import SkippedPosition
 from app.models import Account, Trade
+from app.services.ctrader_specs import risk_inputs
 from app.services.trade_writer import TradeBatch, write_trades
 
 logger = logging.getLogger(__name__)
@@ -80,12 +85,15 @@ def write_ctrader_trades(
             len(converted.before_range),
             _ids(converted.before_range),
         )
+    specs, fx_loss = risk_inputs(session, account)
     batch = TradeBatch(
         deals=converted.deals,
         position_ids=converted.position_ids,
         snapshots=converted.snapshots,
         balance=balance,
         currency=account.currency,
+        specs=specs,
+        fx_loss=fx_loss,
     )
     counts = write_trades(session, account, batch, rules, symbols)
     for skipped in converted.skipped:

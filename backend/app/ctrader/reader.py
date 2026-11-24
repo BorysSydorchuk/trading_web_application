@@ -1,5 +1,8 @@
 """Read-only operations on top of a connection: account list, balance, equity and, when the
-caller asks for it, the trading history (`app.ctrader.history`)."""
+caller asks for it, the trading history (`app.ctrader.history`) and the symbol specs and
+conversion quotes (`app.ctrader.market`, phase c) and the MAE/MFE price series
+(`app.ctrader.excursions`, c5). Neither step ever fails the balance: their errors and their own
+time limits end in a WARNING (``BalanceRead.market`` None, failed MAE/MFE targets)."""
 
 from __future__ import annotations
 
@@ -13,11 +16,14 @@ from typing import Final
 
 from pydantic import SecretStr
 
+from app.ctrader import excursions as ct_excursions
 from app.ctrader import protocol as p
 from app.ctrader.connection import Connector, CtraderConnection, Sleep, open_websocket
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import HistoryRequest, TradingRead, check_account, read_trading
+from app.ctrader.market import MarketRead, MarketRequest, read_market
 from app.ctrader.money import equity_from, parse_int, scale_money
+from app.services.excursions import Fetched
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +40,11 @@ _BALANCE_CHANGED: Final = "balance_changed"
 _CONSISTENCY_ATTEMPTS: Final = 2
 # Below the worker's 60 s schedule; closing the connections adds a few seconds at most.
 READ_BUDGET_S: Final = 45.0
+# Specs + conversion quotes of one account: at most this long, and never closer than
+# `_AccountJob.reserve_s` (MARKET_RESERVE_S per account still to read, this one included)
+# to the read budget's end, so the remaining accounts keep their time.
+MARKET_BUDGET_S: Final = 10.0
+MARKET_RESERVE_S: Final = 5.0
 
 
 @dataclass(frozen=True)
@@ -80,6 +91,21 @@ class BalanceRead:
     position_pnl: Mapping[int, Decimal] = field(default_factory=dict)
     # The trading history; None when it was not asked for, an error when it failed.
     trading: TradingRead | CtraderError | None = None
+    # Specs and conversion quotes; None when not asked for or not read (logged WARNING).
+    market: MarketRead | None = None
+    # MAE/MFE series and failed targets; None when not asked for or no time was left.
+    excursions: Fetched | None = None
+
+
+@dataclass(frozen=True)
+class _AccountJob:
+    """What to read for one account besides its balance; ``deadline`` is loop time."""
+
+    history: HistoryRequest | None = None
+    market: MarketRequest | None = None
+    deadline: float | None = None
+    excursions: ct_excursions.ExcursionRequest | None = None
+    reserve_s: float = MARKET_RESERVE_S
 
 
 def endpoint_for(is_live: bool) -> str:
@@ -244,44 +270,106 @@ async def _restore_session(connection: CtraderConnection, creds: Credentials) ->
         raise _EnvironmentDownError(exc) from None
 
 
+async def _read_market_safely(
+    connection: CtraderConnection,
+    ctid: int,
+    job: _AccountJob,
+    trading: TradingRead | CtraderError | None,
+    clock: Clock,
+) -> MarketRead | None:
+    """`read_market` under its own time limit; any failure is a WARNING and None."""
+    if job.market is None:
+        return None
+    loop = asyncio.get_running_loop()
+    until = loop.time() + MARKET_BUDGET_S
+    if job.deadline is not None:
+        until = min(until, job.deadline - job.reserve_s)
+    if until <= loop.time():
+        logger.warning("cTrader account %s: no time left for specs and FX rates", ctid)
+        return None
+    names = [s.name for s in trading.symbols.values()] if isinstance(trading, TradingRead) else []
+    try:
+        async with asyncio.timeout_at(until):
+            return await read_market(connection, ctid, job.market, names, clock())
+    except TimeoutError:
+        logger.warning("cTrader account %s: specs and FX rates exceeded their time", ctid)
+    except CtraderError as exc:
+        logger.warning("cTrader account %s: specs and FX rates not read: %s", ctid, exc)
+    except Exception:  # a bug must not cost the balance; logged with its traceback
+        logger.exception("cTrader account %s: specs and FX rates failed", ctid)
+    return None
+
+
+async def _read_excursions_safely(
+    connection: CtraderConnection,
+    ctid: int,
+    job: _AccountJob,
+    trading: TradingRead | CtraderError | None,
+    clock: Clock,
+) -> Fetched | None:
+    """MAE/MFE after the market step: at most `excursions.BUDGET_S` (read now), never
+    closer than ``job.reserve_s`` to the read budget's end. Never raises."""
+    request = job.excursions
+    if request is None or not request.targets:
+        return None
+    loop = asyncio.get_running_loop()
+    until = loop.time() + ct_excursions.BUDGET_S
+    if job.deadline is not None:
+        until = min(until, job.deadline - job.reserve_s)
+    if until <= loop.time():
+        logger.warning("cTrader account %s: no time left for MAE/MFE", ctid)
+        return None
+    symbols = trading.symbols if isinstance(trading, TradingRead) else {}
+    try:
+        return await ct_excursions.read_excursions(
+            connection, ctid, request, symbols, clock(), until
+        )
+    except Exception:  # read_excursions never raises; a bug must not cost the balance
+        logger.exception("cTrader account %s: MAE/MFE not read", ctid)
+        return None
+
+
 async def _read_account(
     connection: CtraderConnection,
     creds: Credentials,
     ctid: int,
-    request: HistoryRequest | None,
+    job: _AccountJob,
     *,
     last_attempt: bool,
     clock: Clock,
 ) -> BalanceRead:
-    """Balance and equity, then the trading history when asked for. A failed history read
-    keeps the balance (``trading`` is the error); a dropped session is raised for the retry
-    unless this is the last attempt."""
+    """Balance and equity, then the trading history and the market data when asked for. A
+    failed history read keeps the balance (``trading`` is the error); a dropped session is
+    raised for the retry unless this is the last attempt."""
     read = await read_balance(connection, creds, ctid)
-    if request is None:
-        return read
-    try:
-        trading: TradingRead | CtraderError = await read_trading(connection, ctid, request, clock())
-    except CtraderError as exc:
-        if exc.code in _RETRY_READ and not last_attempt:
-            raise
-        logger.warning("cTrader account %s: history not read: %s", ctid, exc.code.value)
-        trading = exc
-    return replace(read, trading=trading)
+    trading: TradingRead | CtraderError | None = None
+    if job.history is not None:
+        try:
+            trading = await read_trading(connection, ctid, job.history, clock())
+        except CtraderError as exc:
+            if exc.code in _RETRY_READ and not last_attempt:
+                raise
+            logger.warning("cTrader account %s: history not read: %s", ctid, exc.code.value)
+            trading = exc
+    market = await _read_market_safely(connection, ctid, job, trading, clock)
+    excursions = await _read_excursions_safely(connection, ctid, job, trading, clock)
+    return replace(read, trading=trading, market=market, excursions=excursions)
 
 
 async def _read_one(
     connection: CtraderConnection,
     creds: Credentials,
     ctid: int,
-    request: HistoryRequest | None = None,
+    job: _AccountJob | None = None,
     clock: Clock = _utc_now,
 ) -> BalanceRead | CtraderError:
     """One retry after a dropped account session or connection; errors are returned."""
+    todo = job if job is not None else _AccountJob()
     try:
         for attempt in range(2):
             try:
                 return await _read_account(
-                    connection, creds, ctid, request, last_attempt=attempt == 1, clock=clock
+                    connection, creds, ctid, todo, last_attempt=attempt == 1, clock=clock
                 )
             except CtraderError as exc:
                 if attempt == 1 or exc.code not in _RETRY_READ:
@@ -302,19 +390,28 @@ async def _read_environment(
     budget_s: float,
     history: Mapping[int, HistoryRequest] | None = None,
     clock: Clock = _utc_now,
+    markets: Mapping[int, MarketRequest] | None = None,
+    excursions: Mapping[int, ct_excursions.ExcursionRequest] | None = None,
 ) -> dict[int, BalanceRead | CtraderError]:
     """Accounts read before a failure or the time limit keep their results."""
     connection = CtraderConnection(
         endpoint_for(is_live), connector, sleep=sleep, secrets=creds.secrets()
     )
     results: dict[int, BalanceRead | CtraderError] = {}
+    deadline = asyncio.get_running_loop().time() + budget_s
     try:
-        async with asyncio.timeout(budget_s):
+        async with asyncio.timeout_at(deadline):
             await connection.start()
             await authorize_app(connection, creds)
-            for ctid in ctids:
-                request = (history or {}).get(ctid)
-                results[ctid] = await _read_one(connection, creds, ctid, request, clock)
+            for index, ctid in enumerate(ctids):
+                job = _AccountJob(
+                    (history or {}).get(ctid),
+                    (markets or {}).get(ctid),
+                    deadline,
+                    (excursions or {}).get(ctid),
+                    reserve_s=MARKET_RESERVE_S * (len(ctids) - index),
+                )
+                results[ctid] = await _read_one(connection, creds, ctid, job, clock)
         return results
     except _EnvironmentDownError as exc:
         error = exc.error
@@ -336,17 +433,30 @@ async def read_balances(
     budget_s: float = READ_BUDGET_S,
     history: Mapping[int, HistoryRequest] | None = None,
     clock: Clock = _utc_now,
+    markets: Mapping[int, MarketRequest] | None = None,
+    excursions: Mapping[int, ct_excursions.ExcursionRequest] | None = None,
 ) -> dict[int, BalanceRead | CtraderError]:
     """``(ctid, is_live)`` -> result. Live and demo run on their own connection, and an
     unexpected failure of one never loses the results of the other. ``history``: per ctid,
-    the trading history to read too (`BalanceRead.trading`)."""
+    the trading history to read too (`BalanceRead.trading`); ``markets``: per ctid, the
+    specs and conversion quotes (`BalanceRead.market`); ``excursions``: per ctid, the MAE/MFE
+    targets (`BalanceRead.excursions`)."""
     groups: dict[bool, list[int]] = {}
     for ctid, is_live in targets:
         groups.setdefault(is_live, []).append(ctid)
     parts = await asyncio.gather(
         *(
             _read_environment(
-                creds, is_live, ctids, connector, sleep, budget_s, history=history, clock=clock
+                creds,
+                is_live,
+                ctids,
+                connector,
+                sleep,
+                budget_s,
+                history=history,
+                clock=clock,
+                markets=markets,
+                excursions=excursions,
             )
             for is_live, ctids in groups.items()
         ),
