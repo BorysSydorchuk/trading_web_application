@@ -38,6 +38,18 @@ class ConversionPair:
     candidates: tuple[str, ...] = field(default=(), compare=False)
 
 
+@dataclass(frozen=True)
+class RateQuote:
+    """One conversion quote to store (``fx_rates``), platform-neutral; ``at`` is aware UTC."""
+
+    from_currency: str  # upper-case
+    to_currency: str  # upper-case
+    pair: ConversionPair
+    bid: Decimal
+    ask: Decimal
+    at: datetime
+
+
 def is_cross_currency(profit_currency: str, account_currency: str) -> bool:
     """Case-insensitive; a blank currency on either side is never cross-currency."""
     profit, account = profit_currency.strip().upper(), account_currency.strip().upper()

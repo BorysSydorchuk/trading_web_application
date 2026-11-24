@@ -16,6 +16,13 @@ DB-open trade and open position) are read and written through the shared trade w
 worked; a read without any deal never moves the window. The trades are written in a savepoint:
 a failed history keeps the balance. After the commit the open positions go to the Home
 snapshot (`open_positions.json`), as the MT5 sync does.
+
+Specs and conversion rates (phase c): the same connection reads the symbol specs (first cycle,
+then at most hourly per account by ``symbol_specs.synced_at``, sooner only for a traded
+symbol without a stored spec) and the conversion quotes (`app.ctrader.market`). They are
+stored in their own savepoint before the trades (`ctrader_specs.store_market`), so the trade
+risk of the same cycle uses them; a failure there is a WARNING and never changes the row's
+``ok`` or the balance.
 """
 
 from __future__ import annotations
@@ -25,7 +32,7 @@ import logging
 import time
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final
@@ -41,13 +48,15 @@ from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.ctrader.connection import Connector, Sleep, open_websocket
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import HistoryRequest, TradingRead
+from app.ctrader.market import MarketRequest
 from app.ctrader.money import to_stored
 from app.ctrader.reader import READ_BUDGET_S, BalanceRead, Credentials, read_balances
 from app.ctrader.token_manager import TokenManager
 from app.ctrader.tokens import TokenStore, tokens_path
-from app.models import Account, SyncLog, Trade
+from app.models import Account, SymbolSpec, SyncLog, Trade
 from app.models.enums import AccountPlatform, AccountStatus
 from app.services import open_positions_snapshot
+from app.services.ctrader_specs import store_market
 from app.services.ctrader_trades import CtraderTradeResult, write_ctrader_trades
 from app.services.sync import (
     INTERNAL_ERROR,
@@ -62,6 +71,7 @@ logger = logging.getLogger(__name__)
 
 CTRADER_JOB_ID: Final = "ctrader_balance"
 CTRADER_JOB_INTERVAL_S: Final = 60
+SPEC_REFRESH: Final = timedelta(hours=1)
 
 ReadResults = dict[int, BalanceRead | CtraderError]
 BalanceReader = Callable[..., Coroutine[Any, Any, ReadResults]]
@@ -105,6 +115,7 @@ class _Target:
     ctid: int
     is_live: bool
     request: HistoryRequest
+    market: MarketRequest
 
 
 @dataclass(frozen=True)
@@ -125,12 +136,35 @@ def _open_trades(session: Session, account_id: int) -> dict[int, datetime]:
     return {row.position_id: row.open_time for row in rows}
 
 
+def _market_request(
+    session: Session, account: Account, symbols: SymbolsConfig, now: datetime
+) -> MarketRequest:
+    """Specs are due without any stored one or when the newest is `SPEC_REFRESH` old."""
+    rows = session.execute(
+        select(SymbolSpec.symbol, SymbolSpec.currency_profit, SymbolSpec.synced_at).where(
+            SymbolSpec.account_id == account.id
+        )
+    ).all()
+    newest = max((row.synced_at for row in rows), default=None)
+    return MarketRequest(
+        symbols=symbols,
+        firm=account.firm,
+        account_currency=account.currency or "",
+        refresh_specs=newest is None or now - newest >= SPEC_REFRESH,
+        known_specs=frozenset(row.symbol for row in rows),
+        stored_currencies=frozenset(row.currency_profit.strip().upper() for row in rows),
+    )
+
+
 def _due_targets(
-    session_factory: sessionmaker[Session], rules: RulesConfig, now: datetime
+    session_factory: sessionmaker[Session],
+    rules: RulesConfig,
+    symbols: SymbolsConfig,
+    now: datetime,
 ) -> list[_Target]:
     with session_factory() as session:
-        rows = session.execute(
-            select(Account.id, Account.ctid_trader_account_id, Account.ctrader_is_live)
+        accounts = session.scalars(
+            select(Account)
             .where(
                 Account.status == AccountStatus.ACTIVE.value,
                 Account.platform == AccountPlatform.CTRADER.value,
@@ -139,19 +173,21 @@ def _due_targets(
         ).all()
         return [
             _Target(
-                account_id,
-                ctid,
-                bool(is_live),
+                account.id,
+                account.ctid_trader_account_id,
+                bool(account.ctrader_is_live),
                 HistoryRequest(
                     window_from=history_window_start(
-                        session, account_id, rules.sync, now, require_deals=True
+                        session, account.id, rules.sync, now, require_deals=True
                     ),
                     to=now,
-                    open_trades=_open_trades(session, account_id),
+                    open_trades=_open_trades(session, account.id),
                 ),
+                _market_request(session, account, symbols, now),
             )
-            for account_id, ctid, is_live in rows
-            if ctid is not None and is_due(session, account_id, rules, now)
+            for account in accounts
+            if account.ctid_trader_account_id is not None
+            and is_due(session, account.id, rules, now)
         ]
 
 
@@ -230,6 +266,7 @@ def _apply(
         outcome = _store_read(account, result, started)
     except CtraderError as exc:
         return _Outcome(ok=False, code=exc.code.value, message=exc.message)
+    store_market(session, account, result.market, symbols, started)  # never raises
     trading = result.trading
     if trading is None:
         return outcome
@@ -336,6 +373,7 @@ def _read_all(config: CtraderJobConfig, targets: Sequence[_Target]) -> ReadResul
                 budget_s=budget,
                 history={t.ctid: t.request for t in targets},
                 clock=config.now,
+                markets={t.ctid: t.market for t in targets},
             )
         )
     except CtraderError as exc:
@@ -356,7 +394,7 @@ def run_ctrader_balance_cycle(
     except ConfigError as exc:
         logger.error("cTrader sync skipped: %s", exc)
         return []
-    targets = _due_targets(session_factory, rules, started)
+    targets = _due_targets(session_factory, rules, symbols, started)
     if not targets:
         return []
     try:

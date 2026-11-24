@@ -430,7 +430,7 @@ class Counters:
     skipped: list[SkippedPosition] = field(default_factory=list)
 
 
-def _upsert_specs(
+def upsert_specs(
     session: Session,
     account_id: int,
     specs: Iterable[RawSymbolSpec],
@@ -498,7 +498,7 @@ def write(
     if fetched.detected_offset is not None:
         account.server_offset_detected_at = now
     canonical = {name: canonical_symbol(symbols, name) for name in fetched.specs}
-    counters.symbols_synced = _upsert_specs(
+    counters.symbols_synced = upsert_specs(
         session, account.id, fetched.specs.values(), now, canonical
     )
     fx_loss: dict[str, Decimal | None] = {}

@@ -1,8 +1,9 @@
 """A fake cTrader history server built from the JSON fixtures in tests/fixtures/ctrader/.
 
 It answers reconcile (2124), deal list (2133, filtered by the requested time range, with
-``hasMore`` when more than ``max_rows`` deals match), symbols (2114/2116) and the position
-P&L (2187) on top of `ctrader_fakes.default_handlers`. No network is involved.
+``hasMore`` when more than ``max_rows`` deals match), symbols (2114/2116), assets (2112), an
+empty tick answer (2145) and the position P&L (2187) on top of
+`ctrader_fakes.default_handlers`. No network is involved.
 """
 
 from __future__ import annotations
@@ -73,6 +74,13 @@ class HistoryServer:
         handlers[p.DEAL_LIST_REQ] = self._deal_list
         handlers[p.SYMBOLS_LIST_REQ] = (p.SYMBOLS_LIST_RES, self.symbols["list"])
         handlers[p.SYMBOL_BY_ID_REQ] = (p.SYMBOL_BY_ID_RES, self.symbols["byId"])
+        # Phase c reads specs and conversion ticks in the same cycle: the assets, and no
+        # tick at all (tests/ctrader_phase_c_fakes.PhaseCServer serves real ticks).
+        handlers[p.ASSET_LIST_REQ] = (p.ASSET_LIST_RES, load("assets.json"))
+        handlers[p.TICK_DATA_REQ] = (
+            p.TICK_DATA_RES,
+            {"ctidTraderAccountId": CTID, "tickData": [], "hasMore": False},
+        )
         return handlers
 
     def transport(self) -> FakeTransport:

@@ -12,7 +12,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Account, CalculatorMarginRequest, SymbolSpec
-from app.services.sync import _upsert_specs
+from app.services.sync import upsert_specs
 from tests.conftest import alembic_config
 from tests.mt5.factories import legacy_spec
 
@@ -156,20 +156,20 @@ def test_sync_stores_distinct_metadata_and_clears_missing_values(
     account: Account,
 ) -> None:
     old = legacy_spec()
-    _upsert_specs(db_session, account.id, [old], NOW)
+    upsert_specs(db_session, account.id, [old], NOW)
     db_session.flush()
     row = db_session.scalar(select(SymbolSpec).where(SymbolSpec.account_id == account.id))
     assert row is not None
     assert row.point is None
     assert row.tick_value_loss is None
     actual = replace(old, point=Decimal("0.1"), tick_value_loss=Decimal("2.5"))
-    _upsert_specs(db_session, account.id, [actual], NOW + timedelta(seconds=1))
+    upsert_specs(db_session, account.id, [actual], NOW + timedelta(seconds=1))
     db_session.flush()
     db_session.refresh(row)
     assert row.point == Decimal("0.1")
     assert row.tick_value_loss == Decimal("2.5")
     assert row.tick_value == old.tick_value
-    _upsert_specs(db_session, account.id, [old], NOW + timedelta(seconds=2))
+    upsert_specs(db_session, account.id, [old], NOW + timedelta(seconds=2))
     db_session.flush()
     db_session.refresh(row)
     assert row.point is None
