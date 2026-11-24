@@ -18,7 +18,7 @@ from pydantic import SecretStr
 
 from app.ctrader import protocol as p
 from app.ctrader.connection import CtraderConnection
-from app.ctrader.convert import convert, lots
+from app.ctrader.convert import StoredStops, convert, lots
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import (
     MAX_READ_SPAN,
@@ -125,6 +125,24 @@ def test_int64_as_string_is_accepted() -> None:
 )
 def test_malformed_deal_is_a_bad_response(field: str, value: object) -> None:
     raw = dict(load("closed_simple.json")["deals"][0], **{field: value})
+    with pytest.raises(CtraderError) as caught:
+        parse_deal(raw)
+    assert _code(caught) is CtraderErrorCode.BAD_RESPONSE
+
+
+def test_close_detail_without_swap_or_commission_counts_them_as_zero() -> None:
+    raw = copy.deepcopy(load("closed_simple.json")["deals"][1])
+    del raw["closePositionDetail"]["swap"]
+    del raw["closePositionDetail"]["commission"]
+    deal = parse_deal(raw)
+    assert deal is not None
+    assert deal.close is not None
+    assert (deal.close.swap, deal.close.commission) == (Decimal(0), Decimal(0))
+
+
+def test_close_detail_without_gross_profit_is_a_bad_response() -> None:
+    raw = copy.deepcopy(load("closed_simple.json")["deals"][1])
+    del raw["closePositionDetail"]["grossProfit"]
     with pytest.raises(CtraderError) as caught:
         parse_deal(raw)
     assert _code(caught) is CtraderErrorCode.BAD_RESPONSE
@@ -250,9 +268,12 @@ def test_read_range_reaches_back_to_db_open_trades_and_positions() -> None:
     request = HistoryRequest(NOW - timedelta(days=3), NOW, {7: old})
     start, end = read_range(request, [position], NOW)
     assert start == old - RANGE_PAD
-    assert end == NOW + RANGE_PAD
+    assert end == NOW  # never in the future
+    assert read_range(request, [position], NOW + timedelta(seconds=5))[1] == (
+        NOW + timedelta(seconds=5)
+    )
     ancient = HistoryRequest(NOW - timedelta(days=3), NOW, {7: NOW - timedelta(days=900)})
-    assert read_range(ancient, [], NOW)[0] == NOW + RANGE_PAD - MAX_READ_SPAN
+    assert read_range(ancient, [], NOW)[0] == NOW - MAX_READ_SPAN
 
 
 def test_read_trading_reads_positions_first_then_deals_and_symbols() -> None:
@@ -282,7 +303,7 @@ def _read(
     return TradingRead(
         request=HistoryRequest(NOW - timedelta(days=30), NOW, open_trades or {}),
         read_from=NOW - timedelta(days=30),
-        read_to=NOW + RANGE_PAD,
+        read_to=NOW,
         deals=tuple(parsed),
         positions=tuple(live),
         symbols=symbols
@@ -320,7 +341,11 @@ def test_partial_close_builds_one_trade_with_two_exits() -> None:
     converted = convert(_read(load("partial_close.json")["deals"]))
     result = build_trades(converted.deals)
     trade = result.trades[0]
-    assert (trade.volume, trade.exit_volume, trade.open_volume) == (Decimal(2), Decimal(2), Decimal(0))
+    assert (trade.volume, trade.exit_volume, trade.open_volume) == (
+        Decimal(2),
+        Decimal(2),
+        Decimal(0),
+    )
     assert len(trade.exit_deals) == 2
     assert trade.exit_price == Decimal("19485.50000000")
     assert (trade.gross_pnl, trade.commission, trade.net_pnl) == (
@@ -459,3 +484,86 @@ def test_no_history_request_means_no_history_message() -> None:
     result = asyncio.run(read_balances(creds, [(CTID, False)], connector, sleep=no_sleep))
     assert result[CTID].trading is None  # type: ignore[union-attr]
     assert not {p.RECONCILE_REQ, p.DEAL_LIST_REQ} & set(transport.types_sent())
+
+
+# --- review fixes: unreported positions, volume mismatch, carried stops -----------------
+
+
+def test_new_position_not_reported_and_not_closed_is_not_built() -> None:
+    entry = [load("closed_simple.json")["deals"][0]]
+    converted = convert(_read(entry))
+    assert converted.position_ids == set()
+    assert converted.deals == []
+    assert converted.unconfirmed == [5001]
+    assert [s.position_id for s in converted.skipped] == [5001]
+    assert "not reported" in converted.skipped[0].reason
+
+
+def test_db_open_position_closed_only_in_part_stays_unconfirmed() -> None:
+    entry, partial, _final = load("partial_close.json")["deals"]
+    opened = {5002: datetime(2026, 11, 23, 8, tzinfo=UTC)}
+    converted = convert(_read([entry, partial], open_trades=opened))
+    assert converted.unconfirmed == [5002]
+    trade = build_trades(converted.deals).trades[0]
+    assert trade.close_time is None  # never closed on a volume shortfall
+
+
+def test_closed_volume_above_the_entry_is_skipped_visibly() -> None:
+    entry, partial, final = load("partial_close.json")["deals"]
+    over = copy.deepcopy(final)
+    over["closePositionDetail"]["closedVolume"] = 200
+    converted = convert(_read([entry, partial, over]))
+    assert converted.unconfirmed == []  # closed (>= entry volume)
+    result = build_trades(converted.deals)
+    assert [s.position_id for s in result.skipped] == [5002]
+
+
+def test_partial_close_of_a_reported_position_keeps_it_open() -> None:
+    entry, partial, _final = load("partial_close.json")["deals"]
+    position = copy.deepcopy(load("open_position.json")["position"])
+    position.update(positionId=5002, stopLoss=19520.0, takeProfit=19400.0)
+    position["tradeData"].update(symbolId=2, volume=100, tradeSide="SELL")
+    position["tradeData"]["openTimestamp"] = entry["executionTimestamp"]
+    converted = convert(_read([entry, partial], [position]))
+    assert converted.unconfirmed == []
+    assert converted.snapshots[5002].volume == Decimal(1)
+    trade = build_trades(converted.deals, positions=converted.snapshots).trades[0]
+    assert (trade.close_time, trade.open_volume, trade.exit_volume) == (
+        None,
+        Decimal(1),
+        Decimal(1),
+    )
+    assert (trade.last_sl, trade.tp) == (Decimal("19520.0"), Decimal("19400.0"))
+    assert len(trade.exit_deals) == 1
+
+
+def test_stored_stops_of_a_db_open_trade_survive_its_close() -> None:
+    deals = load("closed_simple.json")["deals"]
+    opened = {5001: datetime(2026, 11, 23, 9, tzinfo=UTC)}
+    stops = {5001: StoredStops(last_sl=Decimal("1.08600"), tp=Decimal("1.08812"))}
+    converted = convert(_read(deals, open_trades=opened), stops)
+    trade = build_trades(converted.deals, positions=converted.snapshots).trades[0]
+    assert trade.is_closed
+    assert (trade.last_sl, trade.tp) == (Decimal("1.08600"), Decimal("1.08812"))
+    assert trade.initial_sl is None  # carried stops never become the initial SL
+
+
+def test_unreported_db_open_trade_without_a_new_exit_is_not_rebuilt() -> None:
+    entry = [load("closed_simple.json")["deals"][0]]
+    opened = {5001: datetime(2026, 11, 23, 9, tzinfo=UTC)}
+    stops = {5001: StoredStops(last_sl=Decimal("1.08600"), tp=Decimal("1.08812"))}
+    converted = convert(_read(entry, open_trades=opened), stops)
+    assert converted.position_ids == set()  # its stored row (and stops) stay untouched
+    assert converted.unconfirmed == [5001]
+    assert converted.skipped == []
+    assert converted.missing_entries == []
+
+
+def test_partial_exit_of_an_unreported_db_open_trade_keeps_its_stops() -> None:
+    entry, partial, _final = load("partial_close.json")["deals"]
+    opened = {5002: datetime(2026, 11, 23, 8, tzinfo=UTC)}
+    stops = {5002: StoredStops(last_sl=Decimal("19520.0"), tp=Decimal("19400.0"))}
+    converted = convert(_read([entry, partial], open_trades=opened), stops)
+    trade = build_trades(converted.deals).trades[0]
+    assert trade.close_time is None
+    assert (trade.last_sl, trade.tp) == (Decimal("19520.0"), Decimal("19400.0"))

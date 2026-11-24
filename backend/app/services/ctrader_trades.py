@@ -13,15 +13,16 @@ import logging
 from dataclasses import dataclass
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config_files.rules import RulesConfig
 from app.config_files.symbols import SymbolsConfig
-from app.ctrader.convert import convert
+from app.ctrader.convert import StoredStops, convert
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import TradingRead
 from app.domain.trade_builder import SkippedPosition
-from app.models import Account
+from app.models import Account, Trade
 from app.services.trade_writer import TradeBatch, write_trades
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,16 @@ def _ids(pids: list[int]) -> str:
     return shown + (f" (+{len(pids) - _MAX_LISTED})" if len(pids) > _MAX_LISTED else "")
 
 
+def _stored_stops(session: Session, account_id: int) -> dict[int, StoredStops]:
+    """last_sl / tp of the account's DB-open trades: a close must never wipe them."""
+    rows = session.execute(
+        select(Trade.position_id, Trade.last_sl, Trade.tp).where(
+            Trade.account_id == account_id, Trade.close_time.is_(None)
+        )
+    )
+    return {row.position_id: StoredStops(row.last_sl, row.tp) for row in rows}
+
+
 def write_ctrader_trades(
     session: Session,
     account: Account,
@@ -55,7 +66,7 @@ def write_ctrader_trades(
     """Persist one read (no commit). Raises ``history_incomplete`` before anything is written
     when a position that must have its entry deal in the read range lacks it: the read is
     then not trusted (no trade closed, no open trade created, the cursor does not move)."""
-    converted = convert(read)
+    converted = convert(read, _stored_stops(session, account.id))
     if converted.missing_entries:
         raise CtraderError(
             CtraderErrorCode.HISTORY_INCOMPLETE,
@@ -63,7 +74,7 @@ def write_ctrader_trades(
             f"{_ids(converted.missing_entries)}",
         )
     if converted.before_range:
-        logger.info(
+        logger.debug(
             "cTrader account %s: %s position(s) opened before the read range ignored: %s",
             account.id,
             len(converted.before_range),

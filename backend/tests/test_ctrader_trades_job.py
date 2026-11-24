@@ -140,6 +140,11 @@ def test_trade_seen_open_then_closed_has_net_pnl_r_and_needs_description(
     live = snapshot.read_snapshot(snapshot.snapshot_path(tmp_path))[(account.id, 5001)]
     assert (live.price_current, live.pnl) == (None, Decimal("9.65"))
 
+    trailed = dict(data["open_position"], stopLoss=1.086)
+    moved = HistoryServer([entry], [trailed], [data["open_pnl"]])
+    assert _run(factory, store, moved, MONDAY.replace(hour=10, minute=15), tmp_path)
+    assert _trade(session, 5001).last_sl == Decimal("1.08600")
+
     closed = HistoryServer([entry, exit_])  # cTrader no longer reports the position
     assert _run(factory, store, closed, MONDAY.replace(hour=10, minute=35), tmp_path) == [
         account.id
@@ -159,6 +164,8 @@ def test_trade_seen_open_then_closed_has_net_pnl_r_and_needs_description(
         Decimal("19.30"),
     )
     assert trade.initial_sl == Decimal("1.08412")  # first seen SL kept after the close
+    assert (trade.last_sl, trade.tp) == (Decimal("1.08600"), Decimal("1.08812"))  # not wiped
+    assert trade.planned_rr == Decimal(3)  # (1.08812 - 1.08512) / (1.08512 - 1.08412)
     assert trade.risk_amount == Decimal("10.00")  # 20.00 x 0.00100 / 0.00200
     assert trade.r_multiple == Decimal("1.93")
     assert trade.pnl_pct == Decimal("1.93")  # of reference_balance 1000
@@ -416,3 +423,136 @@ def test_mt5_accounts_are_untouched_by_the_ctrader_job(
     assert session.scalar(select(func.count()).where(Trade.account_id == mt5.id)) == 0
     assert session.scalar(select(func.count()).where(Trade.account_id == account.id)) == 1
     assert mt5.id not in snapshot.synced_at(snapshot.snapshot_path(tmp_path))
+
+
+# --- review fixes -------------------------------------------------------------------------------
+
+
+def _window(session: Session, account_id: int, at: datetime) -> datetime:
+    session.expire_all()
+    return history_window_start(session, account_id, get_rules().sync, at, require_deals=True)
+
+
+def test_unreported_new_position_is_not_written_and_is_a_visible_warning(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    entry = load("closed_simple.json")["deals"][0]
+    assert _run(factory, store, HistoryServer([entry]), NOW, tmp_path) == [account.id]
+    assert session.scalar(select(func.count()).select_from(Trade)) == 0
+    log = _last_log(session, account.id)
+    assert (log.ok, log.error_code) == (True, "positions_skipped")
+    assert "5001" in (log.error_message or "")
+    assert "not reported" in (log.error_message or "")
+    later = NOW + timedelta(days=1)
+    assert _window(session, account.id, later) == later - timedelta(
+        days=get_rules().sync.initial_history_days
+    )  # the skipped run does not move the window
+
+
+def test_skipped_position_is_a_warning_and_is_retried(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    server = HistoryServer(load("closed_simple.json")["deals"])
+    for item in server.symbols["byId"]["symbol"]:
+        item.pop("lotSize", None)
+    assert _run(factory, store, server, NOW, tmp_path) == [account.id]
+    log = _last_log(session, account.id)
+    assert (log.ok, log.error_code) == (True, "positions_skipped")
+    assert "lot size of EURUSD unknown" in (log.error_message or "")
+    assert session.scalar(select(func.count()).select_from(Trade)) == 0
+    later = NOW + timedelta(days=1)
+    assert _window(session, account.id, later) == later - timedelta(
+        days=get_rules().sync.initial_history_days
+    )
+    _run(factory, store, HistoryServer(load("closed_simple.json")["deals"]), later, tmp_path)
+    assert _trade(session, 5001).net_pnl == Decimal("19.30")  # retried and built
+    assert _window(session, account.id, later) == later - timedelta(
+        days=get_rules().sync.overlap_days
+    )
+
+
+def test_partial_close_of_a_reported_position_stays_open_with_its_exit(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    entry, partial, _final = load("partial_close.json")["deals"]
+    position = load("open_position.json")["position"]
+    position.update(positionId=5002, stopLoss=19520.0, takeProfit=19400.0)
+    position["tradeData"].update(symbolId=2, volume=100, tradeSide="SELL")
+    position["tradeData"]["openTimestamp"] = entry["executionTimestamp"]
+    pnl = {"positionId": 5002, "grossUnrealizedPnL": 500, "netUnrealizedPnL": 450}
+    _run(factory, store, HistoryServer([entry, partial], [position], [pnl]), NOW, tmp_path)
+    trade = _trade(session, 5002)
+    assert (trade.close_time, trade.status, trade.volume) == (None, "open", Decimal(2))
+    assert (trade.gross_pnl, trade.net_pnl) == (Decimal("20.00"), Decimal("19.50"))
+    assert (trade.last_sl, trade.tp) == (Decimal("19520.0"), Decimal("19400.0"))
+    assert session.scalar(select(func.count()).select_from(TradeExitDeal)) == 1
+    (shown,) = _home(session, NOW + timedelta(minutes=1), tmp_path).open_positions
+    assert (shown.pnl, shown.close_unconfirmed) == (Decimal("4.50"), False)
+
+
+def test_equity_unavailable_still_writes_trades_without_snapshot_pnl(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    data = load("open_position.json")
+    handlers = HistoryServer(data["deals"], [data["position"]]).handlers()
+    handlers[p.POSITION_PNL_REQ] = (p.ERROR_RES, {"errorCode": "NEW_CODE", "description": "x"})
+    config = CtraderJobConfig(
+        client_id=CLIENT_ID,
+        client_secret=SecretStr(CLIENT_SECRET),
+        store=store,
+        connector=FakeConnector(FakeTransport(handlers)),
+        sleep=no_sleep,
+        now=lambda: NOW,
+        symbols_getter=lambda: TEST_SYMBOLS,
+        snapshot_path=snapshot.snapshot_path(tmp_path),
+    )
+    assert run_ctrader_balance_cycle(factory, config) == []
+    assert _trade(session, 5003).status == "open"  # trades written
+    log = _last_log(session, account.id)
+    assert (log.ok, log.error_code, log.deals_fetched) == (False, "equity_unavailable", 1)
+    live = snapshot.read_snapshot(snapshot.snapshot_path(tmp_path))[(account.id, 5003)]
+    assert (live.price_current, live.pnl) == (None, None)
+
+
+def test_equity_unavailable_and_skipped_positions_keep_both_messages(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    entry = load("closed_simple.json")["deals"][0]  # unreported: skipped
+    handlers = HistoryServer([entry]).handlers()
+    handlers[p.POSITION_PNL_REQ] = (p.ERROR_RES, {"errorCode": "NEW_CODE", "description": "x"})
+    config = CtraderJobConfig(
+        client_id=CLIENT_ID,
+        client_secret=SecretStr(CLIENT_SECRET),
+        store=store,
+        connector=FakeConnector(FakeTransport(handlers)),
+        sleep=no_sleep,
+        now=lambda: NOW,
+        symbols_getter=lambda: TEST_SYMBOLS,
+    )
+    run_ctrader_balance_cycle(factory, config)
+    log = _last_log(session, account.id)
+    assert (log.ok, log.error_code) == (False, "equity_unavailable")
+    message = log.error_message or ""
+    assert "equity not read" in message
+    assert "positions skipped" in message
+    assert "5001" in message

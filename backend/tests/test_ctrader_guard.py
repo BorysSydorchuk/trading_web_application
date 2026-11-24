@@ -14,6 +14,8 @@ from app.ctrader.errors import CtraderError
 from tests.ctrader_fakes import FakeConnector, FakeTransport
 
 CTRADER_DIR = Path(guard.__file__).resolve().parent
+# A field of a received deal (read-only data), not a message: the only name exception.
+READ_ONLY_FIELD = "closepositiondetail"
 TRADING_TYPES = (2106, 2108, 2109, 2110, 2111)
 TRADING_NAMES = (
     "NewOrder",
@@ -105,8 +107,9 @@ def test_no_trading_message_name_outside_the_guard(name: str) -> None:
 
 def test_the_only_name_exception_is_the_close_detail_field() -> None:
     """``closePositionDetail`` is a field of a received deal (read-only data), not a message."""
-    assert "closepositiondetail" in _text(CTRADER_DIR / "history.py").lower()
-    assert "closeposition" not in _scannable(CTRADER_DIR / "history.py")
+    for name in ("history.py", "convert.py"):
+        assert READ_ONLY_FIELD in _text(CTRADER_DIR / name).lower()
+        assert "closeposition" not in _scannable(CTRADER_DIR / name)
 
 
 def _text(path: Path) -> str:
@@ -115,6 +118,3 @@ def _text(path: Path) -> str:
 
 def _scannable(path: Path) -> str:
     return _text(path).lower().replace(READ_ONLY_FIELD, "")
-
-
-READ_ONLY_FIELD = "closepositiondetail"

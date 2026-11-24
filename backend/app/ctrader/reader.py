@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Final
+from typing import Final
 
 from pydantic import SecretStr
 
@@ -94,11 +94,6 @@ async def authorize_app(connection: CtraderConnection, creds: Credentials) -> No
     )
 
 
-def _check_account(payload: dict[str, Any], ctid: int) -> None:
-    """Money from another account's answer must never be stored."""
-    check_account(payload, ctid)
-
-
 def _is_view_scope(scope: object) -> bool:
     return scope == _SCOPE_VIEW_NAME or (type(scope) is int and scope == _SCOPE_VIEW_VALUE)
 
@@ -168,7 +163,7 @@ async def _read_net_pnl(
     payload = await connection.request(
         p.POSITION_PNL_REQ, {"ctidTraderAccountId": ctid}, p.POSITION_PNL_RES
     )
-    _check_account(payload, ctid)
+    check_account(payload, ctid)
     digits = parse_int(payload.get("moneyDigits"), "moneyDigits")
     positions = payload.get("positionUnrealizedPnL", [])
     if not isinstance(positions, list):
@@ -184,11 +179,11 @@ async def _read_net_pnl(
 
 async def _read_trader_balance(connection: CtraderConnection, ctid: int) -> Decimal:
     answer = await connection.request(p.TRADER_REQ, {"ctidTraderAccountId": ctid}, p.TRADER_RES)
-    _check_account(answer, ctid)
+    check_account(answer, ctid)
     trader = answer.get("trader")
     if not isinstance(trader, dict):
         raise CtraderError(CtraderErrorCode.BAD_RESPONSE, "trader is missing")
-    _check_account(trader, ctid)
+    check_account(trader, ctid)
     digits = parse_int(trader.get("moneyDigits"), "moneyDigits")  # never assume a scale
     return scale_money(parse_int(trader.get("balance"), "balance"), digits)
 
@@ -229,7 +224,7 @@ async def read_balance(connection: CtraderConnection, creds: Credentials, ctid: 
         {"ctidTraderAccountId": ctid, "accessToken": creds.access_token.get_secret_value()},
         p.ACCOUNT_AUTH_RES,
     )
-    _check_account(auth, ctid)
+    check_account(auth, ctid)
     return await _read_consistent(connection, ctid)
 
 

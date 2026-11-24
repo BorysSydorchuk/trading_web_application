@@ -196,13 +196,22 @@ def _store_trading(
     return _Outcome(ok=True, trades=result, open_pnl=open_pnl)
 
 
+def _joined(*messages: str | None) -> str | None:
+    return "; ".join(m for m in messages if m) or None
+
+
 def _combine(balance: _Outcome, trading: _Outcome) -> _Outcome:
-    """A failed history wins over a missing equity; a warning only shows on a full success."""
+    """Severity of the code: a failed history, then a missing equity (both errors), then a
+    trades warning (``positions_skipped``, ok stays True). Every message is kept, joined."""
     if not trading.ok:
-        return trading
+        return _Outcome(False, trading.code, _joined(trading.message, balance.message))
     if not balance.ok:
         return _Outcome(
-            False, balance.code, balance.message, trades=trading.trades, open_pnl=trading.open_pnl
+            False,
+            balance.code,
+            _joined(balance.message, trading.message),
+            trades=trading.trades,
+            open_pnl=trading.open_pnl,
         )
     return trading
 

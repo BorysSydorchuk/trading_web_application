@@ -78,13 +78,10 @@ from app.services.starting_balance_suggestion import FirstDeposit, read_history_
 from app.services.trade_writer import (
     TradeBatch,
     assign_changed,
-    trade_values,
     write_trades,
 )
 
 logger = logging.getLogger(__name__)
-
-__all__ = ["trade_values"]  # moved to app.services.trade_writer; kept importable here
 
 INTERNAL_ERROR = "internal_error"
 POSITIONS_SKIPPED = "positions_skipped"
@@ -549,13 +546,14 @@ def history_window_start(
 ) -> datetime:
     """First sync: ``initial_history_days`` back; later: last success - ``overlap_days``.
 
-    ``require_deals`` (cTrader): only a success that read at least one deal moves the
-    window, so an empty read never advances it; the window then never starts more than
-    ``initial_history_days`` back.
+    ``require_deals`` (cTrader): only a success that read at least one deal and skipped no
+    position moves the window, so an empty read never advances it and a skipped position is
+    read again; the window then never starts more than ``initial_history_days`` back.
     """
     conditions = [SyncLog.account_id == account_id, SyncLog.ok.is_(True)]
     if require_deals:
         conditions.append(SyncLog.deals_fetched > 0)
+        conditions.append(SyncLog.error_code.is_distinct_from(POSITIONS_SKIPPED))
     last_ok = session.scalar(select(func.max(SyncLog.started_at)).where(*conditions))
     first = now - timedelta(days=sync.initial_history_days)
     if last_ok is None:

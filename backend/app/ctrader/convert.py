@@ -9,6 +9,16 @@
   entry deal carries no money: cTrader books the commission to the balance with the close, so
   taking the entry deal's commission as well would count it twice (DECISIONS 2026-11-24).
 - Prices are quantized to the symbol's ``digits``.
+- Reconcile: a position is built only if cTrader reports it open, the deals close it, or the
+  DB already has it open. A new position with an entry deal that is neither reported nor
+  closed is not written (no ghost open trade); it is ``unconfirmed`` and skipped visibly.
+  "Closed" = the closed volume (``closedVolume``, else the filled volume) reaches the entered
+  volume: a shortfall keeps the trade open (never closed on a guess), an excess is refused by
+  the trade builder (skipped with its reason).
+- cTrader deals carry no SL/TP. The stored ``last_sl``/``tp`` of a DB-open trade cTrader no
+  longer reports are carried on its exit deals, so a close never wipes them (exit deals are
+  never the initial SL source). Such a trade without a new exit deal is not rebuilt: its row
+  stays as it is (Home shows ``close_unconfirmed``).
 """
 
 from __future__ import annotations
@@ -33,6 +43,17 @@ _EXACT: Final = Context(prec=40, traps=[Inexact])
 ZERO: Final = Decimal(0)
 
 
+UNREPORTED: Final = "not reported open by cTrader and not closed in the history"
+
+
+@dataclass(frozen=True)
+class StoredStops:
+    """The stops a DB-open trade already has (trades.last_sl, trades.tp)."""
+
+    last_sl: Decimal | None
+    tp: Decimal | None
+
+
 @dataclass(frozen=True)
 class Converted:
     deals: list[Deal]
@@ -41,7 +62,8 @@ class Converted:
     skipped: list[SkippedPosition]
     # Positions whose entry deal must be in the read range but is not: an incomplete read.
     missing_entries: list[int]
-    # DB-open, not reported by cTrader, and not fully closed by the deals read.
+    # Not reported by cTrader and not fully closed by the deals read: DB-open ones stay open
+    # (``close_unconfirmed``), new ones are not built (also in ``skipped``).
     unconfirmed: list[int]
     # Exit deals of positions opened before the read range and not open in the DB.
     before_range: list[int]
@@ -66,8 +88,11 @@ def _symbol_problem(symbol_id: int, symbols: Mapping[int, CtSymbol]) -> str | No
     return None
 
 
-def _to_deal(deal: CtDeal, symbol: CtSymbol, volume: Decimal) -> Deal:
+def _to_deal(
+    deal: CtDeal, symbol: CtSymbol, volume: Decimal, stops: StoredStops | None = None
+) -> Deal:
     close = deal.close
+    carried = stops if close is not None else None  # never on an entry (initial SL source)
     return Deal(
         ticket=deal.deal_id,
         order=deal.order_id,
@@ -82,6 +107,8 @@ def _to_deal(deal: CtDeal, symbol: CtSymbol, volume: Decimal) -> Deal:
         commission=close.commission if close is not None else ZERO,
         swap=close.swap if close is not None else ZERO,
         fee=close.fee if close is not None else ZERO,
+        sl=carried.last_sl if carried is not None else None,
+        tp=carried.tp if carried is not None else None,
     )
 
 
@@ -91,7 +118,9 @@ def _deal_volume(deal: CtDeal) -> int:
     return deal.volume
 
 
-def _convert_position(deals: Iterable[CtDeal], symbols: Mapping[int, CtSymbol]) -> list[Deal] | str:
+def _convert_position(
+    deals: Iterable[CtDeal], symbols: Mapping[int, CtSymbol], stops: StoredStops | None
+) -> list[Deal] | str:
     """Domain deals of one position, or the reason it cannot be built."""
     out: list[Deal] = []
     for deal in deals:
@@ -102,7 +131,7 @@ def _convert_position(deals: Iterable[CtDeal], symbols: Mapping[int, CtSymbol]) 
         volume = lots(_deal_volume(deal), symbol)
         if volume is None:
             return f"deal {deal.deal_id}: volume is not a whole number of {symbol.name} lots"
-        out.append(_to_deal(deal, symbol, volume))
+        out.append(_to_deal(deal, symbol, volume, stops))
     return out
 
 
@@ -135,7 +164,9 @@ def _missing_entries(read: TradingRead, with_entry: set[int]) -> list[int]:
     )
 
 
-def convert(read: TradingRead) -> Converted:
+def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -> Converted:
+    """``stops``: stored stops of the DB-open trades, by position id."""
+    stored = stops or {}
     by_position: dict[int, list[CtDeal]] = defaultdict(list)
     for deal in read.deals:
         by_position[deal.position_id].append(deal)
@@ -147,6 +178,9 @@ def convert(read: TradingRead) -> Converted:
     skipped: list[SkippedPosition] = []
     built: set[int] = set()
     before_range: list[int] = []
+    unconfirmed: list[int] = [
+        pid for pid in db_open - set(live) if not _fully_closed(by_position.get(pid, ()))
+    ]
     for pid in sorted(by_position):
         if pid not in with_entry:
             if pid in db_open:
@@ -154,7 +188,16 @@ def convert(read: TradingRead) -> Converted:
             else:
                 before_range.append(pid)
             continue
-        result = _convert_position(by_position[pid], read.symbols)
+        own = by_position[pid]
+        if pid not in live and not _fully_closed(own):
+            if pid not in db_open:
+                skipped.append(SkippedPosition(pid, UNREPORTED))
+                unconfirmed.append(pid)
+                continue
+            if all(d.close is None for d in own):
+                continue  # nothing new: the stored open trade stays untouched
+        carried = stored.get(pid) if pid not in live else None
+        result = _convert_position(own, read.symbols, carried)
         if isinstance(result, str):
             skipped.append(SkippedPosition(pid, result))
             continue
@@ -166,9 +209,6 @@ def convert(read: TradingRead) -> Converted:
         for pid, pos in live.items()
         if pid in built
     }
-    unconfirmed = sorted(
-        pid for pid in db_open - set(live) if not _fully_closed(by_position.get(pid, ()))
-    )
     deals.sort(key=lambda d: (d.time, d.ticket))
     return Converted(
         deals=deals,
@@ -176,6 +216,6 @@ def convert(read: TradingRead) -> Converted:
         snapshots=snapshots,
         skipped=skipped,
         missing_entries=_missing_entries(read, with_entry),
-        unconfirmed=unconfirmed,
+        unconfirmed=sorted(unconfirmed),
         before_range=before_range,
     )

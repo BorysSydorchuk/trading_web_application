@@ -30,8 +30,9 @@ _SIDES: Final[dict[object, str]] = {1: "buy", "BUY": "buy", 2: "sell", "SELL": "
 # ProtoOADealStatus: only executed deals move a position.
 _FILLED: Final = frozenset({2, "FILLED", 3, "PARTIALLY_FILLED"})
 _POSITION_OPEN: Final = frozenset({1, "POSITION_STATUS_OPEN"})
-# The read range is padded on both sides: a deal at the edge or a few seconds of clock
-# difference to the server must never drop a deal. Upserts are idempotent.
+# The read range starts this much earlier: a deal at the edge must never be dropped (upserts
+# are idempotent). It ends at "now", never in the future; a position opened after that (or
+# ahead of the local clock) is outside the range and is read on the next cycle.
 RANGE_PAD: Final = timedelta(minutes=1)
 # Upper bound of one history read (DB-open trades older than this are not re-read).
 MAX_READ_SPAN: Final = timedelta(days=370)
@@ -166,8 +167,8 @@ def _close_detail(raw: object, deal_digits: object) -> CloseDetail:
     closed = detail.get("closedVolume")
     return CloseDetail(
         gross_profit=money("grossProfit"),
-        swap=money("swap"),
-        commission=money("commission"),
+        swap=money("swap", required=False),
+        commission=money("commission", required=False),
         fee=money("pnlConversionFee", required=False),
         closed_volume=parse_int(closed, "closedVolume") if closed is not None else None,
     )
@@ -323,8 +324,9 @@ def read_range(
     request: HistoryRequest, positions: Collection[CtPosition], now: datetime
 ) -> tuple[datetime, datetime]:
     """From the earliest of the window, the DB-open trades and the open positions (so every
-    position to build has its entry deal), padded, at most `MAX_READ_SPAN` back."""
-    to = max(request.to, now) + RANGE_PAD
+    position to build has its entry deal), padded back, at most `MAX_READ_SPAN` back; it
+    ends at ``now`` (the request time if later)."""
+    to = max(request.to, now)
     starts = [request.window_from, *request.open_trades.values()]
     starts.extend(position.open_time for position in positions)
     return max(min(starts) - RANGE_PAD, to - MAX_READ_SPAN), to
