@@ -6,6 +6,9 @@ export type AccountPhase = (typeof ACCOUNT_PHASES)[number]
 export const ACCOUNT_STATUSES = ['active', 'passed', 'failed', 'archived'] as const
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number]
 
+export const ACCOUNT_PLATFORMS = ['mt5', 'ctrader'] as const
+export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
+
 export interface AccountInput {
   name: string
   firm: string
@@ -26,6 +29,8 @@ export interface AccountInput {
 
 export interface Account extends AccountInput {
   id: number
+  /** Read-only. For cTrader: no terminal, `password_env_key` is "", `password_configured` is true. */
+  platform: AccountPlatform
   password_env_key: string
   password_configured: boolean
   balance: string | null
@@ -36,6 +41,11 @@ export interface Account extends AccountInput {
   starting_balance_suggestion?: { amount: string; time: string } | null
   created_at: string
   updated_at: string
+}
+
+/** `POST /api/ctrader/accounts` (backend/app/schemas/ctrader.py); login and server come from cTrader. */
+export type CtraderAccountInput = Omit<AccountInput, 'login' | 'server' | 'terminal_path'> & {
+  ctid_trader_account_id: number
 }
 
 export interface AccountList {

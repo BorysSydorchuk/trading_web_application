@@ -162,6 +162,9 @@ os.environ["LOG_DIR"] = tempfile.mkdtemp(prefix="tj-test-logs-")
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="tj-test-data-")
 # Tests never call the real Anthropic API: no key unless a test sets one (with a fake client).
 os.environ["ANTHROPIC_API_KEY"] = ""
+# Tests never call cTrader: no app credentials unless a test passes fakes explicitly.
+os.environ["CTRADER_CLIENT_ID"] = ""
+os.environ["CTRADER_CLIENT_SECRET"] = ""
 get_settings.cache_clear()
 
 from app import db as app_db  # noqa: E402

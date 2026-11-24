@@ -17,7 +17,9 @@ import {
   type Account,
   type AccountInput,
   type AccountPhase,
+  type AccountPlatform,
   type AccountStatus,
+  type CtraderAccountInput,
 } from './types'
 
 export const FORM_FIELDS = [
@@ -53,9 +55,14 @@ export const REQUIRED_FIELDS: ReadonlySet<FormField> = new Set<FormField>([
 ])
 
 /** Required set per mode: the account size can be left empty only on create (defaults to starting balance). */
-export function requiredFields(isEdit: boolean): ReadonlySet<FormField> {
-  return isEdit ? new Set<FormField>([...REQUIRED_FIELDS, 'reference_balance']) : REQUIRED_FIELDS
+export function requiredFields(isEdit: boolean, platform: AccountPlatform = 'mt5'): ReadonlySet<FormField> {
+  const base = isEdit ? new Set<FormField>([...REQUIRED_FIELDS, 'reference_balance']) : REQUIRED_FIELDS
+  if (platform === 'mt5') return base
+  return new Set([...base].filter((field) => !MT5_ONLY_FIELDS.has(field)))
 }
+
+/** Set by cTrader for a cTrader account: not shown, not validated, not sent on create. */
+export const MT5_ONLY_FIELDS: ReadonlySet<FormField> = new Set<FormField>(['login', 'server', 'terminal_path'])
 
 export const DECIMAL_FIELDS: ReadonlySet<FormField> = new Set<FormField>([
   'starting_balance',
@@ -188,10 +195,11 @@ function validateField(field: FormField, raw: string, required: ReadonlySet<Form
 }
 
 /** `isEdit`: the account size is required when editing (PATCH null → 422). */
-export function validate(values: FormValues, isEdit = false): FieldErrors {
-  const required = requiredFields(isEdit)
+export function validate(values: FormValues, isEdit = false, platform: AccountPlatform = 'mt5'): FieldErrors {
+  const required = requiredFields(isEdit, platform)
   const errors: FieldErrors = {}
   for (const field of FORM_FIELDS) {
+    if (platform !== 'mt5' && MT5_ONLY_FIELDS.has(field)) continue
     const error = validateField(field, values[field], required)
     if (error) errors[field] = error
   }
@@ -234,10 +242,31 @@ export function toInput(values: FormValues): AccountInput {
   }
 }
 
+/** `POST /api/ctrader/accounts` body: the chosen id + the journal fields (extra keys are a 422). */
+export function toCtraderInput(values: FormValues, ctidTraderAccountId: number): CtraderAccountInput {
+  const input = toInput({ ...values, login: '0', server: '', terminal_path: '' })
+  return {
+    ctid_trader_account_id: ctidTraderAccountId,
+    name: input.name,
+    firm: input.firm,
+    program: input.program,
+    phase: input.phase,
+    starting_balance: input.starting_balance,
+    currency: input.currency,
+    status: input.status,
+    reference_balance: input.reference_balance,
+    daily_loss_pct: input.daily_loss_pct,
+    max_drawdown_pct: input.max_drawdown_pct,
+    profit_target_pct: input.profit_target_pct,
+  }
+}
+
 /** PATCH body: only fields whose value differs from the stored account. */
 export function diffInput(account: Account, input: AccountInput): Partial<AccountInput> {
   const patch: Partial<Record<keyof AccountInput, unknown>> = {}
   for (const field of FORM_FIELDS) {
+    // cTrader owns these values and PATCH refuses a change: never send them.
+    if (account.platform === 'ctrader' && MT5_ONLY_FIELDS.has(field)) continue
     if (input[field] !== account[field]) patch[field] = input[field]
   }
   return patch as Partial<AccountInput>
@@ -251,6 +280,8 @@ export interface ServerFormErrors {
   fields: FieldErrors
   /** The server rejected something that is not a form field (shown above the form). */
   general: boolean
+  /** Specific text for the general error; the form's default text otherwise. */
+  generalText?: string
 }
 
 /** Stable 422 `details.field_codes` values (docs/api.md, Accounts) → Ukrainian text. */
@@ -270,7 +301,22 @@ function fieldCodeMessage(fieldCodes: unknown, path: string): string | undefined
  * to Ukrainian messages next to the fields. A known `details.field_codes` entry gives
  * specific text; otherwise the generic `serverRejected`. The global toast is shown separately.
  */
-export function serverFormErrors(error: unknown): ServerFormErrors {
+export function serverFormErrors(error: unknown, platform: AccountPlatform = 'mt5'): ServerFormErrors {
+  const mapped = mapServerErrors(error)
+  if (platform === 'mt5') return mapped
+  // A cTrader form has no login/server/path inputs: such an error goes above the form.
+  const entries = Object.entries(mapped.fields)
+  const visible = entries.filter(([field]) => !MT5_ONLY_FIELDS.has(field as FormField))
+  const general = mapped.general || visible.length < entries.length
+  const isDuplicate = isApiError(error) && error.code === 'conflict' && error.details?.field === 'ctid_trader_account_id'
+  return {
+    fields: Object.fromEntries(visible),
+    general,
+    ...(isDuplicate ? { generalText: uk.ctrader.flow.alreadyAddedError } : {}),
+  }
+}
+
+function mapServerErrors(error: unknown): ServerFormErrors {
   const result: ServerFormErrors = { fields: {}, general: false }
   if (!isApiError(error)) return result
 

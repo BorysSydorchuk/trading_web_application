@@ -17,6 +17,9 @@ export function homeLimits(overrides: Partial<HomeLimits> = {}): HomeLimits {
     to_daily_stop_pct: '5.1000',
     floating_pnl: null,
     floating_included: false,
+    balance: null,
+    equity: null,
+    balance_fresh: false,
     ...overrides,
   }
 }

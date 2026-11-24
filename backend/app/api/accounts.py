@@ -15,7 +15,7 @@ from app.config_files.loader import ConfigError
 from app.db import get_db
 from app.errors import ApiError, config_error
 from app.models import Account, Trade
-from app.models.enums import AccountPhase, AccountStatus
+from app.models.enums import AccountPhase, AccountPlatform, AccountStatus
 from app.schemas import accounts as schemas
 from app.services import starting_balance_suggestion as suggestion
 from app.services.risk_base import recompute_account
@@ -27,11 +27,18 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 # Unique constraint name (models/base.py naming convention) -> (field, message).
 _CONFLICTS: dict[str, tuple[str, str]] = {
     "uq_accounts_name": ("name", "An account with this name already exists"),
-    "uq_accounts_login_server": (
+    "uq_accounts_mt5_login_server": (
         "login",
         "An account with this login and server already exists",
     ),
+    "uq_accounts_ctid_trader_account_id": (
+        "ctid_trader_account_id",
+        "This cTrader account is already added",
+    ),
 }
+
+# What identifies a cTrader account comes from cTrader, never from the edit form.
+_CTRADER_FIXED_FIELDS = ("login", "server", "terminal_path")
 
 # PATCH size whose recomputed risk % / P&L % overflow trades' NUMERIC(10,4) (M5-10).
 _SIZE_TOO_SMALL = "Account size is too small: trade percentages would exceed 999999.9999 %"
@@ -53,9 +60,14 @@ def _suggestion_schema(
 def to_schema(
     account: Account, suggestions: dict[int, suggestion.Suggestion] | None = None
 ) -> schemas.Account:
-    """``suggestions``: the starting balance suggestions file (None = no suggestion)."""
+    """``suggestions``: the starting balance suggestions file (None = no suggestion).
+
+    A cTrader account has no investor password: the key is empty and nothing is missing.
+    """
+    is_mt5 = account.platform == AccountPlatform.MT5.value
     return schemas.Account(
         id=account.id,
+        platform=AccountPlatform(account.platform),
         name=account.name,
         firm=account.firm,
         program=account.program,
@@ -70,8 +82,8 @@ def to_schema(
         daily_loss_pct=account.daily_loss_pct,
         max_drawdown_pct=account.max_drawdown_pct,
         profit_target_pct=account.profit_target_pct,
-        password_env_key=mt5_password_key(account.login),
-        password_configured=mt5_password_for(account.login) is not None,
+        password_env_key=mt5_password_key(account.login) if is_mt5 else "",
+        password_configured=mt5_password_for(account.login) is not None if is_mt5 else True,
         balance=account.balance,
         equity=account.equity,
         balance_synced_at=account.balance_synced_at,
@@ -89,7 +101,7 @@ def _get_or_404(db: Session, account_id: int) -> Account:
     return account
 
 
-def _commit(db: Session) -> None:
+def commit_account(db: Session) -> None:
     """Commit; a duplicate name or login+server becomes a 409 with `details.field`."""
     try:
         db.commit()
@@ -129,7 +141,7 @@ def create_account(
         data["reference_balance"] = body.starting_balance
     account = Account(**data)
     db.add(account)
-    _commit(db)
+    commit_account(db)
     db.refresh(account)
     logger.info(
         "Account %s created (login %s, server %s)", account.id, account.login, account.server
@@ -173,6 +185,24 @@ def _recompute_size(db: Session, account_id: int) -> None:
     logger.info("Account %s: size changed, %s trades recomputed", account_id, count)
 
 
+def _same_value(key: str, new: Any, current: Any) -> bool:
+    """A blank terminal path and NULL both mean "not set"."""
+    return (new or None) == (current or None) if key == "terminal_path" else new == current
+
+
+def _refuse_ctrader_identity_change(account: Account, changes: dict[str, Any]) -> None:
+    """The edit form may resend these unchanged; an actual change is a 422."""
+    if account.platform == AccountPlatform.MT5.value:
+        return
+    fields = {
+        key: "cannot be changed for a cTrader account"
+        for key in _CTRADER_FIXED_FIELDS
+        if key in changes and not _same_value(key, changes[key], getattr(account, key))
+    }
+    if fields:
+        raise ApiError(422, "validation_error", "Request validation failed", {"fields": fields})
+
+
 @router.patch("/{account_id}", response_model=schemas.Account)
 def update_account(
     account_id: int,
@@ -182,6 +212,7 @@ def update_account(
 ) -> schemas.Account:
     account = _get_or_404(db, account_id)
     changes = body.changes()
+    _refuse_ctrader_identity_change(account, changes)
     size_changed = (
         "reference_balance" in changes and changes["reference_balance"] != account.reference_balance
     )
@@ -189,7 +220,7 @@ def update_account(
         setattr(account, key, value)
     if size_changed:
         _recompute_size(db, account_id)
-    _commit(db)
+    commit_account(db)
     db.refresh(account)
     logger.info("Account %s updated: %s", account.id, ", ".join(sorted(changes)) or "no fields")
     return to_schema(account, _suggestions(settings))

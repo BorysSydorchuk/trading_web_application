@@ -70,6 +70,7 @@ const HOME = {
     week: { pct: '2.5000', loss_pct: '-6.0000', profit_pct: '10.0000' },
     month: { pct: '3.1000', loss_pct: '-10.0000', profit_pct: '10.0000' },
     trades_week: 7, max_trades_week: 10, to_daily_stop_pct: '5.1000', floating_pnl: '36.20', floating_included: true,
+    balance: '10000.00', equity: '10036.20', balance_fresh: true,
   },
   kpis: {
     today: {

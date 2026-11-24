@@ -22,7 +22,7 @@ from app.config_files import ConfigError, get_rules
 from app.config_files.rules import RulesConfig
 from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.models import Account
-from app.models.enums import AccountStatus
+from app.models.enums import AccountPlatform, AccountStatus
 from app.mt5.fixture import FixtureMt5Source
 from app.mt5.real import RealMt5Source
 from app.mt5.source import Mt5Source
@@ -175,7 +175,10 @@ def _sync_due_accounts(
         account_ids = list(
             session.scalars(
                 select(Account.id)
-                .where(Account.status == AccountStatus.ACTIVE.value)
+                .where(
+                    Account.status == AccountStatus.ACTIVE.value,
+                    Account.platform == AccountPlatform.MT5.value,
+                )
                 .order_by(Account.id)
             )
         )

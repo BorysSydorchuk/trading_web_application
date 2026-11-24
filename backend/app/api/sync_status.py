@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_rules
+from app.ctrader.errors import CtraderErrorCode
 from app.db import get_db
 from app.domain.sessions import is_trading_time
 from app.models import Account, SyncLog
@@ -26,6 +27,10 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 STALE_FACTOR = 3
 # Used only when config/rules.yaml is broken: the idle interval avoids false "stale".
 FALLBACK_INTERVAL_S = 900
+# Failed attempts that retry by themselves: shown as a warning, not as an error.
+_RETRYING_CODES = frozenset(
+    {Mt5ErrorCode.TERMINAL_LOADING.value, CtraderErrorCode.RATE_LIMITED.value}
+)
 
 
 def utc_now() -> datetime:
@@ -60,7 +65,7 @@ def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
     """never | running | error | warning | ok while the worker is active; stale once
     nothing (not even a failed or running attempt) happened for 3x the expected interval.
     `warning` = the sync succeeded but recorded a problem (e.g. positions_skipped), or the
-    terminal was still loading (skipped this cycle, retried on the next one)."""
+    terminal was still loading / cTrader rate limited (retried on the next cycle)."""
     if latest is None:
         return "never"
     last_attempt = latest.finished_at or latest.started_at
@@ -69,7 +74,7 @@ def sync_state(latest: SyncLog | None, now: datetime) -> SyncState:
     if latest.ok is None:
         return "running"
     if not latest.ok:
-        return "warning" if latest.error_code == Mt5ErrorCode.TERMINAL_LOADING.value else "error"
+        return "warning" if latest.error_code in _RETRYING_CODES else "error"
     return "warning" if latest.error_code else "ok"
 
 

@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { Card } from '@/components/studio/Card'
 import { Tile } from '@/components/studio/Tile'
 import { uk } from '@/i18n/uk'
-import { formatPct } from '@/lib/displayFormat'
+import { formatPct, formatUsd } from '@/lib/displayFormat'
 import { cn } from '@/lib/utils'
 import { limitBarGeometry } from './chartMath'
 import { signTone } from './heroSeries'
@@ -58,6 +58,25 @@ function LimitRow({ label, period }: { label: string; period: LimitPeriod }) {
   )
 }
 
+/** Exact figures, to compare with the trading platform; the last known ones when stale. */
+function BalanceRow({ limits }: { limits: HomeLimits }) {
+  if (limits.balance === null && limits.equity === null) return null
+  const money = (value: string | null) => (value === null ? uk.common.empty : `${formatUsd(value, 'exact')} ${limits.currency}`)
+  return (
+    <div data-testid="limits-balance" className="flex flex-col gap-1 border-b border-divider py-3">
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="text-ink-muted">{t.balance}</span>
+        <span className="num font-semibold">{money(limits.balance)}</span>
+      </div>
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="text-ink-muted">{t.equity}</span>
+        <span className="num font-semibold">{money(limits.equity)}</span>
+      </div>
+      {!limits.balance_fresh && <p data-testid="limits-balance-stale" className="text-[11px] text-ink-muted">{t.balanceStale}</p>}
+    </div>
+  )
+}
+
 export interface LimitsCardProps {
   /** undefined while `GET /api/home` loads (or failed); null when there is no account. */
   limits: HomeLimits | null | undefined
@@ -93,6 +112,7 @@ export function LimitsCard({ limits, error = null, accountCount, accountId }: Li
         <p className="py-6 text-sm text-ink-muted">{t.empty}</p>
       ) : (
         <>
+          <BalanceRow limits={limits} />
           <LimitRow label={t.day} period={limits.day} />
           <LimitRow label={t.week} period={limits.week} />
           <LimitRow label={t.month} period={limits.month} />

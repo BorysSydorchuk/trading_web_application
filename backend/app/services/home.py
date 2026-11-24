@@ -241,13 +241,17 @@ def _floating(account: Account, has_open: bool, now: datetime) -> tuple[Decimal 
     """(floating P&L, included). Fresh worker sync (<= the snapshot staleness limit):
     equity - balance. Stale / unknown: 0 when the account has no open trade (closed P&L is
     then the whole result), else None and not included."""
-    synced, equity, balance = account.balance_synced_at, account.equity, account.balance
-    fresh = synced is not None and now - synced <= snapshot.STALE_AFTER
-    if fresh and equity is not None and balance is not None:
+    equity, balance = account.equity, account.balance
+    if _balance_fresh(account, now) and equity is not None and balance is not None:
         return equity - balance, True
     if not has_open:
         return Decimal(0), True
     return None, False
+
+
+def _balance_fresh(account: Account, now: datetime) -> bool:
+    synced = account.balance_synced_at
+    return synced is not None and now - synced <= snapshot.STALE_AFTER
 
 
 def _period_keys(tz: str) -> tuple[Callable[[datetime], date], ...]:
@@ -295,6 +299,9 @@ def _account_limits(
         month=_bar(keyed, month_key, period.month, size, month_range, extra, open_booked),
         floating_pnl=floating,
         floating_included=included,
+        balance=account.balance,
+        equity=account.equity,
+        balance_fresh=_balance_fresh(account, period.now),
         trades_week=trades_week,
         max_trades_week=max_trades.value if max_trades.enabled else None,
         to_daily_stop_pct=dh.to_daily_stop(day.pct, day.loss_pct),

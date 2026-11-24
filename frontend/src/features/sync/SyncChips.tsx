@@ -4,7 +4,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { uk } from '@/i18n/uk'
 import { formatDateTimeBrussels, formatRecentBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { knownSyncState, useSyncStatus, type SyncState, type SyncStatusRow } from './api'
+import type { AccountPlatform } from '@/features/accounts/types'
+import { knownSyncState, useSyncPlatforms, useSyncStatus, type SyncState, type SyncStatusRow } from './api'
 import { syncErrorText } from './errors'
 
 const s = uk.sync
@@ -41,7 +42,7 @@ function syncedText(row: SyncStatusRow): string | null {
   return row.last_success_utc ? `${s.syncedAt} ${formatRecentBrussels(row.last_success_utc)}` : null
 }
 
-function shortText(row: SyncStatusRow, nowMs: number): string {
+function shortText(row: SyncStatusRow, nowMs: number, platform: AccountPlatform | undefined): string {
   const state = knownSyncState(row.state)
   switch (state) {
     case 'ok':
@@ -61,7 +62,7 @@ function shortText(row: SyncStatusRow, nowMs: number): string {
       return minutes === null ? s.staleNoSuccess : s.staleMinutes(minutes)
     }
     case 'error':
-      return syncErrorText(row.error_code)
+      return syncErrorText(row.error_code, platform)
     case null:
       return row.state
   }
@@ -78,6 +79,7 @@ function stateLabel(state: string): string {
  */
 export function SyncChips() {
   const { data, error, dataUpdatedAt } = useSyncStatus()
+  const platforms = useSyncPlatforms((data?.items.length ?? 0) > 0)
   if (!data) {
     if (!error || (isApiError(error) && error.code === 'not_found')) return null
     return (
@@ -93,15 +95,23 @@ export function SyncChips() {
     <ul aria-label={s.label} aria-live="off" className="flex min-w-0 items-center gap-1 overflow-x-auto">
       {data.items.map((row) => (
         <li key={row.account_id} className="shrink-0">
-          <SyncChip row={row} nowMs={dataUpdatedAt} />
+          <SyncChip row={row} nowMs={dataUpdatedAt} platform={platforms.data?.get(row.account_id)} />
         </li>
       ))}
     </ul>
   )
 }
 
-function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
-  const text = shortText(row, nowMs)
+interface SyncChipProps {
+  row: SyncStatusRow
+  nowMs: number
+  /** undefined until the accounts list is known. */
+  platform: AccountPlatform | undefined
+}
+
+function SyncChip({ row, nowMs, platform }: SyncChipProps) {
+  const text = shortText(row, nowMs, platform)
+  const platformLabel = platform ? uk.accounts.platform[platform] : null
   const state = knownSyncState(row.state)
   return (
     <Popover>
@@ -113,34 +123,36 @@ function SyncChip({ row, nowMs }: { row: SyncStatusRow; nowMs: number }) {
             state === 'error' && 'border-loss/40',
             state === 'warning' && 'border-warning-strong/50',
           )}
-          aria-label={`${row.account_name}: ${text}`}
+          aria-label={`${row.account_name}${platformLabel ? ` (${platformLabel})` : ''}: ${text}`}
         >
           <span className={cn('size-2 shrink-0 rounded-full', state ? dotClass[state] : NEUTRAL_DOT)} aria-hidden />
           <span className="max-w-32 truncate text-sidebar-foreground">{row.account_name}</span>
+          {platformLabel && <span className="text-faint">{platformLabel}</span>}
           <span className={cn('whitespace-nowrap tabular-nums', state ? textClass[state] : NEUTRAL_TEXT)}>
             {text}
           </span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 text-xs">
-        <SyncDetails row={row} />
+        <SyncDetails row={row} platform={platform} />
       </PopoverContent>
     </Popover>
   )
 }
 
-function SyncDetails({ row }: { row: SyncStatusRow }) {
+function SyncDetails({ row, platform }: { row: SyncStatusRow; platform: AccountPlatform | undefined }) {
   const d = s.details
   const state = knownSyncState(row.state)
   // Warning (sync worked, something needs attention) is amber; any error kept on the row is red.
   const isWarning = state === 'warning' || row.error_code === 'positions_skipped' || row.error_code === 'terminal_loading'
   const hasProblem = row.error_code !== null || row.error_message !== null
   const problemText =
-    row.error_code === null && isWarning ? s.states.warning : syncErrorText(row.error_code)
+    row.error_code === null && isWarning ? s.states.warning : syncErrorText(row.error_code, platform)
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium">{row.account_name}</p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        {platform && <DetailRow label={d.platform}>{uk.accounts.platform[platform]}</DetailRow>}
         <DetailRow label={d.state}>
           <span className={state ? textClass[state] : NEUTRAL_TEXT}>{stateLabel(row.state)}</span>
         </DetailRow>
@@ -150,16 +162,21 @@ function SyncDetails({ row }: { row: SyncStatusRow }) {
         <DetailRow label={d.lastSuccess}>
           <TimeValue value={row.last_success_utc} />
         </DetailRow>
-        <DetailRow label={d.serverOffset}>
-          {row.server_offset_hours === null ? (
-            uk.common.empty
-          ) : (
-            <span className="num">{s.utcOffset(row.server_offset_hours)}</span>
-          )}
-        </DetailRow>
-        <DetailRow label={d.openPositions}>
-          <span className="num">{row.open_positions ?? uk.common.empty}</span>
-        </DetailRow>
+        {/* cTrader phase a syncs balance and equity only: no MT5 server time, no positions. */}
+        {platform !== 'ctrader' && (
+          <>
+            <DetailRow label={d.serverOffset}>
+              {row.server_offset_hours === null ? (
+                uk.common.empty
+              ) : (
+                <span className="num">{s.utcOffset(row.server_offset_hours)}</span>
+              )}
+            </DetailRow>
+            <DetailRow label={d.openPositions}>
+              <span className="num">{row.open_positions ?? uk.common.empty}</span>
+            </DetailRow>
+          </>
+        )}
       </dl>
       {hasProblem && (
         <div

@@ -30,7 +30,12 @@ db-up:
 migrate:
 	cd backend && uv run python -m app.tools.migrate
 
-check: lint typecheck test
+# Owner rule 2026-11-24 (this laptop): free-RAM check first (>= 3 GB, re-checked up to
+# 10 min, then a report instead of a start), then 2 pytest and 2 vitest workers.
+check: gate-ram lint typecheck test
+
+gate-ram:
+	cd backend && uv run python ../scripts/gate_ram_check.py
 
 lint: lint-backend lint-frontend
 
@@ -45,7 +50,7 @@ typecheck: typecheck-backend typecheck-frontend
 
 typecheck-backend:
 	cd backend && uv run mypy
-	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py ../scripts/native_pg_diff.py
+	cd backend && uv run mypy ../scripts/dev.py ../scripts/qa_live_check.py ../scripts/tray.py ../scripts/install_shortcuts.py ../scripts/native_pg.py ../scripts/native_pg_env.py ../scripts/native_pg_compare.py ../scripts/native_pg_diff.py ../scripts/gate_ram_check.py
 
 typecheck-frontend:
 	cd frontend && npm run typecheck
@@ -54,9 +59,9 @@ test: test-backend test-frontend
 
 # Tests build their own schema on the test DB(s); only Postgres must be up (never migrates the
 # dev DB). -n auto: pytest-xdist, one test database per worker (tests/conftest.py).
-# Trading hours (weekdays 08:00-16:00 Brussels, CLAUDE.md): make check PYTEST_WORKERS=2 VITEST_WORKERS=2
-PYTEST_WORKERS ?= auto
-VITEST_WORKERS ?=
+# Default 2 + 2 workers at all hours (owner rule 2026-11-24); override per run if ever needed.
+PYTEST_WORKERS ?= 2
+VITEST_WORKERS ?= 2
 # No Docker prerequisite since the native PostgreSQL move (2026-11-20): the native service starts
 # with Windows; on the Docker fallback run `make db-up` first. An unreachable DB fails visibly.
 test-backend:

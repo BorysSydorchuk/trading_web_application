@@ -153,16 +153,29 @@ def write_env_text(path: Path, text: str) -> None:
 
 BACKUP_INFIX = ".bak-"  # `.env.bak-<UTC stamp>`: covered by `.env.*` in .gitignore
 KEEP_ENV_BACKUPS = 10
+_MAX_SAME_STAMP = 100  # copies within one clock tick get -1, -2, ...
+
+
+def _create_exclusive(path: Path, stamp: str, data: bytes) -> Path:
+    """An existing backup is never overwritten; a taken name gets a counter suffix."""
+    for n in range(_MAX_SAME_STAMP):
+        suffix = f"-{n}" if n else ""
+        backup = path.with_name(f"{path.name}{BACKUP_INFIX}{stamp}{suffix}")
+        try:
+            with backup.open("xb") as out:
+                out.write(data)
+        except FileExistsError:
+            continue
+        return backup
+    raise FileExistsError(f"{path.name}{BACKUP_INFIX}{stamp}")
 
 
 def backup_env_file(path: Path, stamp: str) -> Path:
     """Byte copy of ``path`` to ``<name>.bak-<stamp>`` before a switch; keeps the newest
     KEEP_ENV_BACKUPS. Raises NativePgError (nothing changed) if the copy fails."""
-    backup = path.with_name(f"{path.name}{BACKUP_INFIX}{stamp}")
     try:
         data = path.read_bytes()
-        with backup.open("xb") as out:  # exclusive: an existing backup is never overwritten
-            out.write(data)
+        backup = _create_exclusive(path, stamp, data)
     except OSError as exc:
         raise NativePgError(
             f"Не вдалося зберегти копію {path.name}: {exc.strerror or type(exc).__name__}. "

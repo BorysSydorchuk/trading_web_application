@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/api/client'
+import { accountKeys } from '@/features/accounts/api'
+import type { AccountList, AccountPlatform } from '@/features/accounts/types'
 
 /** docs/api.md "Sync status" (PRD 6.2). */
 export const SYNC_STATES = ['ok', 'warning', 'error', 'running', 'never', 'stale'] as const
@@ -41,6 +43,23 @@ export function useSyncStatus() {
     refetchIntervalInBackground: true,
     retry: false,
     // The status bar renders the state itself (and hides the chips if the endpoint is missing).
+    meta: { silentError: true },
+  })
+}
+
+/**
+ * `GET /api/sync/status` has no `platform`, so the chips join it from the accounts list.
+ * Own key under `accounts`: a saved account refreshes it, and its failure stays silent
+ * (the chips then just show no platform label).
+ */
+export function useSyncPlatforms(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: [...accountKeys.all, 'platforms'] as const,
+    queryFn: ({ signal }) =>
+      apiGet<AccountList>('/accounts', { signal, timeoutMs: 5_000, query: { include_archived: true } }),
+    select: (list): ReadonlyMap<number, AccountPlatform> => new Map(list.items.map((item) => [item.id, item.platform])),
+    retry: false,
     meta: { silentError: true },
   })
 }

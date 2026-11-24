@@ -45,6 +45,7 @@ from app.domain.broker_time import (
 )
 from app.domain.sessions import to_local
 from app.models.account import Account, SymbolSpec
+from app.models.enums import AccountPlatform
 from app.models.trade import Trade
 from app.mt5.errors import Mt5Error
 from app.mt5.fixture import FixtureMt5Source
@@ -454,7 +455,9 @@ def build_report(
 
     mt5_error: str | None = None
     fetched: _Fetched | None = None
-    if source is not None and trades:
+    if account.platform != AccountPlatform.MT5.value:
+        mt5_error = "рахунок cTrader: MT5 не запитувався"
+    elif source is not None and trades:
         try:
             fetched = _fetch_mt5(source, account, trades, password_for, rule, now)
         except Mt5Error as exc:

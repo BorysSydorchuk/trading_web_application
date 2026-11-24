@@ -10,6 +10,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.errors import error_response
 
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+# cTrader's consent page sends the browser back here: a cross-site top-level navigation.
+_OAUTH_CALLBACK_PATH = "/api/ctrader/callback"
 SECURITY_HEADERS = (
     (b"x-frame-options", b"DENY"),
     (b"x-content-type-options", b"nosniff"),
@@ -40,6 +42,17 @@ def _origin(value: str) -> tuple[str, str, int] | None:
         return None
 
 
+def _is_oauth_return(scope: Scope, headers: Headers) -> bool:
+    """Only a top-level GET of the callback (never a frame, fetch or other method). The
+    endpoint itself rejects anything without the single-use OAuth state."""
+    return (
+        scope["method"] == "GET"
+        and scope["path"] == _OAUTH_CALLBACK_PATH
+        and headers.getlist("sec-fetch-mode") == ["navigate"]
+        and headers.getlist("sec-fetch-dest") == ["document"]
+    )
+
+
 def _allowed(scope: Scope) -> bool:
     headers = Headers(scope=scope)
     hosts = headers.getlist("host")
@@ -52,7 +65,9 @@ def _allowed(scope: Scope) -> bool:
     target = _origin(f"{scope['scheme']}://{hosts[0]}")
     if target is None or (origins and _origin(origins[0]) != target):
         return False
-    return not sites or sites[0] in {"same-origin", "same-site", "none"}
+    if not sites or sites[0] in {"same-origin", "same-site", "none"}:
+        return True
+    return _is_oauth_return(scope, headers)
 
 
 class LocalBoundaryMiddleware:

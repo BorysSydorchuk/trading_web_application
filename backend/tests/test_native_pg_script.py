@@ -346,9 +346,12 @@ def test_env_backup_never_overwrites(tmp_path: Path) -> None:
     path.write_bytes(b"A=1\n")
     first = envm.backup_env_file(path, "20261120T000000000000Z")
     path.write_bytes(b"A=2\n")
-    with pytest.raises(envm.NativePgError, match="Нічого не змінено"):
-        envm.backup_env_file(path, "20261120T000000000000Z")
+    # Same stamp (a coarse Windows clock tick in switch + switch-back): a suffixed copy, the
+    # first one is never overwritten (gate failure 2026-11-24).
+    second = envm.backup_env_file(path, "20261120T000000000000Z")
     assert first.read_bytes() == b"A=1\n"
+    assert second.name == ".env.bak-20261120T000000000000Z-1"
+    assert second.read_bytes() == b"A=2\n"
 
 
 def test_env_backups_keep_the_newest(tmp_path: Path) -> None:

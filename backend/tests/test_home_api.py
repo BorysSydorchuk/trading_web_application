@@ -201,6 +201,10 @@ def test_limits_of_one_account(client: TestClient, session: Session, alpha: Acco
         # an open position without a worker balance sync: closed P&L only, flagged
         "floating_pnl": None,
         "floating_included": False,
+        # never synced: no figures to show
+        "balance": None,
+        "equity": None,
+        "balance_fresh": False,
     }
 
 
@@ -613,6 +617,28 @@ def test_limits_with_a_stale_balance_sync_use_closed_trades_only(
 
     assert (limits["floating_pnl"], limits["floating_included"]) == (None, False)
     assert (limits["day"]["pct"], limits["to_daily_stop_pct"]) == ("2.5000", "5.5000")
+
+
+def test_limits_show_balance_and_equity_of_a_fresh_sync(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    synced(session, alpha, "10077.76", NOW - timedelta(minutes=1))
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert (limits["balance"], limits["equity"]) == ("10000.00", "10077.76")
+    assert limits["balance_fresh"] is True
+
+
+def test_limits_keep_the_last_figures_of_a_stale_sync_and_flag_them(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    synced(session, alpha, "10077.76", NOW - timedelta(minutes=6))
+
+    limits = home(client, account_id=alpha.id)["limits"]
+
+    assert (limits["balance"], limits["equity"]) == ("10000.00", "10077.76")
+    assert limits["balance_fresh"] is False
 
 
 def test_limits_without_an_open_position_are_unchanged(

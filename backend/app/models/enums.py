@@ -15,6 +15,11 @@ class AccountPhase(enum.StrEnum):
     FUNDED = "funded"
 
 
+class AccountPlatform(enum.StrEnum):
+    MT5 = "mt5"
+    CTRADER = "ctrader"
+
+
 class AccountStatus(enum.StrEnum):
     ACTIVE = "active"
     PASSED = "passed"

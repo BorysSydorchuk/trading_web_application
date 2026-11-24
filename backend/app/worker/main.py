@@ -8,7 +8,9 @@ Jobs: `heartbeat` (DB check), `mt5_sync` (MT5 -> DB, see `app.worker.sync_job`),
 job's Mt5Source and lock, see `app.worker.margin_job`),
 `transcription` (voice notes -> text, see `app.worker.transcription_job`) and
 `journal_requirements` (stamps required_since soon after a journal_fields.yaml change, see
-`app.services.journal_requirements`; the API syncs too, on every journal read).
+`app.services.journal_requirements`; the API syncs too, on every journal read) and
+`ctrader_balance` (read-only cTrader balance/equity, own lock-free job, see
+`app.worker.ctrader_job`).
 Every job is wrapped by `_safe` so an exception is logged and the scheduler keeps running.
 """
 
@@ -58,6 +60,12 @@ from app.services.starting_balance_suggestion import suggestions_path
 from app.services.transcriber import Transcriber, WhisperOptions, WhisperTranscriber
 from app.system.terminals import terminal_windows
 from app.worker.backup_job import BACKUP_JOB_ID, BACKUP_POLL_SECONDS, BackupJob
+from app.worker.ctrader_job import (
+    CTRADER_JOB_ID,
+    CTRADER_JOB_INTERVAL_S,
+    CtraderJobConfig,
+    run_ctrader_balance_cycle,
+)
 from app.worker.margin_job import (
     MARGIN_JOB_ID,
     MARGIN_JOB_INTERVAL_S,
@@ -190,6 +198,16 @@ def default_transcription_job(settings: Settings) -> Callable[[], None]:
     return job
 
 
+def default_ctrader_job(settings: Settings) -> Callable[[], None]:
+    """Balance and equity of active cTrader accounts; never touches the MT5 lock."""
+    config = CtraderJobConfig.from_settings(settings)
+
+    def job() -> None:
+        run_ctrader_balance_cycle(get_session_factory(), config)
+
+    return job
+
+
 def _noop() -> None:
     return None
 
@@ -222,6 +240,7 @@ def build_scheduler(
     mt5: SharedMt5 | None = None,
     backup_job: Callable[[], None] | None = None,
     terminals_job: Callable[[], None] | None = None,
+    ctrader_job: Callable[[], None] | None = None,
 ) -> BackgroundScheduler:
     """Return a configured (not started) scheduler with all worker jobs registered."""
     settings = settings or get_settings()
@@ -326,6 +345,15 @@ def build_scheduler(
         id="backup_recovery",
         name="backup_recovery",
         executor="backups",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _safe(CTRADER_JOB_ID, ctrader_job or default_ctrader_job(settings)),
+        trigger=IntervalTrigger(seconds=CTRADER_JOB_INTERVAL_S, timezone=UTC),
+        id=CTRADER_JOB_ID,
+        name=CTRADER_JOB_ID,
         max_instances=1,
         coalesce=True,
         replace_existing=True,
