@@ -67,3 +67,5 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 - 2026-11-23 (cTrader review, not now): restrict the Windows ACL of `data/ctrader_tokens.json` to the owner.
 - 2026-11-23 (cTrader review, not now): `GET /api/ctrader/accounts` has side effects (token refresh, deleting a trade-scoped token) reachable from same-site localhost pages.
 - 2026-11-23 (cTrader review, not now): check the entered currency against the broker's deposit asset via 2112/2113.
+- 2026-11-24 (gate rule review, LOW): `.env` backup counter sorts by name, so `-10` sorts before `-2`; pad it (`-01`) or cap at 10; add a pruning test with a suffixed copy.
+- 2026-11-24 (gate rule review, LOW): add `gate-ram` to `.PHONY`; `TJ_GATE_WAIT_S=nan/inf` should fall back to the default (`math.isfinite`).
