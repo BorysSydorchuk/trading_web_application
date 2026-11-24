@@ -24,6 +24,8 @@ REFRESH_MARGIN: Final = timedelta(days=3)
 # A refused refresh only heals by reconnecting: do not ask the token endpoint every cycle.
 REFUSED_COOLDOWN: Final = timedelta(hours=1)
 _TRANSIENT: Final = (CtraderErrorCode.CONNECTION_FAILED, CtraderErrorCode.TIMEOUT)
+# A refused refresh, or a broken answer that has probably used up the single-use token.
+_COOL_DOWN: Final = (CtraderErrorCode.TOKEN_INVALID, CtraderErrorCode.BAD_RESPONSE)
 _WRITE_ATTEMPTS: Final = 3
 _WRITE_PAUSE_S: Final = 0.1
 _RECONNECT: Final = "cTrader refused the token refresh: reconnect required"
@@ -138,9 +140,10 @@ class TokenManager:
                 logger.warning("cTrader token refresh postponed: %s", exc.code.value)
                 return pair.access_token
             logger.error("cTrader token refresh failed: %s", exc.code.value)
-            if exc.code is CtraderErrorCode.TOKEN_INVALID:
+            if exc.code in _COOL_DOWN:
                 self._state.refused_obtained_at = pair.obtained_at
                 self._state.refused_until = now + REFUSED_COOLDOWN
+            if exc.code is CtraderErrorCode.TOKEN_INVALID:
                 raise CtraderError(CtraderErrorCode.TOKEN_INVALID, _RECONNECT) from None
             raise
         self._state.refused_obtained_at = self._state.refused_until = None

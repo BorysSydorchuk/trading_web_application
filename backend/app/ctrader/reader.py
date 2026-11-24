@@ -23,6 +23,10 @@ _SCOPE_VIEW_VALUE: Final = 0
 _DEFAULT_BROKER: Final = "cTrader"
 _MAX_BROKER: Final = 100  # accounts.server is String(100)
 _RETRY_READ: Final = (CtraderErrorCode.ACCOUNT_DISCONNECTED, CtraderErrorCode.CONNECTION_FAILED)
+# Not an equity problem: the account itself needs attention («Підключіть cTrader знову»).
+_NOT_EQUITY: Final = (CtraderErrorCode.TOKEN_INVALID, CtraderErrorCode.TOKEN_EXPIRED)
+# accounts.login is BIGINT; a larger login is treated as missing (account_incomplete).
+_MAX_LOGIN: Final = 2**63 - 1
 _BALANCE_CHANGED: Final = "balance_changed"
 _CONSISTENCY_ATTEMPTS: Final = 2
 # Below the worker's 60 s schedule; closing the connections adds a few seconds at most.
@@ -89,6 +93,11 @@ def _is_view_scope(scope: object) -> bool:
     return scope == _SCOPE_VIEW_NAME or (type(scope) is int and scope == _SCOPE_VIEW_VALUE)
 
 
+def _login(raw: object) -> int | None:
+    value = parse_int(raw, "traderLogin") if raw is not None else None
+    return value if value is not None and value <= _MAX_LOGIN else None
+
+
 def _parse_account(entry: object) -> CtidAccount:
     if not isinstance(entry, dict):
         raise CtraderError(CtraderErrorCode.BAD_RESPONSE, "account entry is not an object")
@@ -98,7 +107,7 @@ def _parse_account(entry: object) -> CtidAccount:
     return CtidAccount(
         ctid=parse_int(entry.get("ctidTraderAccountId"), "ctidTraderAccountId"),
         is_live=entry.get("isLive") is True,  # optional in the docs: absent = not live
-        trader_login=parse_int(login, "traderLogin") if login is not None else None,
+        trader_login=_login(login),
         broker=title or _DEFAULT_BROKER,
     )
 
@@ -175,7 +184,7 @@ async def _read_consistent(connection: CtraderConnection, ctid: int) -> BalanceR
         try:
             net = await _read_net_pnl(connection, ctid)
         except CtraderError as exc:
-            if exc.code in _RETRY_READ:
+            if exc.code in _RETRY_READ or exc.code in _NOT_EQUITY:
                 raise
             logger.warning("cTrader account %s: equity not read: %s", ctid, exc.code.value)
             return BalanceRead(before, None, exc.code.value)

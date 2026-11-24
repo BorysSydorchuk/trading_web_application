@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.tokens import TokenPair
+from app.mt5.errors import mask_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,8 @@ def call_token_endpoint(method: str, url: str, params: dict[str, str]) -> dict[s
 def _parse_tokens(body: dict[str, Any], now: datetime, secrets: Iterable[str]) -> TokenPair:
     error = body.get("errorCode")
     if error:
-        text = str(body.get("description") or "no description")[:_MAX_DESCRIPTION]
+        described = str(body.get("description") or "no description")
+        text = mask_secrets(described, secrets)[:_MAX_DESCRIPTION]
         raise CtraderError(
             CtraderErrorCode.TOKEN_INVALID, f"cTrader refused: {error}: {text}", secrets=secrets
         )

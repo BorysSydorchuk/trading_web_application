@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 import app as app_package
-from app.ctrader import guard, oauth, reader
+from app.ctrader import errors, guard, oauth, reader
 from app.ctrader import protocol as p
 from app.ctrader.connection import CtraderConnection
 from app.ctrader.errors import CtraderError, CtraderErrorCode
@@ -718,3 +718,58 @@ def test_the_scan_detects_a_write() -> None:
 
 def test_websockets_logger_never_logs_frames() -> None:
     assert logging.getLogger("websockets").level >= logging.INFO
+
+
+# --- code-reviewer 2026-11-24 ------------------------------------------------------------------
+
+
+def test_a_token_invalidated_during_the_pnl_read_is_not_an_equity_error() -> None:
+    handlers = default_handlers()
+    handlers[p.POSITION_PNL_REQ] = (p.ERROR_RES, {"errorCode": "CH_ACCESS_TOKEN_INVALID"})
+    transport = FakeTransport(handlers)
+
+    async def body() -> BalanceRead:
+        connection = CtraderConnection("wss://fake", FakeConnector(transport), sleep=no_sleep)
+        await connection.start()
+        try:
+            return await read_balance(connection, CREDS, CTID)
+        finally:
+            await connection.close()
+
+    with pytest.raises(CtraderError) as caught:
+        asyncio.run(body())
+    assert caught.value.code is CtraderErrorCode.TOKEN_INVALID
+
+
+def test_a_secret_cut_at_the_length_limit_is_still_masked() -> None:
+    error = errors.error_from_server("X", "a" * 195 + ACCESS_TOKEN, None, secrets=[ACCESS_TOKEN])
+    assert ACCESS_TOKEN[:5] not in error.message
+
+
+def test_a_refused_token_description_is_masked_before_it_is_cut(tmp_path: Path) -> None:
+    store = TokenStore(tokens_path(tmp_path))
+    store.write(_pair(TRADING, days=1))
+    http = CountingHttp({"errorCode": "INVALID_GRANT", "description": "a" * 195 + REFRESH_TOKEN})
+    with pytest.raises(CtraderError) as caught:
+        oauth.refresh_tokens(
+            SecretStr(REFRESH_TOKEN), CLIENT_ID, SecretStr(CLIENT_SECRET), http=http, now=TRADING
+        )
+    assert REFRESH_TOKEN[:5] not in caught.value.message
+
+
+def test_a_login_beyond_bigint_is_treated_as_missing() -> None:
+    account = reader._parse_account({"ctidTraderAccountId": CTID, "traderLogin": 2**63})
+    assert account.trader_login is None
+
+
+def test_a_broken_refresh_answer_cools_down_too(tmp_path: Path) -> None:
+    store = TokenStore(tokens_path(tmp_path))
+    store.write(_pair(TRADING, days=1))
+    http = CountingHttp({"errorCode": None})
+    with pytest.raises(CtraderError) as first:
+        _manager(store, http, TRADING).fresh_access_token()
+    assert first.value.code is CtraderErrorCode.BAD_RESPONSE
+    with pytest.raises(CtraderError) as second:
+        _manager(store, http, TRADING + timedelta(minutes=1)).fresh_access_token()
+    assert second.value.code is CtraderErrorCode.TOKEN_INVALID
+    assert http.calls == 1

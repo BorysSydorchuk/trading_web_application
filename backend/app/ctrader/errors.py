@@ -74,7 +74,11 @@ def error_from_server(
 ) -> CtraderError:
     """Map an ErrorRes to a `CtraderError`; an unknown code is a visible ``bad_response``."""
     kind = _SERVER_CODES.get(server_code, CtraderErrorCode.BAD_RESPONSE)
-    text = str(description)[:_MAX_DESCRIPTION] if description else "no description"
+    text = (
+        mask_secrets(str(description), secrets)[:_MAX_DESCRIPTION]
+        if description
+        else "no description"
+    )
     return CtraderError(
         kind, f"cTrader {server_code}: {text}", retry_after=retry_after, secrets=secrets
     )
