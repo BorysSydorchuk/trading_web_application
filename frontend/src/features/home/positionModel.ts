@@ -13,13 +13,18 @@ export function timeInTrade(openTime: string, now: string): string {
   return t.ageMinutes(minutes)
 }
 
+/** Fresh live values: the API sends a price or a P&L only from a fresh snapshot (cTrader has no price). */
+export function hasLiveValues(position: Pick<HomePosition, 'current_price' | 'pnl'>): boolean {
+  return position.current_price !== null || position.pnl !== null
+}
+
 /**
- * Live values missing: MT5 no longer reports the position («Не вдалося підтвердити закриття»),
- * no snapshot («ціна недоступна») or an old one («дані застаріли HH:MM»).
+ * Live values missing: the platform no longer reports the position («Не вдалося підтвердити
+ * закриття»), no snapshot («ціна недоступна») or an old one («дані застаріли HH:MM»).
  */
-export function liveNote(position: Pick<HomePosition, 'current_price' | 'price_time' | 'close_unconfirmed'>): string | null {
+export function liveNote(position: Pick<HomePosition, 'current_price' | 'pnl' | 'price_time' | 'close_unconfirmed'>): string | null {
   if (position.close_unconfirmed) return t.closeUnconfirmed
-  if (position.current_price !== null) return null
+  if (hasLiveValues(position)) return null
   return position.price_time === null ? t.priceUnavailable : t.stale(brusselsHourMinute(position.price_time))
 }
 

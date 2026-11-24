@@ -6,7 +6,7 @@ import { formatLots, formatPrice, formatR, formatUsd } from '@/lib/displayFormat
 import { cn } from '@/lib/utils'
 import { ladderGeometry } from './chartMath'
 import { signTone } from './heroSeries'
-import { hasRScale, liveNote, timeInTrade } from './positionModel'
+import { hasLiveValues, hasRScale, liveNote, timeInTrade } from './positionModel'
 import type { HomePosition } from './types'
 
 const t = uk.home.positions
@@ -20,7 +20,7 @@ function Ladder({ position }: { position: HomePosition }) {
   const g = ladderGeometry({ tpR: num(position.tp_r), rNow: num(position.r_now), maeR: num(position.mae_r), mfeR: num(position.mfe_r) })
   const tpText = position.tp_r === null ? t.noTp : formatR(position.tp_r, 'overview')
   const price = position.current_price
-  const nowText = price === null ? (liveNote(position) ?? '') : formatPrice(price, 'overview')
+  const nowText = price === null ? (liveNote(position) ?? uk.common.empty) : formatPrice(price, 'overview')
   const good = signTone(position.r_now) !== 'loss'
   return (
     <div role="img" aria-label={t.ladder(position.symbol, nowText, tpText)} data-testid="position-ladder" className="relative mt-2.5 h-[66px]">
@@ -109,7 +109,7 @@ function Excursions({ position }: { position: HomePosition }) {
 
 /** One open position (mockup card): P&L and R, SL → entry → TP ladder, MAE / MFE, description state. */
 export function PositionCard({ position, now }: { position: HomePosition; now: string }) {
-  const tone = position.current_price === null ? 'neutral' : signTone(position.pnl)
+  const tone = hasLiveValues(position) && !position.close_unconfirmed ? signTone(position.pnl) : 'neutral'
   const side = position.direction.toLowerCase()
   return (
     <article

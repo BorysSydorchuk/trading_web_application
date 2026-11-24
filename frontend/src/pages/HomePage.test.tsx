@@ -299,6 +299,19 @@ describe('HomePage «Відкриті позиції»', () => {
     expect(screen.queryByRole('img', { name: h.positions.live })).not.toBeInTheDocument()
   })
 
+  it('a cTrader position with a fresh P&L and no price is live: P&L shown, no stale note', async () => {
+    serveHome(homeData({
+      open_positions: [homePosition({ current_price: null, pnl: '-15.34', r_now: null, price_time: '2026-11-19T13:41:00Z' })],
+      open_totals: { pnl: '-15.34', risk_pct: '0.5000', price_time: '2026-11-19T13:41:00Z' },
+    }))
+    renderWithProviders(<HomePage />)
+    const ger = await screen.findByRole('article', { name: 'GER40' })
+    expect(within(ger).queryByTestId('position-live-note')).not.toBeInTheDocument()
+    expect(within(ger).getByText(`${MINUS}15`)).toBeInTheDocument()
+    expect(within(ger).queryByTestId('position-now-tag')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: h.positions.live })).toBeInTheDocument()
+  })
+
   it('a position MT5 no longer reports says «Не вдалося підтвердити закриття», never a live card', async () => {
     serveHome(homeData({
       open_positions: [
