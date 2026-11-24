@@ -41,7 +41,8 @@ _CONSISTENCY_ATTEMPTS: Final = 2
 # Below the worker's 60 s schedule; closing the connections adds a few seconds at most.
 READ_BUDGET_S: Final = 45.0
 # Specs + conversion quotes of one account: at most this long, and never closer than
-# MARKET_RESERVE_S to the read budget's end (the remaining accounts keep their time).
+# `_AccountJob.reserve_s` (MARKET_RESERVE_S per account still to read, this one included)
+# to the read budget's end, so the remaining accounts keep their time.
 MARKET_BUDGET_S: Final = 10.0
 MARKET_RESERVE_S: Final = 5.0
 
@@ -104,6 +105,7 @@ class _AccountJob:
     market: MarketRequest | None = None
     deadline: float | None = None
     excursions: ct_excursions.ExcursionRequest | None = None
+    reserve_s: float = MARKET_RESERVE_S
 
 
 def endpoint_for(is_live: bool) -> str:
@@ -281,7 +283,7 @@ async def _read_market_safely(
     loop = asyncio.get_running_loop()
     until = loop.time() + MARKET_BUDGET_S
     if job.deadline is not None:
-        until = min(until, job.deadline - MARKET_RESERVE_S)
+        until = min(until, job.deadline - job.reserve_s)
     if until <= loop.time():
         logger.warning("cTrader account %s: no time left for specs and FX rates", ctid)
         return None
@@ -293,6 +295,8 @@ async def _read_market_safely(
         logger.warning("cTrader account %s: specs and FX rates exceeded their time", ctid)
     except CtraderError as exc:
         logger.warning("cTrader account %s: specs and FX rates not read: %s", ctid, exc)
+    except Exception:  # a bug must not cost the balance; logged with its traceback
+        logger.exception("cTrader account %s: specs and FX rates failed", ctid)
     return None
 
 
@@ -304,14 +308,14 @@ async def _read_excursions_safely(
     clock: Clock,
 ) -> Fetched | None:
     """MAE/MFE after the market step: at most `excursions.BUDGET_S` (read now), never
-    closer than MARKET_RESERVE_S to the read budget's end. Never raises."""
+    closer than ``job.reserve_s`` to the read budget's end. Never raises."""
     request = job.excursions
     if request is None or not request.targets:
         return None
     loop = asyncio.get_running_loop()
     until = loop.time() + ct_excursions.BUDGET_S
     if job.deadline is not None:
-        until = min(until, job.deadline - MARKET_RESERVE_S)
+        until = min(until, job.deadline - job.reserve_s)
     if until <= loop.time():
         logger.warning("cTrader account %s: no time left for MAE/MFE", ctid)
         return None
@@ -320,8 +324,8 @@ async def _read_excursions_safely(
         return await ct_excursions.read_excursions(
             connection, ctid, request, symbols, clock(), until
         )
-    except Exception as exc:  # read_excursions never raises; a bug must not cost the balance
-        logger.warning("cTrader account %s: MAE/MFE not read: %s", ctid, type(exc).__name__)
+    except Exception:  # read_excursions never raises; a bug must not cost the balance
+        logger.exception("cTrader account %s: MAE/MFE not read", ctid)
         return None
 
 
@@ -399,12 +403,13 @@ async def _read_environment(
         async with asyncio.timeout_at(deadline):
             await connection.start()
             await authorize_app(connection, creds)
-            for ctid in ctids:
+            for index, ctid in enumerate(ctids):
                 job = _AccountJob(
                     (history or {}).get(ctid),
                     (markets or {}).get(ctid),
                     deadline,
                     (excursions or {}).get(ctid),
+                    reserve_s=MARKET_RESERVE_S * (len(ctids) - index),
                 )
                 results[ctid] = await _read_one(connection, creds, ctid, job, clock)
         return results

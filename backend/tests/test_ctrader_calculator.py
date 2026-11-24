@@ -80,8 +80,12 @@ def write_from_fixture(db: Session, account: Account, symbol_id: int) -> None:
     db.commit()
 
 
+# One fixed quote time, so both accounts' answers match to the microsecond.
+RATE_AT = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=5)
+
+
 def make_rate(db: Session, account: Account) -> None:
-    at = datetime.now(UTC) - timedelta(minutes=5)
+    at = RATE_AT
     db.add(
         FxRate(
             account_id=account.id,

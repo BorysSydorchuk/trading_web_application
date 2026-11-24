@@ -18,7 +18,7 @@ from typing import Final
 from app.ctrader import protocol as p
 from app.ctrader.connection import CtraderConnection
 from app.ctrader.errors import CtraderError, CtraderErrorCode
-from app.ctrader.history import check_account, utc_from_ms
+from app.ctrader.history import check_account, ms_from_utc, utc_from_ms
 from app.ctrader.money import parse_int, scale_money
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 BID: Final = 1  # ProtoOAQuoteType
 ASK: Final = 2
 PRICE_DIGITS: Final = 5  # tick prices are integers in 1/100000
+# A partial (hasMore) answer is followed by asking again after its latest tick, at most so often.
+MAX_TICK_PAGES: Final = 8
 
 
 @dataclass(frozen=True)
@@ -82,9 +84,27 @@ async def tick_page(
 async def last_tick(
     connection: CtraderConnection, ctid: int, symbol_id: int, kind: int, from_ms: int, to_ms: int
 ) -> CtTick | None:
-    """The latest BID or ASK tick in ``from_ms..to_ms`` (a historical request), or None."""
-    ticks, has_more = await tick_page(connection, ctid, symbol_id, kind, from_ms, to_ms)
-    if has_more:
-        # ASSUMPTION: the answer then holds part of the range; its latest tick is used.
-        logger.debug("cTrader ticks of symbol %s: more than one answer holds", symbol_id)
-    return max(ticks, key=lambda tick: tick.time) if ticks else None
+    """The latest BID or ASK tick in ``from_ms..to_ms`` (a historical request), or None.
+
+    A partial (``hasMore``) answer may hold either end of the range (the order is not
+    confirmed yet), so the range is asked again after the latest tick seen until an answer
+    is complete. Still partial after `MAX_TICK_PAGES` answers: a WARNING and None, never a
+    tick that may be stale."""
+    latest: CtTick | None = None
+    for _ in range(MAX_TICK_PAGES):
+        ticks, has_more = await tick_page(connection, ctid, symbol_id, kind, from_ms, to_ms)
+        if ticks:
+            newest = max(ticks, key=lambda tick: tick.time)
+            latest = newest if latest is None or newest.time > latest.time else latest
+        if not has_more:
+            return latest
+        if latest is None:
+            break
+        from_ms = ms_from_utc(latest.time) + 1
+        if from_ms > to_ms:
+            return latest
+    logger.warning(
+        "cTrader ticks of symbol %s: latest tick not found in %d partial answers",
+        symbol_id, MAX_TICK_PAGES,
+    )  # fmt: skip
+    return None

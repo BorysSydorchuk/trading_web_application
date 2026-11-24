@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 FRESH_WINDOW: Final = timedelta(minutes=60)
 FALLBACK_WINDOW: Final = timedelta(days=3)
+# BID and ASK ticks further apart than this are not one quote (a stale side).
+MAX_QUOTE_SKEW: Final = timedelta(minutes=15)
 
 Light = Mapping[str, Any]
 
@@ -202,6 +204,18 @@ async def _quote(
             "cTrader account %s: no usable BID/ASK tick of %s in the last %s days; %s->%s "
             "rate kept",
             ctid, pair.pair, FALLBACK_WINDOW.days, currency, account_currency,
+        )  # fmt: skip
+        return None
+    if abs(bid.time - ask.time) > MAX_QUOTE_SKEW:
+        logger.warning(
+            "cTrader account %s: BID and ASK ticks of %s are %s apart; %s->%s rate kept",
+            ctid, pair.pair, abs(bid.time - ask.time), currency, account_currency,
+        )  # fmt: skip
+        return None
+    if bid.price > ask.price:
+        logger.warning(
+            "cTrader account %s: BID above ASK for %s; %s->%s rate kept",
+            ctid, pair.pair, currency, account_currency,
         )  # fmt: skip
         return None
     at = max(bid.time, ask.time)

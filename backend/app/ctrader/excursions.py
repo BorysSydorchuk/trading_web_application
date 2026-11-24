@@ -385,8 +385,9 @@ async def read_excursions(
             ids.update({name: listing[name] for name in missing if name in listing})
         except (TimeoutError, CtraderError) as exc:
             logger.warning(
-                "cTrader account %s: MAE/MFE symbols not listed: %s", ctid, type(exc).__name__
-            )
+                "cTrader account %s: MAE/MFE symbols not listed: %s", ctid,
+                exc if isinstance(exc, CtraderError) else "time limit",
+            )  # fmt: skip
     budget = max(0.0, until - loop.time())
     return await fetch_ctrader_series(
         connection, ctid, request.targets, ids, points, now, budget_s=budget
