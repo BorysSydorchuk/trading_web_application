@@ -14,8 +14,11 @@ from typing import Any, Final
 HEARTBEAT: Final = 51
 APPLICATION_AUTH_REQ: Final = 2100
 ACCOUNT_AUTH_REQ: Final = 2102
+SYMBOLS_LIST_REQ: Final = 2114
+SYMBOL_BY_ID_REQ: Final = 2116
 TRADER_REQ: Final = 2121
 RECONCILE_REQ: Final = 2124
+DEAL_LIST_REQ: Final = 2133
 ACCOUNT_LIST_REQ: Final = 2149
 POSITION_PNL_REQ: Final = 2187
 
@@ -23,7 +26,11 @@ POSITION_PNL_REQ: Final = 2187
 COMMON_ERROR_RES: Final = 50
 APPLICATION_AUTH_RES: Final = 2101
 ACCOUNT_AUTH_RES: Final = 2103
+SYMBOLS_LIST_RES: Final = 2115
+SYMBOL_BY_ID_RES: Final = 2117
 TRADER_RES: Final = 2122
+RECONCILE_RES: Final = 2125
+DEAL_LIST_RES: Final = 2134
 ACCOUNT_LIST_RES: Final = 2150
 POSITION_PNL_RES: Final = 2188
 ERROR_RES: Final = 2142
@@ -42,6 +49,8 @@ HEARTBEAT_PAYLOAD: Final[dict[str, Any]] = {}
 
 MAX_REQUESTS_PER_S: Final = 50
 MAX_HISTORICAL_REQUESTS_PER_S: Final = 5
+# DealListReq: the server refuses a wider fromTimestamp..toTimestamp range (one week).
+MAX_DEAL_WINDOW_MS: Final = 604_800_000
 
 
 @dataclass(frozen=True)

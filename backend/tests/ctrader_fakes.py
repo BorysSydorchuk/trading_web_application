@@ -47,6 +47,14 @@ def default_handlers() -> dict[int, Handler]:
             },
         ),
         p.ACCOUNT_LIST_REQ: (p.ACCOUNT_LIST_RES, account_list_payload()),
+        # Trading history (phase b): no position reported, no deal, no symbol.
+        p.RECONCILE_REQ: (p.RECONCILE_RES, {"ctidTraderAccountId": CTID, "position": []}),
+        p.DEAL_LIST_REQ: (
+            p.DEAL_LIST_RES,
+            {"ctidTraderAccountId": CTID, "deal": [], "hasMore": False},
+        ),
+        p.SYMBOLS_LIST_REQ: (p.SYMBOLS_LIST_RES, {"ctidTraderAccountId": CTID, "symbol": []}),
+        p.SYMBOL_BY_ID_REQ: (p.SYMBOL_BY_ID_RES, {"ctidTraderAccountId": CTID, "symbol": []}),
     }
 
 

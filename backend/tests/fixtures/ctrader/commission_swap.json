@@ -1,0 +1,71 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. XAUUSD buy 0.5 lot held over the weekend.",
+ "deals": [
+  {
+   "dealId": 9021,
+   "orderId": 8021,
+   "positionId": 5004,
+   "volume": 5000,
+   "filledVolume": 5000,
+   "symbolId": 41,
+   "createTimestamp": 1795186799880,
+   "executionTimestamp": 1795186800000,
+   "utcLastUpdateTimestamp": 1795186800000,
+   "executionPrice": 2650.25,
+   "tradeSide": "BUY",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  },
+  {
+   "dealId": 9022,
+   "orderId": 8022,
+   "positionId": 5004,
+   "volume": 5000,
+   "filledVolume": 5000,
+   "symbolId": 41,
+   "createTimestamp": 1795424399880,
+   "executionTimestamp": 1795424400000,
+   "utcLastUpdateTimestamp": 1795424400000,
+   "executionPrice": 2655.75,
+   "tradeSide": "SELL",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2,
+   "closePositionDetail": {
+    "entryPrice": 2650.25,
+    "grossProfit": 27500,
+    "swap": -1234,
+    "commission": -350,
+    "balance": 127906,
+    "quoteToDepositConversionRate": 1.0,
+    "closedVolume": 5000,
+    "balanceVersion": 12,
+    "moneyDigits": 2,
+    "pnlConversionFee": -10
+   }
+  },
+  {
+   "dealId": 9023,
+   "orderId": 8023,
+   "positionId": 5099,
+   "volume": 5000,
+   "filledVolume": 5000,
+   "symbolId": 41,
+   "createTimestamp": 1795424699880,
+   "executionTimestamp": 1795424700000,
+   "utcLastUpdateTimestamp": 1795424700000,
+   "executionPrice": 2656.0,
+   "tradeSide": "BUY",
+   "dealStatus": 4,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  }
+ ]
+}

@@ -1,0 +1,50 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. Open EURUSD sell 0.20 lot with SL and TP.",
+ "position": {
+  "positionId": 5003,
+  "tradeData": {
+   "symbolId": 1,
+   "volume": 2000000,
+   "tradeSide": "SELL",
+   "openTimestamp": 1795431600000,
+   "guaranteedStopLoss": false
+  },
+  "positionStatus": "POSITION_STATUS_OPEN",
+  "swap": 0,
+  "price": 1.0865,
+  "utcLastUpdateTimestamp": 1795431600000,
+  "commission": 0,
+  "marginRate": 1.0,
+  "mirroringCommission": 0,
+  "guaranteedStopLoss": false,
+  "usedMargin": 1000,
+  "moneyDigits": 2,
+  "stopLoss": 1.09,
+  "takeProfit": 1.08
+ },
+ "pnl": {
+  "positionId": 5003,
+  "grossUnrealizedPnL": -1500,
+  "netUnrealizedPnL": -1534
+ },
+ "deals": [
+  {
+   "dealId": 9041,
+   "orderId": 8041,
+   "positionId": 5003,
+   "volume": 2000000,
+   "filledVolume": 2000000,
+   "symbolId": 1,
+   "createTimestamp": 1795431599880,
+   "executionTimestamp": 1795431600000,
+   "utcLastUpdateTimestamp": 1795431600000,
+   "executionPrice": 1.0865,
+   "tradeSide": "SELL",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  }
+ ]
+}

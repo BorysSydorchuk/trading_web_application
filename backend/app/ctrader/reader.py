@@ -1,11 +1,13 @@
-"""Read-only operations on top of a connection: account list, balance and equity."""
+"""Read-only operations on top of a connection: account list, balance, equity and, when the
+caller asks for it, the trading history (`app.ctrader.history`)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Final
 
@@ -14,6 +16,7 @@ from pydantic import SecretStr
 from app.ctrader import protocol as p
 from app.ctrader.connection import Connector, CtraderConnection, Sleep, open_websocket
 from app.ctrader.errors import CtraderError, CtraderErrorCode
+from app.ctrader.history import HistoryRequest, TradingRead, check_account, read_trading
 from app.ctrader.money import equity_from, parse_int, scale_money
 
 logger = logging.getLogger(__name__)
@@ -61,11 +64,22 @@ class AccountGrant:
     accounts: tuple[CtidAccount, ...]
 
 
+Clock = Callable[[], datetime]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 @dataclass(frozen=True)
 class BalanceRead:
     balance: Decimal
     equity: Decimal | None  # None: the P&L read failed, equity is unknown
     equity_error: str | None = None
+    # Net unrealized P&L by position id (empty when equity is unknown).
+    position_pnl: Mapping[int, Decimal] = field(default_factory=dict)
+    # The trading history; None when it was not asked for, an error when it failed.
+    trading: TradingRead | CtraderError | None = None
 
 
 def endpoint_for(is_live: bool) -> str:
@@ -82,11 +96,7 @@ async def authorize_app(connection: CtraderConnection, creds: Credentials) -> No
 
 def _check_account(payload: dict[str, Any], ctid: int) -> None:
     """Money from another account's answer must never be stored."""
-    if (
-        "ctidTraderAccountId" in payload
-        and parse_int(payload["ctidTraderAccountId"], "ctidTraderAccountId") != ctid
-    ):
-        raise CtraderError(CtraderErrorCode.BAD_RESPONSE, "answer for another account")
+    check_account(payload, ctid)
 
 
 def _is_view_scope(scope: object) -> bool:
@@ -146,7 +156,15 @@ def _field(item: object, name: str) -> object:
     return item.get(name) if isinstance(item, dict) else None
 
 
-async def _read_net_pnl(connection: CtraderConnection, ctid: int) -> list[Decimal]:
+def _position_id(item: object) -> int | None:
+    raw = _field(item, "positionId")
+    return parse_int(raw, "positionId") if raw is not None else None
+
+
+async def _read_net_pnl(
+    connection: CtraderConnection, ctid: int
+) -> list[tuple[int | None, Decimal]]:
+    """(position id, net unrealized P&L) of every open position."""
     payload = await connection.request(
         p.POSITION_PNL_REQ, {"ctidTraderAccountId": ctid}, p.POSITION_PNL_RES
     )
@@ -156,7 +174,10 @@ async def _read_net_pnl(connection: CtraderConnection, ctid: int) -> list[Decima
     if not isinstance(positions, list):
         raise CtraderError(CtraderErrorCode.BAD_RESPONSE, "positions are not a list")
     return [
-        scale_money(parse_int(_field(item, "netUnrealizedPnL"), "netUnrealizedPnL"), digits)
+        (
+            _position_id(item),
+            scale_money(parse_int(_field(item, "netUnrealizedPnL"), "netUnrealizedPnL"), digits),
+        )
         for item in positions
     ]
 
@@ -190,7 +211,9 @@ async def _read_consistent(connection: CtraderConnection, ctid: int) -> BalanceR
             return BalanceRead(before, None, exc.code.value)
         balance = await _read_trader_balance(connection, ctid)
         if balance == before:
-            return BalanceRead(balance, equity_from(balance, net))
+            by_position = {pid: value for pid, value in net if pid is not None}
+            equity = equity_from(balance, (value for _pid, value in net))
+            return BalanceRead(balance, equity, position_pnl=by_position)
     logger.warning("cTrader account %s: balance kept changing during the read", ctid)
     return BalanceRead(balance, None, _BALANCE_CHANGED)
 
@@ -226,14 +249,45 @@ async def _restore_session(connection: CtraderConnection, creds: Credentials) ->
         raise _EnvironmentDownError(exc) from None
 
 
+async def _read_account(
+    connection: CtraderConnection,
+    creds: Credentials,
+    ctid: int,
+    request: HistoryRequest | None,
+    *,
+    last_attempt: bool,
+    clock: Clock,
+) -> BalanceRead:
+    """Balance and equity, then the trading history when asked for. A failed history read
+    keeps the balance (``trading`` is the error); a dropped session is raised for the retry
+    unless this is the last attempt."""
+    read = await read_balance(connection, creds, ctid)
+    if request is None:
+        return read
+    try:
+        trading: TradingRead | CtraderError = await read_trading(connection, ctid, request, clock())
+    except CtraderError as exc:
+        if exc.code in _RETRY_READ and not last_attempt:
+            raise
+        logger.warning("cTrader account %s: history not read: %s", ctid, exc.code.value)
+        trading = exc
+    return replace(read, trading=trading)
+
+
 async def _read_one(
-    connection: CtraderConnection, creds: Credentials, ctid: int
+    connection: CtraderConnection,
+    creds: Credentials,
+    ctid: int,
+    request: HistoryRequest | None = None,
+    clock: Clock = _utc_now,
 ) -> BalanceRead | CtraderError:
     """One retry after a dropped account session or connection; errors are returned."""
     try:
         for attempt in range(2):
             try:
-                return await read_balance(connection, creds, ctid)
+                return await _read_account(
+                    connection, creds, ctid, request, last_attempt=attempt == 1, clock=clock
+                )
             except CtraderError as exc:
                 if attempt == 1 or exc.code not in _RETRY_READ:
                     raise
@@ -251,6 +305,8 @@ async def _read_environment(
     connector: Connector,
     sleep: Sleep,
     budget_s: float,
+    history: Mapping[int, HistoryRequest] | None = None,
+    clock: Clock = _utc_now,
 ) -> dict[int, BalanceRead | CtraderError]:
     """Accounts read before a failure or the time limit keep their results."""
     connection = CtraderConnection(
@@ -262,7 +318,8 @@ async def _read_environment(
             await connection.start()
             await authorize_app(connection, creds)
             for ctid in ctids:
-                results[ctid] = await _read_one(connection, creds, ctid)
+                request = (history or {}).get(ctid)
+                results[ctid] = await _read_one(connection, creds, ctid, request, clock)
         return results
     except _EnvironmentDownError as exc:
         error = exc.error
@@ -282,15 +339,20 @@ async def read_balances(
     *,
     sleep: Sleep = asyncio.sleep,
     budget_s: float = READ_BUDGET_S,
+    history: Mapping[int, HistoryRequest] | None = None,
+    clock: Clock = _utc_now,
 ) -> dict[int, BalanceRead | CtraderError]:
     """``(ctid, is_live)`` -> result. Live and demo run on their own connection, and an
-    unexpected failure of one never loses the results of the other."""
+    unexpected failure of one never loses the results of the other. ``history``: per ctid,
+    the trading history to read too (`BalanceRead.trading`)."""
     groups: dict[bool, list[int]] = {}
     for ctid, is_live in targets:
         groups.setdefault(is_live, []).append(ctid)
     parts = await asyncio.gather(
         *(
-            _read_environment(creds, is_live, ctids, connector, sleep, budget_s)
+            _read_environment(
+                creds, is_live, ctids, connector, sleep, budget_s, history=history, clock=clock
+            )
             for is_live, ctids in groups.items()
         ),
         return_exceptions=True,

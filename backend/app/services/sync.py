@@ -540,17 +540,28 @@ def open_position_ids(session: Session, account_id: int) -> set[int]:
 
 
 def history_window_start(
-    session: Session, account_id: int, sync: SyncConfig, now: datetime
+    session: Session,
+    account_id: int,
+    sync: SyncConfig,
+    now: datetime,
+    *,
+    require_deals: bool = False,
 ) -> datetime:
-    """First sync: ``initial_history_days`` back; later: last success - ``overlap_days``."""
-    last_ok = session.scalar(
-        select(func.max(SyncLog.started_at)).where(
-            SyncLog.account_id == account_id, SyncLog.ok.is_(True)
-        )
-    )
+    """First sync: ``initial_history_days`` back; later: last success - ``overlap_days``.
+
+    ``require_deals`` (cTrader): only a success that read at least one deal moves the
+    window, so an empty read never advances it; the window then never starts more than
+    ``initial_history_days`` back.
+    """
+    conditions = [SyncLog.account_id == account_id, SyncLog.ok.is_(True)]
+    if require_deals:
+        conditions.append(SyncLog.deals_fetched > 0)
+    last_ok = session.scalar(select(func.max(SyncLog.started_at)).where(*conditions))
+    first = now - timedelta(days=sync.initial_history_days)
     if last_ok is None:
-        return now - timedelta(days=sync.initial_history_days)
-    return min(last_ok, now) - timedelta(days=sync.overlap_days)
+        return first
+    start = min(last_ok, now) - timedelta(days=sync.overlap_days)
+    return max(start, first) if require_deals else start
 
 
 def skipped_message(skipped: list[SkippedPosition]) -> str:

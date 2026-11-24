@@ -7,6 +7,8 @@ the positions the sync already read (MT5 ``positions_get``, read-only):
                                         "time": "2026-11-20T09:00:00Z"}}}
 
 ``profit`` = MT5 position profit + swap (account currency), ``time`` = the sync time (UTC).
+cTrader accounts (phase b) write ``price_current: null`` (no quote is read) and ``profit`` =
+the position's net unrealized P&L (2187), or null when it was not read.
 ``"_synced_at": {"<account_id>": "<sync start, UTC>"}`` says which sync wrote each account's
 entry (an empty entry = MT5 reported no positions then); readers of positions skip it.
 The file is replaced atomically (temp file + ``os.replace``). The API reads it; values older
@@ -21,7 +23,7 @@ import json
 import logging
 import os
 import time as monotonic_time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -44,8 +46,8 @@ _warned: set[str] = set()
 
 @dataclass(frozen=True)
 class LiveValue:
-    price_current: Decimal
-    pnl: Decimal  # profit + swap, account currency
+    price_current: Decimal | None  # None: not known (cTrader reads no quote)
+    pnl: Decimal | None  # profit + swap, account currency; None: not known
     time: datetime  # aware UTC
 
 
@@ -92,8 +94,35 @@ def write_account(
     path: Path, account_id: int, positions: Sequence[RawPosition], at: datetime
 ) -> None:
     """Replace ``account_id``'s positions in the snapshot (others kept). Raises OSError."""
+    _write_entries(
+        path, account_id, {str(p.identifier): _position_entry(p, at) for p in positions}, at
+    )
+
+
+def _optional(value: Decimal | None) -> str | None:
+    return format(value, "f") if value is not None else None
+
+
+def write_account_values(
+    path: Path, account_id: int, values: Mapping[int, LiveValue], at: datetime
+) -> None:
+    """As `write_account`, from values by position id (cTrader). Raises OSError."""
+    entries = {
+        str(pid): {
+            "price_current": _optional(value.price_current),
+            "profit": _optional(value.pnl),
+            "time": _utc_iso(value.time),
+        }
+        for pid, value in values.items()
+    }
+    _write_entries(path, account_id, entries, at)
+
+
+def _write_entries(
+    path: Path, account_id: int, entries: Mapping[str, Mapping[str, str | None]], at: datetime
+) -> None:
     data = _read_raw(path)
-    data[str(account_id)] = {str(p.identifier): _position_entry(p, at) for p in positions}
+    data[str(account_id)] = {key: dict(entry) for key, entry in entries.items()}
     synced = data.get(SYNCED_KEY)
     data[SYNCED_KEY] = {
         **(synced if isinstance(synced, dict) else {}),
@@ -124,12 +153,18 @@ def _parse_value(raw: Any) -> LiveValue | None:
         return None
     try:
         at = datetime.fromisoformat(str(raw["time"]))
-        value = LiveValue(Decimal(str(raw["price_current"])), Decimal(str(raw["profit"])), at)
+        value = LiveValue(_decimal(raw["price_current"]), _decimal(raw["profit"]), at)
     except (KeyError, ValueError, InvalidOperation):
         return None
-    if at.tzinfo is None or not value.price_current.is_finite() or not value.pnl.is_finite():
+    numbers = [n for n in (value.price_current, value.pnl) if n is not None]
+    if at.tzinfo is None or not all(n.is_finite() for n in numbers):
         return None
     return value
+
+
+def _decimal(raw: object) -> Decimal | None:
+    """An explicit null is "not known"; a missing key raises KeyError at the caller."""
+    return None if raw is None else Decimal(str(raw))
 
 
 def _parse(data: dict[str, Any]) -> dict[tuple[int, int], LiveValue]:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ctrader import guard
+from app.ctrader import guard, protocol
 from app.ctrader.connection import CtraderConnection
 from app.ctrader.errors import CtraderError
 from tests.ctrader_fakes import FakeConnector, FakeTransport
@@ -30,7 +30,19 @@ TRADING_NAMES = (
 
 
 def test_allowlist_is_exactly_the_read_only_set() -> None:
-    assert frozenset({51, 2100, 2102, 2121, 2124, 2149, 2187}) == guard.ALLOWED_OUTGOING
+    assert (
+        frozenset({51, 2100, 2102, 2114, 2116, 2121, 2124, 2133, 2149, 2187})
+        == guard.ALLOWED_OUTGOING
+    )
+
+
+def test_every_outgoing_protocol_constant_is_on_the_allowlist() -> None:
+    outgoing = {
+        value
+        for name, value in vars(protocol).items()
+        if name.endswith("_REQ") or name == "HEARTBEAT"
+    }
+    assert outgoing == guard.ALLOWED_OUTGOING
 
 
 def test_allowlist_contains_no_trading_message() -> None:
@@ -87,9 +99,22 @@ def test_no_trading_number_outside_the_guard(number: int) -> None:
 
 @pytest.mark.parametrize("name", TRADING_NAMES)
 def test_no_trading_message_name_outside_the_guard(name: str) -> None:
-    hits = [p.name for p in _sources_outside_guard() if name.lower() in _text(p).lower()]
+    hits = [p.name for p in _sources_outside_guard() if name.lower() in _scannable(p)]
     assert hits == []
+
+
+def test_the_only_name_exception_is_the_close_detail_field() -> None:
+    """``closePositionDetail`` is a field of a received deal (read-only data), not a message."""
+    assert "closepositiondetail" in _text(CTRADER_DIR / "history.py").lower()
+    assert "closeposition" not in _scannable(CTRADER_DIR / "history.py")
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _scannable(path: Path) -> str:
+    return _text(path).lower().replace(READ_ONLY_FIELD, "")
+
+
+READ_ONLY_FIELD = "closepositiondetail"

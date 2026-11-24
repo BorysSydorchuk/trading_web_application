@@ -1,0 +1,52 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. EURUSD sell 0.20 lot opened 9 days before the sync.",
+ "deals": [
+  {
+   "dealId": 9031,
+   "orderId": 8031,
+   "positionId": 5005,
+   "volume": 2000000,
+   "filledVolume": 2000000,
+   "symbolId": 1,
+   "createTimestamp": 1794657599880,
+   "executionTimestamp": 1794657600000,
+   "utcLastUpdateTimestamp": 1794657600000,
+   "executionPrice": 1.09012,
+   "tradeSide": "SELL",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  },
+  {
+   "dealId": 9032,
+   "orderId": 8032,
+   "positionId": 5005,
+   "volume": 2000000,
+   "filledVolume": 2000000,
+   "symbolId": 1,
+   "createTimestamp": 1795431599880,
+   "executionTimestamp": 1795431600000,
+   "utcLastUpdateTimestamp": 1795431600000,
+   "executionPrice": 1.08512,
+   "tradeSide": "BUY",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2,
+   "closePositionDetail": {
+    "entryPrice": 1.09012,
+    "grossProfit": 10000,
+    "swap": -456,
+    "commission": -140,
+    "balance": 109404,
+    "quoteToDepositConversionRate": 1.0,
+    "closedVolume": 2000000,
+    "balanceVersion": 12,
+    "moneyDigits": 2
+   }
+  }
+ ]
+}
