@@ -66,6 +66,7 @@ describe('syncErrorText', () => {
   const WORKER_CODES = [
     'not_configured', 'token_expired', 'token_invalid', 'token_store_failed', 'not_authorized', 'client_auth_failed',
     'connection_failed', 'rate_limited', 'bad_response', 'account_disconnected', 'equity_unavailable', 'internal_error', 'timeout',
+    'history_incomplete',
   ] as const
 
   it.each(WORKER_CODES)('cTrader %s uses the cTrader text', (code) => {
