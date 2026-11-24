@@ -1,0 +1,49 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. One open position with a stop loss.",
+ "position": {
+  "positionId": 5202,
+  "tradeData": {
+   "symbolId": 77,
+   "volume": 100,
+   "tradeSide": "BUY",
+   "openTimestamp": 1795431600000,
+   "guaranteedStopLoss": false
+  },
+  "positionStatus": "POSITION_STATUS_OPEN",
+  "swap": 0,
+  "price": 21000.0,
+  "utcLastUpdateTimestamp": 1795431600000,
+  "commission": 0,
+  "marginRate": 1.0,
+  "mirroringCommission": 0,
+  "guaranteedStopLoss": false,
+  "usedMargin": 1000,
+  "moneyDigits": 2,
+  "stopLoss": 20980.0
+ },
+ "pnl": {
+  "positionId": 5202,
+  "grossUnrealizedPnL": 0,
+  "netUnrealizedPnL": 0
+ },
+ "deals": [
+  {
+   "dealId": 9202,
+   "orderId": 8202,
+   "positionId": 5202,
+   "volume": 100,
+   "filledVolume": 100,
+   "symbolId": 77,
+   "createTimestamp": 1795431599880,
+   "executionTimestamp": 1795431600000,
+   "utcLastUpdateTimestamp": 1795431600000,
+   "executionPrice": 21000.0,
+   "tradeSide": "BUY",
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  }
+ ]
+}

@@ -1,0 +1,36 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs (assumed field names, to confirm on the first live run). AssetListRes (2113); ids match symbols.json.",
+ "ctidTraderAccountId": 7001,
+ "asset": [
+  {
+   "assetId": 1,
+   "name": "EUR",
+   "displayName": "Euro",
+   "digits": 2
+  },
+  {
+   "assetId": 2,
+   "name": "USD",
+   "displayName": "US Dollar",
+   "digits": 2
+  },
+  {
+   "assetId": 30,
+   "name": "DE40",
+   "displayName": "Germany 40",
+   "digits": 1
+  },
+  {
+   "assetId": 40,
+   "name": "XAU",
+   "displayName": "Gold",
+   "digits": 2
+  },
+  {
+   "assetId": 77,
+   "name": "US100",
+   "displayName": "US Tech 100",
+   "digits": 2
+  }
+ ]
+}
