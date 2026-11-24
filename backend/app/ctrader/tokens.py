@@ -162,14 +162,15 @@ class TokenStore:
         temp: str | None = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            handle, temp = tempfile.mkstemp(
+            handle, created = tempfile.mkstemp(
                 dir=self.path.parent, prefix=self.path.name, suffix=".tmp"
             )
+            temp = created
             with os.fdopen(handle, "w", encoding="utf-8") as stream:
                 stream.write(body)
                 stream.flush()
                 os.fsync(stream.fileno())
-            _retry_locked(lambda: os.replace(temp, self.path))
+            _retry_locked(lambda: os.replace(created, self.path))
             temp = None
         except OSError as exc:
             logger.error("cTrader token file not written: %s", type(exc).__name__)
