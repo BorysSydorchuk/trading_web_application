@@ -212,6 +212,15 @@ class WhisperTranscriber:
         )
         return True
 
+    def _mark_used_when_done(
+        self, segments: Iterator[TranscribedSegment]
+    ) -> Iterator[TranscribedSegment]:
+        """The idle time counts from the end of a note, not its start (a note may run 10 min)."""
+        try:
+            yield from segments
+        finally:
+            self._last_used = self._clock()
+
     def transcribe(self, path: Path, initial_prompt: str | None) -> TranscriptionRun:
         model = _load_model(self.options)
         self._last_used = self._clock()
@@ -224,6 +233,6 @@ class WhisperTranscriber:
         # info.duration is the full audio (before VAD); segment ends are on that timeline.
         return TranscriptionRun(
             duration=float(info.duration),
-            segments=_segments(raw),
+            segments=self._mark_used_when_done(_segments(raw)),
             settings=self.options.describe(),
         )

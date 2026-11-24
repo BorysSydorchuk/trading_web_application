@@ -362,3 +362,17 @@ def test_unload_keeps_other_cached_models(
     other.load()
     assert idle.unload_if_idle() is True
     assert list(mod._models) == [("base", "int8", 0)]
+
+
+def test_idle_time_counts_from_the_end_of_a_note(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    run = transcriber.transcribe(tmp_path / "a.wav", None)
+    clock.now += 600  # a long note: the segments are read 10 min after the start
+    assert [s.text for s in run.segments] == [" Вхід", " по FVG."]
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S - 1
+    assert transcriber.unload_if_idle() is False
+    clock.now += 1
+    assert transcriber.unload_if_idle() is True
