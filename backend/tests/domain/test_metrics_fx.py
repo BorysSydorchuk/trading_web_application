@@ -4,8 +4,9 @@ New keyword of ``app.domain.metrics.risk_amount``: ``loss_per_tick`` (account cu
 per lot). When given it replaces ``tick_value`` in the fallback
 ``|entry - SL| / tick_size * loss_per_tick * volume``. The realised-P&L path is unchanged.
 
-New keywords of ``app.services.sync.trade_values``: ``account_currency: str | None = None`` and
-``fx_loss_per_tick: Decimal | None = None``. When the spec's profit currency differs from
+New keywords of ``app.services.trade_writer.trade_values``:
+``account_currency: str | None = None`` and ``fx_loss_per_tick: Decimal | None = None``.
+When the spec's profit currency differs from
 ``account_currency`` (case-insensitive) the fallback uses ``fx_loss_per_tick`` and NEVER the
 spec's tick_value (None -> risk None). Without ``account_currency`` behaviour is unchanged.
 """
@@ -21,7 +22,7 @@ from app.domain.metrics import risk_amount
 from app.domain.trade_builder import BuiltTrade
 from app.models.enums import Direction, InitialSlSource
 from app.mt5.types import RawSymbolSpec
-from app.services.sync import trade_values
+from app.services.trade_writer import trade_values
 
 D = Decimal
 OPEN = datetime(2026, 11, 3, 9, 0, tzinfo=UTC)

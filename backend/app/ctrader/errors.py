@@ -29,6 +29,7 @@ class CtraderErrorCode(enum.StrEnum):
     BAD_RESPONSE = "bad_response"
     ACCOUNT_DISCONNECTED = "account_disconnected"
     EQUITY_UNAVAILABLE = "equity_unavailable"
+    HISTORY_INCOMPLETE = "history_incomplete"
     STATE_INVALID = "state_invalid"
     ACCESS_DENIED = "access_denied"
     INTERNAL_ERROR = "internal_error"

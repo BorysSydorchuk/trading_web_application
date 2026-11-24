@@ -3,7 +3,7 @@
 Names the backend must provide (docs/api.md "M5-10"):
 - ``app.domain.metrics.risk_pct(risk, account_size)`` and ``pnl_pct(net_pnl, account_size)``
   (the second parameter is renamed ``account_size``; tests pass it by keyword).
-- ``app.services.sync.trade_values(..., account_size: Decimal | None)`` keyword (required):
+- ``app.services.trade_writer.trade_values(..., account_size: Decimal | None)`` keyword (required):
   percent fields use it; ``balance`` (the live balance) still feeds ``balance_at_open``.
   ``account_size`` None / not positive -> both percents None.
 """
@@ -19,7 +19,7 @@ import pytest
 
 from app.config_files import get_rules
 from app.domain.metrics import pnl_pct, risk_pct
-from app.services.sync import trade_values
+from app.services.trade_writer import trade_values
 from tests.domain.test_metrics_fx import built, ger30_spec
 
 D = Decimal

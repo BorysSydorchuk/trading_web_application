@@ -15,8 +15,11 @@ ALLOWED_OUTGOING: Final = frozenset(
         51,  # heartbeat
         2100,  # ApplicationAuthReq
         2102,  # AccountAuthReq
+        2114,  # SymbolsListReq (symbol names)
+        2116,  # SymbolByIdReq (digits, lot size)
         2121,  # TraderReq
-        2124,  # ReconcileReq
+        2124,  # ReconcileReq (open positions)
+        2133,  # DealListReq (deal history)
         2149,  # GetAccountListByAccessTokenReq
         2187,  # GetPositionUnrealizedPnLReq
     }

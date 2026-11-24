@@ -1,0 +1,74 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. SymbolsListRes (2115) and SymbolByIdRes (2117).",
+ "list": {
+  "ctidTraderAccountId": 7001,
+  "symbol": [
+   {
+    "symbolId": 1,
+    "symbolName": "EURUSD",
+    "enabled": true,
+    "baseAssetId": 1,
+    "quoteAssetId": 2,
+    "symbolCategoryId": 1,
+    "description": "Euro vs US Dollar"
+   },
+   {
+    "symbolId": 2,
+    "symbolName": "DE40",
+    "enabled": true,
+    "baseAssetId": 30,
+    "quoteAssetId": 3,
+    "symbolCategoryId": 5,
+    "description": "Germany 40"
+   },
+   {
+    "symbolId": 41,
+    "symbolName": "XAUUSD",
+    "enabled": true,
+    "baseAssetId": 40,
+    "quoteAssetId": 2,
+    "symbolCategoryId": 3,
+    "description": "Gold vs US Dollar"
+   }
+  ],
+  "archivedSymbol": [
+   {
+    "symbolId": 99,
+    "name": "OLDCFD",
+    "utcLastUpdateTimestamp": 1735689600000
+   }
+  ]
+ },
+ "byId": {
+  "ctidTraderAccountId": 7001,
+  "symbol": [
+   {
+    "symbolId": 1,
+    "digits": 5,
+    "pipPosition": 4,
+    "lotSize": 10000000,
+    "minVolume": 100000,
+    "maxVolume": 10000000000,
+    "stepVolume": 100000
+   },
+   {
+    "symbolId": 2,
+    "digits": 1,
+    "pipPosition": 0,
+    "lotSize": 100,
+    "minVolume": 10,
+    "maxVolume": 100000,
+    "stepVolume": 10
+   },
+   {
+    "symbolId": 41,
+    "digits": 2,
+    "pipPosition": 1,
+    "lotSize": 10000,
+    "minVolume": 100,
+    "maxVolume": 1000000,
+    "stepVolume": 100
+   }
+  ]
+ }
+}

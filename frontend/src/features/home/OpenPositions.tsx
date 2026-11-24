@@ -6,6 +6,7 @@ import { uk } from '@/i18n/uk'
 import { formatPct, formatUsd } from '@/lib/displayFormat'
 import { signTone } from './heroSeries'
 import { PositionCard } from './PositionCard'
+import { hasLiveValues } from './positionModel'
 import type { HomeData } from './types'
 
 const t = uk.home.positions
@@ -15,7 +16,7 @@ export function OpenPositions({ data }: { data: HomeData }) {
   const id = useId()
   const { open_positions: positions, open_totals: totals } = data
   const totalTone = signTone(totals.pnl)
-  const live = positions.some((p) => p.current_price !== null)
+  const live = positions.some((p) => hasLiveValues(p) && !p.close_unconfirmed)
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
       <SectionHeader id={`${id}-title`} title={t.title}>

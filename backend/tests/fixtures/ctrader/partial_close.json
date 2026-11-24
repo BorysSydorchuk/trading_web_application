@@ -1,0 +1,81 @@
+{
+ "_comment": "Sanitized cTrader Open API JSON (ProtoOA*), synthetic ids; shape as in the Open API docs. DE40 sell 2 lots, closed 1 + 1.",
+ "deals": [
+  {
+   "dealId": 9011,
+   "orderId": 8011,
+   "positionId": 5002,
+   "volume": 200,
+   "filledVolume": 200,
+   "symbolId": 2,
+   "createTimestamp": 1795420799880,
+   "executionTimestamp": 1795420800000,
+   "utcLastUpdateTimestamp": 1795420800000,
+   "executionPrice": 19500.5,
+   "tradeSide": 2,
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2
+  },
+  {
+   "dealId": 9012,
+   "orderId": 8012,
+   "positionId": 5002,
+   "volume": 100,
+   "filledVolume": 100,
+   "symbolId": 2,
+   "createTimestamp": 1795422599880,
+   "executionTimestamp": 1795422600000,
+   "utcLastUpdateTimestamp": 1795422600000,
+   "executionPrice": 19480.5,
+   "tradeSide": 1,
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2,
+   "closePositionDetail": {
+    "entryPrice": 19500.5,
+    "grossProfit": 2000,
+    "swap": 0,
+    "commission": -50,
+    "balance": 102000,
+    "quoteToDepositConversionRate": 1.0,
+    "closedVolume": 100,
+    "balanceVersion": 12,
+    "moneyDigits": 2
+   }
+  },
+  {
+   "dealId": 9013,
+   "orderId": 8013,
+   "positionId": 5002,
+   "volume": 100,
+   "filledVolume": 100,
+   "symbolId": 2,
+   "createTimestamp": 1795424399880,
+   "executionTimestamp": 1795424400000,
+   "utcLastUpdateTimestamp": 1795424400000,
+   "executionPrice": 19490.5,
+   "tradeSide": 1,
+   "dealStatus": 2,
+   "marginRate": 1.0,
+   "commission": 0,
+   "baseToUsdConversionRate": 1.0,
+   "moneyDigits": 2,
+   "closePositionDetail": {
+    "entryPrice": 19500.5,
+    "grossProfit": 1000,
+    "swap": 0,
+    "commission": -50,
+    "balance": 102950,
+    "quoteToDepositConversionRate": 1.0,
+    "closedVolume": 100,
+    "balanceVersion": 12,
+    "moneyDigits": 2
+   }
+  }
+ ]
+}

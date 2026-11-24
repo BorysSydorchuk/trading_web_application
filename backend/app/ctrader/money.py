@@ -42,6 +42,21 @@ def scale_money(raw: int, digits: int) -> Decimal:
     return Decimal((sign, numerals, -digits))
 
 
+def parse_price(value: object, field: str) -> Decimal:
+    """A price from JSON (a double) as Decimal via ``str``: the shortest decimal that
+    round-trips the double (1.085, not 1.0849999...), as the MT5 adapter does. No float
+    arithmetic ever touches it; callers quantize to the symbol's digits."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        raise _bad(f"{field} is not a number")
+    try:
+        parsed = Decimal(str(value))
+    except InvalidOperation:
+        raise _bad(f"{field} is not a number") from None
+    if not parsed.is_finite():
+        raise _bad(f"{field} is not a finite number")
+    return parsed
+
+
 def equity_from(balance: Decimal, net_pnl: Iterable[Decimal]) -> Decimal:
     """Balance + the positions' net unrealized P&L, without context rounding.
 
