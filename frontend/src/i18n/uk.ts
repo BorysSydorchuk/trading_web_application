@@ -1121,6 +1121,7 @@ export const uk = {
       marginEstimate: (date: string, price: string, volume: string) =>
         `оцінка за запитом від ${date} (ціна ${price}, обсяг ${volume}); зміни плеча чи специфікацій не враховано`,
       marginUnavailable: 'маржа недоступна',
+      marginCtrader: 'Для рахунку cTrader маржу тут не рахуємо: дивіться її в cTrader.',
       marginLiveFailed: {
         failed: 'MT5 не порахував маржу.',
         expired: 'MT5 не відповів вчасно (термінал або worker не працює).',

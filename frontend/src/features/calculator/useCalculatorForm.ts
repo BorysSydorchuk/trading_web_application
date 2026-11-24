@@ -10,9 +10,10 @@ import { useCalculate, useSymbolSpecs } from './api'
 import { buildPayload, INITIAL_FORM, validateForm, type CalculatorFormState, type FieldErrors } from './formModel'
 import { mapCalculatorError, type CalculatorErrors } from './serverErrors'
 import type { CalculateResult } from './types'
-import { useLiveMargin, type MarginJob } from './useLiveMargin'
+import { useLiveMargin, type LiveMargin, type MarginJob } from './useLiveMargin'
 
 const NO_MISSING: readonly string[] = []
+const UNSUPPORTED: LiveMargin = { state: 'unsupported' }
 
 function pickAccountId(form: CalculatorFormState, accounts: readonly Account[]): string {
   if (accounts.some((a) => String(a.id) === form.accountId)) return form.accountId
@@ -41,7 +42,10 @@ export function useCalculatorForm(accounts: readonly Account[]) {
   // A refetch can drop the selected account or symbol: never show (or keep polling for) a result
   // that no longer matches the form.
   const current = result !== null && String(result.account_id) === accountId && result.symbol === symbol
-  const margin = useLiveMargin(current ? job : null)
+  // Live margin comes from an MT5 terminal; a cTrader account never sends the request.
+  const liveSupported = account?.platform !== 'ctrader'
+  const liveMargin = useLiveMargin(current && liveSupported ? job : null)
+  const margin = liveSupported ? liveMargin : UNSUPPORTED
 
   function supersede() {
     version.current += 1

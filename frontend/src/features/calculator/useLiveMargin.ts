@@ -23,6 +23,8 @@ export type LiveMargin =
   | { state: 'done'; amount: string; currency: string; at: string | null }
   /** Live margin did not come (failed, expired, request error, gave up waiting). */
   | { state: 'failed'; reason: 'failed' | 'expired' | 'error'; code: string | null }
+  /** The account's platform has no live margin (cTrader): no request is made. */
+  | { state: 'unsupported' }
 
 const PENDING: LiveMargin = { state: 'pending' }
 
