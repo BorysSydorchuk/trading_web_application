@@ -286,3 +286,93 @@ def test_faster_whisper_decodes_with_the_locked_pyav(tmp_path: Path) -> None:
 
     audio = decode_audio(str(_tone_wav(tmp_path / "tone.wav", seconds=1.0)))
     assert len(audio) == pytest.approx(16000, abs=160)
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_model_unloads_after_idle_minutes(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    transcriber.transcribe(tmp_path / "a.wav", None)
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S - 1
+    assert transcriber.unload_if_idle() is False
+    assert mod._models  # still loaded just before the limit
+    clock.now += 1
+    with caplog.at_level("INFO", logger=mod.__name__):
+        assert transcriber.unload_if_idle() is True
+    assert mod._models == {}
+    assert "Whisper model unloaded after 15 idle minutes" in caplog.text
+    assert transcriber.unload_if_idle() is False  # nothing left to unload
+
+
+def test_idle_limit_is_fifteen_minutes() -> None:
+    assert mod.WHISPER_IDLE_UNLOAD_S == 15 * 60
+
+
+def test_each_note_restarts_the_idle_time(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    transcriber.transcribe(tmp_path / "a.wav", None)
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S - 60
+    transcriber.transcribe(tmp_path / "b.wav", None)
+    clock.now += 120
+    assert transcriber.unload_if_idle() is False
+    assert len(fake_whisper.instances) == 1
+
+
+def test_never_loaded_model_is_not_unloaded(fake_whisper: type[FakeWhisperModel]) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    clock.now += 10 * mod.WHISPER_IDLE_UNLOAD_S
+    assert transcriber.unload_if_idle() is False
+    assert fake_whisper.instances == []
+
+
+def test_next_note_after_unload_loads_the_model_again(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    transcriber.transcribe(tmp_path / "a.wav", None)
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S
+    assert transcriber.unload_if_idle() is True
+    run = transcriber.transcribe(tmp_path / "b.wav", None)
+    assert [s.text for s in run.segments] == [" Вхід", " по FVG."]
+    assert len(fake_whisper.instances) == 2
+
+
+def test_unload_keeps_other_cached_models(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    clock = _Clock()
+    idle = WhisperTranscriber(OPTIONS, clock=clock)
+    idle.load()
+    other = WhisperTranscriber(replace(OPTIONS, model="base"), clock=clock)
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S
+    other.load()
+    assert idle.unload_if_idle() is True
+    assert list(mod._models) == [("base", "int8", 0)]
+
+
+def test_idle_time_counts_from_the_end_of_a_note(
+    fake_whisper: type[FakeWhisperModel], tmp_path: Path
+) -> None:
+    clock = _Clock()
+    transcriber = WhisperTranscriber(OPTIONS, clock=clock)
+    run = transcriber.transcribe(tmp_path / "a.wav", None)
+    clock.now += 600  # a long note: the segments are read 10 min after the start
+    assert [s.text for s in run.segments] == [" Вхід", " по FVG."]
+    clock.now += mod.WHISPER_IDLE_UNLOAD_S - 1
+    assert transcriber.unload_if_idle() is False
+    clock.now += 1
+    assert transcriber.unload_if_idle() is True
