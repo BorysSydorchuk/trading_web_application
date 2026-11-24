@@ -91,3 +91,8 @@ Top processes by working set (all instances summed):
 
 The worker was 147 MB: the Whisper model was not loaded (no voice note since the start).
 The app itself is not the memory problem; browsers/webviews and Claude take about 6.6 GB.
+
+Second snapshot 14:41 Brussels, after stop.bat and closing extra Chrome tabs: free RAM 4.64 GB (+1.2 GB).
+No python process left. Top: TradingView 2498 MB (12), claude 1865 (10), chrome 1475 (15),
+svchost 1261 (76), msedgewebview2 1008 (18), Memory Compression 524, explorer 374, NVIDIA Overlay 296,
+rsEngineSvc 292, rsAppUI 257. The RAM check (>= 3 GB) passes with TradingView open.
