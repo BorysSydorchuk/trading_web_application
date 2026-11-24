@@ -162,21 +162,19 @@ function SyncDetails({ row, platform }: { row: SyncStatusRow; platform: AccountP
         <DetailRow label={d.lastSuccess}>
           <TimeValue value={row.last_success_utc} />
         </DetailRow>
-        {/* cTrader phase a syncs balance and equity only: no MT5 server time, no positions. */}
+        {/* cTrader times are UTC already: no MT5 server offset to show. */}
         {platform !== 'ctrader' && (
-          <>
-            <DetailRow label={d.serverOffset}>
-              {row.server_offset_hours === null ? (
-                uk.common.empty
-              ) : (
-                <span className="num">{s.utcOffset(row.server_offset_hours)}</span>
-              )}
-            </DetailRow>
-            <DetailRow label={d.openPositions}>
-              <span className="num">{row.open_positions ?? uk.common.empty}</span>
-            </DetailRow>
-          </>
+          <DetailRow label={d.serverOffset}>
+            {row.server_offset_hours === null ? (
+              uk.common.empty
+            ) : (
+              <span className="num">{s.utcOffset(row.server_offset_hours)}</span>
+            )}
+          </DetailRow>
         )}
+        <DetailRow label={d.openPositions}>
+          <span className="num">{row.open_positions ?? uk.common.empty}</span>
+        </DetailRow>
       </dl>
       {hasProblem && (
         <div

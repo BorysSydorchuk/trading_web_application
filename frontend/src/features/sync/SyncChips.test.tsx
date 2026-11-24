@@ -33,14 +33,15 @@ describe('SyncChips: cTrader', () => {
     expect(screen.queryByText(/raw english/)).not.toBeInTheDocument()
   })
 
-  it('details show the platform and hide the MT5 server time and open positions', async () => {
-    serve([row()])
+  it('details show the platform and open positions, and hide the MT5 server time', async () => {
+    serve([row({ open_positions: 2 })])
     const { user } = renderWithProviders(<SyncChips />)
     await user.click(await screen.findByRole('button', { name: /CT Demo \(cTrader\)/ }))
     const details = await screen.findByRole('dialog')
     expect(within(details).getByText(uk.sync.details.platform)).toBeInTheDocument()
     expect(within(details).queryByText(uk.sync.details.serverOffset)).not.toBeInTheDocument()
-    expect(within(details).queryByText(uk.sync.details.openPositions)).not.toBeInTheDocument()
+    expect(within(details).getByText(uk.sync.details.openPositions)).toBeInTheDocument()
+    expect(within(details).getByText('2')).toBeInTheDocument()
   })
 
   it('an MT5 account keeps its details and its timeout text', async () => {
