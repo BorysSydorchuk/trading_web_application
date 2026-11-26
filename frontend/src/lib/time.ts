@@ -46,6 +46,12 @@ export function formatRecentBrussels(isoUtc: string, now: Date = new Date()): st
   return `${dayMonthFormatter.format(date)} ${time}`
 }
 
+/** "HH:mm" in Brussels of a UTC instant (no date), e.g. a daily reset time. */
+export function formatHmBrussels(isoUtc: string): string {
+  const date = new Date(isoUtc)
+  return Number.isNaN(date.getTime()) ? isoUtc : hmFormatter.format(date)
+}
+
 const dateTimeFormatter = new Intl.DateTimeFormat('uk-UA', {
   timeZone: APP_TIME_ZONE,
   day: '2-digit',

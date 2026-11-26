@@ -7,6 +7,7 @@ import { formatDecimal } from '@/lib/decimal'
 import { formatRecentBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { TABLE_CARD_CLASS, TABLE_HEAD_CLASS, TABLE_ROW_CLASS } from '@/features/journal/tableStyles'
+import { firmRulesText } from './firmRules'
 import type { Account } from './types'
 
 const c = uk.accounts.columns
@@ -75,7 +76,9 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       <td className="whitespace-nowrap">
         <Pill tone="neutral">{uk.accounts.platform[account.platform]}</Pill>
       </td>
-      <td className="whitespace-nowrap">{account.firm}</td>
+      <td className="whitespace-nowrap">
+        <FirmCell account={account} />
+      </td>
       <td className="whitespace-nowrap">{account.program}</td>
       <td className="whitespace-nowrap">{uk.accounts.phase[account.phase]}</td>
       <td className="num text-right">{account.login}</td>
@@ -122,6 +125,27 @@ function BalanceCell({ account }: { account: Account }) {
           <span className="num">{formatRecentBrussels(account.balance_synced_at)}</span>
         </span>
       )}
+    </div>
+  )
+}
+
+/** Firm name; for config/firms.yaml rules a compact hint (full text in the title and the edit form). */
+function FirmCell({ account }: { account: Account }) {
+  const text = firmRulesText(account.firm_rules)
+  if (text === null) return <>{account.firm}</>
+  const full = [`${text.title} ${text.summary}`, ...text.verify].join('\n')
+  return (
+    <div className="flex flex-col" title={full}>
+      <span>{account.firm}</span>
+      <span data-testid="firm-rules-hint" className="text-xs text-muted-foreground">
+        {uk.accounts.firmRules.tableHint}
+        {text.verify.length > 0 && (
+          <span className="text-warning">
+            {' · '}
+            {uk.accounts.firmRules.tableVerify(text.verify.length)}
+          </span>
+        )}
+      </span>
     </div>
   )
 }

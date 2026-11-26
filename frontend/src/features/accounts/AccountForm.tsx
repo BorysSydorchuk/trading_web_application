@@ -26,6 +26,7 @@ import {
   type FormField,
   type FormValues,
 } from './form'
+import { FirmRulesNote } from './FirmRulesNote'
 import { ACCOUNT_PHASES, ACCOUNT_STATUSES, passwordEnvKey, type Account, type AccountPlatform } from './types'
 
 const t = uk.accounts.form
@@ -318,6 +319,7 @@ export function AccountForm({ account, ctraderAccount = null, onBack, onDone }: 
             t.hints.pct,
           )}
         </div>
+        <FirmRulesNote rules={account?.firm_rules} />
       </FormSection>
 
       <DialogFooter>

@@ -41,6 +41,30 @@ export interface Account extends AccountInput {
   starting_balance_suggestion?: { amount: string; time: string } | null
   created_at: string
   updated_at: string
+  /** Effective firm rules (docs/api.md "Firm rules from config"); null / absent when source `none`. */
+  firm_rules?: FirmRules | null
+}
+
+/** Where the effective firm rules come from: config/firms.yaml, own Settings values, rules.yaml. */
+export type FirmRulesSource = 'firm' | 'account' | 'fallback'
+
+/** `AccountOut.firm_rules`: effective values, Decimals as strings (percent, e.g. "4.00"). */
+export interface FirmRules {
+  firm: string
+  source: FirmRulesSource
+  daily_loss_pct: string | null
+  max_loss_pct: string | null
+  /** Only `static` today. */
+  max_loss_type: string | null
+  profit_target_pct: string | null
+  /** Only `balance` today (start-of-day balance). */
+  daily_basis: string | null
+  /** "HH:MM" wall time in `reset_timezone`. */
+  daily_reset: string | null
+  /** `server` (broker server time) or an IANA zone name. */
+  reset_timezone: string | null
+  /** Field names to verify with the firm, e.g. ["daily_basis", "daily_reset"]. */
+  to_verify: string[]
 }
 
 /** `POST /api/ctrader/accounts` (backend/app/schemas/ctrader.py); login and server come from cTrader. */

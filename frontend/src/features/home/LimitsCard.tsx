@@ -2,11 +2,13 @@ import { useId } from 'react'
 import { Card } from '@/components/studio/Card'
 import { Tile } from '@/components/studio/Tile'
 import { uk } from '@/i18n/uk'
+import { verifyItemText } from '@/features/accounts/firmRules'
 import { formatPct, formatUsd } from '@/lib/displayFormat'
+import { formatHmBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { limitBarGeometry } from './chartMath'
 import { signTone } from './heroSeries'
-import type { HomeLimits, LimitPeriod } from './types'
+import type { FirmDay, HomeLimits, LimitPeriod } from './types'
 
 const t = uk.home.limits
 const pctSigned = (v: string | null) => formatPct(v, 'overview', { signed: true })
@@ -14,13 +16,50 @@ const pctPlain = (v: string | null) => formatPct(v, 'overview')
 
 const num = (value: string | null) => (value === null ? null : Number(value))
 
+function toneClass(pct: string | null): string {
+  const tone = signTone(pct)
+  return tone === 'loss' ? 'text-loss' : tone === 'profit' ? 'text-profit' : 'text-ink'
+}
+
+interface LimitBarProps {
+  /** Current %, null = unknown (no fill). */
+  pct: string | null
+  loss_pct: string | null
+  profit_pct: string | null
+  ariaLabel: string
+  testId?: string
+}
+
+/** Track with the striped loss zone, the fill from zero to the current % and the zero tick. */
+function LimitBar({ pct, loss_pct, profit_pct, ariaLabel, testId = 'limit-bar' }: LimitBarProps) {
+  const current = pct === null ? 0 : Number(pct)
+  const g = limitBarGeometry(Number.isFinite(current) ? current : 0, num(loss_pct), num(profit_pct))
+  return (
+    <div role="img" aria-label={ariaLabel} data-testid={testId} className="relative h-3">
+      <div className="absolute inset-0 rounded-md bg-track" />
+      {g.lossZone > 0 && (
+        <div
+          data-testid="limit-loss-zone"
+          className="absolute inset-y-0 left-0 rounded-l-md bg-[repeating-linear-gradient(135deg,var(--tj-loss-wash)_0_6px,var(--tj-loss-light)_6px_12px)]"
+          style={{ width: `${g.lossZone}%` }}
+        />
+      )}
+      <div
+        data-testid="limit-fill"
+        className={cn(
+          'absolute inset-y-0',
+          pct === null && 'hidden',
+          current >= 0 ? 'rounded-r-md bg-linear-90 from-profit-light to-profit-mid' : 'rounded-l-md bg-linear-270 from-loss-light to-loss-mid',
+        )}
+        style={{ left: `${g.fillLeft}%`, width: `${g.fillWidth}%` }}
+      />
+      <div data-testid="limit-zero" className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-[1px] bg-faint" style={{ left: `${g.zero}%` }} />
+    </div>
+  )
+}
+
 function LimitRow({ label, period }: { label: string; period: LimitPeriod }) {
   // pct is null without an account size: the bar shows only the limits, the value «—».
-  const current = period.pct === null ? 0 : Number(period.pct)
-  const loss = num(period.loss_pct)
-  const profit = num(period.profit_pct)
-  const g = limitBarGeometry(Number.isFinite(current) ? current : 0, loss, profit)
-  const tone = signTone(period.pct)
   const value = pctSigned(period.pct)
   const low = period.loss_pct === null ? t.noLimit : pctPlain(period.loss_pct)
   const high = period.profit_pct === null ? t.noLimit : pctSigned(period.profit_pct)
@@ -28,32 +67,43 @@ function LimitRow({ label, period }: { label: string; period: LimitPeriod }) {
     <div className="flex flex-col gap-2 border-b border-divider py-3 last:border-b-0">
       <div className="flex items-baseline justify-between">
         <span className="font-semibold">{label}</span>
-        <span className={cn('num text-base font-semibold', tone === 'loss' ? 'text-loss' : tone === 'profit' ? 'text-profit' : 'text-ink')}>{value}</span>
+        <span className={cn('num text-base font-semibold', toneClass(period.pct))}>{value}</span>
       </div>
-      <div role="img" aria-label={t.barLabel(label, value, low, high)} data-testid="limit-bar" className="relative h-3">
-        <div className="absolute inset-0 rounded-md bg-track" />
-        {g.lossZone > 0 && (
-          <div
-            data-testid="limit-loss-zone"
-            className="absolute inset-y-0 left-0 rounded-l-md bg-[repeating-linear-gradient(135deg,var(--tj-loss-wash)_0_6px,var(--tj-loss-light)_6px_12px)]"
-            style={{ width: `${g.lossZone}%` }}
-          />
-        )}
-        <div
-          data-testid="limit-fill"
-          className={cn(
-            'absolute inset-y-0',
-            period.pct === null && 'hidden',
-            current >= 0 ? 'rounded-r-md bg-linear-90 from-profit-light to-profit-mid' : 'rounded-l-md bg-linear-270 from-loss-light to-loss-mid',
-          )}
-          style={{ left: `${g.fillLeft}%`, width: `${g.fillWidth}%` }}
-        />
-        <div data-testid="limit-zero" className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-[1px] bg-faint" style={{ left: `${g.zero}%` }} />
-      </div>
+      <LimitBar pct={period.pct} loss_pct={period.loss_pct} profit_pct={period.profit_pct} ariaLabel={t.barLabel(label, value, low, high)} />
       <div className="num flex justify-between text-[11px]">
         <span className={period.loss_pct === null ? 'text-ink-muted' : 'text-loss'}>{low}</span>
         <span className={period.profit_pct === null ? 'text-ink-muted' : 'text-profit'}>{high}</span>
       </div>
+    </div>
+  )
+}
+
+/** «Денний ліміт фірми»: day P&L % (incl. floating) towards the firm daily floor, room and reset time. */
+function FirmDayRow({ firmDay }: { firmDay: FirmDay }) {
+  const value = pctSigned(firmDay.pnl_pct)
+  const limit = pctPlain(firmDay.loss_pct)
+  const room = firmDay.room_pct === null ? null : Number(firmDay.room_pct)
+  const verify = (firmDay.to_verify ?? []).map((item) => verifyItemText(null, item))
+  return (
+    <div data-testid="firm-day" className="flex flex-col gap-2 border-b border-divider py-3 last:border-b-0">
+      <div className="flex items-baseline justify-between">
+        <span className="font-semibold">{t.firmDay}</span>
+        <span className={cn('num text-base font-semibold', firmDay.breached ? 'text-loss' : toneClass(firmDay.pnl_pct))}>{value}</span>
+      </div>
+      <LimitBar pct={firmDay.pnl_pct} loss_pct={firmDay.loss_pct} profit_pct={null} ariaLabel={t.firmBarLabel(value, limit)} testId="firm-day-bar" />
+      <div className="num flex justify-between gap-2 text-[11px]">
+        <span className="text-loss">{limit}</span>
+        <span className={firmDay.breached || (room !== null && room <= 0) ? 'text-loss' : 'text-ink-muted'}>
+          {t.firmRoom(pctPlain(firmDay.room_pct))} · {t.firmReset(formatHmBrussels(firmDay.reset_at))}
+        </span>
+      </div>
+      {firmDay.pnl_pct === null && <p data-testid="firm-day-no-floating" className="text-[11px] text-ink-muted">{t.firmNoFloating}</p>}
+      {firmDay.breached && (
+        <p data-testid="firm-day-breached" className="text-sm font-semibold text-loss">
+          {t.firmBreached}
+        </p>
+      )}
+      {verify.length > 0 && <p data-testid="firm-day-verify" className="text-[11px] text-ink-muted">{t.firmVerify(verify.join(', '))}</p>}
     </div>
   )
 }
@@ -114,6 +164,7 @@ export function LimitsCard({ limits, error = null, accountCount, accountId }: Li
         <>
           <BalanceRow limits={limits} />
           <LimitRow label={t.day} period={limits.day} />
+          {limits.firm_day && <FirmDayRow firmDay={limits.firm_day} />}
           <LimitRow label={t.week} period={limits.week} />
           <LimitRow label={t.month} period={limits.month} />
           <div className="flex gap-2.5 pt-3">
