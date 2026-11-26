@@ -380,7 +380,7 @@ def test_static_floor_never_moves_after_profit() -> None:
     assert at_max_loss(D(9200), size, D(8)) is True
     # Equity has grown to 12 000 (a trailing floor would be higher): 9200 stays the floor.
     assert at_max_loss(D(12000), size, D(8)) is False
-    assert at_max_loss(D(9200.01), size, D(8)) is False
+    assert at_max_loss(D("9200.01"), size, D(8)) is False
     assert at_max_loss(D(9199), size, D(8)) is True
 
 
@@ -412,3 +412,59 @@ def test_first_second_after_reset_is_a_new_day() -> None:
 
     assert rule.reset_at(start + timedelta(seconds=1)) == start
     assert rule.reset_at(start - timedelta(seconds=1)) == start - timedelta(days=1)
+
+
+def test_breached_by_realized_loss_even_when_floating_is_unknown() -> None:
+    result = day(fresh_balance=D(9600), closed=[(utc(12, 2), D(-400))], floating=None)
+
+    assert result.room_pct is None
+    assert result.pnl_pct is None
+    assert result.breached is True
+
+
+def test_not_breached_by_realized_loss_inside_the_limit_with_unknown_floating() -> None:
+    result = day(fresh_balance=D(9601), closed=[(utc(12, 2), D(-399))], floating=None)
+
+    assert result.breached is False
+
+
+@pytest.mark.parametrize("offset", [24, -24, 30, 100])
+def test_invalid_server_offset_is_utc_with_a_warning(
+    offset: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    result = reset_at(utc(12, 14), time(0), "server", offset)
+
+    assert result == utc(12)
+    assert "server offset" in caplog.text
+
+
+def test_valid_extreme_server_offsets_are_used() -> None:
+    assert reset_at(utc(12, 14), time(0), "server", 23) == utc(12, 1)
+    assert reset_at(utc(12, 14), time(0), "server", -23) == utc(12, 23) - timedelta(days=1)
+
+
+def test_iana_zone_ignores_the_server_offset_even_when_invalid() -> None:
+    assert reset_at(utc(12, 14), time(0), "Europe/Brussels", None) == utc(11, 23)
+    assert reset_at(utc(12, 14), time(0), "Europe/Brussels", 24) == utc(11, 23)
+
+
+def test_reset_inside_the_spring_forward_gap_stays_within_a_day() -> None:
+    # New York 2026-03-08: 02:30 does not exist (02:00 -> 03:00); fold 0 reads it as EST.
+    after = datetime(2026, 3, 8, 12, tzinfo=UTC)
+    during = datetime(2026, 3, 8, 7, 15, tzinfo=UTC)  # 03:15 EDT, before 07:30 UTC
+
+    assert reset_at(after, time(2, 30), "America/New_York", None) == datetime(
+        2026, 3, 8, 7, 30, tzinfo=UTC
+    )
+    assert reset_at(during, time(2, 30), "America/New_York", None) == datetime(
+        2026, 3, 7, 7, 30, tzinfo=UTC
+    )
+
+
+def test_reset_inside_the_fall_back_fold_uses_the_first_occurrence() -> None:
+    # London 2026-10-25: 01:30 happens twice; the first one is BST (UTC+1) = 00:30 UTC.
+    now = datetime(2026, 10, 25, 12, tzinfo=UTC)
+
+    assert reset_at(now, time(1, 30), "Europe/London", None) == datetime(
+        2026, 10, 25, 0, 30, tzinfo=UTC
+    )

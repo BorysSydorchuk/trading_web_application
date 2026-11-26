@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.clock import utc_now
@@ -25,9 +25,9 @@ from app.config import REPO_ROOT, Settings, get_settings
 from app.config_files import reload_config
 from app.config_files.loader import CONFIG_DIR_ENV
 from app.db import make_session_factory
-from app.models import Account
+from app.models import Account, RuleViolation, Trade
 from tests.test_dashboard_api import closed, open_position
-from tests.test_trades_api import add_account
+from tests.test_trades_api import add_account, add_exit
 
 D = Decimal
 NOW = datetime(2026, 11, 12, 14, 0, tzinfo=UTC)
@@ -181,18 +181,98 @@ def test_firm_rules_are_null_without_any_rule(
     assert client.get(f"/api/accounts/{account.id}").json()["firm_rules"] is None
 
 
-def test_account_api_survives_a_broken_rules_yaml_but_reports_a_broken_firms_yaml(
+def break_file(config: Path, name: str, text_: str = "firms:\n  KeyFunding: {bogus: 1}\n") -> None:
+    (config / name).write_text(text_, encoding="utf-8")
+    reload_config()
+
+
+def logged(caplog: pytest.LogCaptureFixture, level: str, needle: str) -> list[str]:
+    return [
+        r.getMessage() for r in caplog.records if r.levelname == level and needle in r.getMessage()
+    ]
+
+
+def test_accounts_with_a_broken_firms_file_show_no_rules_and_log_once_per_request(
+    client: TestClient,
+    session: Session,
+    config_copy: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    key_account(session)
+    key_account(session, "Key2", 8)
+    break_file(config_copy, "firms.yaml")
+    caplog.clear()
+
+    response = client.get("/api/accounts")
+
+    assert response.status_code == 200
+    assert [a["firm_rules"] for a in response.json()["items"]] == [None, None]
+    assert len(logged(caplog, "ERROR", "firms.yaml")) == 1
+
+
+def test_get_one_account_with_a_broken_firms_file_still_answers(
     client: TestClient, session: Session, config_copy: Path
 ) -> None:
     account = key_account(session)
-    (config_copy / "firms.yaml").write_text("firms:\n  KeyFunding: {bogus: 1}\n", encoding="utf-8")
-    reload_config()
+    break_file(config_copy, "firms.yaml")
 
     response = client.get(f"/api/accounts/{account.id}")
 
+    assert response.status_code == 200
+    assert response.json()["firm_rules"] is None
+
+
+def test_broken_rules_file_warns_once_per_request(
+    client: TestClient,
+    session: Session,
+    config_copy: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    key_account(session)
+    key_account(session, "Key2", 8)
+    break_file(config_copy, "rules.yaml", "timezone: [broken\n")
+    caplog.clear()
+
+    response = client.get("/api/accounts")
+
+    assert response.status_code == 200
+    assert len(logged(caplog, "WARNING", "rules.yaml")) == 1
+
+
+def test_patch_with_a_broken_firms_file_is_refused_before_writing(
+    client: TestClient, session: Session, config_copy: Path
+) -> None:
+    account = key_account(session)
+    break_file(config_copy, "firms.yaml")
+
+    response = client.patch(f"/api/accounts/{account.id}", json={"name": "Renamed"})
+
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "config_error"
-    assert response.json()["error"]["details"]["file"] == "firms.yaml"
+    session.expire_all()
+    assert session.get(Account, account.id).name == "Key"  # type: ignore[union-attr]
+
+
+def test_post_with_a_broken_firms_file_creates_nothing(
+    client: TestClient, session: Session, config_copy: Path
+) -> None:
+    break_file(config_copy, "firms.yaml")
+    body = {
+        "name": "New",
+        "firm": "KeyFunding",
+        "program": "P",
+        "phase": "phase_1",
+        "login": 4242,
+        "server": "S",
+        "starting_balance": "10000.00",
+        "currency": "USD",
+    }
+
+    response = client.post("/api/accounts", json=body)
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "config_error"
+    assert session.query(Account).count() == 0
 
 
 def test_ctrader_style_account_gets_the_same_rules(client: TestClient, session: Session) -> None:
@@ -489,3 +569,213 @@ def test_dashboard_broken_firms_file_is_a_config_error(
 
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "config_error"
+
+
+# --- review fixes ------------------------------------------------------------------------------
+
+
+def firm_violation_keys(session: Session, trade_id: int) -> set[str]:
+    session.expire_all()
+    rows = session.scalars(select(RuleViolation).where(RuleViolation.trade_id == trade_id))
+    return {r.rule_key for r in rows}
+
+
+def loss_then_entry(session: Session, account: Account, loss: str = "-450.00") -> Trade:
+    closed(session, account, TODAY - timedelta(hours=7), loss)  # 02:00 UTC
+    return closed(session, account, TODAY + timedelta(hours=1), "10.00", open_time=TODAY)
+
+
+def test_patching_the_firm_recomputes_the_firm_violation(
+    client: TestClient, session: Session
+) -> None:
+    account = key_account(session, firm="OtherFirm")
+    entry = loss_then_entry(session, account)
+    assert "firm_daily_loss" not in firm_violation_keys(session, entry.id)
+
+    client.patch(f"/api/accounts/{account.id}", json={"firm": "KeyFunding"})
+    assert "firm_daily_loss" in firm_violation_keys(session, entry.id)
+
+    client.patch(f"/api/accounts/{account.id}", json={"firm": "OtherFirm"})
+    assert "firm_daily_loss" not in firm_violation_keys(session, entry.id)
+
+
+def test_patching_the_daily_loss_recomputes_the_firm_violation(
+    client: TestClient, session: Session
+) -> None:
+    account = key_account(session)
+    entry = loss_then_entry(session, account, "-350.00")  # -3.5 %: inside the firm 4 %
+    client.patch(f"/api/accounts/{account.id}", json={"name": "Key"})  # no rule field: no change
+    assert "firm_daily_loss" not in firm_violation_keys(session, entry.id)
+
+    response = client.patch(f"/api/accounts/{account.id}", json={"daily_loss_pct": "3"})
+    assert response.status_code == 200
+    assert "firm_daily_loss" in firm_violation_keys(session, entry.id)  # -3.5 % <= -3 %
+
+    client.patch(f"/api/accounts/{account.id}", json={"daily_loss_pct": "5"})
+    assert "firm_daily_loss" not in firm_violation_keys(session, entry.id)
+
+
+def test_patching_the_size_with_a_broken_firms_file_changes_nothing(
+    client: TestClient, session: Session, config_copy: Path
+) -> None:
+    account = key_account(session)
+    break_file(config_copy, "firms.yaml")
+
+    response = client.patch(f"/api/accounts/{account.id}", json={"reference_balance": "5000"})
+
+    assert response.status_code == 500
+    session.expire_all()
+    assert session.get(Account, account.id).reference_balance == D("10000.00")  # type: ignore[union-attr]
+
+
+def test_recompute_account_reads_firms_before_changing_anything(
+    session: Session, config_copy: Path
+) -> None:
+    from app.config_files import ConfigError
+    from app.services import risk_base
+
+    account = key_account(session)
+    trade = closed(session, account, TODAY, "-5.00", risk_amount=D("100.00"), risk_pct=D("9.9999"))
+    break_file(config_copy, "firms.yaml")
+
+    with pytest.raises(ConfigError):
+        risk_base.recompute_account(session, account.id)
+
+    session.rollback()
+    session.refresh(trade)
+    assert trade.risk_pct == D("9.9999")
+
+
+def test_recompute_all_fails_once_for_a_broken_firms_file(
+    db_engine: Engine, session: Session, config_copy: Path
+) -> None:
+    from app.services import risk_base
+
+    key_account(session)
+    break_file(config_copy, "firms.yaml")
+
+    assert risk_base.recompute_all(make_session_factory(db_engine)) is None
+
+
+def test_symbol_map_configs_are_unavailable_for_a_broken_firms_file(config_copy: Path) -> None:
+    from app.services import symbol_map
+
+    break_file(config_copy, "firms.yaml")
+
+    assert symbol_map._recompute_configs() is None
+
+
+def test_partial_close_after_the_reset_of_a_position_opened_before_it(
+    client: TestClient, session: Session
+) -> None:
+    """Buy 23:00 UTC yesterday, partial -300 at 01:00 today (after the 00:00 reset): that
+    realized loss belongs to today, so the start balance is 9700 + 300."""
+    account = key_account(session)
+    trade = open_position(
+        session,
+        account,
+        open_time=datetime(2026, 11, 11, 23, 0, tzinfo=UTC),
+        net_pnl=D("-300.00"),
+        commission=D("0.00"),
+    )
+    add_exit(
+        session,
+        trade,
+        900001,
+        time=datetime(2026, 11, 12, 1, 0, tzinfo=UTC),
+        profit=D("-300.00"),
+        price=D("2640.00"),
+        commission=D("0.00"),
+    )
+    synced(session, account, "9700.00", "9700.00", FRESH)
+
+    day = firm_day(client, account)
+
+    assert day is not None
+    assert day["start_balance"] == "10000.00"
+    assert day["floor"] == "9600.00"
+    assert day["pnl_pct"] == "-3.0000"
+
+
+def test_entry_commission_of_a_position_opened_before_the_reset_stays_yesterday(
+    client: TestClient, session: Session
+) -> None:
+    account = key_account(session)
+    trade = open_position(
+        session,
+        account,
+        open_time=datetime(2026, 11, 11, 23, 0, tzinfo=UTC),
+        net_pnl=D("-307.00"),
+        commission=D("-7.00"),
+    )
+    add_exit(
+        session,
+        trade,
+        900002,
+        time=datetime(2026, 11, 12, 1, 0, tzinfo=UTC),
+        profit=D("-300.00"),
+        price=D("2640.00"),
+        commission=D("0.00"),
+    )
+    synced(session, account, "9693.00", "9693.00", FRESH)
+
+    day = firm_day(client, account)
+
+    assert day is not None
+    assert day["start_balance"] == "9993.00"  # -7 entry commission was booked yesterday
+
+
+def test_account_daily_loss_override_applies_to_the_home_firm_day(
+    client: TestClient, session: Session
+) -> None:
+    account = key_account(session, daily_loss_pct=D("2"))
+    open_position(session, account)
+    synced(session, account, "10000.00", "9800.00", FRESH)
+
+    day = firm_day(client, account)
+
+    assert day is not None
+    assert (day["loss_pct"], day["floor"], day["breached"]) == ("-2.0000", "9800.00", True)
+
+
+def test_account_daily_loss_override_applies_to_the_dashboard_flag(
+    client: TestClient, session: Session
+) -> None:
+    account = key_account(session, daily_loss_pct=D("2"))
+    open_position(session, account)
+    synced(session, account, "10000.00", "9800.00", FRESH)
+
+    assert stop(client)["firm_day"] is True
+
+
+def test_dashboard_flags_both_when_two_firm_accounts_are_breached(
+    client: TestClient, session: Session
+) -> None:
+    first = key_account(session, "K1", 21)
+    second = key_account(session, "K2", 22)
+    for account in (first, second):
+        open_position(session, account)
+        synced(session, account, "10000.00", "9200.00", FRESH)
+
+    flags = stop(client)
+
+    assert (flags["firm_day"], flags["firm_max_loss"]) == (True, True)
+
+
+def test_batch_equity_uses_sync_balance_or_trades(session: Session) -> None:
+    from app.services.home_max_loss import accounts_equity
+
+    fresh = key_account(session, "F", 31)
+    synced(session, fresh, "10000.00", "10123.00", FRESH)
+    balance_only = key_account(session, "B", 32, balance=D("9500.00"))
+    nothing = key_account(session, "N", 33)
+    closed(session, nothing, TODAY, "-250.00")
+    size = D("10000.00")
+
+    result = accounts_equity(session, [(fresh, size), (balance_only, size), (nothing, size)], NOW)
+
+    assert result == {
+        fresh.id: D("10123.00"),
+        balance_only.id: D("9500.00"),
+        nothing.id: D("9750.00"),
+    }

@@ -22,6 +22,7 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
+from app.config_files.firms import get_firms_config
 from app.config_files.loader import ConfigError
 from app.config_files.rules import RulesConfig, get_rules
 from app.config_files.symbols import SymbolsConfig
@@ -120,7 +121,9 @@ def _recompute(
 
 def _recompute_configs() -> tuple[AlignmentSettings, RulesConfig] | None:
     try:
-        return alignment_settings(), get_rules()
+        settings, rules = alignment_settings(), get_rules()
+        get_firms_config()  # recompute_rules reads it: fail before renaming anything
+        return settings, rules
     except ConfigError as exc:
         logger.error(
             "Symbol map not applied (renamed trades need their alignment and rules recomputed): %s",

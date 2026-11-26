@@ -15,6 +15,7 @@ throughout; rounding happens at the API edge only.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta, timezone, tzinfo
@@ -25,7 +26,10 @@ from zoneinfo import ZoneInfo
 from app.config_files.firms import SERVER_ZONE, FirmsConfig
 from app.domain.home import firm_limits
 
+logger = logging.getLogger(__name__)
+
 HUNDRED = Decimal(100)
+MAX_OFFSET_HOURS = 23  # a UTC offset is strictly inside +-24 h
 ZERO = Decimal(0)
 
 FirmRulesSource = Literal["firm", "account", "fallback", "none"]
@@ -138,6 +142,11 @@ def _legacy_limits(
 
 def _zone(reset_timezone: str, server_offset_hours: int | None) -> tzinfo:
     if reset_timezone == SERVER_ZONE:
+        if server_offset_hours is not None and abs(server_offset_hours) > MAX_OFFSET_HOURS:
+            logger.warning(
+                "Invalid server offset %s h, using UTC for the firm day", server_offset_hours
+            )
+            return UTC
         return timezone(timedelta(hours=server_offset_hours or 0))
     return ZoneInfo(reset_timezone)
 
@@ -199,7 +208,7 @@ class FirmDay:
     loss_pct: Decimal  # negative: -daily_loss_pct
     pnl_pct: Decimal | None  # None: floating P&L unknown
     room_pct: Decimal | None
-    breached: bool
+    breached: bool  # also true when only the realized loss is already at the limit
     to_verify: tuple[str, ...]
 
 
@@ -230,6 +239,8 @@ def firm_day(
     floor = start - size * daily_loss_pct / HUNDRED
     pnl_pct = (since + floating) / size * HUNDRED if floating is not None else None
     room = daily_loss_pct + pnl_pct if pnl_pct is not None else None
+    # Unknown floating P&L: the realized part alone can still prove the limit is reached.
+    realized_room = daily_loss_pct + since / size * HUNDRED
     return FirmDay(
         reset_at=reset_at,
         start_balance=start,
@@ -237,7 +248,7 @@ def firm_day(
         loss_pct=-daily_loss_pct,
         pnl_pct=pnl_pct,
         room_pct=room,
-        breached=room is not None and room <= 0,
+        breached=(room if room is not None else realized_room) <= 0,
         to_verify=to_verify,
     )
 

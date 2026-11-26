@@ -568,6 +568,20 @@ def test_cycle_skips_when_rules_broken(
     assert "MT5 sync skipped" in caplog.text
 
 
+def test_cycle_skips_when_firms_broken(
+    factory: sessionmaker[Session], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A broken firms.yaml skips the cycle cleanly, like a broken rules.yaml."""
+    from app.config_files import ConfigError
+
+    def broken() -> Any:
+        raise ConfigError(Path("firms.yaml"), ["firms.KeyFunding.bogus: extra"])
+
+    assert run_sync_cycle(factory, source("basic_week.json"), firms_getter=broken) == []
+    assert "MT5 sync skipped" in caplog.text
+    assert "firms.yaml" in caplog.text
+
+
 def test_make_source(settings: Settings) -> None:
     assert isinstance(
         make_source(settings.model_copy(update={"mt5_source": "real"})), RealMt5Source

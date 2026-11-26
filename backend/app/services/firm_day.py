@@ -17,7 +17,7 @@ from app.config_files.firms import FirmsConfig
 from app.config_files.rules import RulesConfig
 from app.domain import firm_rules as fr
 from app.domain import home as dh
-from app.models import Account, Trade
+from app.models import Account, Trade, TradeExitDeal
 from app.services import open_positions_snapshot as snapshot
 
 ZERO = Decimal(0)
@@ -58,6 +58,34 @@ def account_firm_rules(
     )
 
 
+def _open_cash(db: Session, account_id: int) -> tuple[list[tuple[datetime, Decimal]], bool]:
+    """Cash the account's open trades already booked, bucketed by the day it was booked:
+    each exit deal (profit + commission + swap) at its own time, the rest of the trade's
+    net P&L so far (entry commission, ...) at its open time. And whether any trade is open."""
+    trades = db.execute(
+        select(Trade.id, Trade.open_time, Trade.net_pnl).where(
+            Trade.account_id == account_id, Trade.close_time.is_(None)
+        )
+    ).all()
+    if not trades:
+        return [], False
+    deals = db.execute(
+        select(
+            TradeExitDeal.trade_id,
+            TradeExitDeal.time,
+            TradeExitDeal.profit + TradeExitDeal.commission + TradeExitDeal.swap,
+        ).where(TradeExitDeal.trade_id.in_([t[0] for t in trades]))
+    ).all()
+    exited: dict[int, Decimal] = {}
+    for trade_id, _, cash in deals:
+        exited[trade_id] = exited.get(trade_id, ZERO) + cash
+    rows = [
+        (opened, (net or ZERO) - exited.get(trade_id, ZERO)) for trade_id, opened, net in trades
+    ]
+    rows.extend((at, cash) for _, at, cash in deals)
+    return rows, True
+
+
 def firm_day_of(
     db: Session, account: Account, effective: fr.FirmRules, now: datetime
 ) -> fr.FirmDay | None:
@@ -76,14 +104,7 @@ def firm_day_of(
     if fresh is not None:  # the start balance only needs the trades closed since the reset
         closed_query = closed_query.where(Trade.close_time >= reset)
     closed = [(t, p) for t, p in db.execute(closed_query) if t is not None and p is not None]
-    booked = [
-        (opened, cash if cash is not None else ZERO)
-        for opened, cash in db.execute(
-            select(Trade.open_time, Trade.net_pnl).where(
-                Trade.account_id == account.id, Trade.close_time.is_(None)
-            )
-        )
-    ]
+    booked, has_open = _open_cash(db, account.id)
     return fr.firm_day(
         size=size,
         daily_loss_pct=day_rule.daily_loss_pct,
@@ -91,6 +112,6 @@ def firm_day_of(
         closed=closed,
         open_booked=booked,
         fresh_balance=fresh,
-        floating=floating(account, bool(booked), now)[0],
+        floating=floating(account, has_open, now)[0],
         to_verify=effective.to_verify,
     )

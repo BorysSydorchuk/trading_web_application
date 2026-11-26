@@ -15,19 +15,20 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import time
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictStr,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from app.config_files.loader import (
@@ -43,7 +44,14 @@ SERVER_ZONE = "server"
 _HH_MM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 _NAME_NOISE = re.compile(r"[\s\-_]+")
 
-Percent = Annotated[Decimal, Field(gt=0, lt=100, allow_inf_nan=False)]
+
+def _not_bool(value: Any) -> Any:
+    if isinstance(value, bool):
+        raise ValueError("must be a number, not true/false")
+    return value
+
+
+Percent = Annotated[Decimal, BeforeValidator(_not_bool), Field(gt=0, lt=100, allow_inf_nan=False)]
 VerifyField = Literal[
     "daily_loss_pct",
     "max_loss_pct",
@@ -83,6 +91,15 @@ class FirmRule(_Strict):
     reset_timezone: StrictStr = SERVER_ZONE
     to_verify: tuple[VerifyField, ...] = ()
 
+    @field_validator("daily_reset", mode="before")
+    @classmethod
+    def _quoted(cls, value: Any) -> Any:
+        if isinstance(value, int):  # YAML 1.1 reads an unquoted 00:00 as a number
+            raise ValueError(
+                'write the time in quotes, e.g. "00:00" (YAML reads 00:00 as a number)'
+            )
+        return value
+
     @field_validator("daily_reset")
     @classmethod
     def _reset(cls, value: str) -> str:
@@ -109,10 +126,14 @@ class FirmRule(_Strict):
             raise ValueError(f"listed twice: {', '.join(dupes)}")
         return value
 
-    @property
-    def daily_reset_time(self) -> time:
-        hours, minutes = self.daily_reset.split(":")
-        return time(int(hours), int(minutes))
+    @model_validator(mode="after")
+    def _daily_within_max(self) -> Self:
+        if self.daily_loss_pct > self.max_loss_pct:
+            raise ValueError(
+                f"daily_loss_pct ({self.daily_loss_pct}) must not exceed "
+                f"max_loss_pct ({self.max_loss_pct})"
+            )
+        return self
 
 
 @dataclass(frozen=True)

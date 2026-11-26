@@ -1007,3 +1007,21 @@ Per field: the account's own Settings value when set (> 0), else the firm config
   «перевірити: …» for each `to_verify` item.
 - Home «Ліміти»: a row «Денний ліміт фірми» (bar to loss_pct, room, reset time) when `firm_day`.
 - Dashboard stop banner: lines for firm daily limit and firm max loss.
+
+### Review fixes (2026-11-26)
+- `firms.yaml` is checked at the start of every MT5 / cTrader sync cycle and by the risk-base
+  recompute / symbol-map re-apply: a broken file skips the cycle ("sync skipped: <config message>")
+  before anything is written, like a broken rules.yaml.
+- Accounts API: a broken `firms.yaml` gives `firm_rules: null` on GET (one ERROR log per request,
+  one WARNING for a broken rules.yaml); POST / PATCH refuse with 500 `config_error` before writing.
+  PATCH of `firm` or `daily_loss_pct` (as of `reference_balance`) recomputes the account's rule violations.
+- `daily_loss_pct` must not exceed `max_loss_pct`; write `daily_reset` in quotes (an unquoted `10:30`
+  is read as a number by YAML).
+- `firm_day.breached` is also true when the floating P&L is unknown but the realized loss of the firm
+  day alone has reached the limit (`room_pct` stays null).
+- Cash booked by a still-open trade is bucketed by when it was booked: each exit deal (profit +
+  commission + swap) at its own time, the rest (entry commission) at the trade's open time.
+- A server offset outside +-23 h is treated as UTC (WARNING), never a 500.
+- Reset zone `server` uses the CURRENT detected offset: the firm days of an MT5 account in the past can
+  shift by 1 h across a DST change, so for MT5 firms prefer an IANA `reset_timezone`. A firms.yaml
+  edit reaches stored violations at the next worker start (`recompute_all`).

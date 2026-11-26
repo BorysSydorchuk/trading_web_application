@@ -44,10 +44,9 @@ def entry(day: int, hour: int, minute: int = 0, firm: FirmDayRule | None = FIRM)
 def test_entry_after_the_firm_daily_loss_is_flagged() -> None:
     details = firm_violations(entry(12, 8), [loss(1, (12, 3, 0), "-400")])
 
-    assert len(details) == 1
-    assert "-4.00%" in details[0]
-    assert "-400.00" in details[0]
-    assert "-4" in details[0]
+    assert details == [
+        "firm day P&L reached -4.00% (-400.00) before entry <= firm limit -4%",
+    ]
 
 
 def test_loss_just_inside_the_limit_is_not_flagged() -> None:

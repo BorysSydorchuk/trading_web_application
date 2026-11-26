@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -59,7 +58,6 @@ def test_valid_file_loads_with_decimals(tmp_path: Path) -> None:
     assert rule.max_loss_pct == D("8.0")
     assert rule.profit_target_pct.phase_1 == D("8.0")
     assert rule.profit_target_pct.phase_2 == D("4.0")
-    assert rule.daily_reset_time == time(0, 0)
     assert rule.reset_timezone == "server"
     assert rule.to_verify == ("daily_basis", "daily_reset")
 
@@ -271,3 +269,52 @@ def test_reload_config_clears_the_firms_cache(cfg: Path) -> None:
 
     assert get_firms_config() is not first
     clear_firms_cache()
+
+
+def test_daily_loss_above_max_loss_is_rejected(tmp_path: Path) -> None:
+    text = problems(tmp_path, firm_with(daily_loss_pct=9.0, max_loss_pct=8.0))
+
+    assert "daily_loss_pct" in text
+    assert "max_loss_pct" in text
+
+
+def test_daily_loss_equal_to_max_loss_is_accepted(tmp_path: Path) -> None:
+    rule = load_firms(write(tmp_path, firm_with(daily_loss_pct=8.0))).firms["KeyFunding"]
+
+    assert rule.daily_loss_pct == rule.max_loss_pct
+
+
+def test_unquoted_daily_reset_says_to_quote_the_time(tmp_path: Path) -> None:
+    path = tmp_path / "firms.yaml"
+    path.write_text(
+        "firms:\n  A:\n    daily_loss_pct: 4\n    max_loss_pct: 8\n    daily_reset: 10:30\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError) as info:
+        load_firms(path)
+
+    assert "daily_reset" in str(info.value)
+    assert "quotes" in str(info.value)
+
+
+@pytest.mark.parametrize("field", ["daily_loss_pct", "max_loss_pct"])
+def test_bool_is_not_a_percent(tmp_path: Path, field: str) -> None:
+    assert field in problems(tmp_path, firm_with(**{field: True}))
+
+
+def test_bool_is_not_a_profit_target(tmp_path: Path) -> None:
+    assert "profit_target_pct" in problems(tmp_path, firm_with(profit_target_pct={"phase_1": True}))
+
+
+def test_same_size_edit_with_a_new_mtime_is_reloaded(cfg: Path) -> None:
+    import os
+
+    path = write(cfg, firm_with(max_loss_pct=8.0))
+    assert get_firms_config().firms["KeyFunding"].max_loss_pct == D("8.0")
+    stat = path.stat()
+
+    write(cfg, firm_with(max_loss_pct=7.0))  # same byte size
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+
+    assert get_firms_config().firms["KeyFunding"].max_loss_pct == D("7.0")

@@ -49,6 +49,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.config_files import ConfigError, get_rules
+from app.config_files.firms import FirmsConfig, get_firms_config
 from app.config_files.rules import RulesConfig
 from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.ctrader.connection import Connector, Sleep, open_websocket
@@ -100,6 +101,7 @@ class CtraderJobConfig:
     read: BalanceReader = read_balances
     rules_getter: Callable[[], RulesConfig] = get_rules
     symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config
+    firms_getter: Callable[[], FirmsConfig] = get_firms_config
     budget_s: float = READ_BUDGET_S  # token step + reads, below the job interval
     snapshot_path: Path | None = None  # Home open positions; None = not written
 
@@ -430,12 +432,13 @@ def run_ctrader_balance_cycle(
 ) -> list[int]:
     """Read and store every due cTrader account. Returns the fully updated account ids.
 
-    A broken rules.yaml or symbols.yaml skips the cycle, as for MT5.
+    A broken rules.yaml, symbols.yaml or firms.yaml skips the cycle, as for MT5.
     """
     started = config.now()
     try:
         rules = config.rules_getter()
         symbols = config.symbols_getter()
+        config.firms_getter()  # read while rules are recomputed: fail before any write
     except ConfigError as exc:
         logger.error("cTrader sync skipped: %s", exc)
         return []

@@ -36,7 +36,7 @@ from app.models import Account, Trade
 from app.models.enums import AccountStatus
 from app.schemas import dashboard as schemas
 from app.services.firm_day import account_firm_rules, firm_day_of
-from app.services.home_max_loss import account_equity
+from app.services.home_max_loss import accounts_equity
 from app.services.inbox import count_inbox
 
 ZERO = Decimal(0)
@@ -160,18 +160,21 @@ def _firm_flags(
     db: Session, accounts: Sequence[Account], rules: RulesConfig, firms: FirmsConfig, now: datetime
 ) -> tuple[bool, bool]:
     """(some account breached its firm daily floor, some account at/below its static max-loss
-    floor). Only accounts with a firms.yaml entry count."""
-    day = max_loss = False
+    floor). Only accounts with a firms.yaml entry count; stops looking once a flag is set."""
+    day = False
+    candidates: list[tuple[Account, Decimal, Decimal]] = []
     for account in accounts:
         effective = account_firm_rules(account, rules, firms)
         if effective.source != "firm":
             continue
-        firm_day = firm_day_of(db, account, effective, now)
-        day = day or (firm_day is not None and firm_day.breached)
+        if not day:
+            firm_day = firm_day_of(db, account, effective, now)
+            day = firm_day is not None and firm_day.breached
         size = usable_size(account.reference_balance)
-        if size is not None and effective.max_loss_pct is not None and not max_loss:
-            equity = account_equity(db, account, size, now)
-            max_loss = at_max_loss(equity, size, effective.max_loss_pct)
+        if size is not None and effective.max_loss_pct is not None:
+            candidates.append((account, size, effective.max_loss_pct))
+    equity = accounts_equity(db, [(a, size) for a, size, _ in candidates], now)
+    max_loss = any(at_max_loss(equity[a.id], size, pct) for a, size, pct in candidates)
     return day, max_loss
 
 

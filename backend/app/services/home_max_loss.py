@@ -66,6 +66,9 @@ def _histories(db: Session, account_ids: list[int]) -> dict[int, _History]:
     return {i: _History(closed[i], firsts.get(i), booked.get(i, ZERO)) for i in account_ids}
 
 
+_EMPTY = _History([], None, ZERO)
+
+
 def _equity_now(
     account: Account, size: Decimal, history: _History, now: datetime
 ) -> tuple[Decimal, schemas.EquitySource]:
@@ -104,6 +107,23 @@ def account_firm_limits(account: Account, rules: RulesConfig, firms: FirmsConfig
 def account_equity(db: Session, account: Account, size: Decimal, now: datetime) -> Decimal:
     """Equity now of one account (fresh sync, else balance, else the trades)."""
     return _equity_now(account, size, _histories(db, [account.id])[account.id], now)[0]
+
+
+def accounts_equity(
+    db: Session, pairs: Sequence[tuple[Account, Decimal]], now: datetime
+) -> dict[int, Decimal]:
+    """Equity now per account id (fresh sync, else balance, else the trades). The trade
+    histories are read once, only for the accounts that have neither."""
+    needs = [
+        account.id
+        for account, _ in pairs
+        if account.balance is None and _equity_now(account, ZERO, _EMPTY, now)[1] == "trades"
+    ]
+    histories = _histories(db, needs) if needs else {}
+    return {
+        account.id: _equity_now(account, size, histories.get(account.id, _EMPTY), now)[0]
+        for account, size in pairs
+    }
 
 
 def max_loss(

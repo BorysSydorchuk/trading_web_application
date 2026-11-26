@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import exists, func, select
@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings, mt5_password_for, mt5_password_key
 from app.config_files import get_firms_config, get_rules
+from app.config_files.firms import FirmsConfig
 from app.config_files.loader import ConfigError
+from app.config_files.rules import RulesConfig
 from app.db import get_db
 from app.errors import ApiError, config_error
 from app.models import Account, Trade
@@ -42,6 +44,9 @@ _CONFLICTS: dict[str, tuple[str, str]] = {
 # What identifies a cTrader account comes from cTrader, never from the edit form.
 _CTRADER_FIXED_FIELDS = ("login", "server", "terminal_path")
 
+# Account fields the stored percents and auto rule violations depend on (size, firm rules).
+_RULE_FIELDS = ("reference_balance", "firm", "daily_loss_pct")
+
 # PATCH size whose recomputed risk % / P&L % overflow trades' NUMERIC(10,4) (M5-10).
 _SIZE_TOO_SMALL = "Account size is too small: trade percentages would exceed 999999.9999 %"
 
@@ -59,20 +64,44 @@ def _suggestion_schema(
     return schemas.StartingBalanceSuggestion(amount=entry.amount, time=entry.time)
 
 
-def _firm_rules(account: Account) -> schemas.FirmRulesOut | None:
-    """Effective firm rules (None when nothing applies). A broken firms.yaml is a visible
-    500 config_error; a broken rules.yaml only drops its `account_limits` fallback here (every
-    other page reports that file)."""
+class FirmContext(NamedTuple):
+    """The configs firm rules are built from; None = the file is invalid (already logged)."""
+
+    firms: FirmsConfig | None
+    rules: RulesConfig | None
+
+
+def firm_context() -> FirmContext:
+    """Load firms.yaml and rules.yaml once per request. A broken file is logged here once
+    (ERROR firms.yaml, WARNING rules.yaml: it only drops the `account_limits` fallback); the
+    accounts pages keep working without firm rules."""
+    firms: FirmsConfig | None = None
+    rules: RulesConfig | None = None
     try:
         firms = get_firms_config()
     except ConfigError as exc:
-        raise config_error(exc) from None
+        logger.error("firms.yaml is invalid, firm rules are not shown: %s", exc)
     try:
         rules = get_rules()
     except ConfigError as exc:
         logger.warning("rules.yaml is invalid, no account_limits fallback for firm rules: %s", exc)
-        rules = None
-    effective = account_firm_rules(account, rules, firms)
+    return FirmContext(firms, rules)
+
+
+def require_firms() -> None:
+    """Before writing an account: a broken firms.yaml is a 500 config_error and nothing is
+    written (its rules would be recomputed from it)."""
+    try:
+        get_firms_config()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
+def _firm_rules(account: Account, context: FirmContext) -> schemas.FirmRulesOut | None:
+    """Effective firm rules (None when nothing applies or firms.yaml is invalid)."""
+    if context.firms is None:
+        return None
+    effective = account_firm_rules(account, context.rules, context.firms)
     if effective.source == "none":
         return None
     return schemas.FirmRulesOut(
@@ -90,9 +119,12 @@ def _firm_rules(account: Account) -> schemas.FirmRulesOut | None:
 
 
 def to_schema(
-    account: Account, suggestions: dict[int, suggestion.Suggestion] | None = None
+    account: Account,
+    suggestions: dict[int, suggestion.Suggestion] | None = None,
+    context: FirmContext | None = None,
 ) -> schemas.Account:
     """``suggestions``: the starting balance suggestions file (None = no suggestion).
+    ``context``: the firm configs of this request (None = load them for this account).
 
     A cTrader account has no investor password: the key is empty and nothing is missing.
     """
@@ -123,7 +155,7 @@ def to_schema(
         created_at=account.created_at,
         updated_at=account.updated_at,
         starting_balance_suggestion=_suggestion_schema(account, suggestions or {}),
-        firm_rules=_firm_rules(account),
+        firm_rules=_firm_rules(account, context if context is not None else firm_context()),
     )
 
 
@@ -158,7 +190,10 @@ def list_accounts(
     if not include_archived:
         query = query.where(Account.status != AccountStatus.ARCHIVED.value)
     suggestions = _suggestions(settings)
-    return schemas.AccountList(items=[to_schema(a, suggestions) for a in db.scalars(query)])
+    context = firm_context()  # once per request, not per account
+    return schemas.AccountList(
+        items=[to_schema(a, suggestions, context) for a in db.scalars(query)]
+    )
 
 
 @router.post("", status_code=201, response_model=schemas.Account)
@@ -167,6 +202,7 @@ def create_account(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> schemas.Account:
+    require_firms()
     data: dict[str, Any] = body.model_dump()
     data["phase"] = body.phase.value
     data["status"] = body.status.value
@@ -194,14 +230,15 @@ def get_account(
 def _recompute_size(db: Session, account_id: int) -> None:
     """Percents and rule violations follow the account size, in this transaction (M5-10).
 
-    On failure the transaction is rolled back (the size is not changed): a broken rules.yaml is
+    On failure the transaction is rolled back (the size is not changed): a broken rules.yaml or
+    firms.yaml is
     500 config_error, percents overflowing NUMERIC(10,4) (a tiny size) are 422 on the field.
     """
     try:
         count = recompute_account(db, account_id)
     except ConfigError as exc:
         db.rollback()
-        logger.error("Account %s: size not changed, rules.yaml is invalid: %s", account_id, exc)
+        logger.error("Account %s: not changed, a config file is invalid: %s", account_id, exc)
         raise config_error(exc) from None
     except DataError:
         db.rollback()
@@ -246,12 +283,14 @@ def update_account(
     account = _get_or_404(db, account_id)
     changes = body.changes()
     _refuse_ctrader_identity_change(account, changes)
-    size_changed = (
-        "reference_balance" in changes and changes["reference_balance"] != account.reference_balance
+    require_firms()
+    rules_changed = any(
+        key in changes and not _same_value(key, changes[key], getattr(account, key))
+        for key in _RULE_FIELDS
     )
     for key, value in changes.items():
         setattr(account, key, value)
-    if size_changed:
+    if rules_changed:
         _recompute_size(db, account_id)
     commit_account(db)
     db.refresh(account)

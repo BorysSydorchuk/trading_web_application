@@ -62,8 +62,9 @@ def _rule_input(
     )
 
 
-# A firm day starts at most ~1 day (+ a DST hour) before the trade; the context reaches back
-# this far before the Brussels Monday so the firm day of a Monday-early entry is covered.
+# A firm day starts at most one day (+ a DST hour, for an IANA reset zone) before an entry, in
+# whatever reset zone; the context reaches back this far before the Brussels Monday so the
+# firm day of an entry early on Monday is covered.
 FIRM_CONTEXT_MARGIN = timedelta(days=2)
 
 
@@ -76,15 +77,20 @@ def _firm_rule(
 
 
 def recompute_rules(
-    session: Session, account_id: int, since_utc: datetime, rules: RulesConfig
+    session: Session,
+    account_id: int,
+    since_utc: datetime,
+    rules: RulesConfig,
+    firms: FirmsConfig | None = None,
 ) -> int:
     """Re-entry flags and auto violations of the account's trades opened from the local
-    Monday of ``since_utc``'s week onward. Returns the number of trades evaluated."""
+    Monday of ``since_utc``'s week onward. ``firms`` defaults to the cached firms.yaml.
+    Returns the number of trades evaluated."""
     session.flush()
     tz = rules.timezone
     start = week_start_utc(since_utc, tz)
     account = session.get(Account, account_id)
-    firm = _firm_rule(account, rules, get_firms_config())
+    firm = _firm_rule(account, rules, firms if firms is not None else get_firms_config())
     # Only a firm account needs trades from before the Monday (its firm day).
     context_start = start - FIRM_CONTEXT_MARGIN if firm is not None else start
     # Context: everything opened or closed in the period (a trade opened last week and
