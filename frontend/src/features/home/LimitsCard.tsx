@@ -9,7 +9,7 @@ import { formatHmBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { limitBarGeometry } from './chartMath'
 import { signTone } from './heroSeries'
-import type { FirmDay, HomeLimits, LimitPeriod } from './types'
+import type { FirmAlert, FirmDay, HomeLimits, LimitPeriod } from './types'
 
 const t = uk.home.limits
 const pctSigned = (v: string | null) => formatPct(v, 'overview', { signed: true })
@@ -85,6 +85,12 @@ const OVERVIEW_PCT_PLACES = 1
 /** Room to the firm floor, never rounded up (2.75 → 2.7): the trader must not see more room than there is. */
 const roomText = (v: string | null) => pctPlain(v === null ? null : floorDecimal(v, OVERVIEW_PCT_PLACES))
 
+/** Red line under the account name: which firm limit is close and the room (rounded down). */
+function firmAlertText(alert: FirmAlert): string {
+  const room = alert.room_pct === null ? t.firmAlertHit : t.firmRoom(roomText(alert.room_pct))
+  return t.firmAlert(t.firmAlertKinds[alert.kind], room)
+}
+
 /** «Денний ліміт фірми»: day P&L % (incl. floating) towards the firm daily floor, room and reset time. */
 function FirmDayRow({ firmDay }: { firmDay: FirmDay }) {
   const value = pctSigned(firmDay.pnl_pct)
@@ -148,8 +154,14 @@ export interface LimitsCardProps {
 /** «Ліміти»: day / week / month bars of one account, trades this week and the room to the daily stop. */
 export function LimitsCard({ limits, error = null, accountCount, accountId }: LimitsCardProps) {
   const id = useId()
+  const alert = limits?.firm_alert ?? null
   return (
-    <Card lift aria-labelledby={`${id}-title`} className="flex flex-col gap-1 rounded-[22px] px-[22px] pt-[22px] pb-[18px]">
+    <Card
+      lift
+      aria-labelledby={`${id}-title`}
+      data-firm-alert={alert ? alert.kind : undefined}
+      className={cn('flex flex-col gap-1 rounded-[22px] px-[22px] pt-[22px] pb-[18px]', alert && 'border-loss ring-2 ring-loss/40')}
+    >
       <div className="flex flex-col gap-1">
         <h2 id={`${id}-title`} className="type-card-title">
           {t.title}
@@ -157,7 +169,12 @@ export function LimitsCard({ limits, error = null, accountCount, accountId }: Li
         {limits && (
           <p className="text-xs text-ink-muted">
             {limits.account_name}
-            {accountId === null && accountCount > 1 && ` · ${t.closest}`}
+            {accountId === null && accountCount > 1 && ` · ${alert ? t.closestFirm : t.closest}`}
+          </p>
+        )}
+        {alert && (
+          <p data-testid="firm-alert" className="text-xs font-semibold text-loss">
+            {firmAlertText(alert)}
           </p>
         )}
       </div>

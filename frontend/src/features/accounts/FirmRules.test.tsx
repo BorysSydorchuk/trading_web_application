@@ -45,6 +45,22 @@ describe('Firm rules note in the account form', () => {
     expect(screen.queryByTestId('firm-rules-verify')).not.toBeInTheDocument()
   })
 
+  it('KeyFunding with empty to_verify (confirmed): no «Перевірити» anywhere, form or table', () => {
+    const confirmed = account({ id: 7, firm: 'KeyFunding', firm_rules: keyFunding({ to_verify: [] }) })
+    renderForm(confirmed)
+    expect(screen.getByTestId('firm-rules-note')).not.toHaveTextContent('Перевірити')
+    expect(screen.queryByTestId('firm-rules-verify')).not.toBeInTheDocument()
+  })
+
+  it('table hint without the verify count when to_verify is empty', () => {
+    const confirmed = account({ id: 7, firm: 'KeyFunding', firm_rules: keyFunding({ to_verify: [] }) })
+    renderWithProviders(<AccountsTable accounts={[confirmed]} onEdit={vi.fn()} onDelete={vi.fn()} />)
+    const hint = screen.getByTestId('firm-rules-hint')
+    expect(hint).toHaveTextContent(t.tableHint)
+    expect(hint).not.toHaveTextContent(t.tableVerify(0))
+    expect(hint.parentElement).not.toHaveAttribute('title', expect.stringContaining('Перевірити'))
+  })
+
   it.each([
     ['account', keyFunding({ source: 'account' })],
     ['fallback', keyFunding({ source: 'fallback' })],

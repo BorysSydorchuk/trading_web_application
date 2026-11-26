@@ -53,6 +53,17 @@ export interface HomeLimits {
   balance_fresh: boolean
   /** Firm daily floor (config/firms.yaml); null / absent for accounts without a firm entry. */
   firm_day?: FirmDay | null
+  /** Within 1 % of a firm limit (or at it); null / absent otherwise. Such an account comes first in «Усі рахунки». */
+  firm_alert?: FirmAlert | null
+}
+
+export const FIRM_ALERT_KINDS = ['firm_day', 'max_loss'] as const
+export type FirmAlertKind = (typeof FIRM_ALERT_KINDS)[number]
+
+/** `AccountLimitsOut.firm_alert`: which firm limit is close and the room left (% of size); room null = limit hit. */
+export interface FirmAlert {
+  kind: FirmAlertKind
+  room_pct: string | null
 }
 
 /** `AccountLimitsOut.firm_day` (docs/api.md "Firm rules from config"). Percents of the account size. */

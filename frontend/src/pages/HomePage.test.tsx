@@ -429,6 +429,18 @@ describe('HomePage errors, stop banner, digest suggestion', () => {
     expect(screen.queryByText(uk.dashboard.stopWeek)).not.toBeInTheDocument()
   })
 
+  it('shows the critical firm banner above the personal stop banner when both are hit', async () => {
+    const stop = { today: true, week: false, firm_day: true, firm_max_loss: false }
+    mockApi(http.get('/api/dashboard', () => HttpResponse.json(emptyDashboard({ stop }))))
+    renderWithProviders(<HomePage />)
+    const firm = await screen.findByTestId('firm-limit-banner')
+    const personal = screen.getByText(uk.dashboard.stopToday).closest('[role="alert"]')
+    if (!(personal instanceof HTMLElement)) throw new Error('stop banner expected')
+    expect(firm).not.toBe(personal)
+    expect(firm.compareDocumentPosition(personal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(personal).not.toHaveTextContent(uk.dashboard.firmBanner.day)
+  })
+
   it('shows the digest suggestion with a link to the period', async () => {
     mockApi(http.get('/api/digests/suggestion', () => HttpResponse.json({ weekly: { period_start: '2026-11-09' }, monthly: null })))
     renderWithProviders(<HomePage />)
