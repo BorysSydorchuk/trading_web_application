@@ -14,6 +14,7 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config_files.firms import get_firms_config
 from app.config_files.loader import ConfigError
 from app.config_files.rules import get_rules
 from app.domain import metrics
@@ -27,10 +28,11 @@ def recompute_account(db: Session, account_id: int) -> int:
     """risk_pct / pnl_pct (closed trades only) of every trade of the account from its size,
     then the auto rule violations of all its trades. Flushes, never commits.
 
-    Returns the account's trade count. Raises ConfigError for a broken rules.yaml (the
+    Returns the account's trade count. Raises ConfigError for a broken rules.yaml or firms.yaml (the
     caller decides: the API answers config_error, the worker start logs ERROR).
     """
-    rules = get_rules()  # before any change: a broken rules.yaml changes nothing
+    rules = get_rules()  # before any change: a broken rules.yaml / firms.yaml changes nothing
+    firms = get_firms_config()
     db.flush()
     size = db.scalar(select(Account.reference_balance).where(Account.id == account_id))
     trades = db.scalars(select(Trade).where(Trade.account_id == account_id)).all()
@@ -40,7 +42,7 @@ def recompute_account(db: Session, account_id: int) -> int:
         trade.pnl_pct = metrics.pnl_pct(trade.net_pnl, size) if closed else None
     earliest = db.scalar(select(func.min(Trade.open_time)).where(Trade.account_id == account_id))
     if earliest is not None:
-        recompute_rules(db, account_id, earliest, rules)
+        recompute_rules(db, account_id, earliest, rules, firms)
     db.flush()
     return len(trades)
 
@@ -51,11 +53,13 @@ def recompute_all(session_factory: sessionmaker[Session]) -> int | None:
     A failing account (e.g. a size so small its percents overflow NUMERIC(10,4)) is logged at
     ERROR with its id and skipped; the others are still recomputed and committed. Returns the
     trade count of the accounts that succeeded, or None when the whole step fails (DB down,
-    broken rules.yaml; logged at ERROR, rolled back). Never raises, so the worker start is never
+    broken rules.yaml or firms.yaml; logged at ERROR, rolled back). Never raises, so the
+    worker start is never
     blocked.
     """
     try:
-        get_rules()  # a broken rules.yaml fails the step once, not every account
+        get_rules()  # a broken rules.yaml / firms.yaml fails the step once, not every account
+        get_firms_config()
         with session_factory() as db:
             ids = db.scalars(select(Account.id).order_by(Account.id)).all()
             total = sum(_recompute_in_savepoint(db, account_id) for account_id in ids)

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import REPO_ROOT, Settings
 from app.config_files import ConfigError, get_rules
+from app.config_files.firms import FirmsConfig, get_firms_config
 from app.config_files.rules import RulesConfig
 from app.config_files.symbols import SymbolsConfig, get_symbols_config
 from app.models import Account
@@ -100,13 +101,14 @@ def run_sync_cycle(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     rules_getter: Callable[[], RulesConfig] = get_rules,
     symbols_getter: Callable[[], SymbolsConfig] = get_symbols_config,
+    firms_getter: Callable[[], FirmsConfig] = get_firms_config,
     lock: threading.Lock | None = None,
     snapshot_path: Path | None = None,
     suggestions_path: Path | None = None,
 ) -> list[int]:
     """Re-apply the symbol map, then sync every due active account sequentially. Returns
-    the ids of synced accounts. A broken rules.yaml or symbols.yaml, or a symbol map that
-    could not be applied, skips the cycle (ERROR "MT5 sync skipped"): stored names and new
+    the ids of synced accounts. A broken rules.yaml, symbols.yaml or firms.yaml, or a symbol
+    map that could not be applied, skips the cycle (ERROR "MT5 sync skipped"): stored names and new
     rows would otherwise disagree.
 
     ``lock`` (shared with the margin job, `app.worker.mt5_shared`) is acquired blocking and
@@ -121,6 +123,7 @@ def run_sync_cycle(
     try:
         rules = rules_getter()
         symbols = symbols_getter()
+        firms_getter()  # firm rules are read while rules are recomputed: fail before any write
     except ConfigError as exc:
         logger.error("MT5 sync skipped: %s", exc)
         return []

@@ -1,5 +1,7 @@
 # cTrader integration, phase b: deals become trades, open positions, reconcile
 
+Firm (PM 2026-11-26): the cTrader account is a **KeyFunding** account, not FundedNext; its firm rules are in `config/firms.yaml` (docs/reports/keyfunding-firm-rules.md).
+
 Tier L, no migration. Owner request 2026-11-23 (STEP 2). Branch `ctrader/phase-b` from main 6212dc3.
 
 ## What was built

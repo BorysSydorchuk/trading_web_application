@@ -20,7 +20,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_rules
+from app.config_files.firms import FirmsConfig, get_firms_config
 from app.config_files.rules import DecimalRule, RulesConfig
+from app.domain.firm_rules import at_max_loss
+from app.domain.home import usable_size
 from app.domain.period_pnl import (
     PeriodExtremes,
     limit_state,
@@ -32,6 +35,8 @@ from app.errors import config_error
 from app.models import Account, Trade
 from app.models.enums import AccountStatus
 from app.schemas import dashboard as schemas
+from app.services.firm_day import account_firm_rules, firm_day_of
+from app.services.home_max_loss import accounts_equity
 from app.services.inbox import count_inbox
 
 ZERO = Decimal(0)
@@ -151,10 +156,36 @@ def _open_positions(db: Session) -> list[schemas.OpenPosition]:
     ]
 
 
+def _firm_flags(
+    db: Session, accounts: Sequence[Account], rules: RulesConfig, firms: FirmsConfig, now: datetime
+) -> tuple[bool, bool]:
+    """(some account breached its firm daily floor, some account at/below its static max-loss
+    floor). Only accounts with a firms.yaml entry count; stops looking once a flag is set."""
+    day = False
+    candidates: list[tuple[Account, Decimal, Decimal]] = []
+    for account in accounts:
+        effective = account_firm_rules(account, rules, firms)
+        if effective.source != "firm":
+            continue
+        if not day:
+            firm_day = firm_day_of(db, account, effective, now)
+            day = firm_day is not None and firm_day.breached
+        size = usable_size(account.reference_balance)
+        if size is not None and effective.max_loss_pct is not None:
+            candidates.append((account, size, effective.max_loss_pct))
+    equity = accounts_equity(db, [(a, size) for a, size, _ in candidates], now)
+    max_loss = any(at_max_loss(equity[a.id], size, pct) for a, size, pct in candidates)
+    return day, max_loss
+
+
 def build_dashboard(db: Session, now: datetime) -> schemas.Dashboard:
     """The home-page payload at ``now`` (aware UTC). Broken rules.yaml -> 500 config_error."""
     try:
         rules = get_rules()
+    except ConfigError as exc:
+        raise config_error(exc) from exc
+    try:
+        firms = get_firms_config()
     except ConfigError as exc:
         raise config_error(exc) from exc
     tz = rules.timezone
@@ -164,12 +195,15 @@ def build_dashboard(db: Session, now: datetime) -> schemas.Dashboard:
     limits = _limits(rules)
     closed = _closed_by_account(db, [a.id for a in accounts], week_start(now, tz), tz)
     items = [_account_item(a, closed.get(a.id, []), tz, now, limits) for a in accounts]
+    firm_day, firm_max_loss = _firm_flags(db, accounts, rules, firms, now)
     return schemas.Dashboard(
         now=now,
         accounts=items,
         stop=schemas.StopFlags(
             today=any(a.today_state != "ok" for a in items),
             week=any(a.week_state != "ok" for a in items),
+            firm_day=firm_day,
+            firm_max_loss=firm_max_loss,
         ),
         open_positions=_open_positions(db),
         inbox=count_inbox(db),

@@ -25,8 +25,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config_files import ConfigError, get_rules
+from app.config_files.firms import FirmsConfig, get_firms_config
 from app.config_files.rules import WEEKDAYS as RULE_WEEKDAYS
 from app.config_files.rules import DecimalRule, RulesConfig
+from app.domain import firm_rules as fr
 from app.domain import home as dh
 from app.domain import home_charts as hc
 from app.domain.period_base import period_base
@@ -37,6 +39,9 @@ from app.models import Account, BiasNote, SyncLog, Trade
 from app.models.enums import AccountStatus, BiasKind
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
+from app.services.firm_day import account_firm_rules, firm_day_of
+from app.services.firm_day import balance_fresh as _balance_fresh
+from app.services.firm_day import floating as _floating
 from app.services.home_max_loss import account_firm_limits, max_loss
 
 OUTSIDE: Final = "outside"
@@ -76,6 +81,28 @@ def _rules() -> RulesConfig:
         return get_rules()
     except ConfigError as exc:
         raise config_error(exc) from None
+
+
+def _firms() -> FirmsConfig:
+    try:
+        return get_firms_config()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+
+
+def _firm_day_schema(day: fr.FirmDay | None) -> schemas.FirmDayOut | None:
+    if day is None:
+        return None
+    return schemas.FirmDayOut(
+        reset_at=day.reset_at,
+        start_balance=day.start_balance,
+        floor=day.floor,
+        loss_pct=day.loss_pct,
+        pnl_pct=day.pnl_pct,
+        room_pct=day.room_pct,
+        breached=day.breached,
+        to_verify=list(day.to_verify),
+    )
 
 
 def _accounts(db: Session, account_id: int | None) -> list[Account]:
@@ -237,23 +264,6 @@ def _bar(
     return schemas.LimitBar(pct=pct, loss_pct=loss, profit_pct=profit)
 
 
-def _floating(account: Account, has_open: bool, now: datetime) -> tuple[Decimal | None, bool]:
-    """(floating P&L, included). Fresh worker sync (<= the snapshot staleness limit):
-    equity - balance. Stale / unknown: 0 when the account has no open trade (closed P&L is
-    then the whole result), else None and not included."""
-    equity, balance = account.equity, account.balance
-    if _balance_fresh(account, now) and equity is not None and balance is not None:
-        return equity - balance, True
-    if not has_open:
-        return Decimal(0), True
-    return None, False
-
-
-def _balance_fresh(account: Account, now: datetime) -> bool:
-    synced = account.balance_synced_at
-    return synced is not None and now - synced <= snapshot.STALE_AFTER
-
-
 def _period_keys(tz: str) -> tuple[Callable[[datetime], date], ...]:
     """Brussels day, Monday of the week and 1st of the month of a close time."""
 
@@ -270,11 +280,13 @@ def _period_keys(tz: str) -> tuple[Callable[[datetime], date], ...]:
 
 
 def _account_limits(
+    db: Session,
     account: Account,
     trades: Sequence[hc.ChartTrade],
     trades_week: int,
     open_booked: Sequence[tuple[datetime, Decimal]],
     rules: RulesConfig,
+    firms: FirmsConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut:
     cfg = rules.rules
@@ -284,7 +296,7 @@ def _account_limits(
     extra = floating if floating is not None else Decimal(0)
     keyed = [_Keyed(t.id, t.close_time, t.net_pnl) for t in trades if t.account_id == account.id]
     day_key, week_key, month_key = _period_keys(period.tz)
-    firm = account_firm_limits(account, rules)
+    firm = account_firm_limits(account, rules, firms)
     month_range = (firm.max_loss_pct, firm.profit_target_pct)
     day_range = (_rule(cfg.daily_stop_loss_pct), _rule(cfg.daily_stop_profit_pct))
     week_range = (_rule(cfg.weekly_stop_loss_pct), _rule(cfg.weekly_stop_profit_pct))
@@ -305,6 +317,9 @@ def _account_limits(
         trades_week=trades_week,
         max_trades_week=max_trades.value if max_trades.enabled else None,
         to_daily_stop_pct=dh.to_daily_stop(day.pct, day.loss_pct),
+        firm_day=_firm_day_schema(
+            firm_day_of(db, account, account_firm_rules(account, rules, firms), period.now)
+        ),
     )
 
 
@@ -314,6 +329,7 @@ def _limits(
     trades: Sequence[hc.ChartTrade],
     opened: Sequence[tuple[Trade, Account]],
     rules: RulesConfig,
+    firms: FirmsConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut | None:
     """One account: the selected one, or the one closest to its daily stop."""
@@ -322,7 +338,9 @@ def _limits(
     for trade, account in opened:
         booked.setdefault(account.id, []).append((trade.open_time, trade.net_pnl or Decimal(0)))
     items = [
-        _account_limits(a, trades, counts.get(a.id, 0), booked.get(a.id, []), rules, period)
+        _account_limits(
+            db, a, trades, counts.get(a.id, 0), booked.get(a.id, []), rules, firms, period
+        )
         for a in accounts
     ]
     return dh.closest_to_daily_stop(items, lambda item: item.to_daily_stop_pct)
@@ -409,6 +427,7 @@ def _kpis(
     accounts: Sequence[Account],
     trades: Sequence[hc.ChartTrade],
     rules: RulesConfig,
+    firms: FirmsConfig,
     period: _Period,
     one: bool,
 ) -> schemas.Kpis:
@@ -418,7 +437,7 @@ def _kpis(
         win_rate=win_rate,
         avg_r=avg_r,
         drawdown=_drawdown(accounts, trades, rules, period, one),
-        max_loss=max_loss(db, accounts, rules, period.now),
+        max_loss=max_loss(db, accounts, rules, firms, period.now),
     )
 
 
@@ -515,6 +534,7 @@ def _check_currency(accounts: Sequence[Account], trades: Sequence[hc.ChartTrade]
 def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Path) -> schemas.Home:
     """The «Головна» payload at ``now`` (aware UTC). Broken rules.yaml -> 500 config_error."""
     rules = _rules()
+    firms = _firms()
     period = _period(now, rules.timezone)
     accounts = _accounts(db, account_id)
     ids = [a.id for a in accounts]
@@ -541,8 +561,8 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
         timezone=rules.timezone,
         session=_session(rules, now),
         bias_today=_bias_today(db, rules, period),
-        limits=_limits(db, accounts, trades, opened, rules, period),
-        kpis=_kpis(db, accounts, trades, rules, period, one),
+        limits=_limits(db, accounts, trades, opened, rules, firms, period),
+        kpis=_kpis(db, accounts, trades, rules, firms, period, one),
         open_positions=positions,
         open_totals=_open_totals(positions, {a.currency for _, a in opened}),
     )

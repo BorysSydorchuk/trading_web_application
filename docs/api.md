@@ -936,3 +936,92 @@ All field names below are assumptions from the Open API docs, to confirm on the 
 ### c6. Limits
 - Home «Ліміти», daily/weekly stops and rules use the cTrader trades and account size exactly like MT5
   (no platform branch); tests prove it for a cTrader account.
+
+## Firm rules from config: KeyFunding (PM 2026-11-26; tier L, no migration)
+
+The cTrader account is a **KeyFunding** account (not FundedNext). Firm rules live in a new
+config file, not in code. FundedNext accounts keep their current rules unchanged (no
+`firms.yaml` entry: per-account Settings values, then rules.yaml `account_limits`).
+
+### `config/firms.yaml`
+```yaml
+firms:
+  KeyFunding:
+    daily_loss_pct: 4.0          # > 0, percent of the account size (reference_balance)
+    max_loss_pct: 8.0            # > 0
+    max_loss_type: static        # only `static`: floor = size x (1 - max_loss_pct/100), never moves
+    profit_target_pct: { phase_1: 8.0, phase_2: 4.0 }   # per accounts.phase; funded: none
+    daily_basis: balance         # start-of-day BALANCE (only value supported now)
+    daily_reset: "00:00"         # HH:MM, wall time in reset_timezone
+    reset_timezone: server       # `server` = broker server time (accounts.server_offset_hours
+                                 # when detected, else UTC: cTrader sends UTC), or an IANA name
+    to_verify: [daily_basis, daily_reset]   # shown in Settings and reports as «перевірити»
+```
+- Loader `app/config_files/firms.py`, strict pydantic like symbols.yaml (no extra keys, percents
+  in (0, 100), firm names unique case-insensitively, `to_verify` items from the known field
+  names), cached and reloaded on change. Missing file = no firms. A broken file is a visible
+  ConfigError (API 500 with the config message, worker log ERROR), never silently ignored.
+- Firm match: `accounts.firm` vs the key, case-insensitive, spaces/`-`/`_` ignored
+  ("Key Funding" = "KeyFunding").
+
+### Effective firm rules of one account (`app/domain/firm_rules.py`, pure)
+Per field: the account's own Settings value when set (> 0), else the firm config value.
+- max loss % and profit target %: account value -> firm config (target by phase) -> (no firm entry
+  only) the existing rules.yaml `account_limits` fallback (unchanged behaviour of `firm_limits`).
+- daily loss %: account `daily_loss_pct` -> firm config. The firm daily floor exists ONLY for
+  accounts with a firm entry (it needs basis + reset); FundedNext gets no new daily floor.
+- `source` per account: `firm` (a firm entry matched), `account` (no entry, own values),
+  `fallback` (rules.yaml), `none`.
+
+### Firm day (pure function)
+- `reset_at` = latest moment <= now at which the reset wall time occurs in the reset zone (UTC aware).
+- Start-of-day balance: fresh balance (synced <= snapshot STALE_AFTER) minus net P&L of trades
+  closed at/after `reset_at` minus cash booked by open trades opened at/after `reset_at`;
+  without a fresh balance: size + closed net P&L before `reset_at` + cash booked by open trades
+  opened before `reset_at`.
+- Day P&L = closed since reset + booked since reset + floating (equity - balance of a fresh sync;
+  0 when nothing is open; unknown -> pct/room None).
+- Limit amount = size x daily_loss_pct/100 (of the account SIZE, to verify). Floor = start balance - amount.
+- `pnl_pct` = day P&L / size x 100; `room_pct` = daily_loss_pct + pnl_pct (0 or less = breached).
+
+### API additions (all optional/nullable, existing fields unchanged)
+- `AccountOut.firm_rules: FirmRulesOut | null` (null when source `none`):
+  `{firm, source, daily_loss_pct, max_loss_pct, max_loss_type, profit_target_pct, daily_basis,
+  daily_reset, reset_timezone, to_verify: string[]}` (Decimals as strings, effective values).
+- `AccountLimitsOut.firm_day: FirmDayOut | null` (only accounts with a firm entry):
+  `{reset_at, start_balance, floor, loss_pct (negative, e.g. "-4.00"), pnl_pct | null,
+  room_pct | null, breached: bool, to_verify: string[]}`.
+- «До макс. збитку» (`max_loss`) and the month bar use the effective max loss / target above.
+- `GET /api/dashboard` `stop.firm_day: bool` (some account breached its firm daily floor) and
+  `stop.firm_max_loss: bool` (some account at/below its static floor).
+
+### Rule check
+- New auto violation `firm_daily_loss` (config/violations.yaml, type auto): an entry opened after
+  the account's realized firm-day P&L (trades closed before the entry, since that entry's firm
+  day reset) reached <= -daily_loss_pct of size. Sticky within the firm day, like daily_risk.
+  Only accounts with a firm entry. Personal rules.yaml stops (-3 % etc.) stay for every account.
+- No `firm_max_loss` violation (an account at the floor has failed; KPI + banner only).
+
+### UI (Ukrainian, uk.ts)
+- Settings account form/table: under «Правила фірми» a note with the effective firm rules and
+  «перевірити: …» for each `to_verify` item.
+- Home «Ліміти»: a row «Денний ліміт фірми» (bar to loss_pct, room, reset time) when `firm_day`.
+- Dashboard stop banner: lines for firm daily limit and firm max loss.
+
+### Review fixes (2026-11-26)
+- `firms.yaml` is checked at the start of every MT5 / cTrader sync cycle and by the risk-base
+  recompute / symbol-map re-apply: a broken file skips the cycle ("sync skipped: <config message>")
+  before anything is written, like a broken rules.yaml.
+- Accounts API: a broken `firms.yaml` gives `firm_rules: null` on GET (one ERROR log per request,
+  one WARNING for a broken rules.yaml); POST / PATCH refuse with 500 `config_error` before writing.
+  PATCH of `firm` or `daily_loss_pct` (as of `reference_balance`) recomputes the account's rule violations.
+- `daily_loss_pct` must not exceed `max_loss_pct`; write `daily_reset` in quotes (an unquoted `10:30`
+  is read as a number by YAML).
+- `firm_day.breached` is also true when the floating P&L is unknown but the realized loss of the firm
+  day alone has reached the limit (`room_pct` stays null).
+- Cash booked by a still-open trade is bucketed by when it was booked: each exit deal (profit +
+  commission + swap) at its own time, the rest (entry commission) at the trade's open time.
+- A server offset outside +-23 h is treated as UTC (WARNING), never a 500.
+- Reset zone `server` uses the CURRENT detected offset: the firm days of an MT5 account in the past can
+  shift by 1 h across a DST change, so for MT5 firms prefer an IANA `reset_timezone`. A firms.yaml
+  edit reaches stored violations at the next worker start (`recompute_all`).

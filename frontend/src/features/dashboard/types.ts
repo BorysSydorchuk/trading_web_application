@@ -51,7 +51,8 @@ export interface OpenPosition {
 export interface Dashboard {
   now: string
   accounts: DashboardAccount[]
-  stop: { today: boolean; week: boolean }
+  /** firm_day / firm_max_loss: some account hit its firm daily floor / static max-loss floor (optional for old payloads). */
+  stop: { today: boolean; week: boolean; firm_day?: boolean; firm_max_loss?: boolean }
   open_positions: OpenPosition[]
   inbox: InboxCounts
 }

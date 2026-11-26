@@ -51,6 +51,24 @@ export interface HomeLimits {
   equity: string | null
   /** False when that sync is older than the staleness limit. */
   balance_fresh: boolean
+  /** Firm daily floor (config/firms.yaml); null / absent for accounts without a firm entry. */
+  firm_day?: FirmDay | null
+}
+
+/** `AccountLimitsOut.firm_day` (docs/api.md "Firm rules from config"). Percents of the account size. */
+export interface FirmDay {
+  /** ISO UTC: the latest firm-day reset. */
+  reset_at: string
+  start_balance: string
+  floor: string
+  /** Negative, e.g. "-4.00". */
+  loss_pct: string
+  /** Day P&L % incl. floating; null when the floating P&L is unknown. */
+  pnl_pct: string | null
+  /** loss room left (daily_loss_pct + pnl_pct); null when the floating P&L is unknown. */
+  room_pct: string | null
+  breached: boolean
+  to_verify: string[]
 }
 
 export interface HomeKpis {

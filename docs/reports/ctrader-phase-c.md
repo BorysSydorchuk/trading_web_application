@@ -1,5 +1,7 @@
 # cTrader integration, phase c: symbol specs, FX rates, risk, calculator, MAE/MFE, limits
 
+Firm (PM 2026-11-26): the cTrader account is a **KeyFunding** account, not FundedNext; its firm rules are in `config/firms.yaml` (docs/reports/keyfunding-firm-rules.md).
+
 Tier L, no migration. Owner request 2026-11-24 (task c). Branch `ctrader/phase-c` from main 6f79e64.
 Contract: `docs/api.md`, section "cTrader integration, phase c" (c1–c6).
 

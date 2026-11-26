@@ -75,6 +75,7 @@ def test_limits_of_one_account_are_the_same_on_both_platforms(
         "balance": None,
         "equity": None,
         "balance_fresh": False,
+        "firm_day": None,
     }
 
 

@@ -1,6 +1,6 @@
 """Editable YAML configuration in `config/` (rules.yaml, journal_fields.yaml,
 ai_pricing.yaml, extraction.yaml, transcription.yaml, transcript_glossary.yaml, bias.yaml,
-symbols.yaml, violations.yaml).
+symbols.yaml, violations.yaml, firms.yaml).
 
 Accessors are cached and reload automatically when a file changes; they raise
 `ConfigError` (readable message with file path and key) when a file is invalid.
@@ -30,6 +30,7 @@ from app.config_files.bias import (
     get_bias_config,
 )
 from app.config_files.extraction import clear_extraction_cache, get_number_words
+from app.config_files.firms import FirmsConfig, clear_firms_cache, get_firms_config
 from app.config_files.journal_fields import (
     JournalField,
     JournalFieldsConfig,
@@ -81,6 +82,7 @@ def reload_config() -> None:
     clear_bias_cache()
     clear_symbols_cache()
     clear_violations_cache()
+    clear_firms_cache()
 
 
 def check_config_files() -> list[ConfigError]:
@@ -97,6 +99,7 @@ def check_config_files() -> list[ConfigError]:
         get_transcript_glossary,
         get_bias_config,
         get_symbols_config,
+        get_firms_config,
     ]
     for load in loaders:
         try:
@@ -120,6 +123,7 @@ __all__ = [
     "BiasSymbol",
     "CanonicalSymbol",
     "ConfigError",
+    "FirmsConfig",
     "JournalField",
     "JournalFieldsConfig",
     "JournalOption",
@@ -135,6 +139,7 @@ __all__ = [
     "get_ai_models",
     "get_ai_pricing",
     "get_bias_config",
+    "get_firms_config",
     "get_journal_fields",
     "get_number_words",
     "get_rules",

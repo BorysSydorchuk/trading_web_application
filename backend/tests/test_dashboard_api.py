@@ -201,7 +201,12 @@ def test_limits_come_from_rules_yaml(client: TestClient, seeded: dict[str, Accou
 def test_stop_flags_follow_any_account_state(
     client: TestClient, seeded: dict[str, Account]
 ) -> None:
-    assert dashboard(client)["stop"] == {"today": True, "week": False}
+    assert dashboard(client)["stop"] == {
+        "today": True,
+        "week": False,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
 
 
 def test_week_stop_flag(client: TestClient, session: Session) -> None:
@@ -212,7 +217,12 @@ def test_week_stop_flag(client: TestClient, session: Session) -> None:
 
     assert by_name(data, "Alpha")["week_state"] == "stop_loss"
     assert by_name(data, "Alpha")["today_state"] == "ok"
-    assert data["stop"] == {"today": False, "week": True}
+    assert data["stop"] == {
+        "today": False,
+        "week": True,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
 
 
 def test_exactly_at_the_limit_is_a_stop(client: TestClient, session: Session) -> None:
@@ -228,7 +238,12 @@ def test_no_stop_when_all_accounts_are_ok(client: TestClient, session: Session) 
 
     data = dashboard(client)
 
-    assert data["stop"] == {"today": False, "week": False}
+    assert data["stop"] == {
+        "today": False,
+        "week": False,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
     assert by_name(data, "Alpha")["today_state"] == "ok"
 
 
@@ -249,7 +264,12 @@ def test_account_without_trades_is_all_zeros_and_ok(client: TestClient, session:
     assert empty["today"] == zeros
     assert empty["week"] == zeros
     assert (empty["today_state"], empty["week_state"]) == ("ok", "ok")
-    assert data["stop"] == {"today": False, "week": False}
+    assert data["stop"] == {
+        "today": False,
+        "week": False,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
     assert data["open_positions"] == []
 
 
@@ -329,7 +349,12 @@ def test_no_accounts_gives_an_empty_dashboard(client: TestClient) -> None:
 
     assert data["accounts"] == []
     assert data["open_positions"] == []
-    assert data["stop"] == {"today": False, "week": False}
+    assert data["stop"] == {
+        "today": False,
+        "week": False,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
     assert data["inbox"] == {"needs_sl": 0, "needs_description": 0, "draft": 0}
 
 
@@ -441,7 +466,12 @@ def test_weekly_stop_still_enforced_when_daily_is_disabled(
     data = dashboard(client)
 
     assert by_name(data, "Alpha")["week_state"] == "stop_loss"
-    assert data["stop"] == {"today": False, "week": True}
+    assert data["stop"] == {
+        "today": False,
+        "week": True,
+        "firm_day": False,
+        "firm_max_loss": False,
+    }
 
 
 def test_open_positions_are_ordered_by_open_time_then_trade_id(

@@ -668,6 +668,26 @@ def test_broken_rules_skip_the_cycle_without_a_connection(
     assert connector.urls == []
 
 
+def test_broken_firms_skip_the_cycle_without_a_connection(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.config_files import ConfigError
+
+    make_ctrader_account(session)
+
+    def broken() -> Any:
+        raise ConfigError(Path("firms.yaml"), ["broken"])
+
+    connector = FakeConnector(FakeTransport())
+    config = _config(store, connector, TRADING, firms_getter=broken)
+    assert run_ctrader_balance_cycle(factory, config) == []
+    assert connector.urls == []
+    assert "cTrader sync skipped" in caplog.text
+
+
 # --- 10. send surface -------------------------------------------------------------------
 
 
