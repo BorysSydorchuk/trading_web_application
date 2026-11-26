@@ -6,12 +6,26 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config_files import get_rules
+from app.config_files.firms import FirmsConfig
+from app.config_files.rules import RulesConfig
 from app.models import Account, RuleViolation, Trade
 from app.services.trade_rules import recompute_rules
+from tests.test_firm_rules_api import PINNED_FIRMS
+
+# Pinned rules (`server` zone): the real config/firms.yaml resets at 00:00 EET (2026-11-26).
+PINNED = FirmsConfig.model_validate(yaml.safe_load(PINNED_FIRMS))
+
+
+def recompute_rules_pinned(
+    db: Session, account_id: int, since: datetime, rules: RulesConfig
+) -> int:
+    return recompute_rules(db, account_id, since, rules, firms=PINNED)
+
 
 D = Decimal
 KEY = "firm_daily_loss"
@@ -76,7 +90,7 @@ def test_entry_after_the_firm_daily_loss_gets_the_violation(db_session: Session)
     loser = _trade(db_session, account, _at(12, 1), "-450")
     entry = _trade(db_session, account, _at(12, 8), "20")
 
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
 
     assert KEY not in _keys(db_session, loser.id)
     assert KEY in _keys(db_session, entry.id)
@@ -87,7 +101,7 @@ def test_firm_name_variants_match(db_session: Session) -> None:
     _trade(db_session, account, _at(12, 1), "-450")
     entry = _trade(db_session, account, _at(12, 8), "20")
 
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
 
     assert KEY in _keys(db_session, entry.id)
 
@@ -98,7 +112,7 @@ def test_the_violation_does_not_cross_the_reset(db_session: Session) -> None:
     same_day = _trade(db_session, account, _at(12, 23, 30), "5")
     next_day = _trade(db_session, account, _at(13, 0, 30), "5")
 
-    recompute_rules(db_session, account.id, _at(12, 20), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 20), get_rules())
 
     assert KEY in _keys(db_session, same_day.id)
     assert KEY not in _keys(db_session, next_day.id)
@@ -110,7 +124,7 @@ def test_server_offset_moves_the_reset(db_session: Session) -> None:
     before = _trade(db_session, account, _at(12, 21, 30), "5")
     after = _trade(db_session, account, _at(12, 22, 30), "5")
 
-    recompute_rules(db_session, account.id, _at(12, 19), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 19), get_rules())
 
     assert KEY in _keys(db_session, before.id)
     assert KEY not in _keys(db_session, after.id)
@@ -125,7 +139,7 @@ def test_a_firm_day_that_started_before_the_brussels_monday_is_covered(
     _trade(db_session, account, _at(8, 19), "-450")
     entry = _trade(db_session, account, _at(8, 23, 30), "5")
 
-    recompute_rules(db_session, account.id, _at(8, 23, 30), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(8, 23, 30), get_rules())
 
     assert KEY in _keys(db_session, entry.id)
 
@@ -135,7 +149,7 @@ def test_fundednext_never_gets_the_firm_violation(db_session: Session) -> None:
     _trade(db_session, account, _at(12, 1), "-900")
     entry = _trade(db_session, account, _at(12, 8), "20")
 
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
 
     assert KEY not in _keys(db_session, entry.id)
 
@@ -144,13 +158,13 @@ def test_recompute_is_idempotent_and_removes_a_stale_violation(db_session: Sessi
     account = _account(db_session, "KeyFunding", 7)
     loser = _trade(db_session, account, _at(12, 1), "-450")
     entry = _trade(db_session, account, _at(12, 8), "20")
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
     assert KEY in _keys(db_session, entry.id)
 
     loser.net_pnl = D("-100")
     db_session.flush()
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
 
     assert KEY not in _keys(db_session, entry.id)
 
@@ -161,6 +175,6 @@ def test_an_account_edit_of_daily_loss_changes_the_limit(db_session: Session) ->
     _trade(db_session, account, _at(12, 1), "-450")
     entry = _trade(db_session, account, _at(12, 8), "20")
 
-    recompute_rules(db_session, account.id, _at(12, 1), get_rules())
+    recompute_rules_pinned(db_session, account.id, _at(12, 1), get_rules())
 
     assert KEY not in _keys(db_session, entry.id)  # -4.5 % is inside the account's own 5 %

@@ -102,10 +102,26 @@ def firm_day(client: TestClient, account: Account) -> dict[str, Any] | None:
     return day
 
 
-@pytest.fixture
+# Pinned KeyFunding rules for these tests (the real config/firms.yaml may change: EET reset,
+# Borys 2026-11-26): `server` zone so the offset tests stay meaningful, both items to verify.
+PINNED_FIRMS = """firms:
+  KeyFunding:
+    daily_loss_pct: 4.0
+    max_loss_pct: 8.0
+    max_loss_type: static
+    profit_target_pct: { phase_1: 8.0, phase_2: 4.0 }
+    daily_basis: balance
+    daily_reset: "00:00"
+    reset_timezone: server
+    to_verify: [daily_basis, daily_reset]
+"""
+
+
+@pytest.fixture(autouse=True)
 def config_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     config = tmp_path / "config"
     shutil.copytree(REPO_ROOT / "config", config)
+    (config / "firms.yaml").write_text(PINNED_FIRMS, encoding="utf-8")
     monkeypatch.setenv(CONFIG_DIR_ENV, str(config))
     reload_config()
     yield config

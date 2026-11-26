@@ -54,6 +54,14 @@ class FirmDayOut(BaseModel):
     to_verify: list[str]
 
 
+class FirmAlertOut(BaseModel):
+    """The account is within 1 % of a firm limit (PM 2026-11-26): shown first and in red.
+    room_pct None: breached on the realized loss while the floating P&L is unknown."""
+
+    kind: Literal["firm_day", "max_loss"]
+    room_pct: Pct | None
+
+
 class AccountLimitsOut(BaseModel):
     account_id: int
     account_name: str
@@ -74,6 +82,7 @@ class AccountLimitsOut(BaseModel):
     equity: Money | None
     balance_fresh: bool
     firm_day: FirmDayOut | None = None
+    firm_alert: FirmAlertOut | None = None
 
 
 class CumPoint(BaseModel):

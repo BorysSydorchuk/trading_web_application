@@ -42,7 +42,7 @@ from app.services import open_positions_snapshot as snapshot
 from app.services.firm_day import account_firm_rules, firm_day_of
 from app.services.firm_day import balance_fresh as _balance_fresh
 from app.services.firm_day import floating as _floating
-from app.services.home_max_loss import account_firm_limits, max_loss
+from app.services.home_max_loss import account_firm_limits, accounts_equity, max_loss
 
 OUTSIDE: Final = "outside"
 WEEKDAYS = range(5)  # Monday..Friday, as the bias reminders (app.services.bias_status)
@@ -103,6 +103,21 @@ def _firm_day_schema(day: fr.FirmDay | None) -> schemas.FirmDayOut | None:
         breached=day.breached,
         to_verify=list(day.to_verify),
     )
+
+
+def _firm_alert_schema(
+    day: fr.FirmDay | None,
+    size: Decimal | None,
+    max_loss_pct: Decimal | None,
+    equity_now: Decimal | None,
+) -> schemas.FirmAlertOut | None:
+    """Firm alert (PM 2026-11-26): daily floor or static max loss within 1 % of the size."""
+    usable = dh.usable_size(size)
+    room = None
+    if usable is not None and max_loss_pct is not None and equity_now is not None:
+        room = dh.max_loss_distance(equity_now, usable, max_loss_pct)
+    alert = fr.firm_alert(day, room)
+    return None if alert is None else schemas.FirmAlertOut(kind=alert.kind, room_pct=alert.room_pct)
 
 
 def _accounts(db: Session, account_id: int | None) -> list[Account]:
@@ -288,6 +303,7 @@ def _account_limits(
     rules: RulesConfig,
     firms: FirmsConfig,
     period: _Period,
+    equity_now: Decimal | None,
 ) -> schemas.AccountLimitsOut:
     cfg = rules.rules
     has_open = bool(open_booked)
@@ -302,6 +318,7 @@ def _account_limits(
     week_range = (_rule(cfg.weekly_stop_loss_pct), _rule(cfg.weekly_stop_profit_pct))
     day = _bar(keyed, day_key, period.today, size, day_range, extra, open_booked)
     max_trades = cfg.max_trades_per_week
+    firm_day = firm_day_of(db, account, account_firm_rules(account, rules, firms), period.now)
     return schemas.AccountLimitsOut(
         account_id=account.id,
         account_name=account.name,
@@ -317,9 +334,8 @@ def _account_limits(
         trades_week=trades_week,
         max_trades_week=max_trades.value if max_trades.enabled else None,
         to_daily_stop_pct=dh.to_daily_stop(day.pct, day.loss_pct),
-        firm_day=_firm_day_schema(
-            firm_day_of(db, account, account_firm_rules(account, rules, firms), period.now)
-        ),
+        firm_day=_firm_day_schema(firm_day),
+        firm_alert=_firm_alert_schema(firm_day, size, firm.max_loss_pct, equity_now),
     )
 
 
@@ -332,18 +348,37 @@ def _limits(
     firms: FirmsConfig,
     period: _Period,
 ) -> schemas.AccountLimitsOut | None:
-    """One account: the selected one, or the one closest to its daily stop."""
+    """One account: the selected one; of several, one within 1 % of a firm limit first,
+    else the one closest to its personal daily stop (PM 2026-11-26)."""
     counts = _trades_this_week(db, [a.id for a in accounts], period)
+    sized = [(a, s) for a in accounts if (s := dh.usable_size(a.reference_balance)) is not None]
+    equity = accounts_equity(db, sized, period.now)
     booked: dict[int, list[tuple[datetime, Decimal]]] = {}
     for trade, account in opened:
         booked.setdefault(account.id, []).append((trade.open_time, trade.net_pnl or Decimal(0)))
     items = [
         _account_limits(
-            db, a, trades, counts.get(a.id, 0), booked.get(a.id, []), rules, firms, period
+            db,
+            a,
+            trades,
+            counts.get(a.id, 0),
+            booked.get(a.id, []),
+            rules,
+            firms,
+            period,
+            equity.get(a.id),
         )
         for a in accounts
     ]
-    return dh.closest_to_daily_stop(items, lambda item: item.to_daily_stop_pct)
+    return fr.pick_limits_item(
+        items,
+        lambda item: item.to_daily_stop_pct,
+        lambda item: _alert_of(item.firm_alert),
+    )
+
+
+def _alert_of(alert: schemas.FirmAlertOut | None) -> fr.FirmAlert | None:
+    return None if alert is None else fr.FirmAlert(alert.kind, alert.room_pct)
 
 
 # --- KPIs ------------------------------------------------------------------------------------
