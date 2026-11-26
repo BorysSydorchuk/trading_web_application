@@ -21,7 +21,7 @@ from app.ctrader import protocol as p
 from app.ctrader.tokens import TokenPair, TokenStore, tokens_path
 from app.db import make_session_factory
 from app.models import Account, SyncLog
-from app.services.home import _floating
+from app.services.firm_day import floating as _floating
 from app.worker.ctrader_job import CtraderJobConfig, run_ctrader_balance_cycle
 from tests.ctrader_fakes import (
     ACCESS_TOKEN,
