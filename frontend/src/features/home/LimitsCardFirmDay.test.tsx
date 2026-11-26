@@ -25,8 +25,10 @@ describe('LimitsCard «Денний ліміт фірми»', () => {
     const row = screen.getByTestId('firm-day')
     expect(row).toHaveTextContent(t.firmDay)
     expect(row).toHaveTextContent('−1.3%')
-    expect(row).toHaveTextContent('до ліміту 2.8%')
-    expect(row).toHaveTextContent('скидання о 23:00')
+    // Room 2.75 is rounded down, never up; pnl −1.25 keeps the normal overview rounding.
+    expect(row).toHaveTextContent('до ліміту 2.7%')
+    expect(row).not.toHaveTextContent('2.8%')
+    expect(row).toHaveTextContent('день фірми з 23:00')
     expect(screen.getByRole('img', { name: t.firmBarLabel('−1.3%', '−4%') })).toBeInTheDocument()
     expect(screen.queryByTestId('firm-day-breached')).not.toBeInTheDocument()
     expect(screen.queryByTestId('firm-day-no-floating')).not.toBeInTheDocument()
@@ -50,6 +52,17 @@ describe('LimitsCard «Денний ліміт фірми»', () => {
     expect(screen.getByTestId('firm-day')).toHaveTextContent(t.firmRoom(uk.common.empty))
     expect(screen.getByTestId('firm-day-no-floating')).toHaveTextContent(t.firmNoFloating)
     expect(screen.getByTestId('firm-day-bar').querySelector('[data-testid="limit-fill"]')).toHaveClass('hidden')
+  })
+
+  it.each([
+    ['2.79', '2.7%'],
+    ['2.70', '2.7%'],
+    ['0.05', '0%'],
+    ['-0.15', '−0.2%'],
+    ['-0.10', '−0.1%'],
+  ])('rounds the room %s down to «%s»', (room, shown) => {
+    renderCard(firmDay({ room_pct: room }))
+    expect(screen.getByTestId('firm-day')).toHaveTextContent(t.firmRoom(shown))
   })
 
   it('lists the items to verify', () => {

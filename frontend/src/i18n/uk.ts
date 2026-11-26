@@ -1269,7 +1269,8 @@ export const uk = {
       firmDay: 'Денний ліміт фірми',
       firmBarLabel: (value: string, limit: string) => `Денний ліміт фірми: ${value}, ліміт ${limit}`,
       firmRoom: (pct: string) => `до ліміту ${pct}`,
-      firmReset: (time: string) => `скидання о ${time}`,
+      /** `reset_at` is the start of the current firm day, not the next reset. */
+      firmDayStart: (time: string) => `день фірми з ${time}`,
       firmBreached: 'Денний ліміт фірми досягнуто',
       firmNoFloating: 'плаваючий P&L невідомий',
       firmVerify: (items: string) => `перевірити: ${items}`,

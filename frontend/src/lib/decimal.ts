@@ -75,6 +75,21 @@ export function roundDecimal(value: string, places: number): string {
   return negative && /[1-9]/.test(result) ? `-${result}` : result
 }
 
+/** Rounds a decimal string DOWN (toward −infinity) to `places` digits, on digits only: 2.75 → 2.7, −0.15 → −0.2. */
+export function floorDecimal(value: string, places: number): string {
+  const { negative, abs } = splitSign(value)
+  const parts = parseDecimalParts(abs)
+  if (!parts) return value
+  const fraction = parts.fraction.padEnd(places, '0')
+  const kept = fraction.slice(0, places)
+  const truncated = places > 0 ? `${parts.integer}.${kept}` : parts.integer
+  const dropped = /[1-9]/.test(fraction.slice(places))
+  if (!negative) return truncated
+  // Negative with dropped digits: one more unit away from zero (half-up of "<truncated>5").
+  const result = dropped ? roundDecimal(`${parts.integer}.${kept}5`, places) : truncated
+  return /[1-9]/.test(result) ? `-${result}` : result
+}
+
 /** Drops trailing fraction zeros but keeps at least `minPlaces` ("2650.12000000" → "2650.12"). */
 export function trimDecimal(value: string, minPlaces = 0): string {
   const { negative, abs } = splitSign(value)

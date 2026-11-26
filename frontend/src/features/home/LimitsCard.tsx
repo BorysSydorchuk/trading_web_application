@@ -4,6 +4,7 @@ import { Tile } from '@/components/studio/Tile'
 import { uk } from '@/i18n/uk'
 import { verifyItemText } from '@/features/accounts/firmRules'
 import { formatPct, formatUsd } from '@/lib/displayFormat'
+import { floorDecimal } from '@/lib/decimal'
 import { formatHmBrussels } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { limitBarGeometry } from './chartMath'
@@ -78,6 +79,12 @@ function LimitRow({ label, period }: { label: string; period: LimitPeriod }) {
   )
 }
 
+/** Overview percent precision (lib/displayFormat formatPct overview). */
+const OVERVIEW_PCT_PLACES = 1
+
+/** Room to the firm floor, never rounded up (2.75 → 2.7): the trader must not see more room than there is. */
+const roomText = (v: string | null) => pctPlain(v === null ? null : floorDecimal(v, OVERVIEW_PCT_PLACES))
+
 /** «Денний ліміт фірми»: day P&L % (incl. floating) towards the firm daily floor, room and reset time. */
 function FirmDayRow({ firmDay }: { firmDay: FirmDay }) {
   const value = pctSigned(firmDay.pnl_pct)
@@ -94,7 +101,7 @@ function FirmDayRow({ firmDay }: { firmDay: FirmDay }) {
       <div className="num flex justify-between gap-2 text-[11px]">
         <span className="text-loss">{limit}</span>
         <span className={firmDay.breached || (room !== null && room <= 0) ? 'text-loss' : 'text-ink-muted'}>
-          {t.firmRoom(pctPlain(firmDay.room_pct))} · {t.firmReset(formatHmBrussels(firmDay.reset_at))}
+          {t.firmRoom(roomText(firmDay.room_pct))} · {t.firmDayStart(formatHmBrussels(firmDay.reset_at))}
         </span>
       </div>
       {firmDay.pnl_pct === null && <p data-testid="firm-day-no-floating" className="text-[11px] text-ink-muted">{t.firmNoFloating}</p>}
