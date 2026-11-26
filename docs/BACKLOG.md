@@ -73,3 +73,6 @@ Ideas outside the current milestone. The PM decides when they enter a milestone.
 - (2026-11-26, KeyFunding review LOW) Firm day, fresh-balance mode: a closed trade counts all its net P&L at close_time; one partly closed before the reset makes the start balance too high (floor stricter, not looser). Bucket closed trades by exit-deal time like open ones.
 - (2026-11-26, KeyFunding review LOW, PM question) «Усі рахунки» on Home: the «Ліміти» account is picked by the personal daily stop; a KeyFunding account close to its firm floor may not be the one shown.
 - (2026-11-26, KeyFunding) Home computes firm_day per account (re-queries open trades); batch if the account count grows. Start-of-day EQUITY basis needs a stored snapshot.
+- (2026-11-26, firm alerts review LOW) Firm alert with unknown floating and a realized firm-day room <= 1 % (not breached) gives no alert; expose a realized room on FirmDay and use it.
+- (2026-11-26, firm alerts review LOW, PM question) `stop.firm_max_loss` banner counts only firms.yaml accounts, while the «Ліміти» max-loss alert also covers FundedNext (Settings max loss): should the critical banner follow?
+- (2026-11-26, firm alerts review LOW) LimitsCardFirmDay test "room null" uses kind max_loss; only firm_day can have a null room.
