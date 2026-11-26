@@ -1025,3 +1025,16 @@ Per field: the account's own Settings value when set (> 0), else the firm config
 - Reset zone `server` uses the CURRENT detected offset: the firm days of an MT5 account in the past can
   shift by 1 h across a DST change, so for MT5 firms prefer an IANA `reset_timezone`. A firms.yaml
   edit reaches stored violations at the next worker start (`recompute_all`).
+
+### PM answers 2026-11-26 (branch `ctrader/firm-alerts`)
+- Firm limits and personal stops are shown together. Personal stops keep the StopBanner («СТОП на сьогодні»). A
+  firm limit (`stop.firm_day` / `stop.firm_max_loss`) gets its own critical red banner (`FirmLimitBanner`) above it.
+- `AccountLimitsOut.firm_alert: {kind: "firm_day" | "max_loss", room_pct: Pct | null} | null`. It is set when the firm
+  daily room or the static max-loss room is <= 1 % of the size (`FIRM_ALERT_ROOM_PCT`), or when the firm day is
+  breached (room null = breached on realized loss, floating unknown). When both are near, it names the closer one.
+  The max-loss room counts for every account with an effective max loss (FundedNext Settings values too). The firm day
+  counts only for firms.yaml accounts.
+- «Усі рахунки»: an alerted account is picked first (smallest room, unknown first), else the closest to the personal
+  daily stop as before. The card turns red and names the firm limit.
+- KeyFunding (Borys confirmed): daily limit = start-of-day balance − 4 % of the size. The day resets 00:00 server
+  time EET (`reset_timezone: EET`, IANA EET/EEST). `to_verify: []`.

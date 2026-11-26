@@ -37,3 +37,7 @@ firm/daily-loss edit), then fixed, then both APPROVE. The LOW items are in BACKL
 - `server` reset zone uses the currently detected MT5 offset, so past firm days of an MT5 firm can shift 1 h across a
   DST change. Use an IANA zone for MT5 firms. A firms.yaml edit reaches stored violations at the next worker start.
 - KeyFunding symbol aliases: after the live cTrader symbol list (live check, task d).
+
+## Update 2026-11-26 (PM answers, Borys checks)
+- Borys confirmed the daily basis. The reset is 00:00 server time EET (`reset_timezone: EET`), so nothing is left to verify.
+- Firm limits apply together with the personal stops and have their own critical banner. With «Усі рахунки», an account within 1 % of a firm limit is shown first in «Ліміти», in red (branch `ctrader/firm-alerts`).
