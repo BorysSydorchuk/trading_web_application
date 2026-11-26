@@ -205,6 +205,7 @@ def test_limits_of_one_account(client: TestClient, session: Session, alpha: Acco
         "balance": None,
         "equity": None,
         "balance_fresh": False,
+        "firm_day": None,
     }
 
 

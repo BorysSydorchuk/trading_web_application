@@ -66,6 +66,8 @@ class DashboardAccount(BaseModel):
 class StopFlags(BaseModel):
     today: bool
     week: bool
+    firm_day: bool = False  # a firm account is at/below its firm daily floor
+    firm_max_loss: bool = False  # a firm account is at/below its static max-loss floor
 
 
 class OpenPosition(BaseModel):

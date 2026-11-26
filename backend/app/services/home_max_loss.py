@@ -18,11 +18,13 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config_files.firms import FirmsConfig
 from app.config_files.rules import RulesConfig
 from app.domain import home as dh
 from app.models import Account, Trade
 from app.schemas import home as schemas
 from app.services import open_positions_snapshot as snapshot
+from app.services.firm_day import account_firm_rules
 
 ZERO = Decimal(0)
 
@@ -92,19 +94,24 @@ def _account_kpi(
     )
 
 
-def account_firm_limits(account: Account, rules: RulesConfig) -> dh.FirmLimits:
-    """Per-account firm rules (Settings) first, rules.yaml `account_limits` as fallback."""
-    cfg = rules.account_limits
-    return dh.firm_limits(
-        account.max_drawdown_pct,
-        account.profit_target_pct,
-        cfg.max_drawdown_pct if cfg is not None else None,
-        cfg.profit_target_pct if cfg is not None else None,
-    )
+def account_firm_limits(account: Account, rules: RulesConfig, firms: FirmsConfig) -> dh.FirmLimits:
+    """Effective firm limits: a firms.yaml entry (account Settings value first), else the
+    per-account Settings values with the rules.yaml `account_limits` fallback."""
+    max_loss_pct, target = account_firm_rules(account, rules, firms).limits()
+    return dh.FirmLimits(max_loss_pct, target)
+
+
+def account_equity(db: Session, account: Account, size: Decimal, now: datetime) -> Decimal:
+    """Equity now of one account (fresh sync, else balance, else the trades)."""
+    return _equity_now(account, size, _histories(db, [account.id])[account.id], now)[0]
 
 
 def max_loss(
-    db: Session, accounts: Sequence[Account], rules: RulesConfig, now: datetime
+    db: Session,
+    accounts: Sequence[Account],
+    rules: RulesConfig,
+    firms: FirmsConfig,
+    now: datetime,
 ) -> schemas.MaxLossKpi | None:
     """One account: that account; all accounts: the one closest to its floor (lowest pct,
     ties -> lowest id). Limit per account (Settings firm rules, else rules.yaml account_limits);
@@ -113,7 +120,7 @@ def max_loss(
         (a, s, limit)
         for a in accounts
         if (s := dh.usable_size(a.reference_balance)) is not None
-        and (limit := account_firm_limits(a, rules).max_loss_pct) is not None
+        and (limit := account_firm_limits(a, rules, firms).max_loss_pct) is not None
     ]
     if not usable:
         return None

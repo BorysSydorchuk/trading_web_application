@@ -20,6 +20,7 @@ ENGINE_KEYS = [
     "max_risk_pct",
     "daily_risk",
     "weekly_risk",
+    "firm_daily_loss",
     "max_trades_per_week",
     "max_reentries_per_idea",
     "min_planned_rr",

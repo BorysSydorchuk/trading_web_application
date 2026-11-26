@@ -17,6 +17,7 @@ violations:
   - { key: max_risk_pct, label: "ризик на угоду вище ліміту", type: auto, status: active }
   - { key: daily_risk, label: "Порушення денного ризику", type: auto, status: active }
   - { key: weekly_risk, label: "Порушення тижневого ризику", type: auto, status: active }
+  - { key: firm_daily_loss, label: "вхід після денного ліміту фірми", type: auto, status: active }
   - { key: max_trades_per_week, label: "перевищено ліміт угод на тиждень", type: auto, status: active }
   - { key: max_reentries_per_idea, label: "забагато перезаходів в ідею", type: auto, status: active }
   - { key: min_planned_rr, label: "плановий RR нижче мінімуму", type: auto, status: active }

@@ -40,6 +40,20 @@ class LimitBar(BaseModel):
     profit_pct: Pct | None
 
 
+class FirmDayOut(BaseModel):
+    """Firm daily limit of an account with a firms.yaml entry (docs/api.md "Firm rules from
+    config"). pnl_pct / room_pct None: floating P&L unknown (stale sync with an open trade)."""
+
+    reset_at: UtcDatetime
+    start_balance: Money
+    floor: Money
+    loss_pct: Pct  # negative: -daily_loss_pct
+    pnl_pct: Pct | None
+    room_pct: Pct | None
+    breached: bool
+    to_verify: list[str]
+
+
 class AccountLimitsOut(BaseModel):
     account_id: int
     account_name: str
@@ -59,6 +73,7 @@ class AccountLimitsOut(BaseModel):
     balance: Money | None
     equity: Money | None
     balance_fresh: bool
+    firm_day: FirmDayOut | None = None
 
 
 class CumPoint(BaseModel):

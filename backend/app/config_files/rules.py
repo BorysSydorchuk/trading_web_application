@@ -169,12 +169,14 @@ RULE_KEYS: tuple[str, ...] = tuple(RulesSet.model_fields)
 
 DAILY_RISK_KEY = "daily_risk"
 WEEKLY_RISK_KEY = "weekly_risk"
+FIRM_DAILY_LOSS_KEY = "firm_daily_loss"  # docs/api.md "Firm rules from config"
 # The `rule_key`s the rules engine emits (app.domain.rules). config/violations.yaml must
 # list exactly these as active `auto` entries (checked by its loader).
 ENGINE_RULE_KEYS: tuple[str, ...] = (
     "max_risk_pct",
     DAILY_RISK_KEY,
     WEEKLY_RISK_KEY,
+    FIRM_DAILY_LOSS_KEY,
     "max_trades_per_week",
     "max_reentries_per_idea",
     "min_planned_rr",

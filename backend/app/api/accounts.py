@@ -11,6 +11,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings, mt5_password_for, mt5_password_key
+from app.config_files import get_firms_config, get_rules
 from app.config_files.loader import ConfigError
 from app.db import get_db
 from app.errors import ApiError, config_error
@@ -18,6 +19,7 @@ from app.models import Account, Trade
 from app.models.enums import AccountPhase, AccountPlatform, AccountStatus
 from app.schemas import accounts as schemas
 from app.services import starting_balance_suggestion as suggestion
+from app.services.firm_day import account_firm_rules
 from app.services.risk_base import recompute_account
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,36 @@ def _suggestion_schema(
     return schemas.StartingBalanceSuggestion(amount=entry.amount, time=entry.time)
 
 
+def _firm_rules(account: Account) -> schemas.FirmRulesOut | None:
+    """Effective firm rules (None when nothing applies). A broken firms.yaml is a visible
+    500 config_error; a broken rules.yaml only drops its `account_limits` fallback here (every
+    other page reports that file)."""
+    try:
+        firms = get_firms_config()
+    except ConfigError as exc:
+        raise config_error(exc) from None
+    try:
+        rules = get_rules()
+    except ConfigError as exc:
+        logger.warning("rules.yaml is invalid, no account_limits fallback for firm rules: %s", exc)
+        rules = None
+    effective = account_firm_rules(account, rules, firms)
+    if effective.source == "none":
+        return None
+    return schemas.FirmRulesOut(
+        firm=effective.firm or account.firm,
+        source=effective.source,
+        daily_loss_pct=effective.daily_loss_pct,
+        max_loss_pct=effective.max_loss_pct,
+        max_loss_type=effective.max_loss_type,
+        profit_target_pct=effective.profit_target_pct,
+        daily_basis=effective.daily_basis,
+        daily_reset=effective.daily_reset,
+        reset_timezone=effective.reset_timezone,
+        to_verify=list(effective.to_verify),
+    )
+
+
 def to_schema(
     account: Account, suggestions: dict[int, suggestion.Suggestion] | None = None
 ) -> schemas.Account:
@@ -91,6 +123,7 @@ def to_schema(
         created_at=account.created_at,
         updated_at=account.updated_at,
         starting_balance_suggestion=_suggestion_schema(account, suggestions or {}),
+        firm_rules=_firm_rules(account),
     )
 
 

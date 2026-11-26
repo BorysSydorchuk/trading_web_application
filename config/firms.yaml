@@ -1,0 +1,27 @@
+# Prop-firm rules (docs/api.md "Firm rules from config: KeyFunding").
+#
+# A firm listed here is matched against `accounts.firm` (case-insensitive; spaces, `-` and `_`
+# are ignored: "Key Funding" = "KeyFunding"). Accounts of a firm without an entry (FundedNext)
+# keep the per-account Settings values and the rules.yaml `account_limits` fallback.
+# Per field, an account's own Settings value (> 0) wins over the value here.
+#
+#   daily_loss_pct       percent of the account size (reference_balance); the firm day floor is
+#                        the start-of-day balance minus this share of the size
+#   max_loss_pct         static floor = size x (1 - max_loss_pct / 100), never moves
+#   max_loss_type        only `static`
+#   profit_target_pct    per accounts.phase (phase_1 / phase_2); a funded account has none
+#   daily_basis          only `balance` (start-of-day balance)
+#   daily_reset          HH:MM wall time in reset_timezone
+#   reset_timezone       `server` = broker server time (accounts.server_offset_hours when
+#                        detected, else UTC: cTrader sends UTC) or an IANA name
+#   to_verify            fields shown in Settings and reports as "перевірити"
+firms:
+  KeyFunding:
+    daily_loss_pct: 4.0
+    max_loss_pct: 8.0
+    max_loss_type: static
+    profit_target_pct: { phase_1: 8.0, phase_2: 4.0 }
+    daily_basis: balance
+    daily_reset: "00:00"
+    reset_timezone: server
+    to_verify: [daily_basis, daily_reset]

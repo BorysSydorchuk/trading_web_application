@@ -131,6 +131,22 @@ class StartingBalanceSuggestion(BaseModel):
     time: UtcDatetime
 
 
+class FirmRulesOut(BaseModel):
+    """Effective firm rules of an account (docs/api.md "Firm rules from config"); percents
+    positive, ``profit_target_pct`` already resolved for the account's phase."""
+
+    firm: str  # the firms.yaml name, else the account's own firm text
+    source: str  # firm | account | fallback
+    daily_loss_pct: Decimal | None
+    max_loss_pct: Decimal | None
+    max_loss_type: str | None
+    profit_target_pct: Decimal | None
+    daily_basis: str | None
+    daily_reset: str | None
+    reset_timezone: str | None
+    to_verify: list[str]
+
+
 class Account(BaseModel):
     """Response: AccountInput fields + read-only sync/password info. Never the password."""
 
@@ -159,6 +175,7 @@ class Account(BaseModel):
     created_at: UtcDatetime
     updated_at: UtcDatetime
     starting_balance_suggestion: StartingBalanceSuggestion | None = None
+    firm_rules: FirmRulesOut | None = None
 
 
 class AccountList(BaseModel):
