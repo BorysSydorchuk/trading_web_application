@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { uk } from '@/i18n/uk'
 import { homeLimits } from './home.fixture'
 import { LimitsCard } from './LimitsCard'
-import type { FirmDay } from './types'
+import type { FirmAlert, FirmDay, HomeLimits } from './types'
 
 const t = uk.home.limits
 
@@ -68,5 +68,54 @@ describe('LimitsCard «Денний ліміт фірми»', () => {
   it('lists the items to verify', () => {
     renderCard(firmDay({ to_verify: ['daily_basis', 'daily_reset'] }))
     expect(screen.getByTestId('firm-day-verify')).toHaveTextContent('перевірити: база денного ліміту, час скидання дня')
+  })
+})
+
+function renderAlert(alert: FirmAlert | null, accountId: number | null = 1, extra: Partial<HomeLimits> = {}) {
+  render(<LimitsCard limits={homeLimits({ firm_alert: alert, ...extra })} accountCount={2} accountId={accountId} />)
+}
+
+describe('LimitsCard firm_alert', () => {
+  it('firm day: red card and a red line with the room rounded down', () => {
+    renderAlert({ kind: 'firm_day', room_pct: '0.89' })
+    expect(screen.getByTestId('firm-alert')).toHaveTextContent(t.firmAlert(t.firmAlertKinds.firm_day, t.firmRoom('0.8%')))
+    expect(screen.getByTestId('firm-alert')).toHaveTextContent('Близько до ліміту фірми: денний ліміт фірми, до ліміту 0.8%')
+    const card = screen.getByRole('region', { name: t.title })
+    expect(card).toHaveClass('border-loss')
+    expect(card).toHaveAttribute('data-firm-alert', 'firm_day')
+  })
+
+  it('max loss: names the firm max loss', () => {
+    renderAlert({ kind: 'max_loss', room_pct: '0.50' })
+    expect(screen.getByTestId('firm-alert')).toHaveTextContent('Близько до ліміту фірми: макс. збиток фірми, до ліміту 0.5%')
+  })
+
+  it('room null: «ліміт досягнуто»', () => {
+    renderAlert({ kind: 'max_loss', room_pct: null })
+    expect(screen.getByTestId('firm-alert')).toHaveTextContent(t.firmAlert(t.firmAlertKinds.max_loss, t.firmAlertHit))
+  })
+
+  it.each([null, undefined])('no alert (%s): calm card, no red line', (alert) => {
+    render(<LimitsCard limits={homeLimits({ firm_alert: alert })} accountCount={2} accountId={null} />)
+    expect(screen.queryByTestId('firm-alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: t.title })).not.toHaveClass('border-loss')
+    expect(screen.getByText(`Funded · ${t.closest}`)).toBeInTheDocument()
+  })
+
+  it('«Усі рахунки»: the closest suffix names the firm limit for an alerted account', () => {
+    renderAlert({ kind: 'firm_day', room_pct: '0.30' }, null)
+    expect(screen.getByText(`Funded · ${t.closestFirm}`)).toBeInTheDocument()
+    expect(screen.queryByText(`Funded · ${t.closest}`)).not.toBeInTheDocument()
+  })
+
+  it('a single chosen account has no closest suffix even with an alert', () => {
+    renderAlert({ kind: 'firm_day', room_pct: '0.30' }, 1)
+    expect(screen.queryByText(new RegExp(t.closestFirm))).not.toBeInTheDocument()
+  })
+
+  it('empty to_verify shows no «перевірити» line in the firm day row', () => {
+    renderAlert(null, 1, { firm_day: firmDay({ to_verify: [] }) })
+    expect(screen.getByTestId('firm-day')).not.toHaveTextContent(t.firmVerify(''))
+    expect(screen.queryByTestId('firm-day-verify')).not.toBeInTheDocument()
   })
 })

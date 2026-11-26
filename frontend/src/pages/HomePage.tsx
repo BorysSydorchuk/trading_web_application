@@ -4,6 +4,7 @@ import { useDashboard } from '@/features/dashboard/api'
 import { DigestSuggestionCard } from '@/features/dashboard/DigestSuggestionCard'
 import { useHomeCharts } from '@/features/dashboard/homeCharts/api'
 import { loadSelection, rangeOf, saveSelection, type ChartSelection } from '@/features/dashboard/homeCharts/range'
+import { FirmLimitBanner } from '@/features/dashboard/FirmLimitBanner'
 import { StopBanner } from '@/features/dashboard/StopBanner'
 import { useHome } from '@/features/home/api'
 import { BiasStatusCard } from '@/features/home/BiasStatusCard'
@@ -73,6 +74,7 @@ export function HomePage() {
         accountId={accountId}
         onAccount={(id) => setSelection({ accountId: id })}
       />
+      {dashboard.data && <FirmLimitBanner stop={dashboard.data.stop} />}
       {dashboard.data && <StopBanner stop={dashboard.data.stop} />}
       {dashboard.isError && (
         <LoadError title={d.loadError} error={dashboard.error} stale={dashboard.data !== undefined} busy={dashboard.isFetching} onRetry={() => void dashboard.refetch()} />

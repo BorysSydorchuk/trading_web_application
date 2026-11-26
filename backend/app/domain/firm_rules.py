@@ -16,15 +16,15 @@ throughout; rounding happens at the API edge only.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta, timezone, tzinfo
 from decimal import Decimal
-from typing import Literal
+from typing import Final, Literal
 from zoneinfo import ZoneInfo
 
 from app.config_files.firms import SERVER_ZONE, FirmsConfig
-from app.domain.home import firm_limits
+from app.domain.home import closest_to_daily_stop, firm_limits
 
 logger = logging.getLogger(__name__)
 
@@ -264,3 +264,48 @@ def max_loss_floor(size: Decimal, max_loss_pct: Decimal) -> Decimal:
 def at_max_loss(equity: Decimal, size: Decimal, max_loss_pct: Decimal) -> bool:
     """The account failed: equity at or below the static floor."""
     return equity <= max_loss_floor(size, max_loss_pct)
+
+
+# --- firm alert and the «Ліміти» pick (PM 2026-11-26) ----------------------------------------
+
+# An account this close (percent of the size) to a firm limit is shown first and in red.
+FIRM_ALERT_ROOM_PCT: Final = Decimal(1)
+_UNKNOWN_ROOM: Final = Decimal("-Infinity")  # breached with unknown room sorts first
+
+FirmAlertKind = Literal["firm_day", "max_loss"]
+
+
+@dataclass(frozen=True)
+class FirmAlert:
+    kind: FirmAlertKind
+    room_pct: Decimal | None  # None: breached on the realized loss, floating unknown
+
+
+def _alert_key(alert: FirmAlert) -> Decimal:
+    return _UNKNOWN_ROOM if alert.room_pct is None else alert.room_pct
+
+
+def firm_alert(day: FirmDay | None, max_loss_room: Decimal | None) -> FirmAlert | None:
+    """The firm limit (daily floor or static max loss) within FIRM_ALERT_ROOM_PCT of the
+    account, the closer one when both; None when neither is near."""
+    alerts: list[FirmAlert] = []
+    if day is not None:
+        near = day.room_pct is not None and day.room_pct <= FIRM_ALERT_ROOM_PCT
+        if near or day.breached:
+            alerts.append(FirmAlert("firm_day", day.room_pct))
+    if max_loss_room is not None and max_loss_room <= FIRM_ALERT_ROOM_PCT:
+        alerts.append(FirmAlert("max_loss", max_loss_room))
+    return min(alerts, key=_alert_key) if alerts else None
+
+
+def pick_limits_item[T](
+    items: Sequence[T],
+    stop_room: Callable[[T], Decimal | None],
+    alert: Callable[[T], FirmAlert | None],
+) -> T | None:
+    """An item near a firm limit first (smallest room; ties keep the input order), else the
+    one closest to its personal daily stop."""
+    alerted = [(a, item) for item in items if (a := alert(item)) is not None]
+    if alerted:
+        return min(alerted, key=lambda pair: _alert_key(pair[0]))[1]
+    return closest_to_daily_stop(items, stop_room)

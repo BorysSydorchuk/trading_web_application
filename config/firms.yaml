@@ -23,5 +23,7 @@ firms:
     profit_target_pct: { phase_1: 8.0, phase_2: 4.0 }
     daily_basis: balance
     daily_reset: "00:00"
-    reset_timezone: server
-    to_verify: [daily_basis, daily_reset]
+    # Borys 2026-11-26 (KeyFunding rules): daily limit = start-of-day balance - 4 % of the size,
+    # day reset 00:00 server time EET. EET = IANA zone with EU summer time (EEST, UTC+3).
+    reset_timezone: EET
+    to_verify: []

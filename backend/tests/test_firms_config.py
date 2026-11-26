@@ -71,8 +71,8 @@ def test_real_file_is_the_keyfunding_contract() -> None:
     assert rule.max_loss_type == "static"
     assert rule.daily_basis == "balance"
     assert rule.daily_reset == "00:00"
-    assert rule.reset_timezone == "server"
-    assert rule.to_verify == ("daily_basis", "daily_reset")
+    assert rule.reset_timezone == "EET"  # Borys 2026-11-26: 00:00 server time EET
+    assert rule.to_verify == ()  # both items confirmed by Borys 2026-11-26
     assert list(config.firms) == ["KeyFunding"]
 
 
