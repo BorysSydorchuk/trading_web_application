@@ -141,6 +141,7 @@ export const uk = {
       server: 'Сервер',
       status: 'Статус',
       balance: 'Баланс',
+      equity: 'Еквіті',
       accountSize: 'Розмір рахунку',
       currency: 'Валюта',
       password: 'Пароль у .env',
@@ -163,6 +164,8 @@ export const uk = {
     },
     balanceUpdated: 'оновлено',
     balanceNotSynced: 'ще не синхронізовано',
+    /** Exact synced money with its currency («98 022.17 USD»). */
+    amount: (value: string, currency: string) => `${value} ${currency}`,
     password: {
       configured: 'налаштовано',
       missing: 'не налаштовано',
@@ -1391,6 +1394,13 @@ export const uk = {
       losers: (n: number) => `Середній MFE збиткових (${n})`,
       reached: 'Збиткові, що спершу дійшли до +1R',
       hint: 'Лише закриті угоди з початковим SL і порахованим MFE; виключені угоди не входять.',
+    },
+    accountPct: {
+      /** «Усі рахунки» only (PM 2026-11-27): one of the two always matches «Головна». */
+      title: 'P&L рахунків',
+      sizeWeighted: '% від суми рахунків',
+      equalWeighted: 'середнє по рахунках',
+      hint: '«Середнє по рахунках» — як на «Головній»: кожен рахунок важить однаково.',
     },
     excluded: {
       title: 'Виключені угоди',

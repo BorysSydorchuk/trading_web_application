@@ -34,6 +34,7 @@ export function AccountsTable({ accounts, onEdit, onDelete }: AccountsTableProps
             <th className="text-left">{c.status}</th>
             <th className="text-right">{c.accountSize}</th>
             <th className="text-right">{c.balance}</th>
+            <th className="text-right">{c.equity}</th>
             <th className="text-left">{c.currency}</th>
             <th className="text-left">{c.password}</th>
             <th className="text-right">
@@ -88,7 +89,10 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       </td>
       <td className="num text-right whitespace-nowrap">{formatDecimal(account.reference_balance)}</td>
       <td className="text-right whitespace-nowrap">
-        <BalanceCell account={account} />
+        <SyncedAmountCell value={account.balance} account={account} testId="account-balance" />
+      </td>
+      <td className="text-right whitespace-nowrap">
+        <SyncedAmountCell value={account.equity} account={account} testId="account-equity" />
       </td>
       <td className="num">{account.currency}</td>
       <td className="whitespace-nowrap">
@@ -112,17 +116,18 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
   )
 }
 
-function BalanceCell({ account }: { account: Account }) {
-  if (account.balance === null) {
+/** Exact synced figures in the account currency with the sync time, to compare with the
+ *  platform (Home is % only, PM 2026-11-27); balance and equity are written by the same sync. */
+function SyncedAmountCell({ value, account, testId }: { value: string | null; account: Account; testId: string }) {
+  if (value === null) {
     return <span className="text-xs text-muted-foreground">{uk.accounts.balanceNotSynced}</span>
   }
   return (
     <div className="flex flex-col items-end">
-      <span className="num">{formatDecimal(account.balance)}</span>
+      <span data-testid={testId} className="num">{uk.accounts.amount(formatDecimal(value), account.currency)}</span>
       {account.balance_synced_at && (
         <span className="text-xs text-muted-foreground">
-          {uk.accounts.balanceUpdated}{' '}
-          <span className="num">{formatRecentBrussels(account.balance_synced_at)}</span>
+          {uk.accounts.balanceUpdated} <span className="num">{formatRecentBrussels(account.balance_synced_at)}</span>
         </span>
       )}
     </div>

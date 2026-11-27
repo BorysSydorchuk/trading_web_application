@@ -1232,3 +1232,58 @@ def test_small_r_trade_counts_as_breakeven_in_the_digest(
     assert (m["wins"]["value"], m["losses"]["value"], m["breakeven"]["value"]) == (1, 0, 1)
     assert m["win_rate"]["value"] == "50.0000"
     assert m["avg_loss_r"]["value"] is None
+
+
+def test_all_accounts_digest_has_both_percent_lines(
+    client: TestClient, fixture_week: dict[str, Trade]
+) -> None:
+    """PM 2026-11-27: Alpha 10 000 +200 (+2 %), Beta 20 000 +200 (+1 %)."""
+    line = digest(client)["metrics"]["account_pct"]
+    assert line == {
+        "accounts": 2,
+        "size_weighted": "1.3333",  # 400 / 30 000: «% від суми рахунків»
+        "equal_weighted": "1.5000",  # (2 + 1) / 2: «середнє по рахунках», as «Головна»
+    }
+
+
+def test_one_account_digest_percent_lines_are_equal(client: TestClient, session: Session) -> None:
+    alpha, _ = accounts(session)
+    closed(session, alpha, datetime(2026, 11, 10, 10, tzinfo=UTC), "150.00", "1.5")
+    line = digest(client)["metrics"]["account_pct"]
+    assert line == {"accounts": 1, "size_weighted": "1.5000", "equal_weighted": "1.5000"}
+
+
+def test_an_account_whose_only_trade_is_excluded_still_counts(
+    client: TestClient, session: Session
+) -> None:
+    alpha, beta = accounts(session)  # 10 000 / 20 000
+    closed(session, alpha, datetime(2026, 11, 10, 10, tzinfo=UTC), "100.00", "1.0")  # +1 %
+    only = closed(session, beta, datetime(2026, 11, 11, 10, tzinfo=UTC), "400.00", "2.0")  # +2 %
+    response = client.post(f"/api/trades/{only.id}/exclude", json={"reason": "тест"})
+    assert response.status_code == 200, response.text
+
+    line = digest(client)["metrics"]["account_pct"]
+
+    assert line == {"accounts": 2, "size_weighted": "1.6667", "equal_weighted": "1.5000"}
+
+
+def test_a_counted_account_without_a_size_gives_no_percent(
+    client: TestClient, session: Session
+) -> None:
+    alpha = add_account(session, "Alpha", 1, reference_balance=D("10000.00"))
+    nosize = add_account(session, "NoSize", 2, reference_balance=D("0"))
+    closed(session, alpha, datetime(2026, 11, 10, 10, tzinfo=UTC), "100.00", "1.0")
+    closed(session, nosize, datetime(2026, 11, 10, 11, tzinfo=UTC), "50.00", "0.5")
+
+    line = digest(client)["metrics"]["account_pct"]
+
+    assert line == {"accounts": 2, "size_weighted": None, "equal_weighted": None}
+
+
+def test_equal_weighted_matches_the_home_charts_total_for_the_same_week(
+    client: TestClient, fixture_week: dict[str, Trade]
+) -> None:
+    line = digest(client)["metrics"]["account_pct"]
+    home = client.get("/api/dashboard/charts", params={"from": WEEK, "to": "2026-11-15"})
+    assert home.status_code == 200, home.text
+    assert line["equal_weighted"] == home.json()["total_pct"] == "1.5000"

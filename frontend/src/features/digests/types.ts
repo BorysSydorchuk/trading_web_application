@@ -160,6 +160,8 @@ export interface DigestSnapshot {
   trade_ids: number[]
   /** M8-01; absent in snapshots generated before M8-01. */
   excluded?: ExcludedBlock
+  /** PM 2026-11-27: account P&L % two ways; absent in older snapshots (until «Оновити»). */
+  account_pct?: AccountPctBlock
   /** M8-16; absent in snapshots generated before M8-16. */
   excursions?: ExcursionsBlock
 }
@@ -173,6 +175,14 @@ export interface ExcursionsBlock {
   losers_reached_1r: number
   /** Percent of losers, e.g. "50.0000". */
   losers_reached_1r_share: string | null
+}
+
+/** The accounts' real P&L (excluded included) as % of the summed sizes and as the average of the
+ *  per-account % (the «Головна» rule); null without a usable size. */
+export interface AccountPctBlock {
+  accounts: number
+  size_weighted: string | null
+  equal_weighted: string | null
 }
 
 /** M8-01 «Виключені угоди»: strategy net P&L + `net_pnl` = `account_net_pnl`. */
