@@ -38,7 +38,7 @@ from app.config_files.journal_fields import (
     clear_journal_fields_cache,
     get_journal_fields,
 )
-from app.config_files.loader import ConfigError, config_dir
+from app.config_files.loader import ConfigError, StaleConfig, config_dir, stale_configs
 from app.config_files.rules import (
     RULE_KEYS,
     RulesConfig,
@@ -85,10 +85,8 @@ def reload_config() -> None:
     clear_firms_cache()
 
 
-def check_config_files() -> list[ConfigError]:
-    """Load every config file once; log each problem loudly. Used at API and worker start."""
-    errors: list[ConfigError] = []
-    loaders: list[Callable[[], object]] = [
+def _loaders() -> list[Callable[[], object]]:
+    return [
         get_rules,
         get_violations,
         get_journal_fields,
@@ -101,7 +99,26 @@ def check_config_files() -> list[ConfigError]:
         get_symbols_config,
         get_firms_config,
     ]
-    for load in loaders:
+
+
+def config_not_applied() -> list[str]:
+    """File names not applied right now, for the status bar (owner/PM 2026-11-27): a changed
+    file that failed validation (the last valid version stays in use) or one that has no
+    valid version at all. Quiet: the loaders log the details themselves."""
+    names: set[str] = set()
+    for load in _loaders():
+        try:
+            load()
+        except ConfigError as exc:
+            names.add(exc.path.name)
+    names.update(stale.path.name for stale in stale_configs())
+    return sorted(names)
+
+
+def check_config_files() -> list[ConfigError]:
+    """Load every config file once; log each problem loudly. Used at API and worker start."""
+    errors: list[ConfigError] = []
+    for load in _loaders():
         try:
             load()
         except ConfigError as exc:
@@ -131,11 +148,13 @@ __all__ = [
     "ReminderWindow",
     "RulesConfig",
     "SessionWindow",
+    "StaleConfig",
     "SymbolsConfig",
     "TranscriptionConfig",
     "ViolationsConfig",
     "check_config_files",
     "config_dir",
+    "config_not_applied",
     "get_ai_models",
     "get_ai_pricing",
     "get_bias_config",
@@ -148,4 +167,5 @@ __all__ = [
     "get_transcription",
     "get_violations",
     "reload_config",
+    "stale_configs",
 ]

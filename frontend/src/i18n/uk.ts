@@ -300,6 +300,8 @@ export const uk = {
   },
   sync: {
     label: 'Синхронізація рахунків',
+    /** PM 2026-11-27: a config file failed validation; the last valid one stays in use. */
+    configNotApplied: (file: string) => `Конфіг не застосовано: ${file}, див. лог`,
     loadError: 'Не вдалося отримати стан синхронізації',
     syncedAt: 'синхр.',
     attention: 'увага',

@@ -59,6 +59,7 @@ Classify every task at the start and write the tier next to it in `docs/STATUS.m
 - **Codex (OpenAI) and any other non-Claude-Code agent** (paused since 2026-11-16; works only when Borys asks; its instructions: `AGENTS.md`):
   - Works only on its own branch `codex/<topic>`, one task at a time; the task is listed in `docs/STATUS.md` with owner `codex`.
   - Never merges to `main`. The orchestrator reviews its branch like a subagent task: `make check`, `code-reviewer` (plus the required specialist reviewers), then `git merge --no-ff`.
+- **Main checkout is live (owner/PM 2026-11-27):** Borys's app runs from the main checkout and re-reads `config/*.yaml` while running. Never edit files there while the app runs from it (no branch switches with changes, no direct edits). Every change, config included, goes through a worktree (`git worktree add ../WEB_application-<topic> -b <branch> main`) and a merge like code; after the merge Borys pushes and restarts.
 - **Pre-migration backup:** before any `alembic upgrade` on the dev database `trading_journal` (`make db-ensure`, `start.bat`, `make migrate`, anything), a `pg_dump` goes to `backups/pre-migration-<revision>-<timestamp>.dump` and its path is printed; keep the last 10. Tests on `trading_journal_test` do not need this.
 
 ## Git workflow

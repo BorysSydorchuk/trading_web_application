@@ -10,10 +10,13 @@ Files are read as UTF-8 (a UTF-8 BOM is accepted). Text garbled by a wrong-encod
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import threading
 from collections.abc import Callable, Hashable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,8 @@ from pydantic import ValidationError
 
 from app.config import REPO_ROOT
 from app.config_files.mojibake import mojibake_problems
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR_ENV = "CONFIG_DIR"
 # `ConfigError.reason` for text garbled by a wrong encoding (API: `details.reason`).
@@ -130,10 +135,52 @@ def file_stamp(path: Path) -> tuple[int, int] | None:
     return (st.st_mtime_ns, st.st_size)
 
 
+@dataclass(frozen=True)
+class StaleConfig:
+    """A config file whose new content failed validation; the last valid one stays in use."""
+
+    path: Path
+    problems: tuple[str, ...]
+    since: datetime  # aware UTC, first failure of this content
+
+
+_stale_lock = threading.Lock()
+_stale: dict[Path, StaleConfig] = {}
+
+
+def stale_configs() -> list[StaleConfig]:
+    """Files not applied right now (owner/PM 2026-11-27: «Конфіг не застосовано»), by path."""
+    with _stale_lock:
+        return sorted(_stale.values(), key=lambda s: str(s.path))
+
+
+def _note_stale(exc: ConfigError) -> None:
+    problems = tuple(exc.problems)
+    with _stale_lock:
+        known = _stale.get(exc.path)
+        if known is not None and known.problems == problems:
+            return  # already logged for this content
+        _stale[exc.path] = StaleConfig(exc.path, problems, datetime.now(UTC))
+    logger.error("CONFIG NOT APPLIED, the last valid version stays in use. %s", exc)
+
+
+def _clear_stale(paths: tuple[Path, ...]) -> None:
+    with _stale_lock:
+        fixed = [p for p in paths if p in _stale]
+        for path in fixed:
+            del _stale[path]
+    for path in fixed:
+        logger.info("Config applied again: %s", path)
+
+
 class FileCache[T]:
     """Caches a parsed value until one of its source files changes (mtime/size) or `clear()`.
 
     Failures are not cached: a fixed file is picked up by the next call without a restart.
+    Hardening (owner/PM 2026-11-27): when a CHANGED file fails validation, the last valid
+    value of the same files stays in use (sync never stops), the file is listed by
+    `stale_configs` and logged once at ERROR. Without any valid value yet (start, or after
+    `clear()`), the ConfigError is raised as before.
     """
 
     def __init__(self, paths: Callable[[], list[Path]], load: Callable[[], T]) -> None:
@@ -142,16 +189,33 @@ class FileCache[T]:
         self._lock = threading.Lock()
         self._stamp: tuple[tuple[int, int] | None, ...] | None = None
         self._value: T | None = None
+        self._key: tuple[Path, ...] | None = None
+        self._good: dict[tuple[Path, ...], T] = {}
 
     def get(self) -> T:
         with self._lock:
-            stamp = tuple(file_stamp(p) for p in self._paths())
-            if self._value is None or stamp != self._stamp:
-                self._value = self._load()
-                self._stamp = stamp
-            return self._value
+            key = tuple(self._paths())
+            stamp = tuple(file_stamp(p) for p in key)
+            if self._value is not None and stamp == self._stamp and key == self._key:
+                return self._value
+            try:
+                value = self._load()
+            except ConfigError as exc:
+                good = self._good.get(key)
+                if good is None:
+                    raise
+                _note_stale(exc)
+                self._value, self._stamp, self._key = good, stamp, key
+                return good
+            self._good[key] = value
+            self._value, self._stamp, self._key = value, stamp, key
+        _clear_stale(key)
+        return value
 
     def clear(self) -> None:
+        """Forget everything, the last valid value too (tests, explicit reload)."""
         with self._lock:
             self._value = None
             self._stamp = None
+            self._key = None
+            self._good.clear()

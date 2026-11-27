@@ -83,3 +83,22 @@ describe('syncErrorText', () => {
     expect(syncErrorText('brand_new_code', 'ctrader')).toBe(uk.sync.errors.unknown)
   })
 })
+
+describe('SyncChips: a config file not applied (PM 2026-11-27)', () => {
+  it('warns «Конфіг не застосовано: rules.yaml, див. лог» next to the chips that keep syncing', async () => {
+    mockApi(
+      http.get('/api/sync/status', () => HttpResponse.json({ items: [row({ state: 'ok', error_code: null })], config_not_applied: ['rules.yaml'] })),
+      http.get('/api/accounts', () => HttpResponse.json({ items: [account({ id: 2, platform: 'ctrader' })] })),
+    )
+    renderWithProviders(<SyncChips />)
+    expect(await screen.findByTestId('config-not-applied')).toHaveTextContent(uk.sync.configNotApplied('rules.yaml'))
+    expect(screen.getByRole('list', { name: uk.sync.label })).toBeInTheDocument()
+  })
+
+  it('no warning when every config file is applied (or an older API without the field)', async () => {
+    serve([row({ state: 'ok', error_code: null })])
+    renderWithProviders(<SyncChips />)
+    await screen.findByRole('list', { name: uk.sync.label })
+    expect(screen.queryByTestId('config-not-applied')).not.toBeInTheDocument()
+  })
+})
