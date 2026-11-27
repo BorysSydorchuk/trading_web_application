@@ -479,21 +479,25 @@ def test_api_starts_with_broken_config(
     assert rules.status_code == 200  # the other file is still served
 
 
-def test_broken_config_returns_config_error(cfg_dir: Path, api: TestClient) -> None:
+def test_broken_config_keeps_the_last_valid_version_and_warns(
+    cfg_dir: Path, api: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """PM 2026-11-27: a file broken while the app runs is not applied; the last valid version
+    stays in use (sync goes on), the status bar lists it and the details are logged."""
+    before = api.get("/api/rules").json()
     data = _read(cfg_dir / "rules.yaml")
     data["sessions"]["premarket"]["start"] = "10:00"
     _write(cfg_dir / "rules.yaml", data)
 
     response = api.get("/api/rules")
-    assert response.status_code == 500
-    error = response.json()["error"]
-    assert error["code"] == "config_error"
-    assert "overlaps london" in error["message"]
-    assert error["details"]["file"] == "rules.yaml"
-    assert any("overlaps" in p for p in error["details"]["problems"])
+    assert response.status_code == 200
+    assert response.json() == before
+    assert "overlaps london" in caplog.text
+    assert api.get("/api/sync/status").json()["config_not_applied"] == ["rules.yaml"]
     # Fixing the file is picked up without a restart.
     shutil.copy(REAL_CONFIG / "rules.yaml", cfg_dir / "rules.yaml")
     assert api.get("/api/rules").status_code == 200
+    assert api.get("/api/sync/status").json()["config_not_applied"] == []
 
 
 @pytest.mark.parametrize("field_type", ["auto", "links"])
