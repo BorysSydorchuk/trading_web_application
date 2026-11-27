@@ -300,12 +300,21 @@ def sl_moved_away(
     return f"SL moved away from {initial} to {last} after entry" if further else None
 
 
+def sl_at_entry(
+    entry: Decimal | None, initial: Decimal | None, last: Decimal | None, tick: Decimal | None
+) -> bool:
+    """no_breakeven's SL part: the SL was moved from a real stop to the entry (1 tick)."""
+    if entry is None or initial is None or last is None or _near(initial, entry, tick):
+        return False
+    return last != initial and _near(last, entry, tick)
+
+
 def _breakeven(trade: RuleTradeInput, tick: Decimal | None) -> str | None:
     entry, initial = trade.entry_price, trade.initial_sl
     if entry is None or initial is None or _near(initial, entry, tick):
         return None
     last = trade.last_sl
-    if last is not None and last != initial and _near(last, entry, tick):
+    if sl_at_entry(entry, initial, last, tick):
         return f"SL moved from {initial} to {last} (entry {entry})"
     for deal in trade.exit_deals:
         if deal.reason == "sl" and _near(deal.price, entry, tick):

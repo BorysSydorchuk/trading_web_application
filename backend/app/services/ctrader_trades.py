@@ -50,11 +50,18 @@ def _ids(pids: list[int]) -> str:
     return shown + (f" (+{len(pids) - _MAX_LISTED})" if len(pids) > _MAX_LISTED else "")
 
 
-def _stored_stops(session: Session, account_id: int) -> dict[int, StoredStops]:
-    """last_sl / tp of the account's DB-open trades: a close must never wipe them."""
+def _stored_stops(
+    session: Session, account_id: int, read: TradingRead
+) -> dict[int, StoredStops]:
+    """last_sl / tp of the stored trades of the read's positions (open and closed): a close,
+    or a re-read of a closed trade inside the overlap window, must never wipe them (the last
+    SL feeds no_breakeven and sl_moved_away, 2026-11-27)."""
+    pids = {d.position_id for d in read.deals} | set(read.request.open_trades)
+    if not pids:
+        return {}
     rows = session.execute(
         select(Trade.position_id, Trade.last_sl, Trade.tp).where(
-            Trade.account_id == account_id, Trade.close_time.is_(None)
+            Trade.account_id == account_id, Trade.position_id.in_(pids)
         )
     )
     return {row.position_id: StoredStops(row.last_sl, row.tp) for row in rows}
@@ -71,7 +78,7 @@ def write_ctrader_trades(
     """Persist one read (no commit). Raises ``history_incomplete`` before anything is written
     when a position that must have its entry deal in the read range lacks it: the read is
     then not trusted (no trade closed, no open trade created, the cursor does not move)."""
-    converted = convert(read, _stored_stops(session, account.id))
+    converted = convert(read, _stored_stops(session, account.id, read))
     if converted.missing_entries:
         raise CtraderError(
             CtraderErrorCode.HISTORY_INCOMPLETE,

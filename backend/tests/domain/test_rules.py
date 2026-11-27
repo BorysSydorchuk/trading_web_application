@@ -40,6 +40,7 @@ RAW: dict[str, Any] = {
         "entry_session": {"enabled": True},
         "qm_not_in_ny": {"enabled": True, "entry_model": "qm_m5", "session": "ny"},
         "no_breakeven": {"enabled": True},
+        "sl_moved_away": {"enabled": True},
     },
 }
 
@@ -490,3 +491,24 @@ def test_unknown_stops_are_never_flagged() -> None:
     assert sl_moved_away("buy", None, Decimal("1"), _TICK) is None
     assert sl_moved_away("buy", Decimal("1"), None, _TICK) is None
     assert sl_moved_away("buy", Decimal("1.0"), Decimal("0.9"), None) is not None  # exact compare
+
+
+def test_sl_moved_away_through_evaluate_buy_and_sell() -> None:
+    tick = D("0.01")
+    assert "sl_moved_away" in keys(_be(last_sl=D("2640.00")), tick=tick)  # buy: lower
+    assert "sl_moved_away" not in keys(_be(last_sl=D("2648.00")), tick=tick)  # toward entry
+    sell = _be(direction="sell", initial_sl=D("2655.00"), last_sl=D("2660.00"))
+    assert "sl_moved_away" in keys(sell, tick=tick)
+    toward = _be(direction="sell", initial_sl=D("2655.00"), last_sl=D("2652.00"))
+    assert "sl_moved_away" not in keys(toward, tick=tick)
+
+
+def test_a_stop_out_with_slippage_is_not_a_moved_stop() -> None:
+    slipped = (RuleExitDeal(D("2643.50"), "sl"),)  # filled 1.50 beyond the SL
+    trade = _be(last_sl=D("2645.00"), exit_deals=slipped)
+    assert "sl_moved_away" not in keys(trade, tick=D("0.01"))
+
+
+def test_sl_moved_away_can_be_switched_off() -> None:
+    off = rules(sl_moved_away={"enabled": False})
+    assert "sl_moved_away" not in keys(_be(last_sl=D("2640.00")), cfg=off, tick=D("0.01"))

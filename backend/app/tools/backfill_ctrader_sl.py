@@ -36,7 +36,7 @@ from app.ctrader.errors import CtraderError
 from app.ctrader.history import check_account
 from app.ctrader.orders import CtOrder, initial_stop, last_protective_stop, read_position_orders
 from app.ctrader.reader import Credentials, authorize_app, endpoint_for
-from app.domain.rules import sl_moved_away
+from app.domain.rules import sl_at_entry, sl_moved_away
 from app.models import Account, SymbolSpec, Trade
 from app.models.enums import AccountPlatform, AccountStatus, InitialSlSource
 from app.services.trade_rules import recompute_rules_for_trade
@@ -44,6 +44,7 @@ from app.services.trade_rules import recompute_rules_for_trade
 logger = logging.getLogger(__name__)
 LOG_FILE = "backfill_ctrader_sl.log"
 MOVED_LABEL = "Стоп відсунуто після входу"  # config/violations.yaml sl_moved_away
+BREAKEVEN_LABEL = "перенесення в беззбиток"  # config/violations.yaml no_breakeven
 PAD = timedelta(minutes=1)
 
 
@@ -77,6 +78,7 @@ class Totals:
     none: int = 0
     failed: int = 0
     moved: int = 0  # «Стоп відсунуто після входу» (sl_moved_away)
+    unchanged: int = 0  # order-sourced SL already stored, last SL the same or unknown
 
 
 def targets(session: Session, account_id: int | None = None) -> list[Target]:
@@ -90,10 +92,11 @@ def targets(session: Session, account_id: int | None = None) -> list[Target]:
             Trade.close_time.is_not(None),
             or_(
                 and_(Trade.initial_sl.is_(None), Trade.initial_sl_source.is_(None)),
-                # 2026-11-27: SL from the order history, last SL not read yet (sl_moved_away).
+                # 2026-11-27: SL from the order history, last SL not read yet (sl_moved_away):
+                # NULL after the first backfill, = initial when the sync built it.
                 and_(
                     Trade.initial_sl_source == InitialSlSource.ORDER.value,
-                    Trade.last_sl.is_(None),
+                    or_(Trade.last_sl.is_(None), Trade.last_sl == Trade.initial_sl),
                 ),
             ),
         )
@@ -152,11 +155,12 @@ def _store(session: Session, target: Target, sl: Decimal | None, last: Decimal |
         session.rollback()
         return False  # got an SL meanwhile (owner or sync): never overwritten
     if sl is None and (
-        trade.initial_sl_source != InitialSlSource.ORDER.value or trade.last_sl is not None
+        trade.initial_sl_source != InitialSlSource.ORDER.value
+        or trade.last_sl not in (None, trade.initial_sl)
     ):
         session.rollback()
-        return False  # the owner changed it, or the last SL is known meanwhile
-    if last is not None and trade.last_sl is None:
+        return False  # the owner changed it, or another last SL is known meanwhile
+    if last is not None:
         trade.last_sl = last
     if sl is not None:
         apply_initial_sl(session, trade, sl, InitialSlSource.ORDER)  # recomputes the rules
@@ -193,11 +197,20 @@ def run(session: Session, read: OrdersByTrade, todo: Sequence[Target], *, apply:
                 continue
             new_sl = initial = stop.sl
             line = f"{head}: SL {stop.sl} ({stop.kind}, ордер {stop.order_id})"
+        if new_sl is None and (last is None or last == initial):
+            totals.unchanged += 1
+            totals.lines.append(f"{line}, останній SL без змін [{_kinds(result)}]")
+            continue  # nothing to write
         totals.found += 1
         line += f", останній SL {last if last is not None else '—'}"
+        flags = []
         if sl_moved_away(target.side, initial, last, target.tick) is not None:
             totals.moved += 1
-            line += f" → «{MOVED_LABEL}»"
+            flags.append(MOVED_LABEL)
+        if sl_at_entry(target.entry_price, initial, last, target.tick):
+            flags.append(BREAKEVEN_LABEL)
+        if flags:
+            line += " → " + ", ".join(f"«{flag}»" for flag in flags)
         line += f" [{_kinds(result)}]"
         if apply:
             stored = _store(session, target, new_sl, last)
@@ -211,7 +224,8 @@ def summary(totals: Totals, apply: bool, count: int) -> str:
     mode = "apply" if apply else "dry run, нічого не записано"
     return (
         f"Угод: {count}; SL знайдено: {totals.found}; записано: {totals.stored}; "
-        f"стоп відсунуто: {totals.moved}; без SL в ордерах: {totals.none}; "
+        f"стоп відсунуто: {totals.moved}; без змін: {totals.unchanged}; "
+        f"без SL в ордерах: {totals.none}; "
         f"помилки: {totals.failed} ({mode})"
     )
 

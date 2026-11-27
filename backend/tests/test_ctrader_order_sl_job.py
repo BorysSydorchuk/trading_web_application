@@ -295,3 +295,22 @@ def test_a_stop_moved_away_after_entry_is_a_violation(
     assert trade.last_sl == Decimal(str(stop)).quantize(Decimal("0.00001"))
     keys = {v.rule_key for v in trade.rule_violations}
     assert ("sl_moved_away" in keys) is flagged
+
+
+def test_the_moved_stop_survives_a_re_read_in_the_overlap_window(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    deals = load("closed_simple.json")["deals"]
+    first = HistoryServer(deals, orders=[_opening_order(relativeStopLoss=100), _protective(1.083)])
+    _run(factory, store, first, tmp_path)
+    again = HistoryServer(deals, orders=[_opening_order(relativeStopLoss=100), _protective(1.083)])
+    _run(factory, store, again, tmp_path)  # same deals: closed in the DB, inside the overlap
+
+    trade = _trade(session, 5001)
+    assert again.order_requests == []  # known SL: not read again
+    assert (trade.initial_sl, trade.last_sl) == (Decimal("1.08412"), Decimal("1.08300"))
+    assert "sl_moved_away" in {v.rule_key for v in trade.rule_violations}
