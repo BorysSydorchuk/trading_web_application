@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from app.config_files.rules import RulesConfig
-from app.domain.rules import RuleExitDeal, RuleTradeInput, Violation, evaluate
+from app.domain.rules import RuleExitDeal, RuleTradeInput, Violation, evaluate, sl_moved_away
 
 D = Decimal
 
@@ -40,6 +40,7 @@ RAW: dict[str, Any] = {
         "entry_session": {"enabled": True},
         "qm_not_in_ny": {"enabled": True, "entry_model": "qm_m5", "session": "ny"},
         "no_breakeven": {"enabled": True},
+        "sl_moved_away": {"enabled": True},
     },
 }
 
@@ -466,3 +467,48 @@ def test_weekly_stop_loss_is_sticky() -> None:
         tr(11, utc(11, 3, 8), utc(11, 3, 9), "2000"),  # Tue: back to -4.50 %
     ]
     assert "weekly_stop_loss_pct" in limits(tr(1, utc(11, 4, 8)), ctx)
+
+
+# --- sl_moved_away (owner 2026-11-27) ------------------------------------------------------
+
+
+_TICK = Decimal("0.00001")
+
+
+def test_sl_moved_away_buy_and_sell() -> None:
+    assert sl_moved_away("buy", Decimal("0.84157"), Decimal("0.84148"), _TICK) is not None
+    assert sl_moved_away("sell", Decimal("1.09541"), Decimal("1.09600"), _TICK) is not None
+
+
+def test_moves_toward_entry_or_within_a_tick_are_never_flagged() -> None:
+    assert sl_moved_away("buy", Decimal("0.84157"), Decimal("0.84200"), _TICK) is None  # toward
+    assert sl_moved_away("sell", Decimal("1.09541"), Decimal("1.09500"), _TICK) is None  # toward
+    assert sl_moved_away("buy", Decimal("0.84157"), Decimal("0.84156"), _TICK) is None  # 1 tick
+    assert sl_moved_away("buy", Decimal("0.84157"), Decimal("0.84157"), _TICK) is None
+
+
+def test_unknown_stops_are_never_flagged() -> None:
+    assert sl_moved_away("buy", None, Decimal("1"), _TICK) is None
+    assert sl_moved_away("buy", Decimal("1"), None, _TICK) is None
+    assert sl_moved_away("buy", Decimal("1.0"), Decimal("0.9"), None) is not None  # exact compare
+
+
+def test_sl_moved_away_through_evaluate_buy_and_sell() -> None:
+    tick = D("0.01")
+    assert "sl_moved_away" in keys(_be(last_sl=D("2640.00")), tick=tick)  # buy: lower
+    assert "sl_moved_away" not in keys(_be(last_sl=D("2648.00")), tick=tick)  # toward entry
+    sell = _be(direction="sell", initial_sl=D("2655.00"), last_sl=D("2660.00"))
+    assert "sl_moved_away" in keys(sell, tick=tick)
+    toward = _be(direction="sell", initial_sl=D("2655.00"), last_sl=D("2652.00"))
+    assert "sl_moved_away" not in keys(toward, tick=tick)
+
+
+def test_a_stop_out_with_slippage_is_not_a_moved_stop() -> None:
+    slipped = (RuleExitDeal(D("2643.50"), "sl"),)  # filled 1.50 beyond the SL
+    trade = _be(last_sl=D("2645.00"), exit_deals=slipped)
+    assert "sl_moved_away" not in keys(trade, tick=D("0.01"))
+
+
+def test_sl_moved_away_can_be_switched_off() -> None:
+    off = rules(sl_moved_away={"enabled": False})
+    assert "sl_moved_away" not in keys(_be(last_sl=D("2640.00")), cfg=off, tick=D("0.01"))

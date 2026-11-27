@@ -24,6 +24,7 @@ violations:
   - { key: entry_session, label: "вхід поза дозволеною сесією", type: auto, status: active }
   - { key: qm_not_in_ny, label: "QM у сесії NY", type: auto, status: active }
   - { key: no_breakeven, label: "перенесення в беззбиток", type: auto, status: active }
+  - { key: sl_moved_away, label: "Стоп відсунуто після входу", type: auto, status: active }
 
   # --- chosen by you ---
   - { key: entry_not_by_model, label: "Вхід не за моделлю входу", type: manual, status: active }

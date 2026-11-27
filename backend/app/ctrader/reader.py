@@ -347,7 +347,7 @@ async def _with_opening_stops(
             exc.code.value,
         )
         return trading
-    return replace(trading, opening_stops=stops)
+    return replace(trading, opening_stops=stops.initial, last_stops=stops.last)
 
 
 async def _read_account(

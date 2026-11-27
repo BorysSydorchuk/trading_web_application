@@ -17,10 +17,12 @@
   the trade builder (skipped with its reason).
 - cTrader deals carry no SL/TP. A position the app never saw open gets its initial SL from
   its order history (`app.ctrader.orders`, read into ``TradingRead.opening_stops``) as the
-  opening order's stop (source ``order``). The stored ``last_sl``/``tp`` of a DB-open trade
-  cTrader no longer reports are carried on its exit deals, so a close never wipes them (exit
-  deals are never the initial SL source). Such a trade without a new exit deal is not
-  rebuilt: its row stays as it is (Home shows ``close_unconfirmed``).
+  opening order's stop (source ``order``) and its last SL (latest protective order) on its
+  exit deals. The stored ``last_sl``/``tp`` of a stored trade cTrader does not report open
+  (DB-open, or closed and re-read in the overlap window) are carried on its exit deals, so
+  a close or a re-read never wipes them (exit deals are never the initial SL source). Such a
+  trade without a new exit deal is not rebuilt: its row stays as it is (Home shows
+  ``close_unconfirmed``).
 """
 
 from __future__ import annotations
@@ -185,7 +187,7 @@ def _opening_orders(read: TradingRead, built: set[int]) -> dict[int, OrderStops]
 
 
 def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -> Converted:
-    """``stops``: stored stops of the DB-open trades, by position id."""
+    """``stops``: stored stops of the read's stored trades (open and closed), by position id."""
     stored = stops or {}
     by_position: dict[int, list[CtDeal]] = defaultdict(list)
     for deal in read.deals:
@@ -217,6 +219,9 @@ def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -
             if all(d.close is None for d in own):
                 continue  # nothing new: the stored open trade stays untouched
         carried = stored.get(pid) if pid not in live else None
+        if pid in read.last_stops and pid in read.opening_stops:
+            # Never seen open: the last SL from the order history rides on the exit deals.
+            carried = StoredStops(read.last_stops[pid], carried.tp if carried else None)
         result = _convert_position(own, read.symbols, carried)
         if isinstance(result, str):
             skipped.append(SkippedPosition(pid, result))

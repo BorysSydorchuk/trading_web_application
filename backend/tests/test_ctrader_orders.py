@@ -27,6 +27,7 @@ from app.ctrader.orders import (
     CtOrder,
     InitialStop,
     initial_stop,
+    last_protective_stop,
     parse_order,
     read_opening_stops,
     read_position_orders,
@@ -326,7 +327,7 @@ def _stops(transport: FakeTransport, read: TradingRead) -> dict[int, Decimal]:
         connection = CtraderConnection("wss://fake", FakeConnector(transport))
         await connection.start()
         try:
-            return await read_opening_stops(connection, CTID, read)
+            return (await read_opening_stops(connection, CTID, read)).initial
         finally:
             await connection.close()
 
@@ -406,3 +407,13 @@ def test_a_hasmore_storm_is_bounded() -> None:
         _read(transport, T0, T0 + timedelta(days=6))
     assert caught.value.code is CtraderErrorCode.BAD_RESPONSE
     assert transport.types_sent().count(p.ORDER_LIST_BY_POSITION_REQ) <= MAX_REQUESTS
+
+
+def test_last_protective_stop_is_the_latest_protective_order() -> None:
+    orders = [
+        _order(1, stop_loss="1.09500"),
+        _order(2, kind="protective", created=T0 + timedelta(minutes=1), stop_price="1.09500"),
+        _order(3, kind="protective", created=T0 + timedelta(minutes=9), stop_price="1.09400"),
+    ]
+    assert last_protective_stop(orders, 5) == Decimal("1.09400")
+    assert last_protective_stop([_order(1, stop_loss="1.09500")], 5) is None

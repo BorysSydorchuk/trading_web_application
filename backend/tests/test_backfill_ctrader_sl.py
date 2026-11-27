@@ -200,3 +200,95 @@ def test_read_orders_authorizes_each_account_once_and_sends_only_allowed_types(
     sent = transport.types_sent()
     assert sent.count(p.ACCOUNT_AUTH_REQ) == 1
     assert set(sent) <= guard.ALLOWED_OUTGOING
+
+
+def _protective(order_id: int, stop: str) -> CtOrder:
+    return _order(
+        order_id,
+        kind="protective",
+        closing=True,
+        relative_stop_loss=None,
+        stop_price=Decimal(stop),
+        created=OPEN + timedelta(minutes=1),
+    )
+
+
+def test_a_stored_order_sl_gets_its_last_sl_and_the_moved_away_violation(
+    session: Session,
+) -> None:
+    account = make_ctrader_account(session, reference_balance=Decimal("100000"))
+    trade = _trade(
+        session,
+        account,
+        1,
+        initial_sl=Decimal("25246.6"),
+        initial_sl_source="order",
+        status="needs_description",
+    )
+    todo = targets(session)
+    assert [t.stored_initial for t in todo] == [Decimal("25246.60000000")]
+
+    dry = run(session, {trade.id: (_order(10), _protective(11, "25230.0"))}, todo, apply=False)
+    assert dry.moved == 1
+    assert "останній SL 25230.0 → «Стоп відсунуто після входу»" in dry.lines[0]
+    session.expire_all()
+    assert trade.last_sl is None
+
+    done = run(session, {trade.id: (_order(10), _protective(11, "25230.0"))}, todo, apply=True)
+    session.expire_all()
+    assert done.stored == 1
+    assert trade.last_sl == Decimal("25230.00000000")
+    assert "sl_moved_away" in {v.rule_key for v in trade.rule_violations}
+    assert targets(session) == []  # last SL known: never read again
+
+
+def test_a_stop_moved_toward_the_entry_is_not_flagged(session: Session) -> None:
+    account = make_ctrader_account(session, reference_balance=Decimal("100000"))
+    trade = _trade(session, account, 1, initial_sl=Decimal("25246.6"), initial_sl_source="order")
+    done = run(
+        session, {trade.id: (_order(10), _protective(11, "25260.0"))}, targets(session), apply=True
+    )
+    session.expire_all()
+    assert done.moved == 0
+    assert trade.last_sl == Decimal("25260.00000000")
+    assert "sl_moved_away" not in {v.rule_key for v in trade.rule_violations}
+
+
+def test_a_sync_written_order_trade_with_last_sl_equal_to_initial_is_checked(
+    session: Session,
+) -> None:
+    account = make_ctrader_account(session, reference_balance=Decimal("100000"))
+    trade = _trade(
+        session,
+        account,
+        1,
+        initial_sl=Decimal("25246.6"),
+        initial_sl_source="order",
+        last_sl=Decimal("25246.6"),
+    )
+    todo = targets(session)
+    assert [t.trade_id for t in todo] == [trade.id]
+    done = run(session, {trade.id: (_order(10), _protective(11, "25230.0"))}, todo, apply=True)
+    session.expire_all()
+    assert (done.stored, done.moved) == (1, 1)
+    assert trade.last_sl == Decimal("25230.00000000")
+
+
+def test_no_protective_order_changes_nothing(session: Session) -> None:
+    account = make_ctrader_account(session, reference_balance=Decimal("100000"))
+    trade = _trade(session, account, 1, initial_sl=Decimal("25246.6"), initial_sl_source="order")
+    done = run(session, {trade.id: (_order(10),)}, targets(session), apply=True)
+    session.expire_all()
+    assert (done.stored, done.unchanged) == (0, 1)
+    assert "без змін" in done.lines[0]
+    assert trade.last_sl is None
+
+
+def test_dry_run_names_a_stop_moved_to_the_entry_as_breakeven(session: Session) -> None:
+    account = make_ctrader_account(session, reference_balance=Decimal("100000"))
+    trade = _trade(session, account, 1, initial_sl=Decimal("25246.6"), initial_sl_source="order")
+    dry = run(
+        session, {trade.id: (_order(10), _protective(11, "25266.6"))}, targets(session), apply=False
+    )
+    assert "«перенесення в беззбиток»" in dry.lines[0]
+    assert dry.moved == 0

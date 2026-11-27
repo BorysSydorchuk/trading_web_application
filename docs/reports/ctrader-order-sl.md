@@ -62,3 +62,8 @@ new SL. Trade 34 lost 1.11 R: the stop was moved wider (0.84148) after the open.
   order moved later gives the moved price (DECISIONS 2026-11-27).
 - More than 10 never-seen-open closed positions in one sync: the rest stay `needs_sl` (WARNING),
   the tool covers them.
+
+## Follow-up 2026-11-27: «Стоп відсунуто після входу» (sl_moved_away)
+Dry run (16:38 Brussels, read-only): 6 order-sourced cTrader trades read again for their last SL.
+Trade 34 USDCHF: initial 0.84157, last protective stop 0.84148 -> flagged. Trades 35-38: last SL =
+initial. Trade 41: no protective order, last SL unknown (not flagged). MT5: 0 of 34 trades flagged.
