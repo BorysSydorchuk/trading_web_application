@@ -130,6 +130,8 @@ class TradingRead:
     # Initial SL from the order history (2183) of positions the app never saw open, by
     # position id (`app.ctrader.orders.read_opening_stops`); empty when none was found.
     opening_stops: Mapping[int, Decimal] = field(default_factory=dict)
+    # Last SL of those positions (latest protective order), for trades.last_sl.
+    last_stops: Mapping[int, Decimal] = field(default_factory=dict)
 
 
 def _side(value: object, name: str) -> str:

@@ -27,6 +27,7 @@ ENGINE_KEYS = [
     "entry_session",
     "qm_not_in_ny",
     "no_breakeven",
+    "sl_moved_away",
 ]
 OLD_KEYS = [
     "daily_stop_loss_pct",

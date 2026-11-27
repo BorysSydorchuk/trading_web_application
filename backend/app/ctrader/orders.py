@@ -191,6 +191,25 @@ def initial_stop(
     return None
 
 
+def last_protective_stop(orders: Iterable[CtOrder], digits: int | None) -> Decimal | None:
+    """The SL the position had last: the stop of its latest protective order (its last state
+    in the order history), or None. Used for ``trades.last_sl`` (rule ``sl_moved_away``)."""
+    protective = [o for o in orders if o.kind == "protective"]
+    for order in sorted(protective, key=_order_key, reverse=True):
+        price = order.stop_loss if order.stop_loss is not None else order.stop_price
+        if price is not None:
+            return quantize_price(price, digits)
+    return None
+
+
+@dataclass(frozen=True)
+class StopsRead:
+    """By position id: the initial SL and, when a protective order exists, the last SL."""
+
+    initial: dict[int, Decimal]
+    last: dict[int, Decimal]
+
+
 # --- request ---------------------------------------------------------------------------
 
 
@@ -311,8 +330,8 @@ def unseen_closed(read: TradingRead) -> list[_Unseen]:
 
 async def read_opening_stops(
     connection: CtraderConnection, ctid: int, read: TradingRead
-) -> dict[int, Decimal]:
-    """Initial SL by position id of the read's `unseen_closed` positions (at most
+) -> StopsRead:
+    """Initial (and last) SL by position id of the read's `unseen_closed` positions (at most
     `MAX_ORDER_READS`). A position whose orders cannot be read is logged and skipped: its
     trade stays ``needs_sl`` (visible), the backfill tool can read it later. A dropped
     connection or session is raised (the caller's retry rule)."""
@@ -326,6 +345,7 @@ async def read_opening_stops(
             MAX_ORDER_READS,
         )
     found: dict[int, Decimal] = {}
+    last: dict[int, Decimal] = {}
     for item in unseen[:MAX_ORDER_READS]:
         try:
             orders = await read_position_orders(
@@ -367,6 +387,9 @@ async def read_opening_stops(
             )
             continue
         found[item.position_id] = stop.sl
+        moved = last_protective_stop(orders, symbol.digits if symbol is not None else None)
+        if moved is not None:
+            last[item.position_id] = moved
         logger.info(
             "cTrader account %s: position %s initial SL %s from %s order %s",
             ctid,
@@ -375,4 +398,4 @@ async def read_opening_stops(
             stop.kind,
             stop.order_id,
         )
-    return found
+    return StopsRead(found, last)

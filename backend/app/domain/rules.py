@@ -22,6 +22,10 @@ Conventions (local = ``RulesConfig.timezone``, Europe/Brussels):
   before it exceeds the value. A non-re-entry is never flagged by this rule.
 - min_planned_rr: no TP (planned_rr None) is not a violation in v1.
 - no_breakeven: needs a known initial SL that is not itself at entry (more than 1 tick away).
+- sl_moved_away (owner 2026-11-27): the last known SL is further from the entry than the
+  initial SL by more than 1 tick (buy: lower, sell: higher). A move toward the entry is never
+  this rule (that is no_breakeven); a stop-out with slippage is not a move (only ``last_sl``).
+  Only the last SL is known, so a stop moved away and back is not seen.
 """
 
 from __future__ import annotations
@@ -278,7 +282,22 @@ def evaluate(
         if detail is not None:
             out.append(Violation("no_breakeven", detail))
 
+    if cfg.sl_moved_away.enabled:
+        detail = sl_moved_away(trade.direction, trade.initial_sl, trade.last_sl, spec_tick_size)
+        if detail is not None:
+            out.append(Violation("sl_moved_away", detail))
+
     return out
+
+
+def sl_moved_away(
+    direction: str, initial: Decimal | None, last: Decimal | None, tick: Decimal | None
+) -> str | None:
+    """Detail when the last SL is further from the entry than the initial one (> 1 tick)."""
+    if initial is None or last is None or _near(last, initial, tick):
+        return None
+    further = last < initial if direction == "buy" else last > initial
+    return f"SL moved away from {initial} to {last} after entry" if further else None
 
 
 def _breakeven(trade: RuleTradeInput, tick: Decimal | None) -> str | None:

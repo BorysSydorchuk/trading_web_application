@@ -253,3 +253,45 @@ def test_a_failing_order_read_keeps_the_deals(
     run_ctrader_balance_cycle(factory, config)
     trade = _trade(session, 5001)
     assert (trade.status, trade.initial_sl) == ("needs_sl", None)
+
+
+def _protective(stop: float) -> dict[str, Any]:
+    return {
+        "orderId": 8003,
+        "positionId": 5001,
+        "orderType": "STOP_LOSS_TAKE_PROFIT",
+        "orderStatus": "ORDER_STATUS_CANCELLED",
+        "closingOrder": True,
+        "stopPrice": stop,
+        "utcLastUpdateTimestamp": ENTRY_MS + 1000,
+        "tradeData": {
+            "symbolId": 1,
+            "volume": 1000000,
+            "tradeSide": "SELL",
+            "openTimestamp": ENTRY_MS,
+        },
+    }
+
+
+@pytest.mark.parametrize(("stop", "flagged"), [(1.08300, True), (1.08412, False), (1.08500, False)])
+def test_a_stop_moved_away_after_entry_is_a_violation(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+    stop: float,
+    flagged: bool,
+) -> None:
+    """Initial SL 1.08412 (buy at 1.08512): moved away to 1.08300 is flagged; the same stop or
+    one moved toward the entry (1.08500) never is (no_breakeven covers the entry itself)."""
+    server = HistoryServer(
+        load("closed_simple.json")["deals"],
+        orders=[_opening_order(relativeStopLoss=100), _protective(stop)],
+    )
+    _run(factory, store, server, tmp_path)
+    trade = _trade(session, 5001)
+    assert trade.initial_sl == Decimal("1.08412")
+    assert trade.last_sl == Decimal(str(stop)).quantize(Decimal("0.00001"))
+    keys = {v.rule_key for v in trade.rule_violations}
+    assert ("sl_moved_away" in keys) is flagged

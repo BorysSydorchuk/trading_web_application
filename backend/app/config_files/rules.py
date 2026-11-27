@@ -161,6 +161,8 @@ class RulesSet(_Strict):
     entry_session: Rule
     qm_not_in_ny: QmNotInNyRule
     no_breakeven: Rule
+    # Owner 2026-11-27; optional in rules.yaml so older copies stay valid (default: on).
+    sl_moved_away: Rule = Field(default_factory=lambda: Rule(enabled=True))
 
 
 # Thresholds in rules.yaml `rules:` (not the violation keys: the daily/weekly limits are
@@ -183,6 +185,7 @@ ENGINE_RULE_KEYS: tuple[str, ...] = (
     "entry_session",
     "qm_not_in_ny",
     "no_breakeven",
+    "sl_moved_away",
 )
 
 

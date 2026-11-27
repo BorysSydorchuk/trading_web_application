@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.trades import apply_initial_sl
@@ -34,13 +34,16 @@ from app.ctrader import protocol as p
 from app.ctrader.connection import Connector, CtraderConnection, open_websocket
 from app.ctrader.errors import CtraderError
 from app.ctrader.history import check_account
-from app.ctrader.orders import CtOrder, initial_stop, read_position_orders
+from app.ctrader.orders import CtOrder, initial_stop, last_protective_stop, read_position_orders
 from app.ctrader.reader import Credentials, authorize_app, endpoint_for
+from app.domain.rules import sl_moved_away
 from app.models import Account, SymbolSpec, Trade
 from app.models.enums import AccountPlatform, AccountStatus, InitialSlSource
+from app.services.trade_rules import recompute_rules_for_trade
 
 logger = logging.getLogger(__name__)
 LOG_FILE = "backfill_ctrader_sl.log"
+MOVED_LABEL = "Стоп відсунуто після входу"  # config/violations.yaml sl_moved_away
 PAD = timedelta(minutes=1)
 
 
@@ -57,6 +60,9 @@ class Target:
     digits: int | None
     start: datetime
     end: datetime
+    # The order-history SL already stored (only its last SL is missing), else None.
+    stored_initial: Decimal | None = None
+    tick: Decimal | None = None
 
 
 OrdersByTrade = Mapping[int, tuple[CtOrder, ...] | CtraderError]
@@ -70,6 +76,7 @@ class Totals:
     stored: int = 0
     none: int = 0
     failed: int = 0
+    moved: int = 0  # «Стоп відсунуто після входу» (sl_moved_away)
 
 
 def targets(session: Session, account_id: int | None = None) -> list[Target]:
@@ -81,8 +88,14 @@ def targets(session: Session, account_id: int | None = None) -> list[Target]:
             Account.status == AccountStatus.ACTIVE.value,
             Account.ctid_trader_account_id.is_not(None),
             Trade.close_time.is_not(None),
-            Trade.initial_sl.is_(None),
-            Trade.initial_sl_source.is_(None),
+            or_(
+                and_(Trade.initial_sl.is_(None), Trade.initial_sl_source.is_(None)),
+                # 2026-11-27: SL from the order history, last SL not read yet (sl_moved_away).
+                and_(
+                    Trade.initial_sl_source == InitialSlSource.ORDER.value,
+                    Trade.last_sl.is_(None),
+                ),
+            ),
         )
         .order_by(Trade.open_time, Trade.id)
     )
@@ -111,6 +124,8 @@ def targets(session: Session, account_id: int | None = None) -> list[Target]:
                 digits=spec.digits if spec is not None else None,
                 start=trade.open_time - PAD,
                 end=close_time + PAD,
+                stored_initial=trade.initial_sl,
+                tick=spec.tick_size if spec is not None else None,
             )
         )
     return out
@@ -126,12 +141,27 @@ def _kinds(orders: Sequence[CtOrder]) -> str:
     )
 
 
-def _store(session: Session, target: Target, sl: Decimal) -> bool:
+def _store(session: Session, target: Target, sl: Decimal | None, last: Decimal | None) -> bool:
+    """``sl``: a new initial SL (None = keep the stored one); ``last``: the last SL. Rules
+    (also ``sl_moved_away``) are recomputed. Never over an SL entered or synced meanwhile."""
     # Fresh from the DB under a row lock: the identity map may hold the stale row of targets().
     trade = session.get(Trade, target.trade_id, populate_existing=True, with_for_update=True)
-    if trade is None or trade.initial_sl_source is not None or trade.initial_sl is not None:
+    if trade is None:
+        return False
+    if sl is not None and (trade.initial_sl_source is not None or trade.initial_sl is not None):
+        session.rollback()
         return False  # got an SL meanwhile (owner or sync): never overwritten
-    apply_initial_sl(session, trade, sl, InitialSlSource.ORDER)
+    if sl is None and (
+        trade.initial_sl_source != InitialSlSource.ORDER.value or trade.last_sl is not None
+    ):
+        session.rollback()
+        return False  # the owner changed it, or the last SL is known meanwhile
+    if last is not None and trade.last_sl is None:
+        trade.last_sl = last
+    if sl is not None:
+        apply_initial_sl(session, trade, sl, InitialSlSource.ORDER)  # recomputes the rules
+    else:
+        recompute_rules_for_trade(session, trade, "last SL from the order history")
     session.commit()
     return True
 
@@ -149,17 +179,28 @@ def run(session: Session, read: OrdersByTrade, todo: Sequence[Target], *, apply:
             reason = result.code.value if isinstance(result, CtraderError) else "не прочитано"
             totals.lines.append(f"{head}: помилка читання ордерів: {reason}")
             continue
-        stop = initial_stop(
-            result, side=target.side, entry_price=target.entry_price, digits=target.digits
-        )
-        if stop is None:
-            totals.none += 1
-            totals.lines.append(f"{head}: SL в історії ордерів немає [{_kinds(result)}]")
-            continue
+        last = last_protective_stop(result, target.digits)
+        if target.stored_initial is not None:
+            new_sl, initial = None, target.stored_initial
+            line = f"{head}: SL {initial} (вже записано)"
+        else:
+            stop = initial_stop(
+                result, side=target.side, entry_price=target.entry_price, digits=target.digits
+            )
+            if stop is None:
+                totals.none += 1
+                totals.lines.append(f"{head}: SL в історії ордерів немає [{_kinds(result)}]")
+                continue
+            new_sl = initial = stop.sl
+            line = f"{head}: SL {stop.sl} ({stop.kind}, ордер {stop.order_id})"
         totals.found += 1
-        line = f"{head}: SL {stop.sl} ({stop.kind}, ордер {stop.order_id}) [{_kinds(result)}]"
+        line += f", останній SL {last if last is not None else '—'}"
+        if sl_moved_away(target.side, initial, last, target.tick) is not None:
+            totals.moved += 1
+            line += f" → «{MOVED_LABEL}»"
+        line += f" [{_kinds(result)}]"
         if apply:
-            stored = _store(session, target, stop.sl)
+            stored = _store(session, target, new_sl, last)
             totals.stored += int(stored)
             line += " — записано" if stored else " — пропущено: SL вже є"
         totals.lines.append(line)
@@ -169,8 +210,9 @@ def run(session: Session, read: OrdersByTrade, todo: Sequence[Target], *, apply:
 def summary(totals: Totals, apply: bool, count: int) -> str:
     mode = "apply" if apply else "dry run, нічого не записано"
     return (
-        f"Угод без SL: {count}; SL знайдено: {totals.found}; записано: {totals.stored}; "
-        f"без SL в ордерах: {totals.none}; помилки: {totals.failed} ({mode})"
+        f"Угод: {count}; SL знайдено: {totals.found}; записано: {totals.stored}; "
+        f"стоп відсунуто: {totals.moved}; без SL в ордерах: {totals.none}; "
+        f"помилки: {totals.failed} ({mode})"
     )
 
 

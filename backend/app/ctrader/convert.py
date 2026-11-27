@@ -217,6 +217,9 @@ def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -
             if all(d.close is None for d in own):
                 continue  # nothing new: the stored open trade stays untouched
         carried = stored.get(pid) if pid not in live else None
+        if carried is None and pid in read.last_stops and pid in read.opening_stops:
+            # Never seen open: the last SL from the order history rides on the exit deals.
+            carried = StoredStops(read.last_stops[pid], None)
         result = _convert_position(own, read.symbols, carried)
         if isinstance(result, str):
             skipped.append(SkippedPosition(pid, result))
