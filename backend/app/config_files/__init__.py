@@ -38,7 +38,13 @@ from app.config_files.journal_fields import (
     clear_journal_fields_cache,
     get_journal_fields,
 )
-from app.config_files.loader import ConfigError, StaleConfig, config_dir, stale_configs
+from app.config_files.loader import (
+    ConfigError,
+    StaleConfig,
+    config_dir,
+    reset_stale,
+    stale_configs,
+)
 from app.config_files.rules import (
     RULE_KEYS,
     RulesConfig,
@@ -72,6 +78,7 @@ logger = logging.getLogger(__name__)
 
 def reload_config() -> None:
     """Drop cached configs; the next accessor call re-reads the files."""
+    reset_stale()
     clear_rules_cache()
     clear_journal_fields_cache()
     clear_ai_pricing_cache()

@@ -21,7 +21,14 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import REPO_ROOT
-from app.config_files import config_not_applied, get_rules, reload_config, stale_configs
+from app.config_files import (
+    config_not_applied,
+    get_journal_fields,
+    get_rules,
+    get_violations,
+    reload_config,
+    stale_configs,
+)
 from app.config_files.loader import CONFIG_DIR_ENV, ConfigError, FileCache
 from app.ctrader.tokens import TokenPair, TokenStore, tokens_path
 from app.db import make_session_factory
@@ -90,6 +97,39 @@ def test_a_fixed_file_is_applied_again(config: Path) -> None:
     assert get_rules().rules.max_risk_pct.value == Decimal("1.2")
     assert stale_configs() == []
     assert config_not_applied() == []
+
+
+@pytest.mark.parametrize("name", ["rules.yaml", "violations.yaml"])
+def test_a_dependent_config_reloading_never_hides_the_warning(config: Path, name: str) -> None:
+    """journal_fields reads rules.yaml and violations.yaml too and loads fine on their last
+    valid values: the warning must stay while the file is broken (review 2026-11-27)."""
+    get_rules()
+    get_violations()
+    get_journal_fields()
+    _break(config / name, "not: [valid")
+
+    get_journal_fields()
+    assert config_not_applied() == [name]
+    assert config_not_applied() == [name]  # a second poll too
+
+
+def test_a_fixed_file_clears_the_warning_with_dependent_caches(config: Path) -> None:
+    original = (config / "rules.yaml").read_text(encoding="utf-8")
+    get_rules()
+    get_journal_fields()
+    _break(config / "rules.yaml")
+    assert config_not_applied() == ["rules.yaml"]
+    _break(config / "rules.yaml", original)
+    get_journal_fields()
+    assert config_not_applied() == []
+
+
+def test_reload_config_forgets_the_warnings(config: Path) -> None:
+    get_rules()
+    _break(config / "rules.yaml")
+    get_rules()
+    reload_config()
+    assert stale_configs() == []
 
 
 def test_without_a_valid_version_the_error_is_raised(config: Path) -> None:

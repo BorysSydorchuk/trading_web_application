@@ -146,6 +146,9 @@ class StaleConfig:
 
 _stale_lock = threading.Lock()
 _stale: dict[Path, StaleConfig] = {}
+# Which caches noted each path: only a cache that noted a file clears it (another cache that
+# reads the same file, e.g. journal_fields with rules.yaml, may load fine on the stale value).
+_owners: dict[Path, set[int]] = {}
 
 
 def stale_configs() -> list[StaleConfig]:
@@ -154,9 +157,10 @@ def stale_configs() -> list[StaleConfig]:
         return sorted(_stale.values(), key=lambda s: str(s.path))
 
 
-def _note_stale(exc: ConfigError) -> None:
+def _note_stale(owner: int, exc: ConfigError) -> None:
     problems = tuple(exc.problems)
     with _stale_lock:
+        _owners.setdefault(exc.path, set()).add(owner)
         known = _stale.get(exc.path)
         if known is not None and known.problems == problems:
             return  # already logged for this content
@@ -164,13 +168,26 @@ def _note_stale(exc: ConfigError) -> None:
     logger.error("CONFIG NOT APPLIED, the last valid version stays in use. %s", exc)
 
 
-def _clear_stale(paths: tuple[Path, ...]) -> None:
+def _clear_stale(owner: int) -> list[Path]:
+    """Drop what ``owner`` noted; a path goes when no cache has it noted any more."""
+    fixed: list[Path] = []
     with _stale_lock:
-        fixed = [p for p in paths if p in _stale]
-        for path in fixed:
-            del _stale[path]
-    for path in fixed:
-        logger.info("Config applied again: %s", path)
+        for path, owners in list(_owners.items()):
+            if owner not in owners:
+                continue
+            owners.discard(owner)
+            if not owners:
+                del _owners[path]
+                if _stale.pop(path, None) is not None:
+                    fixed.append(path)
+    return fixed
+
+
+def reset_stale() -> None:
+    """Forget every noted file (with `reload_config`, tests)."""
+    with _stale_lock:
+        _stale.clear()
+        _owners.clear()
 
 
 class FileCache[T]:
@@ -204,12 +221,14 @@ class FileCache[T]:
                 good = self._good.get(key)
                 if good is None:
                     raise
-                _note_stale(exc)
+                _note_stale(id(self), exc)
                 self._value, self._stamp, self._key = good, stamp, key
                 return good
             self._good[key] = value
             self._value, self._stamp, self._key = value, stamp, key
-        _clear_stale(key)
+            fixed = _clear_stale(id(self))
+        for path in fixed:
+            logger.info("Config applied again: %s", path)
         return value
 
     def clear(self) -> None:
@@ -219,3 +238,4 @@ class FileCache[T]:
             self._stamp = None
             self._key = None
             self._good.clear()
+            _clear_stale(id(self))
