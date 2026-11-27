@@ -34,6 +34,7 @@ export function AccountsTable({ accounts, onEdit, onDelete }: AccountsTableProps
             <th className="text-left">{c.status}</th>
             <th className="text-right">{c.accountSize}</th>
             <th className="text-right">{c.balance}</th>
+            <th className="text-right">{c.equity}</th>
             <th className="text-left">{c.currency}</th>
             <th className="text-left">{c.password}</th>
             <th className="text-right">
@@ -90,6 +91,9 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
       <td className="text-right whitespace-nowrap">
         <BalanceCell account={account} />
       </td>
+      <td className="text-right whitespace-nowrap">
+        <EquityCell account={account} />
+      </td>
       <td className="num">{account.currency}</td>
       <td className="whitespace-nowrap">
         {account.platform === 'ctrader' ? (
@@ -112,17 +116,34 @@ function AccountRow({ account, onEdit, onDelete }: AccountRowProps) {
   )
 }
 
+/** Exact synced figures in the account currency, to compare with the platform (Home is % only). */
 function BalanceCell({ account }: { account: Account }) {
   if (account.balance === null) {
     return <span className="text-xs text-muted-foreground">{uk.accounts.balanceNotSynced}</span>
   }
   return (
     <div className="flex flex-col items-end">
-      <span className="num">{formatDecimal(account.balance)}</span>
+      <span data-testid="account-balance" className="num">{uk.accounts.amount(formatDecimal(account.balance), account.currency)}</span>
       {account.balance_synced_at && (
         <span className="text-xs text-muted-foreground">
           {uk.accounts.balanceUpdated}{' '}
           <span className="num">{formatRecentBrussels(account.balance_synced_at)}</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+function EquityCell({ account }: { account: Account }) {
+  if (account.equity === null) {
+    return <span className="text-xs text-muted-foreground">{uk.accounts.balanceNotSynced}</span>
+  }
+  return (
+    <div className="flex flex-col items-end">
+      <span data-testid="account-equity" className="num">{uk.accounts.amount(formatDecimal(account.equity), account.currency)}</span>
+      {account.balance_synced_at && (
+        <span className="text-xs text-muted-foreground">
+          {uk.accounts.balanceUpdated} <span className="num">{formatRecentBrussels(account.balance_synced_at)}</span>
         </span>
       )}
     </div>

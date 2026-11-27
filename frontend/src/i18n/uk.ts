@@ -141,6 +141,7 @@ export const uk = {
       server: 'Сервер',
       status: 'Статус',
       balance: 'Баланс',
+      equity: 'Еквіті',
       accountSize: 'Розмір рахунку',
       currency: 'Валюта',
       password: 'Пароль у .env',
@@ -163,6 +164,8 @@ export const uk = {
     },
     balanceUpdated: 'оновлено',
     balanceNotSynced: 'ще не синхронізовано',
+    /** Exact synced money with its currency («98 022.17 USD»). */
+    amount: (value: string, currency: string) => `${value} ${currency}`,
     password: {
       configured: 'налаштовано',
       missing: 'не налаштовано',
