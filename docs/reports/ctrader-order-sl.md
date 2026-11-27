@@ -37,8 +37,25 @@ Live format notes: market orders carry the absolute `stopLoss` (5 of 6) or only
 `stopPrice`. Trade 34: the protective stop (0.84148) differs from the opening SL (0.84157), so the
 SL was moved after the open; the rule takes the opening one (the SL attached at open).
 
-## Apply
-See the STATUS line / the final section below once applied.
+## Reviews
+python-reviewer and code-reviewer: CHANGES REQUESTED (python 2 HIGH: stale row in the tool's
+re-check, a failed order read lost the history read; code 1 HIGH: trades already stored with an
+SL were re-read every sync inside the overlap window and an order SL could replace a
+`position` one). Fixed in fcf9f9f (`known_sl`, `_with_opening_stops`, fresh locked row,
+64-request cap per position, absurd price skipped, no-SL logged) -> both APPROVE.
+
+## Apply (2026-11-27 ~14:20 Brussels, Borys's OK, reviewed code)
+6 of 6 written (source `order`), 0 errors. Status `needs_sl` -> `needs_description`.
+| Trade | SL | Risk % | R | MFE R | MAE R |
+|---|---|---|---|---|---|
+| 34 USDCHF | 0.84157 | 1.0589 | -1.1113 | 0.1212 | 1.1010 |
+| 35 GER40 | 25201.0 | 1.0026 | -1.0061 | 0.0320 | 1.0046 |
+| 36 GER40 | 25172.5 | 1.0833 | -1.0091 | 0.0515 | 1.0081 |
+| 37 XAUUSD | 3540.40 | 1.0089 | 2.3800 | 2.3863 | 0.7654 |
+| 38 EURUSD | 1.09541 | 0.9694 | -1.1351 | 0.7568 | 1.0135 |
+| 41 GER40 | 25327.5 | 0.8433 | 0.0312 | 0.1262 | 0.0140 |
+MAE/MFE prices were already final (stored before), so only their R was recomputed from the
+new SL. Trade 34 lost 1.11 R: the stop was moved wider (0.84148) after the open.
 
 ## Known limits
 - The order history keeps an order's last state: with no SL on the opening order, a protective
