@@ -4,6 +4,7 @@ import { Pill } from '@/components/studio/Pill'
 import { Button } from '@/components/ui/button'
 import { uk } from '@/i18n/uk'
 import { formatDateTimeBrussels } from '@/lib/time'
+import { AccountPctLine } from './AccountPctLine'
 import { AiSummarySection } from './AiSummarySection'
 import { useRegenerateDigest } from './api'
 import { BreakdownTables } from './BreakdownTables'
@@ -44,6 +45,7 @@ export function DigestView({ digest }: { digest: Digest }) {
           />
         ))}
       </div>
+      <AccountPctLine block={snapshot.account_pct} />
       {snapshot.excluded && <AccountTotalLine block={snapshot.excluded} currency={snapshot.currency} />}
       {snapshot.excluded && <ExcludedTrades block={snapshot.excluded} currency={snapshot.currency} />}
       {snapshot.excursions && <ExcursionsCard block={snapshot.excursions} />}

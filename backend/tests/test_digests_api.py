@@ -1232,3 +1232,22 @@ def test_small_r_trade_counts_as_breakeven_in_the_digest(
     assert (m["wins"]["value"], m["losses"]["value"], m["breakeven"]["value"]) == (1, 0, 1)
     assert m["win_rate"]["value"] == "50.0000"
     assert m["avg_loss_r"]["value"] is None
+
+
+def test_all_accounts_digest_has_both_percent_lines(
+    client: TestClient, fixture_week: dict[str, Trade]
+) -> None:
+    """PM 2026-11-27: Alpha 10 000 +200 (+2 %), Beta 20 000 +200 (+1 %)."""
+    line = digest(client)["metrics"]["account_pct"]
+    assert line == {
+        "accounts": 2,
+        "size_weighted": "1.3333",  # 400 / 30 000: «% від суми рахунків»
+        "equal_weighted": "1.5000",  # (2 + 1) / 2: «середнє по рахунках», as «Головна»
+    }
+
+
+def test_one_account_digest_percent_lines_are_equal(client: TestClient, session: Session) -> None:
+    alpha, _ = accounts(session)
+    closed(session, alpha, datetime(2026, 11, 10, 10, tzinfo=UTC), "150.00", "1.5")
+    line = digest(client)["metrics"]["account_pct"]
+    assert line == {"accounts": 1, "size_weighted": "1.5000", "equal_weighted": "1.5000"}

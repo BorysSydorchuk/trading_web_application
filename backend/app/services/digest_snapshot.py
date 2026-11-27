@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain import digest_metrics as dm
+from app.domain import equal_weight as ew
 from app.domain.digest_breakdowns import JournalSpec, journal_breakdowns
 from app.domain.period_base import period_base
 from app.schemas.dashboard import money_str, pct_str
@@ -271,6 +272,24 @@ def _excluded(inp: SnapshotInput) -> Json:
     }
 
 
+def _account_pct(inp: SnapshotInput) -> Json:
+    """All accounts (PM 2026-11-27): the accounts' real P&L (excluded trades included) in two
+    percents: of the sum of the sizes (``period_base``, as the metric blocks) and the average
+    of the per-account percents (``equal_weight``, as Home). One line always matches Home;
+    with one account both are equal (the UI shows the line only for two or more)."""
+    pnl: dict[int, Decimal | None] = {}
+    for t in (*inp.combined.period, *(e.trade for e in inp.excluded)):
+        pnl[t.account_id] = (pnl.get(t.account_id) or Decimal(0)) + t.net_pnl
+    base = period_base(inp.sizes, pnl)
+    total = sum((v for v in pnl.values() if v is not None), Decimal(0))
+    equal = ew.average(pnl, dict(inp.sizes))
+    return {
+        "accounts": len(pnl),
+        "size_weighted": None if base is None or not pnl else pct_str(total * HUNDRED / base),
+        "equal_weighted": None if equal is None else pct_str(equal),
+    }
+
+
 ONE_R = Decimal(1)
 HUNDRED = Decimal(100)
 
@@ -312,5 +331,6 @@ def build_snapshot(inp: SnapshotInput) -> Json:
         "charts": _charts(trades, inp.start),
         "trade_ids": sorted(t.id for t in trades),
         "excluded": _excluded(inp),
+        "account_pct": _account_pct(inp),
         "excursions": _excursions(trades),
     }
