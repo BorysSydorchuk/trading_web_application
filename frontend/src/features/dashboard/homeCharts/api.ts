@@ -13,6 +13,10 @@ export interface HomeCharts {
   daily: { day: string; net_pnl: string; pct: string | null; trades: number }[]
   rolling: { time: string; n: number; win_rate: string; avg_r: string | null }[]
   rolling_window: number
+  /** «Головна» %-only: range result (equal-weighted %), plain sum of R, accounts counted. */
+  total_pct: string | null
+  total_r: string | null
+  accounts_counted: number
 }
 
 export const homeChartKeys = {

@@ -410,6 +410,7 @@ def _today(
         pnl=pnl,
         pct=cum[-1],
         trades=len(today),
+        accounts_counted=len(counted),
         series=[
             schemas.CumPoint(time=p.time, cum_pnl=p.cum_pnl, cum_pct=pct)
             for p, pct in zip(hc.equity(today, period.today), cum, strict=True)

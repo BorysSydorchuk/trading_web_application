@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { Pill } from '@/components/studio/Pill'
 import { describePath } from '@/features/trades/links'
 import { uk } from '@/i18n/uk'
-import { formatLots, formatPrice, formatR, formatUsd } from '@/lib/displayFormat'
+import { formatLots, formatPct, formatPrice, formatR } from '@/lib/displayFormat'
 import { cn } from '@/lib/utils'
 import { ladderGeometry } from './chartMath'
 import { signTone } from './heroSeries'
@@ -87,7 +87,7 @@ function LiveValues({ position }: { position: HomePosition }) {
   return (
     <>
       <p className={cn('num text-2xl font-semibold', tone === 'loss' ? 'text-loss' : tone === 'profit' ? 'text-profit' : 'text-ink')}>
-        {formatUsd(position.pnl, 'overview', { signed: true })}
+        {formatPct(position.pnl_pct, 'overview', { signed: true })}
       </p>
       <p className="num text-xs text-ink-muted">{formatR(position.r_now, 'overview')}</p>
     </>

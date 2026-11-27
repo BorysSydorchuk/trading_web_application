@@ -21,7 +21,6 @@ const h = uk.home
 const MINUS = '−'
 const TOTAL = '[data-testid="hero-total"]'
 /** U+202F, the overview thousands separator (queries normalize it, textContent keeps it). */
-const NNBSP = ' '
 
 function status(overrides: Partial<BiasStatus> = {}): BiasStatus {
   return {
@@ -70,7 +69,7 @@ describe('HomePage layout (M8-10b)', () => {
   it('renders the sections in the mockup order', async () => {
     serveCharts()
     renderWithProviders(<HomePage />)
-    await screen.findByText('+741', { selector: TOTAL })
+    await screen.findByText('+7.4%', { selector: TOTAL })
     expect(screen.getByRole('heading', { level: 1, name: h.title })).toBeInTheDocument()
     const titles = screen.getAllByRole('heading', { level: 2 }).map((el) => el.textContent)
     expect(titles).toEqual([
@@ -117,7 +116,7 @@ describe('HomePage hero and KPI toggles', () => {
   it('a KPI card switches the hero chart; clicking it again or «← Крива P&L» returns to the P&L curve', async () => {
     serveCharts()
     const { user } = renderWithProviders(<HomePage />)
-    await screen.findByText('+741', { selector: TOTAL })
+    await screen.findByText('+7.4%', { selector: TOTAL })
     expect(screen.getByRole('radiogroup', { name: h.hero.range })).toBeInTheDocument()
     const today = await screen.findByRole('button', { name: new RegExp(`^${h.kpis.today}`) })
     expect(today).toHaveAttribute('aria-pressed', 'false')
@@ -127,12 +126,12 @@ describe('HomePage hero and KPI toggles', () => {
     expect(today).toHaveTextContent(h.kpis.hintOn)
     expect(today).toHaveClass('border-2', 'border-profit')
     expect(screen.getByRole('heading', { level: 2, name: h.hero.todayTitle })).toBeInTheDocument()
-    expect(screen.getByTestId('hero-total')).toHaveTextContent('+212')
+    expect(screen.getByTestId('hero-total')).toHaveTextContent('+2.1%')
     expect(screen.queryByRole('radiogroup', { name: h.hero.range })).not.toBeInTheDocument()
 
     await user.click(today)
     expect(today).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByTestId('hero-total')).toHaveTextContent('+741')
+    expect(screen.getByTestId('hero-total')).toHaveTextContent('+7.4%')
 
     const maxLoss = screen.getByRole('button', { name: new RegExp(`^${h.kpis.maxLoss}`) })
     await user.click(maxLoss)
@@ -159,22 +158,22 @@ describe('HomePage hero and KPI toggles', () => {
   it('labels every point of a short curve and every 3rd + min + last of a long one; the min is below in loss colour', async () => {
     serveCharts()
     const first = renderWithProviders(<HomePage />)
-    await screen.findByText('+741', { selector: TOTAL })
-    expect(screen.getAllByTestId('hero-value-label').map((el) => el.textContent)).toEqual(['0', '+120', '+30', '+340', '+741'])
+    await screen.findByText('+7.4%', { selector: TOTAL })
+    expect(screen.getAllByTestId('hero-value-label').map((el) => el.textContent)).toEqual(['0%', '+1.2%', '+0.3%', '+3.4%', '+7.4%'])
     first.unmount()
 
     const month = ['0', '-20', '-45', '60', '140', '120', '260', '310', '290', '410', '499', '470', '640', '705', '780', '899', '1010', '1241']
     serveCharts(homeCharts(month))
     renderWithProviders(<HomePage />)
-    await screen.findByText('+1 241', { selector: TOTAL })
+    await screen.findByText('+12.4%', { selector: TOTAL })
     const labels = screen.getAllByTestId('hero-value-label')
-    expect(labels.map((el) => el.textContent)).toEqual([`${MINUS}45`, '+60', '+260', '+410', '+640', '+899', `+1${NNBSP}241`])
+    expect(labels.map((el) => el.textContent)).toEqual([`${MINUS}0.5%`, '+0.6%', '+2.6%', '+4.1%', '+6.4%', '+9%', '+12.4%'])
     const min = labels[0]
     expect(min).toHaveAttribute('data-kind', 'min')
     expect(min).toHaveClass('text-loss')
     expect(min?.style.transform).toContain('10px)')
     expect(labels.at(-1)).toHaveAttribute('data-kind', 'last')
-    expect(screen.getByRole('img', { name: h.hero.chartLabel(h.hero.pnlTitle('листопад'), '0', `+1${NNBSP}241`, `${MINUS}45`) })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: h.hero.chartLabel(h.hero.pnlTitle('листопад'), '0%', '+12.4%', `${MINUS}0.5%`) })).toBeInTheDocument()
   })
 
   it('shows «Немає угод за цей період» for an empty range and remembers the range per browser', async () => {
@@ -257,13 +256,13 @@ describe('HomePage «Відкриті позиції»', () => {
     serveHome(homeData({
       open_positions: [
         homePosition(),
-        homePosition({ trade_id: 42, symbol: 'EURUSD', direction: 'sell', account_name: 'Funded 2', entry_price: '1.10950000', current_price: '1.10910000', pnl: '-28.00', r_now: '-0.3000', described: false }),
+        homePosition({ trade_id: 42, symbol: 'EURUSD', direction: 'sell', account_name: 'Funded 2', entry_price: '1.10950000', current_price: '1.10910000', pnl: '-28.00', pnl_pct: '-0.2800', r_now: '-0.3000', described: false }),
       ],
-      open_totals: { pnl: '36.20', risk_pct: '1.6560', price_time: '2026-11-19T13:41:30Z' },
+      open_totals: { pnl: '36.20', pnl_pct: '0.3620', risk_pct: '1.6560', price_time: '2026-11-19T13:41:30Z' },
     }))
     renderWithProviders(<HomePage />)
     const ger = await screen.findByRole('article', { name: 'GER40' })
-    expect(within(ger).getByText('+64')).toHaveClass('text-profit')
+    expect(within(ger).getByText('+0.6%')).toHaveClass('text-profit')
     expect(within(ger).getByText('+0.7R')).toBeInTheDocument()
     expect(within(ger).getByText(h.positions.meta('0.13', 'Funded', '58 хв'))).toBeInTheDocument()
     expect(within(ger).getByTestId('position-now-tag')).toHaveTextContent('26 523')
@@ -275,10 +274,10 @@ describe('HomePage «Відкриті позиції»', () => {
     expect(within(ger).getByText(h.positions.described)).toBeInTheDocument()
     expect(within(ger).getByRole('link', { name: h.positions.describeLabel('GER40') })).toHaveAttribute('href', '/trades/41/describe')
     const eur = screen.getByRole('article', { name: 'EURUSD' })
-    expect(within(eur).getByText(`${MINUS}28`)).toHaveClass('text-loss')
+    expect(within(eur).getByText(`${MINUS}0.3%`)).toHaveClass('text-loss')
     expect(within(eur).getByText(h.positions.notDescribed)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: h.positions.live })).toBeInTheDocument()
-    expect(screen.getByLabelText(`${h.positions.total}: +36`)).toHaveTextContent('+36 USD')
+    expect(screen.getByLabelText(`${h.positions.total}: +0.4%`)).toHaveTextContent('+0.4%')
     expect(screen.getByText(h.positions.risk('1.7%'))).toBeInTheDocument()
   })
 
@@ -288,7 +287,7 @@ describe('HomePage «Відкриті позиції»', () => {
         homePosition({ current_price: null, pnl: null, r_now: null, price_time: '2026-11-19T13:30:00Z' }),
         homePosition({ trade_id: 43, symbol: 'XAUUSD', current_price: null, pnl: null, r_now: null, price_time: null }),
       ],
-      open_totals: { pnl: null, risk_pct: '1.3120', price_time: null },
+      open_totals: { pnl: null, pnl_pct: null, risk_pct: '1.3120', price_time: null },
     }))
     renderWithProviders(<HomePage />)
     const ger = await screen.findByRole('article', { name: 'GER40' })
@@ -301,13 +300,13 @@ describe('HomePage «Відкриті позиції»', () => {
 
   it('a cTrader position with a fresh P&L and no price is live: P&L shown, no stale note', async () => {
     serveHome(homeData({
-      open_positions: [homePosition({ current_price: null, pnl: '-15.34', r_now: null, price_time: '2026-11-19T13:41:00Z' })],
-      open_totals: { pnl: '-15.34', risk_pct: '0.5000', price_time: '2026-11-19T13:41:00Z' },
+      open_positions: [homePosition({ current_price: null, pnl: '-15.34', pnl_pct: '-0.1534', r_now: null, price_time: '2026-11-19T13:41:00Z' })],
+      open_totals: { pnl: '-15.34', pnl_pct: '-0.1534', risk_pct: '0.5000', price_time: '2026-11-19T13:41:00Z' },
     }))
     renderWithProviders(<HomePage />)
     const ger = await screen.findByRole('article', { name: 'GER40' })
     expect(within(ger).queryByTestId('position-live-note')).not.toBeInTheDocument()
-    expect(within(ger).getByText(`${MINUS}15`)).toBeInTheDocument()
+    expect(within(ger).getByText(`${MINUS}0.2%`)).toBeInTheDocument()
     expect(within(ger).queryByTestId('position-now-tag')).not.toBeInTheDocument()
     expect(screen.getByRole('img', { name: h.positions.live })).toBeInTheDocument()
   })
@@ -317,7 +316,7 @@ describe('HomePage «Відкриті позиції»', () => {
       open_positions: [
         homePosition({ symbol: 'GBPUSD', close_unconfirmed: true, current_price: null, pnl: null, r_now: null, price_time: null }),
       ],
-      open_totals: { pnl: null, risk_pct: '0.5000', price_time: null },
+      open_totals: { pnl: null, pnl_pct: null, risk_pct: '0.5000', price_time: null },
     }))
     renderWithProviders(<HomePage />)
     const card = await screen.findByRole('article', { name: 'GBPUSD' })
@@ -379,8 +378,8 @@ describe('HomePage bottom charts', () => {
     serveCharts()
     renderWithProviders(<HomePage />)
     expect(await screen.findAllByTestId('daily-bar')).toHaveLength(4)
-    expect(screen.getAllByTestId('daily-value').map((el) => el.textContent)).toEqual(['+120', `${MINUS}90`, '+310', '+401'])
-    expect(screen.getByRole('img', { name: h.daily.label(`Пн +120, Вт ${MINUS}90, Ср +310, Чт +401`) })).toBeInTheDocument()
+    expect(screen.getAllByTestId('daily-value').map((el) => el.textContent)).toEqual(['+1.2%', `${MINUS}0.9%`, '+3.1%', '+4%'])
+    expect(screen.getByRole('img', { name: h.daily.label(`Пн +1.2%, Вт ${MINUS}0.9%, Ср +3.1%, Чт +4%`) })).toBeInTheDocument()
     expect(screen.getAllByTestId('form-end-label').map((el) => el.textContent)).toEqual(['57%', '+1.3R'])
     expect(screen.getByRole('img', { name: h.form.label('45%', '57%', '+0.6R', '+1.3R') })).toBeInTheDocument()
   })
@@ -562,7 +561,7 @@ describe('HomePage hero x labels (M8-10b follow-up, owner fix)', () => {
   it('«3 міс» and «Рік» label month starts of the actual span (from the first trade)', async () => {
     serveCharts(chartsAt(quarter))
     const { user } = renderWithProviders(<HomePage />)
-    await screen.findByText('+60', { selector: TOTAL })
+    await screen.findByText('+0.6%', { selector: TOTAL })
     await user.click(screen.getByRole('radio', { name: h.hero.ranges.months3 }))
     await waitFor(() => expect(xLabelTexts()).toEqual(['вер', 'жов', 'лис']))
     await user.click(screen.getByRole('radio', { name: h.hero.ranges.year }))
@@ -579,7 +578,7 @@ describe('HomePage hero x labels (M8-10b follow-up, owner fix)', () => {
   it('«Місяць» keeps DD.MM labels from the first trade', async () => {
     serveCharts(chartsAt(quarter))
     renderWithProviders(<HomePage />)
-    await screen.findByText('+60', { selector: TOTAL })
+    await screen.findByText('+0.6%', { selector: TOTAL })
     expect(xLabelTexts()).toEqual(['03.09', '15.09', '02.10', '20.10', '18.11'])
     expect(screen.queryByTestId('hero-data-from')).not.toBeInTheDocument()
   })
@@ -587,7 +586,7 @@ describe('HomePage hero x labels (M8-10b follow-up, owner fix)', () => {
   it('the «дані з» note needs the data to start at least 7 days after the range start', async () => {
     serveCharts(chartsAt(['2026-10-31T23:00:00Z', '2026-11-07T10:00:00Z', '2026-11-12T10:00:00Z']))
     const first = renderWithProviders(<HomePage />)
-    await screen.findByText('+20', { selector: TOTAL })
+    await screen.findByText('+0.2%', { selector: TOTAL })
     expect(screen.queryByTestId('hero-data-from')).not.toBeInTheDocument()
     first.unmount()
 
@@ -660,29 +659,12 @@ describe('HomePage «До макс. збитку» KPI', () => {
     expect(within(kpi).getByTestId('kpi-no-floating')).toHaveTextContent(h.kpis.maxLossNoFloating)
   })
 
-  it('the limits card shows the exact balance and equity of the account', async () => {
+  it('«Головна» shows no balance or equity, even after a sync (percentages only, owner 2026-11-27)', async () => {
     serveHome(homeData({ limits: homeLimits({ balance: '10000.00', equity: '10056.25', balance_fresh: true }) }))
-    renderWithProviders(<HomePage />)
-    const figures = await screen.findByTestId('limits-balance')
-    expect(figures).toHaveTextContent(uk.home.limits.balance)
-    expect(figures).toHaveTextContent(/10.000\.00/)
-    expect(figures).toHaveTextContent(uk.home.limits.equity)
-    expect(figures).toHaveTextContent(/10.056\.25/)
-    expect(within(figures).queryByTestId('limits-balance-stale')).not.toBeInTheDocument()
-  })
-
-  it('a stale sync keeps the last figures and says they are old', async () => {
-    serveHome(homeData({ limits: homeLimits({ balance: '10000.00', equity: '10056.25', balance_fresh: false }) }))
-    renderWithProviders(<HomePage />)
-    const figures = await screen.findByTestId('limits-balance')
-    expect(within(figures).getByTestId('limits-balance-stale')).toHaveTextContent(uk.home.limits.balanceStale)
-  })
-
-  it('an account that never synced shows no balance block', async () => {
-    serveHome(homeData())
     renderWithProviders(<HomePage />)
     await card()
     expect(screen.queryByTestId('limits-balance')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/10.056/)
   })
 
   it('no account limits: «—», the hint, and the hero says the limits are not set', async () => {
@@ -700,8 +682,8 @@ describe('HomePage «До макс. збитку» KPI', () => {
 describe('HomePage neutral pills', () => {
   it('Buy/Sell and the description state are neutral; P&L keeps sign colours', async () => {
     serveHome(homeData({
-      open_positions: [homePosition(), homePosition({ trade_id: 42, symbol: 'EURUSD', direction: 'sell', pnl: '-28.00', r_now: '-0.3000', described: false })],
-      open_totals: { pnl: '36.20', risk_pct: '1.6560', price_time: '2026-11-19T13:41:30Z' },
+      open_positions: [homePosition(), homePosition({ trade_id: 42, symbol: 'EURUSD', direction: 'sell', pnl: '-28.00', pnl_pct: '-0.2800', r_now: '-0.3000', described: false })],
+      open_totals: { pnl: '36.20', pnl_pct: '0.3620', risk_pct: '1.6560', price_time: '2026-11-19T13:41:30Z' },
     }))
     renderWithProviders(<HomePage />)
     const ger = await screen.findByRole('article', { name: 'GER40' })
@@ -710,8 +692,8 @@ describe('HomePage neutral pills', () => {
     expect(within(eur).getByText(h.positions.sides.sell ?? '')).toHaveAttribute('data-tone', 'neutral')
     expect(within(ger).getByText(h.positions.described)).toHaveAttribute('data-tone', 'neutral')
     expect(within(eur).getByText(h.positions.notDescribed)).toHaveAttribute('data-tone', 'neutral')
-    expect(within(eur).getByText(`${MINUS}28`)).toHaveClass('text-loss')
-    expect(screen.getByLabelText(`${h.positions.total}: +36`)).toHaveAttribute('data-tone', 'profit')
+    expect(within(eur).getByText(`${MINUS}0.3%`)).toHaveClass('text-loss')
+    expect(screen.getByLabelText(`${h.positions.total}: +0.4%`)).toHaveAttribute('data-tone', 'profit')
   })
 
   it('the «Без опису» count pill is neutral', async () => {
@@ -755,7 +737,7 @@ describe('HomePage pinned backend cases (2026-11-20)', () => {
         homePosition({ symbol: 'XAUUSD', entry_price: '2650.00000000', current_price: '2655' }),
         homePosition({ trade_id: 44, symbol: 'EURUSD', current_price: '1.1091', r_now: null, tp_r: null }),
       ],
-      open_totals: { pnl: null, risk_pct: null, price_time: null },
+      open_totals: { pnl: null, pnl_pct: null, risk_pct: null, price_time: null },
     }))
     renderWithProviders(<HomePage />)
     const xau = await screen.findByRole('article', { name: 'XAUUSD' })
@@ -765,5 +747,42 @@ describe('HomePage pinned backend cases (2026-11-20)', () => {
     expect(within(eur).getByText(h.positions.noSl)).toBeInTheDocument()
     expect(screen.queryByLabelText(new RegExp(`^${h.positions.total}`))).not.toBeInTheDocument()
     expect(screen.queryByText(/^ризик /)).not.toBeInTheDocument()
+  })
+})
+
+
+describe('«Головна» shows percentages only (owner 2026-11-27)', () => {
+  it('no USD amount anywhere on Home: hero, KPI, bars, positions, open total, limits', async () => {
+    serveCharts()
+    serveHome(homeData({
+      limits: homeLimits({ balance: '10000.00', equity: '10056.25', balance_fresh: true, floating_pnl: '64.20' }),
+      open_positions: [homePosition()],
+      open_totals: { pnl: '64.20', pnl_pct: '0.6420', risk_pct: '0.6560', price_time: '2026-11-19T13:41:30Z' },
+    }))
+    renderWithProviders(<HomePage />)
+    await screen.findByText('+7.4%', { selector: TOTAL })
+    await screen.findByRole('article', { name: 'GER40' })
+    const text = document.body.textContent ?? ''
+    // A currency, never a symbol name such as EURUSD.
+    expect(text).not.toMatch(/\bUSD\b|\$/)
+    // The money values of the fixture (P&L 741 / 212.40 / 64.20, daily +120, equity 10 056.25).
+    for (const money of ['741', '212', '+64', '+120', '+401', '10 056', '10056']) expect(text).not.toContain(money)
+    expect(screen.getByLabelText(`${h.positions.total}: +0.6%`)).toBeInTheDocument()
+    expect(within(screen.getByRole('article', { name: 'GER40' })).getByText('+0.6%')).toBeInTheDocument()
+  })
+
+  it('«Усі рахунки»: the combined % says «середнє по рахунках» and the total R is the secondary value', async () => {
+    serveCharts({ ...homeCharts(), accounts_counted: 2, total_pct: '2.0000', total_r: '3.5000' })
+    renderWithProviders(<HomePage />)
+    await screen.findByText('+2%', { selector: TOTAL })
+    expect(screen.getByText(h.hero.pnlSub(h.hero.totalR('+3.5R'), h.hero.average))).toBeInTheDocument()
+  })
+
+  it('one account: no «середнє по рахунках» note', async () => {
+    serveCharts()
+    renderWithProviders(<HomePage />)
+    await screen.findByText('+7.4%', { selector: TOTAL })
+    expect(screen.queryByText(new RegExp(h.hero.average))).not.toBeInTheDocument()
+    expect(screen.getByText(h.hero.totalR('+3.2R'))).toBeInTheDocument()
   })
 })

@@ -1,7 +1,7 @@
 import { KpiCard } from '@/components/studio/KpiCard'
 import type { KpiTone } from '@/components/studio/tones'
 import { uk } from '@/i18n/uk'
-import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
+import { formatPct, formatR } from '@/lib/displayFormat'
 import { sparkPoints } from './chartMath'
 import type { ReactNode } from 'react'
 import { maxLossLimit, maxLossTone, signTone, type HeroMetric, type KpiMetric } from './heroSeries'
@@ -39,14 +39,16 @@ interface KpiItem {
 const numbers = (raws: readonly string[]) => raws.map(Number).filter(Number.isFinite)
 
 function items(kpis: HomeKpis): KpiItem[] {
-  const todayTone = signTone(kpis.today.pnl) === 'loss' ? 'loss' : 'profit'
+  const todayTone = signTone(kpis.today.pct) === 'loss' ? 'loss' : 'profit'
   return [
     {
       metric: 'today',
       label: t.today,
-      value: formatUsd(kpis.today.pnl, 'overview', { signed: true }),
+      // «Головна» is % only (owner 2026-11-27): equal-weighted over the accounts that traded today.
+      value: formatPct(kpis.today.pct, 'overview', { signed: true }),
       tone: todayTone,
-      series: numbers(kpis.today.series.map((p) => p.cum_pnl)),
+      series: numbers(kpis.today.series.flatMap((p) => (p.cum_pct === null ? [] : [p.cum_pct]))),
+      caption: kpis.today.accounts_counted > 1 ? uk.home.hero.average : undefined,
     },
     { metric: 'win_rate', label: t.winRate, value: formatPct(kpis.win_rate.value, 'overview'), tone: 'accent', series: numbers(kpis.win_rate.series.map((p) => p.value)) },
     { metric: 'avg_r', label: t.avgR, value: formatR(kpis.avg_r.value, 'overview'), tone: 'accent', series: numbers(kpis.avg_r.series.map((p) => p.value)) },

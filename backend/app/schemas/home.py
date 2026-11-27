@@ -106,6 +106,7 @@ class TodayKpi(BaseModel):
     pct: Pct | None
     trades: int
     series: list[CumPoint]
+    accounts_counted: int  # accounts in the equal-weighted pct (owner 2026-11-27)
 
 
 class RollingKpi(BaseModel):

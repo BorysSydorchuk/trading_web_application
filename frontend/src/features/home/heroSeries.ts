@@ -3,7 +3,7 @@ import type { HomeCharts } from '@/features/dashboard/homeCharts/api'
 import type { ChartSelection, RangePreset } from '@/features/dashboard/homeCharts/range'
 import { uk } from '@/i18n/uk'
 import { decimalSign } from '@/lib/decimal'
-import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
+import { formatPct, formatR } from '@/lib/displayFormat'
 import { addDays, brusselsToday } from '@/lib/time'
 import { type AxisCandidate, dateCandidates, pointCandidates } from './axisLabels'
 import { MAX_LOSS_WARN_PCT } from './chartMath'
@@ -42,14 +42,19 @@ export const signTone = (value: string | null): ValueTone => {
   return sign > 0 ? 'profit' : sign < 0 ? 'loss' : 'neutral'
 }
 
-const usd = (v: string) => formatUsd(v, 'overview', { signed: true })
-const pctSigned = (v: string) => formatPct(v, 'overview', { signed: true })
+const pctSigned = (v: string | null) => formatPct(v, 'overview', { signed: true })
 const pct = (v: string) => formatPct(v, 'overview')
 const r = (v: string) => formatR(v, 'overview')
 
-function toPoints(raws: readonly string[]): ChartPoint[] {
-  return raws.map((raw) => ({ raw, value: Number(raw) })).filter((p) => Number.isFinite(p.value))
+function toPoints(raws: readonly (string | null)[]): ChartPoint[] {
+  return raws
+    .filter((raw): raw is string => raw !== null)
+    .map((raw) => ({ raw, value: Number(raw) }))
+    .filter((p) => Number.isFinite(p.value))
 }
+
+/** «середнє по рахунках» when the % averages more than one account. */
+const averageNote = (accounts: number) => (accounts > 1 ? t.average : '')
 
 /** Long ranges label month starts when the actual span is long enough (axisLabels.ts). */
 const MONTH_LABEL_PRESETS: ReadonlySet<RangePreset> = new Set(['months3', 'year', 'all'])
@@ -100,19 +105,21 @@ export function periodTitle(selection: ChartSelection, range: { from: string; to
   return t.periods[selection.preset]
 }
 
+/** «Головна» shows percentages only (owner 2026-11-27): the range result in % of the account size,
+ *  equal-weighted over the accounts for «Усі рахунки», and the total R as the secondary value. */
 export function pnlView(charts: HomeCharts | undefined, period: string, preset: RangePreset): HeroView {
   const equity = charts?.equity ?? []
-  const last = equity[equity.length - 1]
+  const total = charts?.total_pct ?? null
   return {
     title: t.pnlTitle(period),
-    total: last ? usd(last.cum_pnl) : charts ? usd('0') : uk.common.empty,
-    totalTone: signTone(last?.cum_pnl ?? null),
-    sub: t.pnlSub(charts?.currency ?? '', last?.cum_pct ? pctSigned(last.cum_pct) : ''),
+    total: total !== null ? pctSigned(total) : uk.common.empty,
+    totalTone: signTone(total),
+    sub: charts ? t.pnlSub(charts.total_r !== null ? t.totalR(r(charts.total_r)) : '', averageNote(charts.accounts_counted)) : '',
     kind: 'money',
-    points: toPoints(equity.map((p) => p.cum_pnl)),
+    points: toPoints(equity.map((p) => p.cum_pct)),
     xLabels: dateCandidates(spanTimes(equity), MONTH_LABEL_PRESETS.has(preset)),
     note: dataFromNote(charts),
-    format: usd,
+    format: pctSigned,
     empty: uk.dashboard.charts.empty,
   }
 }
@@ -140,19 +147,18 @@ function maxLossView({ kpis }: HomeData): HeroView {
 /** One of the four KPI metrics from `GET /api/home`. */
 export function kpiView(metric: KpiMetric, data: HomeData): HeroView {
   const { kpis } = data
-  const currency = data.limits?.currency ?? ''
   switch (metric) {
     case 'today':
       return {
         title: t.todayTitle,
-        total: usd(kpis.today.pnl),
-        totalTone: signTone(kpis.today.pnl),
-        sub: t.todaySub(currency, kpis.today.pct === null ? '' : pctSigned(kpis.today.pct), kpis.today.trades),
+        total: pctSigned(kpis.today.pct),
+        totalTone: signTone(kpis.today.pct),
+        sub: t.todaySub(kpis.today.trades, averageNote(kpis.today.accounts_counted)),
         kind: 'money',
-        points: toPoints(kpis.today.series.map((p) => p.cum_pnl)),
+        points: toPoints(kpis.today.series.map((p) => p.cum_pct)),
         xLabels: pointCandidates(kpis.today.series.map((p) => p.time), brusselsHourMinute),
         note: '',
-        format: usd,
+        format: pctSigned,
         empty: t.todayEmpty,
       }
     case 'win_rate':

@@ -3,7 +3,7 @@ import { Card } from '@/components/studio/Card'
 import type { HomeCharts } from '@/features/dashboard/homeCharts/api'
 import { uk } from '@/i18n/uk'
 import { decimalSign } from '@/lib/decimal'
-import { formatPct, formatR, formatUsd } from '@/lib/displayFormat'
+import { formatPct, formatR } from '@/lib/displayFormat'
 import { cn } from '@/lib/utils'
 import { evenIndices, minIndex, scale } from './chartMath'
 import { brusselsDayMonth, weekdayOfDay } from './dates'
@@ -20,7 +20,8 @@ const BAR_BOTTOM = 108
 const DAY_LABEL_Y = 146
 /** The charts API's rolling window (docs/api.md M8-14) until the first answer. */
 const DEFAULT_ROLLING_WINDOW = 20
-const usd = (v: string) => formatUsd(v, 'overview', { signed: true })
+/** «Головна» is % only (owner 2026-11-27): the day's result in % of the account size. */
+const pct = (v: string | null) => formatPct(v, 'overview', { signed: true })
 
 function barLabelIndices(values: readonly number[]): Set<number> {
   if (values.length <= ALL_BAR_LABELS_MAX) return new Set(values.map((_, i) => i))
@@ -33,10 +34,10 @@ function dayLabels(days: HomeCharts['daily']): Map<number, string> {
   return new Map(evenIndices(days.length, DAY_LABELS).map((i) => [i, brusselsDayMonth(`${days[i]?.day ?? ''}T12:00:00Z`)]))
 }
 
-/** «P&L по днях»: bars around zero with value labels and day labels (Brussels days). */
+/** «P&L по днях»: bars (in %) around zero with value labels and day labels (Brussels days). */
 export function DailyBars({ days }: { days: HomeCharts['daily'] }) {
   const id = useId()
-  const values = days.map((d) => Number(d.net_pnl))
+  const values = days.map((d) => (d.pct === null ? 0 : Number(d.pct)))
   const y = scale(Math.min(0, ...values), Math.max(0, ...values), BAR_BOTTOM, BAR_TOP)
   const slot = VIEW_W / Math.max(days.length, 1)
   const width = Math.min(BAR_MAX_W, slot * 0.65)
@@ -44,7 +45,7 @@ export function DailyBars({ days }: { days: HomeCharts['daily'] }) {
   const labels = dayLabels(days)
   const summary =
     days.length <= ALL_BAR_LABELS_MAX
-      ? uk.home.daily.label(days.map((d, i) => `${labels.get(i) ?? d.day} ${usd(d.net_pnl)}`).join(', '))
+      ? uk.home.daily.label(days.map((d, i) => `${labels.get(i) ?? d.day} ${pct(d.pct)}`).join(', '))
       : uk.dashboard.charts.dailySummary(days.length)
   return (
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label={summary} className="h-[150px] w-full">
@@ -61,7 +62,7 @@ export function DailyBars({ days }: { days: HomeCharts['daily'] }) {
       <line x1="0" x2={VIEW_W} y1={y(0)} y2={y(0)} className="stroke-line" />
       {days.map((d, i) => {
         const value = values[i] ?? 0
-        const sign = decimalSign(d.net_pnl)
+        const sign = d.pct === null ? 0 : decimalSign(d.pct)
         const cx = i * slot + slot / 2
         const barTop = Math.min(y(value), y(0))
         const height = Math.max(1, Math.abs(y(value) - y(0)))
@@ -85,7 +86,7 @@ export function DailyBars({ days }: { days: HomeCharts['daily'] }) {
                 fontSize="12"
                 className={cn('num font-semibold', sign < 0 ? 'fill-loss' : sign > 0 ? 'fill-profit' : 'fill-ink-muted')}
               >
-                {usd(d.net_pnl)}
+                {pct(d.pct)}
               </text>
             )}
             {labels.has(i) && (
