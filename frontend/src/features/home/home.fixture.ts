@@ -39,6 +39,7 @@ export function homePosition(overrides: Partial<HomePosition> = {}): HomePositio
     current_price: '26523.40000000',
     price_time: '2026-11-19T13:41:30Z',
     pnl: '64.20',
+    pnl_pct: '0.6420',
     r_now: '0.7000',
     tp_r: '1.5000',
     mae_r: '0.2000',
@@ -79,11 +80,12 @@ export function homeData(overrides: Partial<HomeData> = {}): HomeData {
         pnl: '212.40',
         pct: '2.1240',
         trades: 3,
+        accounts_counted: 1,
         series: [
-          { time: '2026-11-18T23:00:00Z', cum_pnl: '0.00' },
-          { time: '2026-11-19T08:30:00Z', cum_pnl: '45.00' },
-          { time: '2026-11-19T10:10:00Z', cum_pnl: '110.00' },
-          { time: '2026-11-19T13:30:00Z', cum_pnl: '212.40' },
+          { time: '2026-11-18T23:00:00Z', cum_pnl: '0.00', cum_pct: '0.0000' },
+          { time: '2026-11-19T08:30:00Z', cum_pnl: '45.00', cum_pct: '0.4500' },
+          { time: '2026-11-19T10:10:00Z', cum_pnl: '110.00', cum_pct: '1.1000' },
+          { time: '2026-11-19T13:30:00Z', cum_pnl: '212.40', cum_pct: '2.1240' },
         ],
       },
       win_rate: { value: '57.0000', n: 20, window: 20, series: valueSeries(['45.0000', '48.0000', '46.0000', '50.0000', '57.0000']) },
@@ -91,7 +93,7 @@ export function homeData(overrides: Partial<HomeData> = {}): HomeData {
       max_loss: homeMaxLoss(),
     },
     open_positions: [],
-    open_totals: { pnl: null, risk_pct: null, price_time: null },
+    open_totals: { pnl: null, pnl_pct: null, risk_pct: null, price_time: null },
     ...overrides,
   }
 }
@@ -121,5 +123,8 @@ export function homeCharts(cum: readonly string[] = ['0.00', '120.00', '30.00', 
       { time: '2026-11-19T10:00:00Z', n: 20, win_rate: '57.0000', avg_r: '1.3000' },
     ],
     rolling_window: 20,
+    total_pct: (Number(cum[cum.length - 1] ?? '0') / 100).toFixed(4),
+    total_r: '3.2000',
+    accounts_counted: 1,
   }
 }

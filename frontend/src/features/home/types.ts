@@ -83,7 +83,8 @@ export interface FirmDay {
 }
 
 export interface HomeKpis {
-  today: { pnl: string; pct: string | null; trades: number; series: { time: string; cum_pnl: string }[] }
+  /** pct and cum_pct: equal-weighted average of the accounts' % (accounts_counted of them). */
+  today: { pnl: string; pct: string | null; trades: number; accounts_counted: number; series: { time: string; cum_pnl: string; cum_pct: string | null }[] }
   /** No strategy trades: value null, n 0, series []. */
   win_rate: { value: string | null; n: number; window: number; series: { time: string; value: string }[] }
   avg_r: { value: string | null; n: number; window: number; series: { time: string; value: string }[] }
@@ -123,6 +124,8 @@ export interface HomePosition {
   /** Time of the snapshot (ISO UTC), kept when it is stale; null when there is none. */
   price_time: string | null
   pnl: string | null
+  /** pnl in % of this position's account size. */
+  pnl_pct: string | null
   r_now: string | null
   /** Signed; r_now / tp_r are null without a usable SL (missing or not on the losing side). */
   tp_r: string | null
@@ -144,5 +147,5 @@ export interface HomeData {
   kpis: HomeKpis
   open_positions: HomePosition[]
   /** pnl / risk_pct null when any position lacks the value (no partial sums). */
-  open_totals: { pnl: string | null; risk_pct: string | null; price_time: string | null }
+  open_totals: { pnl: string | null; pnl_pct: string | null; risk_pct: string | null; price_time: string | null }
 }

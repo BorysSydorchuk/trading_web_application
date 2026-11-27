@@ -4,8 +4,10 @@ Closed trades of non-archived accounts (one account or all). The range is Brusse
 ``from``..``to`` inclusive. Equity and daily P&L: every trade of the range (account money,
 excluded trades included). Rolling win rate / average R: computed over all strategy trades,
 so the window reaches back before the range start, then shown for the range only.
-Percent of account size: `app.domain.period_base` (one account's size, or the sum of the
-sizes of the accounts with a trade in the range, excluded trades included; the digest's rule).
+Percent of account size (owner 2026-11-27, «Головна» %-only): equal-weighted, every counted
+account the same (`app.domain.equal_weight`): one account -> its percent; all -> the average of
+the percents of the accounts with a trade in the range (excluded trades included).
+``account_size`` stays the `period_base` sum (information).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config_files import ConfigError, get_rules
+from app.domain import equal_weight as ew
 from app.domain import home_charts as hc
 from app.domain.period_base import period_base
 from app.domain.sessions import DEFAULT_TZ
@@ -104,7 +107,12 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
             "The range has trades in more than one account currency",
             {"currencies": sorted(currencies)},
         )
-    size = period_base({a.id: a.reference_balance for a in accounts}, active, account_id=account_id)
+    sizes = {a.id: a.reference_balance for a in accounts}
+    size = period_base(sizes, active, account_id=account_id)
+    weighted = [account_id] if account_id is not None else sorted(active)
+    base = ew.basis(sizes, weighted)
+    cum = ew.cumulative(in_range, base)
+    per_day = ew.by_day(in_range, base)
     rolling = [p for p in hc.rolling(every, breakeven_r=breakeven_r) if p.time >= lo]
     return schemas.HomeCharts(
         from_=start,
@@ -113,13 +121,11 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
         account_size=size,
         trades=len(in_range),
         equity=[
-            schemas.EquityPointOut(time=p.time, cum_pnl=p.cum_pnl, cum_pct=hc.pct(p.cum_pnl, size))
-            for p in hc.equity(in_range, start)
+            schemas.EquityPointOut(time=p.time, cum_pnl=p.cum_pnl, cum_pct=pct)
+            for p, pct in zip(hc.equity(in_range, start), cum, strict=True)
         ],
         daily=[
-            schemas.DayPnlOut(
-                day=d.day, net_pnl=d.net_pnl, pct=hc.pct(d.net_pnl, size), trades=d.trades
-            )
+            schemas.DayPnlOut(day=d.day, net_pnl=d.net_pnl, pct=per_day.get(d.day), trades=d.trades)
             for d in hc.daily_pnl(in_range)
         ],
         rolling=[
@@ -127,4 +133,7 @@ def build(db: Session, start: date, end: date, account_id: int | None) -> schema
             for p in rolling
         ],
         rolling_window=hc.ROLLING_WINDOW,
+        total_pct=cum[-1],
+        total_r=ew.total_r(in_range),
+        accounts_counted=len(weighted),
     )

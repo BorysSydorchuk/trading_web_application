@@ -88,6 +88,7 @@ class AccountLimitsOut(BaseModel):
 class CumPoint(BaseModel):
     time: UtcDatetime
     cum_pnl: Money
+    cum_pct: Pct | None  # equal-weighted (app.domain.equal_weight)
 
 
 class ValuePoint(BaseModel):
@@ -105,6 +106,7 @@ class TodayKpi(BaseModel):
     pct: Pct | None
     trades: int
     series: list[CumPoint]
+    accounts_counted: int  # accounts in the equal-weighted pct (owner 2026-11-27)
 
 
 class RollingKpi(BaseModel):
@@ -158,6 +160,8 @@ class OpenPositionOut(BaseModel):
     current_price: PlainDecimal | None
     price_time: UtcDatetime | None
     pnl: Money | None
+    # pnl in % of this position's account size; None without a live value or a size.
+    pnl_pct: Pct | None
     r_now: R | None
     tp_r: R | None
     mae_r: R | None
@@ -170,6 +174,8 @@ class OpenPositionOut(BaseModel):
 
 class OpenTotalsOut(BaseModel):
     pnl: Money | None
+    # Equal-weighted average of the accounts' open P&L % (None when any value is unknown).
+    pnl_pct: Pct | None
     risk_pct: Pct | None
     price_time: UtcDatetime | None
 

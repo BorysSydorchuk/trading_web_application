@@ -3,7 +3,7 @@ import { LiveDot } from '@/components/studio/LiveDot'
 import { Pill } from '@/components/studio/Pill'
 import { SectionHeader } from '@/components/studio/SectionHeader'
 import { uk } from '@/i18n/uk'
-import { formatPct, formatUsd } from '@/lib/displayFormat'
+import { formatPct } from '@/lib/displayFormat'
 import { signTone } from './heroSeries'
 import { PositionCard } from './PositionCard'
 import { hasLiveValues } from './positionModel'
@@ -15,16 +15,16 @@ const t = uk.home.positions
 export function OpenPositions({ data }: { data: HomeData }) {
   const id = useId()
   const { open_positions: positions, open_totals: totals } = data
-  const totalTone = signTone(totals.pnl)
+  const totalTone = signTone(totals.pnl_pct)
+  const totalText = formatPct(totals.pnl_pct, 'overview', { signed: true })
   const live = positions.some((p) => hasLiveValues(p) && !p.close_unconfirmed)
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
       <SectionHeader id={`${id}-title`} title={t.title}>
         {live && <LiveDot label={t.live} />}
-        {positions.length > 0 && totals.pnl !== null && (
-          <Pill tone={totalTone === 'neutral' ? 'neutral' : totalTone} mono size="md" aria-label={`${t.total}: ${formatUsd(totals.pnl, 'overview', { signed: true })}`} className="py-1">
-            {formatUsd(totals.pnl, 'overview', { signed: true })}
-            {data.limits && ` ${data.limits.currency}`}
+        {positions.length > 0 && totals.pnl_pct !== null && (
+          <Pill tone={totalTone === 'neutral' ? 'neutral' : totalTone} mono size="md" aria-label={`${t.total}: ${totalText}`} className="py-1">
+            {totalText}
           </Pill>
         )}
         {positions.length > 0 && totals.risk_pct !== null && (

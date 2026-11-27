@@ -42,3 +42,8 @@ class HomeCharts(BaseModel):
     daily: list[DayPnlOut]
     rolling: list[RollingPointOut]
     rolling_window: int
+    # «Головна» %-only (owner 2026-11-27): the range result in % (equal-weighted average of the
+    # accounts' %, `app.domain.equal_weight`), the plain sum of R, and how many accounts count.
+    total_pct: Pct | None
+    total_r: Pct | None
+    accounts_counted: int

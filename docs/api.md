@@ -1038,3 +1038,9 @@ Per field: the account's own Settings value when set (> 0), else the firm config
   daily stop as before. The card turns red and names the firm limit.
 - KeyFunding (Borys confirmed): daily limit = start-of-day balance − 4 % of the size. The day resets 00:00 server
   time EET (`reset_timezone: EET`, IANA EET/EEST). `to_verify: []`.
+
+## «Головна» percentages only (owner 2026-11-27, tier M)
+- Home shows % only, no USD. Combined % for «Усі рахунки» = equal-weighted average of the accounts' % (`app.domain.equal_weight`): each counted account counts the same; counted = the selected account, or the accounts with a closed trade in the period (excluded trades included); any counted account without a usable size -> null. One account: identical to before.
+- `GET /api/dashboard/charts`: `equity[].cum_pct` and `daily[].pct` are now equal-weighted; new `total_pct` (= last `cum_pct`), `total_r` (plain sum of the R of the range's trades that have one, null when none), `accounts_counted`. `account_size` unchanged (the `period_base` sum, information).
+- `GET /api/home`: `kpis.today.pct` equal-weighted over the accounts with a trade today (none -> 0), `kpis.today.series[].cum_pct`, `kpis.today.accounts_counted`; `open_positions[].pnl_pct` (live P&L / that account's size x 100, null without a live value or size); `open_totals.pnl_pct` (per account sum of its positions' P&L / its size, averaged over the accounts with an open position; null when any P&L is unknown). Money fields stay for the other pages.
+- The UI notes «середнє по рахунках» when more than one account is averaged. «Ліміти» on Home no longer shows balance / equity (balance stays in «Налаштування» → рахунки).

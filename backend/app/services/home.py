@@ -13,7 +13,7 @@ rules engine / «СТОП» stay on closed trades (DECISIONS M8-01). Fixes 2026-
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
@@ -28,6 +28,7 @@ from app.config_files import ConfigError, get_rules
 from app.config_files.firms import FirmsConfig, get_firms_config
 from app.config_files.rules import WEEKDAYS as RULE_WEEKDAYS
 from app.config_files.rules import DecimalRule, RulesConfig
+from app.domain import equal_weight as ew
 from app.domain import firm_rules as fr
 from app.domain import home as dh
 from app.domain import home_charts as hc
@@ -402,12 +403,17 @@ def _today(
 ) -> schemas.TodayKpi:
     today = [t for t in trades if t.close_time >= period.midnight(period.today)]
     pnl = sum((t.net_pnl for t in today), Decimal(0))
+    # Equal-weighted % (owner 2026-11-27): the one account, or those with a trade today.
+    counted = [accounts[0].id] if one and accounts else sorted({t.account_id for t in today})
+    cum = ew.cumulative(today, ew.basis({a.id: a.reference_balance for a in accounts}, counted))
     return schemas.TodayKpi(
         pnl=pnl,
-        pct=hc.pct(pnl, _size(accounts, today, one)),
+        pct=cum[-1],
         trades=len(today),
+        accounts_counted=len(counted),
         series=[
-            schemas.CumPoint(time=p.time, cum_pnl=p.cum_pnl) for p in hc.equity(today, period.today)
+            schemas.CumPoint(time=p.time, cum_pnl=p.cum_pnl, cum_pct=pct)
+            for p, pct in zip(hc.equity(today, period.today), cum, strict=True)
         ],
     )
 
@@ -507,6 +513,11 @@ def _position(
         current_price=price,
         price_time=live.time if live is not None else None,
         pnl=fresh.pnl if fresh is not None else None,
+        pnl_pct=(
+            hc.pct(fresh.pnl, account.reference_balance)
+            if fresh is not None and fresh.pnl is not None
+            else None
+        ),
         r_now=dh.r_now(trade.direction, trade.entry_price, trade.initial_sl, price),
         tp_r=dh.tp_r(trade.direction, trade.entry_price, trade.initial_sl, trade.tp),
         mae_r=trade.mae_r,
@@ -537,8 +548,24 @@ def _current_snapshot_accounts(db: Session, path: Path, account_ids: set[int]) -
     }
 
 
+def _open_pnl_pct(
+    positions: Sequence[schemas.OpenPositionOut], sizes: Mapping[int, Decimal | None]
+) -> Decimal | None:
+    """Equal-weighted open P&L %: per account the sum of its positions over its size, then
+    the average over the accounts with an open position (any unknown P&L -> None)."""
+    by_account: dict[int, Decimal | None] = {}
+    for p in positions:
+        if p.pnl is None:
+            return None
+        known = by_account.get(p.account_id) or Decimal(0)
+        by_account[p.account_id] = known + p.pnl
+    return ew.average(by_account, sizes)
+
+
 def _open_totals(
-    positions: Sequence[schemas.OpenPositionOut], currencies: set[str]
+    positions: Sequence[schemas.OpenPositionOut],
+    currencies: set[str],
+    sizes: Mapping[int, Decimal | None],
 ) -> schemas.OpenTotalsOut:
     """Sum of the open positions; never USD + EUR: mixed currencies -> pnl None (no 409)."""
     totals = dh.open_totals(
@@ -547,7 +574,12 @@ def _open_totals(
         [p.price_time for p in positions],
     )
     pnl = totals.pnl if len(currencies) <= 1 else None
-    return schemas.OpenTotalsOut(pnl=pnl, risk_pct=totals.risk_pct, price_time=totals.price_time)
+    return schemas.OpenTotalsOut(
+        pnl=pnl,
+        pnl_pct=_open_pnl_pct(positions, sizes),
+        risk_pct=totals.risk_pct,
+        price_time=totals.price_time,
+    )
 
 
 def _check_currency(accounts: Sequence[Account], trades: Sequence[hc.ChartTrade]) -> None:
@@ -599,5 +631,9 @@ def build_home(db: Session, now: datetime, account_id: int | None, data_dir: Pat
         limits=_limits(db, accounts, trades, opened, rules, firms, period),
         kpis=_kpis(db, accounts, trades, rules, firms, period, one),
         open_positions=positions,
-        open_totals=_open_totals(positions, {a.currency for _, a in opened}),
+        open_totals=_open_totals(
+            positions,
+            {a.currency for _, a in opened},
+            {a.id: a.reference_balance for _, a in opened},
+        ),
     )
