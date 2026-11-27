@@ -50,9 +50,7 @@ def _ids(pids: list[int]) -> str:
     return shown + (f" (+{len(pids) - _MAX_LISTED})" if len(pids) > _MAX_LISTED else "")
 
 
-def _stored_stops(
-    session: Session, account_id: int, read: TradingRead
-) -> dict[int, StoredStops]:
+def _stored_stops(session: Session, account_id: int, read: TradingRead) -> dict[int, StoredStops]:
     """last_sl / tp of the stored trades of the read's positions (open and closed): a close,
     or a re-read of a closed trade inside the overlap window, must never wipe them (the last
     SL feeds no_breakeven and sl_moved_away, 2026-11-27)."""
