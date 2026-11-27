@@ -342,8 +342,11 @@ def _check_stop_side(trade: Trade, sl: Decimal) -> None:
         raise _validation_error("initial_sl", "must be above the entry price for a sell")
 
 
-def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
-    """Set a user-entered initial SL; recompute risk, risk %, R, planned RR and violations."""
+def apply_initial_sl(
+    db: Session, trade: Trade, sl: Decimal, source: InitialSlSource = InitialSlSource.USER
+) -> None:
+    """Set a closed trade's initial SL (user-entered, or ``order`` from the cTrader order
+    history backfill); recompute risk, risk %, R, planned RR, MAE/MFE R and violations."""
     spec = db.scalar(
         select(SymbolSpec).where(
             # Specs are keyed by the broker name; trade.symbol is canonical (M5-08).
@@ -369,7 +372,7 @@ def apply_initial_sl(db: Session, trade: Trade, sl: Decimal) -> None:
         loss_per_tick=per_tick.loss_per_tick,
     )
     trade.initial_sl = sl
-    trade.initial_sl_source = InitialSlSource.USER.value
+    trade.initial_sl_source = source.value
     trade.risk_amount = risk
     # Risk % divides by the account size (M5-10), not balance_at_open.
     size = account.reference_balance if account is not None else None

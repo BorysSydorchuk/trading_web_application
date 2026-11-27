@@ -560,7 +560,9 @@ def test_only_read_only_messages_are_sent_and_the_allowlist_is_unchanged(
 
     measure(factory, store, tmp_path, SHORT, server, CLOSE_B + MEASURE_AFTER)
 
-    pinned = frozenset({51, 2100, 2102, 2112, 2114, 2116, 2121, 2124, 2133, 2137, 2145, 2149, 2187})
+    pinned = frozenset(
+        {51, 2100, 2102, 2112, 2114, 2116, 2121, 2124, 2133, 2137, 2145, 2149, 2183, 2187}
+    )
     assert pinned == guard.ALLOWED_OUTGOING
     assert {2137, 2145} <= set(server.requests)  # both used by this step
     assert set(server.requests) <= guard.ALLOWED_OUTGOING

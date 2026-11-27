@@ -33,7 +33,9 @@ TRADING_NAMES = (
 
 def test_allowlist_is_exactly_the_read_only_set() -> None:
     assert (
-        frozenset({51, 2100, 2102, 2112, 2114, 2116, 2121, 2124, 2133, 2137, 2145, 2149, 2187})
+        frozenset(
+            {51, 2100, 2102, 2112, 2114, 2116, 2121, 2124, 2133, 2137, 2145, 2149, 2183, 2187}
+        )
         == guard.ALLOWED_OUTGOING
     )
 

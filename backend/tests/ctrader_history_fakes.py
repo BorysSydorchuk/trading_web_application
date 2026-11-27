@@ -2,7 +2,7 @@
 
 It answers reconcile (2124), deal list (2133, filtered by the requested time range, with
 ``hasMore`` when more than ``max_rows`` deals match), symbols (2114/2116), assets (2112), an
-empty tick answer (2145) and the position P&L (2187) on top of
+empty tick answer (2145), the orders of a position (2183) and the position P&L (2187) on top of
 `ctrader_fakes.default_handlers`. No network is involved.
 """
 
@@ -34,6 +34,7 @@ class HistoryServer:
         *,
         max_rows: int | None = None,
         balance: int = 100050,
+        orders: Iterable[dict[str, Any]] = (),
     ) -> None:
         self.deals = list(deals)
         self.positions = list(positions)
@@ -42,6 +43,26 @@ class HistoryServer:
         self.balance = balance
         self.symbols = load("symbols.json")
         self.deal_requests: list[tuple[int, int]] = []
+        self.orders = list(orders)
+        self.order_requests: list[int] = []
+
+    def _order_list(self, frame: dict[str, Any]) -> Reply:
+        """2183: the orders of one position updated in the requested range."""
+        payload = frame["payload"]
+        pid = int(payload["positionId"])
+        lo, hi = int(payload["fromTimestamp"]), int(payload["toTimestamp"])
+        self.order_requests.append(pid)
+        found = [
+            o
+            for o in self.orders
+            if int(o.get("positionId", 0)) == pid
+            and lo <= int(o.get("utcLastUpdateTimestamp", lo)) <= hi
+        ]
+        return p.ORDER_LIST_BY_POSITION_RES, {
+            "ctidTraderAccountId": CTID,
+            "order": found,
+            "hasMore": False,
+        }
 
     def _deal_list(self, frame: dict[str, Any]) -> Reply:
         payload = frame["payload"]
@@ -72,6 +93,7 @@ class HistoryServer:
             {"ctidTraderAccountId": CTID, "position": self.positions, "order": []},
         )
         handlers[p.DEAL_LIST_REQ] = self._deal_list
+        handlers[p.ORDER_LIST_BY_POSITION_REQ] = self._order_list
         handlers[p.SYMBOLS_LIST_REQ] = (p.SYMBOLS_LIST_RES, self.symbols["list"])
         handlers[p.SYMBOL_BY_ID_REQ] = (p.SYMBOL_BY_ID_RES, self.symbols["byId"])
         # Phase c reads specs and conversion ticks in the same cycle: the assets, and no

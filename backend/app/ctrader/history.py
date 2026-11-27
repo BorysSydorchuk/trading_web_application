@@ -109,11 +109,14 @@ class CtPosition:
 
 @dataclass(frozen=True)
 class HistoryRequest:
-    """What to read for one account. ``open_trades``: DB-open position id -> open time."""
+    """What to read for one account. ``open_trades``: DB-open position id -> open time;
+    ``known_sl``: positions whose stored trade already has an initial SL (any source), so
+    their order history is never read again (`app.ctrader.orders.unseen_closed`)."""
 
     window_from: datetime
     to: datetime
     open_trades: Mapping[int, datetime] = field(default_factory=dict)
+    known_sl: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -124,6 +127,9 @@ class TradingRead:
     deals: tuple[CtDeal, ...]
     positions: tuple[CtPosition, ...]
     symbols: Mapping[int, CtSymbol]
+    # Initial SL from the order history (2183) of positions the app never saw open, by
+    # position id (`app.ctrader.orders.read_opening_stops`); empty when none was found.
+    opening_stops: Mapping[int, Decimal] = field(default_factory=dict)
 
 
 def _side(value: object, name: str) -> str:

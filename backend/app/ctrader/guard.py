@@ -24,6 +24,7 @@ ALLOWED_OUTGOING: Final = frozenset(
         2137,  # GetTrendbarsReq (M1 bars for MAE/MFE)
         2145,  # GetTickDataReq (BID/ASK ticks: conversion rates, MAE/MFE)
         2149,  # GetAccountListByAccessTokenReq
+        2183,  # OrderListByPositionIdReq (order history: the initial SL of a position)
         2187,  # GetPositionUnrealizedPnLReq
     }
 )
