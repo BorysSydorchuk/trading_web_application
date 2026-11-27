@@ -593,6 +593,7 @@ def test_open_positions_in_two_currencies_have_no_pnl_total_instead_of_409(
 
     assert [p["pnl"] for p in data["open_positions"]] == ["10.00", "20.00"]
     assert data["open_totals"]["pnl"] is None
+    assert data["open_totals"]["pnl_pct"] == "0.1500"  # (0.1 % + 0.2 %) / 2: the only total shown
     assert data["open_totals"]["risk_pct"] == "2.0000"
 
 
@@ -795,3 +796,39 @@ def test_max_loss_and_month_bar_use_the_account_firm_rules_from_settings(
     assert (kpi["limit_pct"], kpi["pct"]) == ("-8.0000", "8.5625")  # (10056.25 - 9200) / 10000
     month = data["limits"]["month"]
     assert (month["loss_pct"], month["profit_pct"]) == ("-8.0000", None)
+
+
+# --- «Головна» %-only: equal weight through the API (owner 2026-11-27) ---------------------
+
+
+def test_today_kpi_of_a_10k_and_a_100k_account_with_the_same_percent(
+    client: TestClient, session: Session, alpha: Account
+) -> None:
+    big = add_account(session, "Big", 2, reference_balance=D("100000.00"))
+    closed(session, alpha, TODAY, "100.00")  # +1 % of 10K
+    closed(session, big, TODAY + timedelta(minutes=5), "1000.00")  # +1 % of 100K
+
+    today = home(client)["kpis"]["today"]
+
+    assert (today["pct"], today["accounts_counted"]) == ("1.0000", 2)
+    assert today["series"][-1]["cum_pct"] == "1.0000"
+
+
+def test_open_total_pct_averages_the_accounts(
+    client: TestClient, session: Session, data_dir: Path, alpha: Account
+) -> None:
+    big = add_account(session, "Big", 2, reference_balance=D("100000.00"))
+    small, large = open_position(session, alpha), open_position(session, big)
+    at = NOW - timedelta(minutes=1)
+    write_snapshot(
+        data_dir,
+        {
+            str(alpha.id): {str(small.position_id): live("2655", "100", at)},
+            str(big.id): {str(large.position_id): live("2655", "1000", at)},
+        },
+    )
+
+    data = home(client)
+
+    assert [p["pnl_pct"] for p in data["open_positions"]] == ["1.0000", "1.0000"]
+    assert data["open_totals"]["pnl_pct"] == "1.0000"  # not 1100 / 110000 by accident: both 1 %

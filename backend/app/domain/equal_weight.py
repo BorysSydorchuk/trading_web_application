@@ -96,7 +96,8 @@ def average(
     base = basis(sizes, list(pnl_by_account))
     if base is None:
         return None
-    return _q(sum((base.share(a, v) for a, v in pnl_by_account.items() if v is not None), _ZERO))
+    known = {a: v for a, v in pnl_by_account.items() if v is not None}  # all known here
+    return _q(sum((base.share(a, v) for a, v in known.items()), _ZERO))
 
 
 def total_r(trades: Iterable[ChartTrade]) -> Decimal | None:
