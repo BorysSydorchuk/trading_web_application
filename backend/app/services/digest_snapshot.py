@@ -277,15 +277,15 @@ def _account_pct(inp: SnapshotInput) -> Json:
     percents: of the sum of the sizes (``period_base``, as the metric blocks) and the average
     of the per-account percents (``equal_weight``, as Home). One line always matches Home;
     with one account both are equal (the UI shows the line only for two or more)."""
-    pnl: dict[int, Decimal | None] = {}
+    pnl: dict[int, Decimal] = {}
     for t in (*inp.combined.period, *(e.trade for e in inp.excluded)):
-        pnl[t.account_id] = (pnl.get(t.account_id) or Decimal(0)) + t.net_pnl
+        pnl[t.account_id] = pnl.get(t.account_id, Decimal(0)) + t.net_pnl
+    # Same base and total as `excluded.account_net_pnl_pct`: equal by design.
     base = period_base(inp.sizes, pnl)
-    total = sum((v for v in pnl.values() if v is not None), Decimal(0))
     equal = ew.average(pnl, dict(inp.sizes))
     return {
         "accounts": len(pnl),
-        "size_weighted": None if base is None or not pnl else pct_str(total * HUNDRED / base),
+        "size_weighted": None if base is None else pct_str(sum(pnl.values()) * HUNDRED / base),
         "equal_weighted": None if equal is None else pct_str(equal),
     }
 
