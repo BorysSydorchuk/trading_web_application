@@ -27,6 +27,8 @@ export interface SyncStatusRow {
 
 export interface SyncStatusList {
   items: SyncStatusRow[]
+  /** Config files not applied right now (PM 2026-11-27); absent from an older API. */
+  config_not_applied?: string[]
 }
 
 export const SYNC_POLL_MS = 30_000

@@ -89,16 +89,32 @@ export function SyncChips() {
       </span>
     )
   }
-  if (data.items.length === 0) return null
+  const notApplied = data.config_not_applied ?? []
+  if (data.items.length === 0 && notApplied.length === 0) return null
 
   return (
-    <ul aria-label={s.label} aria-live="off" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-      {data.items.map((row) => (
-        <li key={row.account_id} className="shrink-0">
-          <SyncChip row={row} nowMs={dataUpdatedAt} platform={platforms.data?.get(row.account_id)} />
-        </li>
-      ))}
-    </ul>
+    <>
+      {notApplied.length > 0 && <ConfigWarning files={notApplied} />}
+      {data.items.length > 0 && (
+        <ul aria-label={s.label} aria-live="off" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+          {data.items.map((row) => (
+            <li key={row.account_id} className="shrink-0">
+              <SyncChip row={row} nowMs={dataUpdatedAt} platform={platforms.data?.get(row.account_id)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+/** A config file failed validation: the last valid version is still used, sync goes on. */
+function ConfigWarning({ files }: { files: string[] }) {
+  return (
+    <span role="status" data-testid="config-not-applied" className="flex shrink-0 items-center gap-1.5 px-1.5 text-warning">
+      <span className="size-2 shrink-0 rounded-full bg-warning-strong" aria-hidden />
+      {s.configNotApplied(files.join(', '))}
+    </span>
   )
 }
 

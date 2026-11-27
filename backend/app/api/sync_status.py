@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
-from app.config_files import ConfigError, get_rules
+from app.config_files import ConfigError, config_not_applied, get_rules
 from app.ctrader.errors import CtraderErrorCode
 from app.db import get_db
 from app.domain.sessions import is_trading_time
@@ -126,4 +126,4 @@ def sync_status(db: Session = Depends(get_db), now: datetime = Depends(utc_now))
                 open_positions=success.open_positions if success is not None else 0,
             )
         )
-    return SyncStatusList(items=items)
+    return SyncStatusList(items=items, config_not_applied=config_not_applied())

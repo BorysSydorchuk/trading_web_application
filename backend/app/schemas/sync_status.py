@@ -25,3 +25,5 @@ class AccountSyncStatus(BaseModel):
 
 class SyncStatusList(BaseModel):
     items: list[AccountSyncStatus]
+    # Config files not applied right now (file names); the status bar warns (PM 2026-11-27).
+    config_not_applied: list[str] = []
