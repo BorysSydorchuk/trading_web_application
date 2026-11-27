@@ -93,7 +93,9 @@ def test_one_account_and_percent_of_its_size(
 def test_empty_range_and_errors(client: TestClient, account: Account) -> None:
     empty = charts(client)
     assert (empty["trades"], empty["daily"], empty["rolling"]) == (0, [], [])
-    assert empty["equity"] == [{"time": "2026-11-08T23:00:00Z", "cum_pnl": "0.00", "cum_pct": None}]
+    assert empty["equity"] == [
+        {"time": "2026-11-08T23:00:00Z", "cum_pnl": "0.00", "cum_pct": "0.0000"}
+    ]
 
     bad = client.get("/api/dashboard/charts", params={"from": WEEK_TO, "to": WEEK_FROM})
     assert bad.status_code == 422
@@ -215,3 +217,37 @@ def test_home_month_equals_the_digest_month_for_the_same_selection(
         )
         == ("1000.00", "10.0000")
     )
+
+
+# --- «Головна» %-only: equal-weighted percent (owner 2026-11-27) ---------------------------
+
+
+def test_10k_and_100k_accounts_with_the_same_percent_combine_to_it(
+    client: TestClient, session: Session
+) -> None:
+    small = add_account(session, "10K", 11, reference_balance=Decimal("10000.00"))
+    big = add_account(session, "100K", 12, reference_balance=Decimal("100000.00"))
+    closed(session, small, TODAY, "200.00", "2.0")  # +2 %
+    closed(session, big, TODAY + timedelta(minutes=5), "2000.00", "1.5")  # +2 %
+
+    data = charts(client)
+
+    assert data["total_pct"] == "2.0000"
+    assert data["equity"][-1]["cum_pct"] == "2.0000"
+    assert [d["pct"] for d in data["daily"]] == ["2.0000"]
+    assert data["total_r"] == "3.5000"  # plain sum
+    assert data["accounts_counted"] == 2
+
+
+def test_equal_weight_is_not_money_over_sizes(client: TestClient, session: Session) -> None:
+    small = add_account(session, "10K", 11, reference_balance=Decimal("10000.00"))
+    big = add_account(session, "100K", 12, reference_balance=Decimal("100000.00"))
+    closed(session, small, TODAY, "-100.00", "-1.0")  # -1 %
+    closed(session, big, TODAY + timedelta(minutes=5), "3000.00", "3.0")  # +3 %
+
+    data = charts(client)
+
+    # (-1 + 3) / 2 = +1 %, not 2900 / 110000 = 2.6364 %
+    assert data["total_pct"] == "1.0000"
+    one = charts(client, account_id=small.id)
+    assert (one["total_pct"], one["accounts_counted"]) == ("-1.0000", 1)

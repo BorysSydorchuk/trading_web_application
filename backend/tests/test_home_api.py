@@ -245,7 +245,12 @@ def test_no_accounts_means_no_limits(client: TestClient) -> None:
 
     assert data["limits"] is None
     assert data["open_positions"] == []
-    assert data["open_totals"] == {"pnl": "0.00", "risk_pct": "0.0000", "price_time": None}
+    assert data["open_totals"] == {
+        "pnl": "0.00",
+        "pnl_pct": None,
+        "risk_pct": "0.0000",
+        "price_time": None,
+    }
 
 
 def test_unknown_or_archived_account_is_404(client: TestClient, session: Session) -> None:
@@ -314,9 +319,9 @@ def test_today_kpi_runs_from_zero_at_brussels_midnight(
 
     assert (today["pnl"], today["pct"], today["trades"]) == ("200.00", "2.0000", 2)
     assert today["series"] == [
-        {"time": MIDNIGHT, "cum_pnl": "0.00"},
-        {"time": "2026-11-12T09:00:00Z", "cum_pnl": "250.00"},
-        {"time": "2026-11-12T10:00:00Z", "cum_pnl": "200.00"},
+        {"time": MIDNIGHT, "cum_pnl": "0.00", "cum_pct": "0.0000"},
+        {"time": "2026-11-12T09:00:00Z", "cum_pnl": "250.00", "cum_pct": "2.5000"},
+        {"time": "2026-11-12T10:00:00Z", "cum_pnl": "200.00", "cum_pct": "2.0000"},
     ]
 
 
@@ -417,6 +422,7 @@ def test_open_position_with_a_fresh_snapshot(
         "current_price": "2655",
         "price_time": "2026-11-12T13:59:00Z",
         "pnl": "250.50",
+        "pnl_pct": "2.5050",
         "r_now": "0.5000",
         "tp_r": "2.0000",
         "mae_r": "-0.4000",
@@ -427,6 +433,7 @@ def test_open_position_with_a_fresh_snapshot(
     }
     assert data["open_totals"] == {
         "pnl": "250.50",
+        "pnl_pct": "2.5050",
         "risk_pct": "1.0000",
         "price_time": "2026-11-12T13:59:00Z",
     }
@@ -515,7 +522,12 @@ def test_missing_or_broken_snapshot_never_fails(
 
     [item] = data["open_positions"]
     assert (item["current_price"], item["price_time"], item["pnl"]) == (None, None, None)
-    assert data["open_totals"] == {"pnl": None, "risk_pct": "1.0000", "price_time": None}
+    assert data["open_totals"] == {
+        "pnl": None,
+        "pnl_pct": None,
+        "risk_pct": "1.0000",
+        "price_time": None,
+    }
 
 
 def test_open_positions_of_every_active_account_whatever_the_selection(
