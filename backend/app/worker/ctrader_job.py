@@ -180,6 +180,18 @@ def _excursion_request(session: Session, account_id: int, now: datetime) -> Excu
     )
 
 
+def _known_sl(session: Session, account_id: int) -> frozenset[int]:
+    """Closed trades that already have an initial SL: their orders are never read again."""
+    rows = session.scalars(
+        select(Trade.position_id).where(
+            Trade.account_id == account_id,
+            Trade.close_time.is_not(None),
+            Trade.initial_sl.is_not(None),
+        )
+    )
+    return frozenset(rows)
+
+
 def _due_targets(
     session_factory: sessionmaker[Session],
     rules: RulesConfig,
@@ -206,6 +218,7 @@ def _due_targets(
                     ),
                     to=now,
                     open_trades=_open_trades(session, account.id),
+                    known_sl=_known_sl(session, account.id),
                 ),
                 _market_request(session, account, symbols, now),
                 _excursion_request(session, account.id, now),

@@ -330,6 +330,26 @@ async def _read_excursions_safely(
         return None
 
 
+async def _with_opening_stops(
+    connection: CtraderConnection, ctid: int, trading: TradingRead, last_attempt: bool
+) -> TradingRead:
+    """The order-history SLs are an enrichment: a failure never loses the history read. A
+    dropped session is raised for the retry unless this is the last attempt; otherwise the
+    read is kept without them (WARNING; those trades stay needs_sl, see the backfill tool)."""
+    try:
+        stops = await read_opening_stops(connection, ctid, trading)
+    except CtraderError as exc:
+        if exc.code in _RETRY_READ and not last_attempt:
+            raise
+        logger.warning(
+            "cTrader account %s: order history not read, initial SLs skipped: %s",
+            ctid,
+            exc.code.value,
+        )
+        return trading
+    return replace(trading, opening_stops=stops)
+
+
 async def _read_account(
     connection: CtraderConnection,
     creds: Credentials,
@@ -347,13 +367,13 @@ async def _read_account(
     if job.history is not None:
         try:
             trading = await read_trading(connection, ctid, job.history, clock())
-            stops = await read_opening_stops(connection, ctid, trading)
-            trading = replace(trading, opening_stops=stops)
         except CtraderError as exc:
             if exc.code in _RETRY_READ and not last_attempt:
                 raise
             logger.warning("cTrader account %s: history not read: %s", ctid, exc.code.value)
             trading = exc
+        if isinstance(trading, TradingRead):
+            trading = await _with_opening_stops(connection, ctid, trading, last_attempt)
     market = await _read_market_safely(connection, ctid, job, trading, clock)
     excursions = await _read_excursions_safely(connection, ctid, job, trading, clock)
     return replace(read, trading=trading, market=market, excursions=excursions)

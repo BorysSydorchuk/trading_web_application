@@ -50,10 +50,11 @@ _TYPES: Final[dict[object, str]] = {
     "STOP_LIMIT": "stop_limit",
 }
 _FILLED: Final = frozenset({2, "ORDER_STATUS_FILLED"})
-_SIDES: Final[dict[object, str]] = {1: "buy", "BUY": "buy", 2: "sell", "SELL": "sell"}
 RELATIVE_SCALE: Final = Decimal(100_000)
-# Same splitting rule as the deal list: halve a window answered with hasMore.
+# Same splitting rule as the deal list: halve a window answered with hasMore; at most
+# MAX_REQUESTS answers per position (a bad server can never cause a request storm).
 MAX_SPLIT_DEPTH: Final = 40
+MAX_REQUESTS: Final = 64
 
 # A dropped session/connection or an access problem concerns the whole read (the caller's
 # retry rule and status), never one skipped position.
@@ -81,7 +82,6 @@ class CtOrder:
     order_id: int
     position_id: int | None
     kind: str  # market | limit | stop | protective | market_range | stop_limit | unknown
-    side: str | None
     filled: bool  # FILLED status or an executed volume
     closing: bool
     created: datetime | None  # tradeData.openTimestamp
@@ -124,7 +124,6 @@ def parse_order(entry: object) -> CtOrder:
         order_id=parse_int(entry.get("orderId"), "orderId"),
         position_id=_int(entry, "positionId"),
         kind=_TYPES.get(entry.get("orderType"), "unknown"),
-        side=_SIDES.get(trade.get("tradeSide")),
         filled=entry.get("orderStatus") in _FILLED or (executed is not None and executed > 0),
         closing=entry.get("closingOrder") is True,
         created=utc_from_ms(created, "openTimestamp") if created is not None else None,
@@ -203,7 +202,11 @@ async def _read_window(
     hi: int,
     found: dict[int, CtOrder],
     depth: int,
+    calls: list[int],
 ) -> None:
+    calls[0] += 1
+    if calls[0] > MAX_REQUESTS:
+        raise _bad(f"order list of position {position_id} needs more than {MAX_REQUESTS} reads")
     payload = await connection.request(
         p.ORDER_LIST_BY_POSITION_REQ,
         {
@@ -220,8 +223,8 @@ async def _read_window(
         if hi <= lo or depth >= MAX_SPLIT_DEPTH:
             raise _bad("order list still has more orders in the smallest window")
         mid = (lo + hi) // 2
-        await _read_window(connection, ctid, position_id, lo, mid, found, depth + 1)
-        await _read_window(connection, ctid, position_id, mid + 1, hi, found, depth + 1)
+        await _read_window(connection, ctid, position_id, lo, mid, found, depth + 1, calls)
+        await _read_window(connection, ctid, position_id, mid + 1, hi, found, depth + 1, calls)
         return
     items = payload.get("order", [])
     if not isinstance(items, list):
@@ -238,10 +241,11 @@ async def read_position_orders(
     """Every order of the position last updated in ``start..end``, in windows of at most one
     week (as the deal list); a window answered with ``hasMore`` is split in halves."""
     found: dict[int, CtOrder] = {}
+    calls = [0]
     lo, to_ms = ms_from_utc(start), ms_from_utc(end)
     while lo <= to_ms:
         hi = min(lo + p.MAX_DEAL_WINDOW_MS - 1, to_ms)
-        await _read_window(connection, ctid, position_id, lo, hi, found, 0)
+        await _read_window(connection, ctid, position_id, lo, hi, found, 0, calls)
         lo = hi + 1
     return tuple(sorted(found.values(), key=_order_key))
 
@@ -265,31 +269,37 @@ class _Unseen:
     end: datetime
 
 
-def _vwap(deals: Sequence[CtDeal]) -> Decimal:
+def _vwap(deals: Sequence[CtDeal]) -> Decimal | None:
     volume = sum(d.volume for d in deals)
+    if volume <= 0:
+        return None
     return sum((d.price * d.volume for d in deals), Decimal(0)) / volume
 
 
 def unseen_closed(read: TradingRead) -> list[_Unseen]:
     """Positions closed in this read that the app never saw open: not reported open now, not
-    open in the DB, with their entry deal(s) in the read. Oldest first."""
+    open in the DB, not stored with an initial SL already (``known_sl``), with their entry
+    deal(s) in the read. Oldest first."""
     by_position: dict[int, list[CtDeal]] = defaultdict(list)
     for deal in read.deals:
         by_position[deal.position_id].append(deal)
     live = {position.position_id for position in read.positions}
     out: list[_Unseen] = []
     for pid, own in by_position.items():
-        if pid in live or pid in read.request.open_trades:
+        if pid in live or pid in read.request.open_trades or pid in read.request.known_sl:
             continue
         entries = sorted((d for d in own if d.close is None), key=lambda d: (d.time, d.deal_id))
         if not entries or all(d.close is None for d in own):
             continue
         first = entries[0]
+        entry_price = _vwap(entries)
+        if entry_price is None:
+            continue
         out.append(
             _Unseen(
                 position_id=pid,
                 side=first.side,
-                entry_price=_vwap(entries),
+                entry_price=entry_price,
                 opening_order_id=first.order_id,
                 symbol_id=first.symbol_id,
                 start=first.time - ORDER_PAD,
@@ -332,21 +342,37 @@ async def read_opening_stops(
             )
             continue
         symbol = read.symbols.get(item.symbol_id)
-        stop = initial_stop(
-            orders,
-            side=item.side,
-            entry_price=item.entry_price,
-            digits=symbol.digits if symbol is not None else None,
-            opening_order_id=item.opening_order_id,
-        )
-        if stop is not None:
-            found[item.position_id] = stop.sl
-            logger.info(
-                "cTrader account %s: position %s initial SL %s from %s order %s",
+        try:
+            stop = initial_stop(
+                orders,
+                side=item.side,
+                entry_price=item.entry_price,
+                digits=symbol.digits if symbol is not None else None,
+                opening_order_id=item.opening_order_id,
+            )
+        except (ArithmeticError, ValueError) as exc:  # an absurd price from the server
+            logger.warning(
+                "cTrader account %s: orders of position %s unusable: %s",
                 ctid,
                 item.position_id,
-                stop.sl,
-                stop.kind,
-                stop.order_id,
+                type(exc).__name__,
             )
+            continue
+        if stop is None:
+            logger.info(
+                "cTrader account %s: position %s has no SL in its order history (%s orders)",
+                ctid,
+                item.position_id,
+                len(orders),
+            )
+            continue
+        found[item.position_id] = stop.sl
+        logger.info(
+            "cTrader account %s: position %s initial SL %s from %s order %s",
+            ctid,
+            item.position_id,
+            stop.sl,
+            stop.kind,
+            stop.order_id,
+        )
     return found

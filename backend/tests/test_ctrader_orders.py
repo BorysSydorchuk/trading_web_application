@@ -23,6 +23,7 @@ from app.ctrader.history import (
 )
 from app.ctrader.orders import (
     MAX_ORDER_READS,
+    MAX_REQUESTS,
     CtOrder,
     InitialStop,
     initial_stop,
@@ -40,7 +41,6 @@ def _order(
     order_id: int,
     *,
     kind: str = "market",
-    side: str = "buy",
     created: datetime | None = T0,
     filled: bool = True,
     closing: bool = False,
@@ -53,7 +53,6 @@ def _order(
         order_id=order_id,
         position_id=1,
         kind=kind,
-        side=side,
         filled=filled,
         closing=closing,
         created=created,
@@ -84,12 +83,7 @@ def test_parse_order_reads_names_and_numbers() -> None:
         "closingOrder": False,
     }
     order = parse_order(raw)
-    assert (order.order_id, order.position_id, order.kind, order.side) == (
-        77,
-        5,
-        "protective",
-        "sell",
-    )
+    assert (order.order_id, order.position_id, order.kind) == (77, 5, "protective")
     assert (order.filled, order.closing) == (False, False)
     assert order.stop_loss == Decimal("1.2345")
     assert order.relative_stop_loss is None  # 0 = not set
@@ -99,7 +93,7 @@ def test_parse_order_reads_names_and_numbers() -> None:
 def test_parse_order_market_filled_by_number() -> None:
     raw = {"orderId": 1, "orderType": 1, "orderStatus": 2, "tradeData": {"tradeSide": 1}}
     order = parse_order(raw)
-    assert (order.kind, order.filled, order.side, order.created) == ("market", True, "buy", None)
+    assert (order.kind, order.filled, order.created) == ("market", True, None)
 
 
 def test_parse_order_executed_volume_counts_as_filled() -> None:
@@ -128,7 +122,7 @@ def test_relative_stop_buy_is_below_the_execution_price() -> None:
 
 
 def test_relative_stop_sell_is_above_the_execution_price() -> None:
-    order = _order(1, side="sell", execution="25234.0", relative=12_440_000)
+    order = _order(1, execution="25234.0", relative=12_440_000)
     stop = _stop([order], side="sell", entry=Decimal("25234.0"), digits=1)
     assert stop == InitialStop(Decimal("25358.4"), "opening", 1)
 
@@ -178,9 +172,9 @@ def test_a_wrong_side_opening_stop_falls_back_to_a_protective_one() -> None:
 
 
 def test_sell_side_rule() -> None:
-    orders = [_order(1, side="sell", stop_loss="1.09000")]
+    orders = [_order(1, stop_loss="1.09000")]
     assert _stop(orders, side="sell") is None  # below a sell entry: not a loss stop
-    orders = [_order(1, side="sell", stop_loss="1.10600")]
+    orders = [_order(1, stop_loss="1.10600")]
     assert _stop(orders, side="sell") == InitialStop(Decimal("1.10600"), "opening", 1)
 
 
@@ -381,3 +375,34 @@ def test_an_access_or_connection_failure_fails_the_read(server_code: str) -> Non
     transport = FakeTransport({p.ORDER_LIST_BY_POSITION_REQ: refuse})
     with pytest.raises(CtraderError):
         _stops(transport, _trading(_closed_pair(1, at)))
+
+
+def test_unseen_closed_skips_positions_stored_with_an_sl() -> None:
+    at = T0 + timedelta(minutes=10)
+    read = _trading(_closed_pair(1, at) + _closed_pair(2, at))
+    request = HistoryRequest(T0, T0 + timedelta(hours=5), {}, frozenset({1}))
+    known = TradingRead(request, read.read_from, read.read_to, read.deals, (), read.symbols)
+    assert [u.position_id for u in unseen_closed(known)] == [2]
+
+
+def test_an_absurd_price_skips_the_position_only() -> None:
+    at = T0 + timedelta(minutes=10)
+    raw = _raw(1010, at, position_id=1)
+    raw["stopLoss"] = 1e300  # cannot be quantized to 5 digits
+    transport, _ = _orders_server([raw])
+    assert _stops(transport, _trading(_closed_pair(1, at))) == {}
+
+
+def test_a_hasmore_storm_is_bounded() -> None:
+    def always_more(frame: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        return p.ORDER_LIST_BY_POSITION_RES, {
+            "ctidTraderAccountId": CTID,
+            "order": [],
+            "hasMore": True,
+        }
+
+    transport = FakeTransport({p.ORDER_LIST_BY_POSITION_REQ: always_more})
+    with pytest.raises(CtraderError) as caught:
+        _read(transport, T0, T0 + timedelta(days=6))
+    assert caught.value.code is CtraderErrorCode.BAD_RESPONSE
+    assert transport.types_sent().count(p.ORDER_LIST_BY_POSITION_REQ) <= MAX_REQUESTS

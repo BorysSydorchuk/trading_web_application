@@ -87,7 +87,6 @@ def _order(order_id: int, **kw: Any) -> CtOrder:
         "order_id": order_id,
         "position_id": 1,
         "kind": "market",
-        "side": "buy",
         "filled": True,
         "closing": False,
         "created": OPEN,
@@ -141,8 +140,12 @@ def test_apply_never_writes_over_an_sl_set_meanwhile(session: Session) -> None:
     account = make_ctrader_account(session, reference_balance=Decimal("100000"))
     trade = _trade(session, account, 1)
     todo = targets(session)
-    trade.initial_sl, trade.initial_sl_source = Decimal("25200"), "user"
-    session.commit()
+    # The owner saves an SL in the app (another session) while the tool reads cTrader.
+    with make_session_factory(session.get_bind())() as other:  # type: ignore[arg-type]
+        row = other.get(Trade, trade.id)
+        assert row is not None
+        row.initial_sl, row.initial_sl_source = Decimal("25200"), "user"
+        other.commit()
     totals = run(session, {trade.id: (_order(10),)}, todo, apply=True)
     session.expire_all()
     assert totals.stored == 0

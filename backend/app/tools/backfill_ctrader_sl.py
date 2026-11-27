@@ -8,8 +8,10 @@ and `app.ctrader.orders.initial_stop` picks the SL. Dry run by default: one line
 and the totals, nothing written. ``--apply`` stores it as source ``order`` with the same
 recompute as an owner-entered SL (risk, risk %, R, planned RR, MAE/MFE R from the stored
 extremes, violations). The lines also go to ``logs/backfill_ctrader_sl.log``.
-Safe while the app runs: the token file is shared under its lock (`TokenManager`), and a
-trade that got an SL meanwhile is re-checked before it is written.
+Safe while the app runs: the token file is shared under its lock (`TokenManager`); before a
+write the row is read again under a row lock (``SELECT ... FOR UPDATE``), so an SL entered or
+synced meanwhile is never overwritten. Without the entry deal's order id (not stored) the
+opening order is the earliest executed non-closing one (the sync names it exactly).
 """
 
 from __future__ import annotations
@@ -93,13 +95,14 @@ def targets(session: Session, account_id: int | None = None) -> list[Target]:
                 SymbolSpec.account_id == account.id, SymbolSpec.symbol == trade.broker_symbol
             )
         )
-        if trade.close_time is None or account.ctid_trader_account_id is None:
-            continue  # excluded by the query; keeps the types narrow
+        close_time, ctid = trade.close_time, account.ctid_trader_account_id
+        if close_time is None or ctid is None:  # pragma: no cover - excluded by the query
+            continue
         out.append(
             Target(
                 trade_id=trade.id,
                 account_id=account.id,
-                ctid=account.ctid_trader_account_id,
+                ctid=ctid,
                 is_live=bool(account.ctrader_is_live),
                 position_id=trade.position_id,
                 symbol=trade.symbol,
@@ -107,7 +110,7 @@ def targets(session: Session, account_id: int | None = None) -> list[Target]:
                 entry_price=trade.entry_price,
                 digits=spec.digits if spec is not None else None,
                 start=trade.open_time - PAD,
-                end=trade.close_time + PAD,
+                end=close_time + PAD,
             )
         )
     return out
@@ -124,7 +127,8 @@ def _kinds(orders: Sequence[CtOrder]) -> str:
 
 
 def _store(session: Session, target: Target, sl: Decimal) -> bool:
-    trade = session.get(Trade, target.trade_id)
+    # Fresh from the DB under a row lock: the identity map may hold the stale row of targets().
+    trade = session.get(Trade, target.trade_id, populate_existing=True, with_for_update=True)
     if trade is None or trade.initial_sl_source is not None or trade.initial_sl is not None:
         return False  # got an SL meanwhile (owner or sync): never overwritten
     apply_initial_sl(session, trade, sl, InitialSlSource.ORDER)
@@ -173,6 +177,15 @@ def summary(totals: Totals, apply: bool, count: int) -> str:
 # --- network ---------------------------------------------------------------------------
 
 
+async def _authorize_account(connection: CtraderConnection, creds: Credentials, ctid: int) -> None:
+    auth = await connection.request(
+        p.ACCOUNT_AUTH_REQ,
+        {"ctidTraderAccountId": ctid, "accessToken": creds.access_token.get_secret_value()},
+        p.ACCOUNT_AUTH_RES,
+    )
+    check_account(auth, ctid)
+
+
 async def read_orders(
     creds: Credentials, todo: Sequence[Target], connector: Connector = open_websocket
 ) -> dict[int, tuple[CtOrder, ...] | CtraderError]:
@@ -185,19 +198,19 @@ async def read_orders(
             await connection.start()
             await authorize_app(connection, creds)
             authorized: set[int] = set()
+            refused: dict[int, CtraderError] = {}
             for target in group:
+                if target.ctid in refused:
+                    out[target.trade_id] = refused[target.ctid]
+                    continue
+                if target.ctid not in authorized:
+                    try:
+                        await _authorize_account(connection, creds, target.ctid)
+                    except CtraderError as exc:
+                        refused[target.ctid] = out[target.trade_id] = exc
+                        continue
+                    authorized.add(target.ctid)
                 try:
-                    if target.ctid not in authorized:
-                        auth = await connection.request(
-                            p.ACCOUNT_AUTH_REQ,
-                            {
-                                "ctidTraderAccountId": target.ctid,
-                                "accessToken": creds.access_token.get_secret_value(),
-                            },
-                            p.ACCOUNT_AUTH_RES,
-                        )
-                        check_account(auth, target.ctid)
-                        authorized.add(target.ctid)
                     out[target.trade_id] = await read_position_orders(
                         connection, target.ctid, target.position_id, target.start, target.end
                     )

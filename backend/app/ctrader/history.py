@@ -109,11 +109,14 @@ class CtPosition:
 
 @dataclass(frozen=True)
 class HistoryRequest:
-    """What to read for one account. ``open_trades``: DB-open position id -> open time."""
+    """What to read for one account. ``open_trades``: DB-open position id -> open time;
+    ``known_sl``: positions whose stored trade already has an initial SL (any source), so
+    their order history is never read again (`app.ctrader.orders.unseen_closed`)."""
 
     window_from: datetime
     to: datetime
     open_trades: Mapping[int, datetime] = field(default_factory=dict)
+    known_sl: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.trades import apply_initial_sl
 from app.ctrader import guard
+from app.ctrader import protocol as p
 from app.ctrader.tokens import TokenPair, TokenStore, tokens_path
 from app.db import make_session_factory
 from app.models import Account, Trade
@@ -26,6 +27,7 @@ from tests.ctrader_fakes import (
     CLIENT_SECRET,
     REFRESH_TOKEN,
     FakeConnector,
+    FakeTransport,
     make_ctrader_account,
     no_sleep,
 )
@@ -165,6 +167,7 @@ def test_a_user_entered_sl_is_never_overwritten(
     _run(factory, store, server, tmp_path)
     trade = _trade(session, 5001)
     assert (trade.initial_sl, trade.initial_sl_source) == (Decimal("1.08300"), "user")
+    assert server.order_requests == []  # stored with an SL: never read again
 
 
 def test_a_position_seen_open_reads_no_order_history(
@@ -186,6 +189,13 @@ def test_a_position_seen_open_reads_no_order_history(
     _run(factory, store, closing, tmp_path)
     trade = _trade(session, 5001)
     assert closing.order_requests == []
+    assert (trade.initial_sl, trade.initial_sl_source) == (Decimal("1.08412"), "position")
+
+    # Next sync: closed in the DB, still inside the overlap window.
+    again = HistoryServer(data["deals"], orders=[_opening_order(relativeStopLoss=500)])
+    _run(factory, store, again, tmp_path)
+    trade = _trade(session, 5001)
+    assert again.order_requests == []
     assert (trade.initial_sl, trade.initial_sl_source) == (Decimal("1.08412"), "position")
 
 
@@ -215,3 +225,31 @@ def test_only_read_only_messages_are_sent(
     assert 2183 in sent
     assert sent <= guard.ALLOWED_OUTGOING
     assert not sent & guard.BLOCKED_OUTGOING
+
+
+def test_a_failing_order_read_keeps_the_deals(
+    session: Session,
+    factory: sessionmaker[Session],
+    store: TokenStore,
+    account: Account,
+    tmp_path: Path,
+) -> None:
+    server = HistoryServer(load("closed_simple.json")["deals"])
+    handlers = server.handlers()
+    handlers[p.ORDER_LIST_BY_POSITION_REQ] = (
+        p.ERROR_RES,
+        {"errorCode": "SERVER_IS_UNDER_MAINTENANCE", "description": "down"},
+    )
+    config = CtraderJobConfig(
+        client_id=CLIENT_ID,
+        client_secret=SecretStr(CLIENT_SECRET),
+        store=store,
+        connector=FakeConnector(FakeTransport(handlers), FakeTransport(handlers)),
+        sleep=no_sleep,
+        now=lambda: NOW,
+        symbols_getter=lambda: TEST_SYMBOLS,
+        snapshot_path=snapshot.snapshot_path(tmp_path),
+    )
+    run_ctrader_balance_cycle(factory, config)
+    trade = _trade(session, 5001)
+    assert (trade.status, trade.initial_sl) == ("needs_sl", None)
