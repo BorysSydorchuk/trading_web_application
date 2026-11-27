@@ -23,6 +23,7 @@ from app.ctrader.errors import CtraderError, CtraderErrorCode
 from app.ctrader.history import HistoryRequest, TradingRead, check_account, read_trading
 from app.ctrader.market import MarketRead, MarketRequest, read_market
 from app.ctrader.money import equity_from, parse_int, scale_money
+from app.ctrader.orders import read_opening_stops
 from app.services.excursions import Fetched
 
 logger = logging.getLogger(__name__)
@@ -346,6 +347,8 @@ async def _read_account(
     if job.history is not None:
         try:
             trading = await read_trading(connection, ctid, job.history, clock())
+            stops = await read_opening_stops(connection, ctid, trading)
+            trading = replace(trading, opening_stops=stops)
         except CtraderError as exc:
             if exc.code in _RETRY_READ and not last_attempt:
                 raise

@@ -15,17 +15,19 @@
   "Closed" = the closed volume (``closedVolume``, else the filled volume) reaches the entered
   volume: a shortfall keeps the trade open (never closed on a guess), an excess is refused by
   the trade builder (skipped with its reason).
-- cTrader deals carry no SL/TP. The stored ``last_sl``/``tp`` of a DB-open trade cTrader no
-  longer reports are carried on its exit deals, so a close never wipes them (exit deals are
-  never the initial SL source). Such a trade without a new exit deal is not rebuilt: its row
-  stays as it is (Home shows ``close_unconfirmed``).
+- cTrader deals carry no SL/TP. A position the app never saw open gets its initial SL from
+  its order history (`app.ctrader.orders`, read into ``TradingRead.opening_stops``) as the
+  opening order's stop (source ``order``). The stored ``last_sl``/``tp`` of a DB-open trade
+  cTrader no longer reports are carried on its exit deals, so a close never wipes them (exit
+  deals are never the initial SL source). Such a trade without a new exit deal is not
+  rebuilt: its row stays as it is (Home shows ``close_unconfirmed``).
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Context, Decimal, Inexact
 from typing import Final
 
@@ -34,6 +36,7 @@ from app.domain.trade_builder import (
     Deal,
     DealEntry,
     DealType,
+    OrderStops,
     PositionSnapshot,
     SkippedPosition,
 )
@@ -67,6 +70,9 @@ class Converted:
     unconfirmed: list[int]
     # Exit deals of positions opened before the read range and not open in the DB.
     before_range: list[int]
+    # Opening-order stops by order id (the entry deal's orderId) of built positions whose
+    # initial SL came from the order history (`TradingRead.opening_stops`).
+    orders: dict[int, OrderStops] = field(default_factory=dict)
 
 
 def lots(volume: int, symbol: CtSymbol) -> Decimal | None:
@@ -164,6 +170,20 @@ def _missing_entries(read: TradingRead, with_entry: set[int]) -> list[int]:
     )
 
 
+def _opening_orders(read: TradingRead, built: set[int]) -> dict[int, OrderStops]:
+    """The order-history SL as the opening order's stop, keyed by the first entry deal's
+    orderId (the trade builder's lookup): source ``order``, below the deal and above the
+    first SL seen on the position."""
+    out: dict[int, OrderStops] = {}
+    for pid, sl in read.opening_stops.items():
+        if pid not in built:
+            continue
+        entries = [d for d in read.deals if d.position_id == pid and d.close is None]
+        first = min(entries, key=lambda d: (d.time, d.deal_id))
+        out[first.order_id] = OrderStops(sl=sl)
+    return out
+
+
 def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -> Converted:
     """``stops``: stored stops of the DB-open trades, by position id."""
     stored = stops or {}
@@ -211,6 +231,7 @@ def convert(read: TradingRead, stops: Mapping[int, StoredStops] | None = None) -
     }
     deals.sort(key=lambda d: (d.time, d.ticket))
     return Converted(
+        orders=_opening_orders(read, built),
         deals=deals,
         position_ids=built,
         snapshots=snapshots,

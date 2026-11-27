@@ -90,6 +90,7 @@ def write_ctrader_trades(
         deals=converted.deals,
         position_ids=converted.position_ids,
         snapshots=converted.snapshots,
+        orders=converted.orders,
         balance=balance,
         currency=account.currency,
         specs=specs,

@@ -124,6 +124,9 @@ class TradingRead:
     deals: tuple[CtDeal, ...]
     positions: tuple[CtPosition, ...]
     symbols: Mapping[int, CtSymbol]
+    # Initial SL from the order history (2183) of positions the app never saw open, by
+    # position id (`app.ctrader.orders.read_opening_stops`); empty when none was found.
+    opening_stops: Mapping[int, Decimal] = field(default_factory=dict)
 
 
 def _side(value: object, name: str) -> str:
